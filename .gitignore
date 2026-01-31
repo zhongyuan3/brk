@@ -1,0 +1,15 @@
+*.o
+*.d
+*.out
+*.elf
+
+.cache/
+compile_commands.json
+.vscode
+
+*.dtb
+*.dts
+*.img
+
+aosd.ld
+aosd.elf

@@ -1,0 +1,417 @@
+#include <aosd/macros.h>
+#include <aosd/printf.h>
+#include <aosd/string.h>
+
+#define ZERO_PAD (1U << 0)
+#define LEFT_ALIGN (1U << 1)
+#define MARK_POS (1U << 2)
+#define ALT_FORM (1U << 3)
+#define PAD_POS (1U << 4)
+
+union fmt_arg {
+	struct {
+		uintmax_t i;
+		bool lt0;
+	};
+	void *p;
+};
+
+struct internal_display {
+	struct display *dis;
+	size_t cnt;
+};
+
+enum {
+	STATE_INVALID,
+	STATE_START,
+	STATE_LPRE,
+	STATE_LLPRE,
+	STATE_HPRE,
+	STATE_HHPRE,
+	STATE_ZPRE,
+	STATE_STOP,
+	STATE_CHAR,
+	STATE_UCHAR,
+	STATE_SHORT,
+	STATE_USHORT,
+	STATE_INT,
+	STATE_UINT,
+	STATE_LONG,
+	STATE_ULONG,
+	STATE_LLONG,
+	STATE_ULLONG,
+	STATE_PTR,
+	STATE_SIZE_T,
+	STATE_PTRDIFF_T,
+};
+
+#define S(x) [x - 'A']
+#define OOB(x) ((unsigned)(x) - 'A' > 'z' - 'A')
+
+static uint8_t const states[]['z' - 'A' + 1] = {
+	{ STATE_INVALID },
+	{
+		/* STATE_START */
+		S('l') = STATE_LPRE,
+		S('h') = STATE_HPRE,
+		S('z') = STATE_ZPRE,
+		S('d') = STATE_INT,
+		S('i') = STATE_INT,
+		S('u') = STATE_UINT,
+		S('x') = STATE_UINT,
+		S('X') = STATE_UINT,
+		S('o') = STATE_UINT,
+		S('s') = STATE_PTR,
+		S('c') = STATE_INT,
+		S('p') = STATE_PTR,
+	},
+	{
+		/* STATE_LPRE */
+		S('l') = STATE_LLPRE,
+		S('d') = STATE_LONG,
+		S('i') = STATE_LONG,
+		S('u') = STATE_ULONG,
+		S('x') = STATE_ULONG,
+		S('X') = STATE_ULONG,
+		S('o') = STATE_ULONG,
+	},
+	{
+		/* STATE_LLPRE */
+		S('d') = STATE_LLONG,
+		S('i') = STATE_LLONG,
+		S('u') = STATE_ULLONG,
+		S('x') = STATE_ULLONG,
+		S('X') = STATE_ULLONG,
+		S('o') = STATE_ULLONG,
+	},
+	{
+		/* STATE_HPRE */
+		S('l') = STATE_HHPRE,
+		S('d') = STATE_SHORT,
+		S('i') = STATE_SHORT,
+		S('u') = STATE_USHORT,
+		S('x') = STATE_USHORT,
+		S('X') = STATE_USHORT,
+		S('o') = STATE_USHORT,
+	},
+	{
+		/* STATE_HHPRE */
+		S('d') = STATE_CHAR,
+		S('i') = STATE_CHAR,
+		S('u') = STATE_UCHAR,
+		S('x') = STATE_UCHAR,
+		S('X') = STATE_UCHAR,
+		S('o') = STATE_UCHAR,
+	},
+	{
+		/* STATE_ZPRE */
+		S('d') = STATE_PTRDIFF_T,
+		S('i') = STATE_PTRDIFF_T,
+		S('u') = STATE_SIZE_T,
+		S('x') = STATE_SIZE_T,
+		S('X') = STATE_SIZE_T,
+		S('o') = STATE_SIZE_T,
+	},
+};
+
+static char *fmt_u(uintmax_t x, char *s, char const *d)
+{
+	do {
+		*--s = d[x % 10];
+		x /= 10;
+	} while (x > 0);
+	return s;
+}
+
+static char *fmt_o(uintmax_t x, char *s, char const *d)
+{
+	do {
+		*--s = d[x & 7];
+		x >>= 3;
+	} while (x > 0);
+	return s;
+}
+
+static char *fmt_x(uintmax_t x, char *s, char const *d)
+{
+	do {
+		*--s = d[x & 15];
+		x >>= 4;
+	} while (x > 0);
+	return s;
+}
+
+static void out(struct internal_display *dis, char const *buf, size_t len)
+{
+	size_t n = 0;
+	dis->dis->write(dis->dis, buf, len, &n);
+	dis->cnt += n;
+}
+
+static void pad(struct internal_display *dis, size_t pad_len, char pad_ch)
+{
+	for (size_t i = 0; i < pad_len; ++i)
+		out(dis, &pad_ch, 1);
+}
+
+static void pop_arg(va_list ap, unsigned int st, union fmt_arg *arg)
+{
+	signed char c;
+	signed short si;
+	signed int i;
+	signed long li;
+	signed long long lli;
+	ptrdiff_t pd;
+	arg->lt0 = false;
+	switch (st) {
+	case STATE_CHAR:
+		c = (signed char)va_arg(ap, int);
+		if (c < 0) {
+			arg->lt0 = true;
+			c = -c;
+		}
+		arg->i = c;
+		break;
+	case STATE_SHORT:
+		si = (signed short)va_arg(ap, int);
+		if (si < 0) {
+			arg->lt0 = true;
+			si = -si;
+		}
+		arg->i = si;
+		break;
+	case STATE_INT:
+		i = va_arg(ap, int);
+		if (i < 0) {
+			arg->lt0 = true;
+			i = -i;
+		}
+		arg->i = i;
+		break;
+	case STATE_LONG:
+		li = va_arg(ap, long);
+		if (li < 0) {
+			arg->lt0 = true;
+			li = -li;
+		}
+		arg->i = li;
+		break;
+	case STATE_LLONG:
+		lli = va_arg(ap, long long);
+		if (lli < 0) {
+			arg->lt0 = true;
+			lli = -lli;
+		}
+		arg->i = lli;
+		break;
+	case STATE_PTRDIFF_T:
+		pd = va_arg(ap, ptrdiff_t);
+		if (pd < 0) {
+			arg->lt0 = true;
+			pd = -pd;
+		}
+		arg->i = pd;
+		break;
+	case STATE_UCHAR:
+		arg->i = va_arg(ap, unsigned int);
+		break;
+	case STATE_USHORT:
+		arg->i = va_arg(ap, unsigned int);
+		break;
+	case STATE_UINT:
+		arg->i = va_arg(ap, unsigned int);
+		break;
+	case STATE_ULONG:
+		arg->i = va_arg(ap, unsigned long);
+		break;
+	case STATE_ULLONG:
+		arg->i = va_arg(ap, unsigned long long);
+		break;
+	case STATE_SIZE_T:
+		arg->i = va_arg(ap, size_t);
+		break;
+	case STATE_PTR:
+		arg->p = va_arg(ap, void *);
+		break;
+	}
+}
+
+int printf_core(struct display *dis, char const *format, va_list ap)
+{
+	char buf[32];
+	union fmt_arg arg;
+	struct internal_display idis = {
+		.dis = dis,
+		.cnt = 0,
+	};
+	char const *s = format;
+
+	while (*s) {
+		if (*s != '%') {
+			out(&idis, s++, 1);
+			continue;
+		}
+
+		++s;
+
+		size_t width = 0;
+		bool has_width = false;
+		size_t prec = 0;
+		bool has_prec = false;
+		unsigned int flags = 0;
+
+		while (1) {
+			if (*s == ' ')
+				flags |= PAD_POS;
+			else if (*s == '+')
+				flags |= MARK_POS;
+			else if (*s == '-')
+				flags |= LEFT_ALIGN;
+			else if (*s == '0')
+				flags |= ZERO_PAD;
+			else if (*s == '#')
+				flags |= ALT_FORM;
+			else
+				break;
+			++s;
+		}
+
+		if (*s >= '0' && *s <= '9') {
+			has_width = true;
+			width = *s++ - '0';
+			while (*s >= '0' && *s <= '9')
+				width = width * 10 + (*s++ - '0');
+		}
+
+		if (*s == '.') {
+			++s;
+			has_prec = true;
+			while (*s >= '0' && *s <= '9')
+				prec = prec * 10 + (*s++ - '0');
+		}
+
+		unsigned int st = STATE_START;
+		char pch = 0;
+		while (st >= STATE_START && st <= STATE_STOP) {
+			if (OOB(*s))
+				goto invalid;
+			st = states[st] S(*s);
+			pch = *s++;
+		}
+
+		if (st == STATE_INVALID)
+			goto invalid;
+
+		pop_arg(ap, st, &arg);
+
+		char const *prefixes = "+- 0x0X";
+		char const *digits = "0123456789abcdef";
+
+		char *raw = NULL;
+		size_t raw_len = 0;
+
+		char const *radix = NULL;
+		size_t radix_len = 0;
+		char const *sign = NULL;
+		size_t sign_len = 0;
+
+		size_t lspace_pad = 0;
+		size_t lzero_pad = 0;
+		size_t rspace_pad = 0;
+
+		switch (pch) {
+		case 'i':
+		case 'd':
+		case 'u':
+			bitflags_clear(flags, ALT_FORM);
+			raw = fmt_u(arg.i, buf + sizeof(buf), digits);
+			break;
+		case 'o':
+			raw = fmt_o(arg.i, buf + sizeof(buf), digits);
+			radix = prefixes + 3;
+			radix_len = 1;
+			if (prec > 0)
+				prec -= 1;
+			break;
+		case 'x':
+			raw = fmt_x(arg.i, buf + sizeof(buf), digits);
+			radix = prefixes + 3;
+			radix_len = 2;
+			break;
+		case 'X':
+			digits = "0123456789ABCDEF";
+			raw = fmt_x(arg.i, buf + sizeof(buf), digits);
+			radix = prefixes + 5;
+			radix_len = 2;
+			break;
+		case 'p':
+			flags = ALT_FORM;
+			radix = prefixes + 3;
+			radix_len = 2;
+			raw = fmt_x(arg.i, buf + sizeof(buf), digits);
+			break;
+		case 's':
+			if (arg.p) {
+				raw_len = strlen(arg.p);
+			} else {
+				arg.p = "(null)";
+				raw_len = 6;
+			}
+			if (has_prec && prec < raw_len)
+				raw_len = prec;
+			if (has_width && width > raw_len &&
+			    !bitflags_check(flags, LEFT_ALIGN))
+				pad(&idis, width - raw_len, ' ');
+			out(&idis, arg.p, raw_len);
+			if (has_width && width > raw_len &&
+			    bitflags_check(flags, LEFT_ALIGN))
+				pad(&idis, width - raw_len, ' ');
+			continue;
+		case 'c':
+			pch = arg.i;
+			out(&idis, &pch, 1);
+			continue;
+		}
+
+		raw_len = buf + sizeof(buf) - raw;
+
+		if (has_prec || bitflags_check(flags, LEFT_ALIGN))
+			bitflags_clear(flags, ZERO_PAD);
+
+		if (has_prec && prec > raw_len)
+			lzero_pad = prec - raw_len;
+
+		if (bitflags_check(flags, PAD_POS)) {
+			sign = prefixes + 2;
+			sign_len = 1;
+		}
+		if (arg.lt0) {
+			sign = prefixes + 1;
+			sign_len = 1;
+		}
+		if (bitflags_check(flags, MARK_POS)) {
+			sign = prefixes + 0;
+			sign_len = 1;
+		}
+
+		size_t total_len = sign_len + radix_len + lzero_pad + raw_len;
+		if (has_width && width > total_len) {
+			if (bitflags_check(flags, LEFT_ALIGN))
+				rspace_pad = width - total_len;
+			if (bitflags_check(flags, ZERO_PAD))
+				lzero_pad = width - total_len;
+		}
+
+		pad(&idis, lspace_pad, ' ');
+		out(&idis, sign, sign_len);
+		out(&idis, radix, radix_len);
+		pad(&idis, lzero_pad, '0');
+		out(&idis, raw, raw_len);
+		pad(&idis, rspace_pad, ' ');
+	}
+
+	return (int)idis.cnt;
+
+invalid:
+	return -1;
+}

@@ -1,0 +1,38 @@
+#ifndef AOSD_MACROS_H
+#define AOSD_MACROS_H
+
+#define is_pow2(x)                                  \
+	({                                          \
+		__auto_type __x = (x);              \
+		__x != 0 && (__x & (__x - 1)) == 0; \
+	})
+
+#define max(x, y)                      \
+	({                             \
+		__auto_type __x = (x); \
+		__auto_type __y = (y); \
+		__x > __y ? __x : __y; \
+	})
+
+#define min(x, y)                      \
+	({                             \
+		__auto_type __x = (x); \
+		__auto_type __y = (y); \
+		__x < __y ? __x : __y; \
+	})
+
+#ifndef countof
+#define countof(arr) (sizeof(arr) / sizeof((arr)[0]))
+#endif
+
+#define bitflags_set(flags, flags_bit) ((flags) |= (flags_bit))
+#define bitflags_clear(flags, flags_bit) ((flags) &= ~(flags_bit))
+#define bitflags_check(flags, flags_bit) (((flags) & (flags_bit)) != 0)
+
+#define container_of(ptr, type, member)                              \
+	({                                                           \
+		typeof((((type *)0)->member)) const *__mptr = (ptr); \
+		(type *)((char *)__mptr - offsetof(type, member));   \
+	})
+
+#endif
