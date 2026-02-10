@@ -154,7 +154,7 @@ static void pad(struct internal_display *dis, size_t pad_len, char pad_ch)
 		out(dis, &pad_ch, 1);
 }
 
-static void pop_arg(va_list ap, unsigned int st, union fmt_arg *arg)
+static void pop_arg(va_list *ap, unsigned int st, union fmt_arg *arg)
 {
 	signed char c;
 	signed short si;
@@ -165,7 +165,7 @@ static void pop_arg(va_list ap, unsigned int st, union fmt_arg *arg)
 	arg->lt0 = false;
 	switch (st) {
 	case STATE_CHAR:
-		c = (signed char)va_arg(ap, int);
+		c = (signed char)va_arg(*ap, int);
 		if (c < 0) {
 			arg->lt0 = true;
 			c = -c;
@@ -173,7 +173,7 @@ static void pop_arg(va_list ap, unsigned int st, union fmt_arg *arg)
 		arg->i = c;
 		break;
 	case STATE_SHORT:
-		si = (signed short)va_arg(ap, int);
+		si = (signed short)va_arg(*ap, int);
 		if (si < 0) {
 			arg->lt0 = true;
 			si = -si;
@@ -181,7 +181,7 @@ static void pop_arg(va_list ap, unsigned int st, union fmt_arg *arg)
 		arg->i = si;
 		break;
 	case STATE_INT:
-		i = va_arg(ap, int);
+		i = va_arg(*ap, int);
 		if (i < 0) {
 			arg->lt0 = true;
 			i = -i;
@@ -189,7 +189,7 @@ static void pop_arg(va_list ap, unsigned int st, union fmt_arg *arg)
 		arg->i = i;
 		break;
 	case STATE_LONG:
-		li = va_arg(ap, long);
+		li = va_arg(*ap, long);
 		if (li < 0) {
 			arg->lt0 = true;
 			li = -li;
@@ -197,7 +197,7 @@ static void pop_arg(va_list ap, unsigned int st, union fmt_arg *arg)
 		arg->i = li;
 		break;
 	case STATE_LLONG:
-		lli = va_arg(ap, long long);
+		lli = va_arg(*ap, long long);
 		if (lli < 0) {
 			arg->lt0 = true;
 			lli = -lli;
@@ -205,7 +205,7 @@ static void pop_arg(va_list ap, unsigned int st, union fmt_arg *arg)
 		arg->i = lli;
 		break;
 	case STATE_PTRDIFF_T:
-		pd = va_arg(ap, ptrdiff_t);
+		pd = va_arg(*ap, ptrdiff_t);
 		if (pd < 0) {
 			arg->lt0 = true;
 			pd = -pd;
@@ -213,25 +213,25 @@ static void pop_arg(va_list ap, unsigned int st, union fmt_arg *arg)
 		arg->i = pd;
 		break;
 	case STATE_UCHAR:
-		arg->i = va_arg(ap, unsigned int);
+		arg->i = va_arg(*ap, unsigned int);
 		break;
 	case STATE_USHORT:
-		arg->i = va_arg(ap, unsigned int);
+		arg->i = va_arg(*ap, unsigned int);
 		break;
 	case STATE_UINT:
-		arg->i = va_arg(ap, unsigned int);
+		arg->i = va_arg(*ap, unsigned int);
 		break;
 	case STATE_ULONG:
-		arg->i = va_arg(ap, unsigned long);
+		arg->i = va_arg(*ap, unsigned long);
 		break;
 	case STATE_ULLONG:
-		arg->i = va_arg(ap, unsigned long long);
+		arg->i = va_arg(*ap, unsigned long long);
 		break;
 	case STATE_SIZE_T:
-		arg->i = va_arg(ap, size_t);
+		arg->i = va_arg(*ap, size_t);
 		break;
 	case STATE_PTR:
-		arg->p = va_arg(ap, void *);
+		arg->p = va_arg(*ap, void *);
 		break;
 	}
 }
@@ -302,7 +302,7 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 		if (st == STATE_INVALID)
 			goto invalid;
 
-		pop_arg(ap, st, &arg);
+		pop_arg(&ap, st, &arg);
 
 		char const *prefixes = "+- 0x0X";
 		char const *digits = "0123456789abcdef";
