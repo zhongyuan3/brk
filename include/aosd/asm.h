@@ -1,0 +1,28 @@
+#ifndef AOSD_ASM_H
+#define AOSD_ASM_H
+
+#define PAGE_SHIFT 12
+#define PAGE_SHIFT_2M 21
+#define PAGE_SHIFT_1G 30
+
+#define PAGE_SIZE 0x1000
+#define PAGE_SIZE_2M 0x200000
+#define PAGE_SIZE_1G 0x40000000
+
+#define KERNEL_LOAD_ADDR 0x80200000
+
+#define PAGE_OFFSET 0xffffffc000000000
+#define LINEAR_MAPPING_SIZE 0x2000000000 /* 128G */
+
+#define VMALLOC_START 0xffffffe000000000
+#define VMALLOC_SIZE 0x1000000000 /* 64G */
+
+#define MEM_MAP_START 0xfffffff000000000
+#define MEM_MAP_SIZE 0x100000000 /* 4G */
+
+#define KERNEL_LINK_ADDR 0xffffffff80000000
+
+#define INIT_STACK_PAGES 2
+#define EARLY_PGDIR_PAGES 4
+
+#endif
