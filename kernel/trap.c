@@ -1,6 +1,11 @@
+#include <aosd/assert.h>
+#include <aosd/irq.h>
 #include <aosd/macros.h>
+#include <aosd/panic.h>
+#include <aosd/plic.h>
 #include <aosd/riscv.h>
 #include <aosd/sbi.h>
+#include <aosd/timer.h>
 #include <aosd/trap.h>
 #include <aosd/types.h>
 
@@ -74,4 +79,45 @@ void early_trap_vector(void)
 
 	for (;;)
 		;
+}
+
+void trap_init(void)
+{
+	write_stvec((uint64_t)kernel_trap_vector);
+	write_sie(read_sie() | SIE_SEIE | SIE_STIE);
+	plic_set_threshold(my_cpu(), 0);
+	timer_set_next();
+	enable_int();
+}
+
+void kernel_trap_handler(void)
+{
+	uint64_t sstatus = read_sstatus();
+	uint64_t scause = read_scause();
+	uint64_t sepc = read_sepc();
+	uint64_t stval = read_stval();
+	uint32_t code = scause & 0x3FF;
+
+	assert(sstatus & SSTATUS_SPP);
+	assert(!is_int_enabled());
+
+	if (scause & (1ULL << 63)) {
+		switch (code) {
+		case 5:
+			timer_handle_int();
+			break;
+		case 9:
+			irq_handle_external(my_cpu());
+			break;
+		default:
+			panic("interrupt: %s, scause=%#lx, sepc=%#lx, stval=%#lx",
+			      interrupt_str(code), scause, sepc, stval);
+		}
+	} else {
+		panic("exception: %s, scause=%#lx, sepc=%#lx, stval=%#lx",
+		      exception_str(code), scause, sepc, stval);
+	}
+
+	write_sepc(sepc);
+	write_sstatus(sstatus);
 }
