@@ -16,6 +16,7 @@ typedef struct {
 } pte_t;
 
 struct kmem_cache {
+	const char *name;
 	size_t size;
 	size_t align;
 	struct list_head slab_list;
