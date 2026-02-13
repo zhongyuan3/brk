@@ -29,6 +29,10 @@ SRCS := \
 	kernel/panic.c \
 	kernel/printk.c \
 	kernel/trap.c \
+	kernel/cpu.c \
+	kernel/timer.c \
+	kernel/irq.c \
+	kernel/entry.S \
 	mm/init.c \
 	mm/memblock.c \
 	mm/pgalloc.c \
@@ -36,6 +40,8 @@ SRCS := \
 	mm/slab.c \
 	mm/vmalloc.c \
 	mm/ioremap.c \
+	drivers/plic.c \
+	drivers/uart.c \
 	lib/string.c \
 	lib/printf.c \
 	lib/libfdt/fdt.c \
