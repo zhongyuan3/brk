@@ -5,7 +5,8 @@
 
 #define NR_KMALLOC_CACHES 10
 
-int kmem_cache_init(struct kmem_cache *cache, size_t size, size_t align);
+int kmem_cache_init(struct kmem_cache *cache, size_t size, size_t align,
+		    const char *name);
 void kmem_cache_deinit(struct kmem_cache *cache);
 void *kmem_cache_alloc(struct kmem_cache *cache);
 void kmem_cache_free(struct kmem_cache *cache, void *obj);

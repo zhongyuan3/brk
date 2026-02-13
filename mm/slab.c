@@ -46,7 +46,7 @@ void kmalloc_init(void)
 	};
 	size_t align = alignof(max_align_t);
 	for (int i = 0; i < NR_KMALLOC_CACHES; ++i)
-		kmem_cache_init(&kmalloc_caches[i], sz[i], align);
+		kmem_cache_init(&kmalloc_caches[i], sz[i], align, "kmalloc");
 }
 
 void *kmalloc(size_t size)
@@ -122,7 +122,8 @@ static int kmem_cache_add_page(struct kmem_cache *cache)
 	return 0;
 }
 
-int kmem_cache_init(struct kmem_cache *cache, size_t size, size_t align)
+int kmem_cache_init(struct kmem_cache *cache, size_t size, size_t align,
+		    const char *name)
 {
 	if (size == 0 || align == 0)
 		return -EINVAL;
@@ -136,6 +137,7 @@ int kmem_cache_init(struct kmem_cache *cache, size_t size, size_t align)
 	cache->size = size;
 	cache->align = align;
 	cache->page_order = page_order(size);
+	cache->name = name;
 
 	list_init_head(&cache->slab_list);
 	return kmem_cache_add_page(cache);

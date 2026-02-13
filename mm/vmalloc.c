@@ -284,7 +284,7 @@ static void free_vmem_area(struct vmem_area *area)
 void vmalloc_init(void)
 {
 	kmem_cache_init(&vmem_area_cache, sizeof(struct vmem_area),
-			alignof(struct vmem_area));
+			alignof(struct vmem_area), "vmem_area");
 	list_init_head(&free_vmem_areas);
 	struct vmem_area *area = kmem_cache_alloc(&vmem_area_cache);
 	area->addr = VMALLOC_START;
