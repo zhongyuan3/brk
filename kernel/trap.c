@@ -5,6 +5,7 @@
 #include <aosd/plic.h>
 #include <aosd/riscv.h>
 #include <aosd/sbi.h>
+#include <aosd/sched/sched.h>
 #include <aosd/timer.h>
 #include <aosd/trap.h>
 #include <aosd/types.h>
@@ -105,16 +106,18 @@ void kernel_trap_handler(void)
 		switch (code) {
 		case 5:
 			timer_handle_int();
+			if (my_cpu()->current_task)
+				sched_yield();
 			break;
 		case 9:
 			irq_handle_external(my_cpu());
 			break;
 		default:
-			panic("interrupt: %s, scause=%#lx, sepc=%#lx, stval=%#lx",
+			panic("interrupt: %s, scause=%#lx, sepc=%#lx, stval=%#lx\n",
 			      interrupt_str(code), scause, sepc, stval);
 		}
 	} else {
-		panic("exception: %s, scause=%#lx, sepc=%#lx, stval=%#lx",
+		panic("exception: %s, scause=%#lx, sepc=%#lx, stval=%#lx\n",
 		      exception_str(code), scause, sepc, stval);
 	}
 
