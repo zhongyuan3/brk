@@ -7,6 +7,7 @@
 #include <aosd/printk.h>
 #include <aosd/riscv.h>
 #include <aosd/sbi.h>
+#include <aosd/sched/sched.h>
 #include <aosd/timer.h>
 #include <aosd/trap.h>
 #include <aosd/uart.h>
@@ -43,6 +44,66 @@ static struct console uart_console = {
 	.write = uart_write,
 };
 
+#define INTERVAL 20000000
+
+static void thread0(void)
+{
+	volatile size_t i = 0;
+	while (1) {
+		if (i % INTERVAL == 0)
+			printk("A");
+		++i;
+	}
+}
+
+static void thread0_entry(void)
+{
+	thread0();
+}
+
+static void thread1(void)
+{
+	volatile size_t i = 0;
+	while (1) {
+		if (i % INTERVAL == 0)
+			printk("B");
+		++i;
+	}
+}
+
+static void thread1_entry(void)
+{
+	thread1();
+}
+
+static void thread2(void)
+{
+	volatile size_t i = 0;
+	while (1) {
+		if (i % INTERVAL == 0)
+			printk("C");
+		++i;
+	}
+}
+
+static void thread2_entry(void)
+{
+	thread2();
+}
+
+static void create_thread(void (*entry)(void))
+{
+	struct task *task = task_create();
+	if (!task) {
+		log_warn("create thread failed\n");
+		return;
+	}
+
+	task->ctx.ra = (uint64_t)entry;
+	task->ctx.sp = task->kstack_top;
+	sched_join(task);
+}
+
 void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 {
 	write_stvec((uint64_t)early_trap_vector);
@@ -66,6 +127,14 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 	trap_init();
 
 	log_info("AOSD kernel starting\n");
+
+	sched_init();
+
+	create_thread(thread0_entry);
+	create_thread(thread1_entry);
+	create_thread(thread2_entry);
+
+	start_scheduler();
 
 	while (1) {
 	}

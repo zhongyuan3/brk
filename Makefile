@@ -33,6 +33,9 @@ SRCS := \
 	kernel/timer.c \
 	kernel/irq.c \
 	kernel/entry.S \
+	kernel/sched/sched.c \
+	kernel/sched/task.c \
+	kernel/sched/switch.S \
 	mm/init.c \
 	mm/memblock.c \
 	mm/pgalloc.c \
