@@ -42,7 +42,7 @@ static volatile uint8_t *uart_reg(unsigned int reg)
 
 static void uart_write_reg(unsigned int reg, uint8_t val)
 {
-	writeb(uart_reg(reg), val);
+	writeb(val, uart_reg(reg));
 }
 
 static uint8_t uart_read_reg(unsigned int reg)
