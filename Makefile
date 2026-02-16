@@ -45,6 +45,8 @@ SRCS := \
 	mm/ioremap.c \
 	drivers/plic.c \
 	drivers/uart.c \
+	drivers/virtio/virtio.c \
+	drivers/virtio/virtio_blk.c \
 	lib/string.c \
 	lib/printf.c \
 	lib/libfdt/fdt.c \
@@ -68,7 +70,9 @@ ROOTFS_IMG   := rootfs.img
 QEMU           := qemu-system-riscv64
 QEMU_COMMON    := -machine virt -nographic -m 128M -smp 1 -bios default \
 -drive file=$(ROOTFS_IMG),if=none,format=raw,id=x0 \
--device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
+-d guest_errors \
+-global virtio-mmio.force-legacy=false
 
 .PHONY: all aosd clean gdb-server gdb-client dis dts rootfs run
 
