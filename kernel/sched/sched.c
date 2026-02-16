@@ -3,7 +3,7 @@
 #include <aosd/mm.h>
 #include <aosd/panic.h>
 #include <aosd/riscv.h>
-#include <aosd/sched/sched.h>
+#include <aosd/sched.h>
 
 static LIST_HEAD(ready_queue);
 static LIST_HEAD(sleep_queue);

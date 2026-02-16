@@ -7,7 +7,7 @@
 #include <aosd/panic.h>
 #include <aosd/plic.h>
 #include <aosd/printk.h>
-#include <aosd/sched/sched.h>
+#include <aosd/sched.h>
 #include <aosd/slab.h>
 #include <aosd/virtio.h>
 #include <aosd/virtio_blk.h>
