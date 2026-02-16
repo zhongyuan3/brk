@@ -27,6 +27,11 @@ struct context {
 
 typedef long pid_t;
 
+typedef enum {
+	TASK_RUNNING,
+	TASK_SLEEPING,
+} task_state_t;
+
 struct task {
 	uint64_t kstack_base;
 	uint64_t kstack_top;
@@ -34,6 +39,8 @@ struct task {
 	pid_t pid;
 	struct list_head list;
 	pgde_t *pgd;
+	task_state_t state;
+	void *chan;
 };
 
 #endif

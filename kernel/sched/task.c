@@ -63,6 +63,8 @@ struct task *task_create(void)
 	task = task_alloc();
 	if (!task)
 		return NULL;
+	
+	task->state = TASK_RUNNING;
 
 	task->pid = pid_alloc();
 	if (task->pid < 0)
