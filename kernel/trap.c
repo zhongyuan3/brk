@@ -83,11 +83,11 @@ void early_trap_vector(void)
 		;
 }
 
-void trap_init(void)
+void trap_init(uint32_t hart_id)
 {
 	write_stvec((uint64_t)kernel_trap_vector);
 	write_sie(read_sie() | SIE_SEIE | SIE_STIE);
-	plic_set_threshold(my_cpu()->hart_id, 0);
+	plic_set_threshold(hart_id, 0);
 	timer_set_next();
 	enable_int();
 }
