@@ -8,9 +8,12 @@
 #include <aosd/riscv.h>
 #include <aosd/sbi.h>
 #include <aosd/sched/sched.h>
+#include <aosd/slab.h>
 #include <aosd/timer.h>
 #include <aosd/trap.h>
 #include <aosd/uart.h>
+#include <aosd/virtio.h>
+#include <aosd/virtio_blk.h>
 
 static int sbi_console_write(struct console *con, char const *buf, size_t n,
 			     size_t *written)
@@ -44,14 +47,14 @@ static struct console uart_console = {
 	.write = uart_write,
 };
 
-#define INTERVAL 20000000
+#define INTERVAL 40000000
 
 static void thread0(void)
 {
 	volatile size_t i = 0;
 	while (1) {
 		if (i % INTERVAL == 0)
-			printk("A");
+			printk("%s: A\n", __func__);
 		++i;
 	}
 }
@@ -63,10 +66,22 @@ static void thread0_entry(void)
 
 static void thread1(void)
 {
+	char *buf = kmalloc(1024);
+	virtio_blk_read(1024, buf, 1024 / SECTOR_SIZE);
 	volatile size_t i = 0;
+	size_t j = 0;
+	while (j < 1024) {
+		if (i % INTERVAL == 0) {
+			printk("%s: %d\n", __func__, buf[j]);
+			++j;
+		}
+		++i;
+	}
+	kfree(buf);
 	while (1) {
 		if (i % INTERVAL == 0)
-			printk("B");
+			printk("%s: B\n", __func__);
+
 		++i;
 	}
 }
@@ -81,7 +96,7 @@ static void thread2(void)
 	volatile size_t i = 0;
 	while (1) {
 		if (i % INTERVAL == 0)
-			printk("C");
+			printk("%s: C\n", __func__);
 		++i;
 	}
 }
@@ -126,9 +141,13 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 	console_register(&uart_console);
 	trap_init();
 
-	log_info("AOSD kernel starting\n");
+	dtb_init_scan_virtio_dev();
 
 	sched_init();
+
+	struct virtio_device *dev = virtio_dev_get(VIRTIO_DEVICE_ID_BLK);
+
+	virtio_blk_init(dev, 16);
 
 	create_thread(thread0_entry);
 	create_thread(thread1_entry);

@@ -7,6 +7,7 @@
 #include <aosd/panic.h>
 #include <aosd/printk.h>
 #include <aosd/slab.h>
+#include <aosd/virtio.h>
 
 uint64_t dtb_phys;
 void *dtb_virt;
@@ -227,13 +228,27 @@ int dtb_parse_plic(struct plic_device *plic)
 	return 0;
 }
 
+static int dtb_get_irq(int node, uint32_t *irq)
+{
+	int len;
+	const uint32_t *prop;
+
+	prop = fdt_getprop(dtb_virt, node, "interrupts", &len);
+	if (!prop || len != sizeof(uint32_t))
+		return -EINVAL;
+
+	*irq = fdt32_to_cpu(*prop);
+	return 0;
+}
+
 int dtb_parse_uart(struct uart_device *uart)
 {
 	int node;
-	const uint32_t *irq, *clock_freq;
+	const uint32_t *clock_freq;
 	int len;
 	uint64_t addr = 0;
 	uint64_t size = 0;
+	uint32_t irq = 0;
 
 	node = fdt_path_offset(dtb_virt, "/soc/serial");
 	if (node < 0) {
@@ -249,12 +264,11 @@ int dtb_parse_uart(struct uart_device *uart)
 	uart->phys_base = addr;
 	uart->size = size;
 
-	irq = fdt_getprop(dtb_virt, node, "interrupts", &len);
-	if (!irq || len != sizeof(uint32_t)) {
+	if (dtb_get_irq(node, &irq)) {
 		log_warn("UART interrupts property not found\n");
 		return -EINVAL;
 	}
-	uart->irq = fdt32_to_cpu(*irq);
+	uart->irq = irq;
 
 	clock_freq = fdt_getprop(dtb_virt, node, "clock-frequency", &len);
 	if (!clock_freq || len != sizeof(uint32_t)) {
@@ -263,5 +277,43 @@ int dtb_parse_uart(struct uart_device *uart)
 	}
 	uart->clock_freq = fdt32_to_cpu(*clock_freq);
 
+	return 0;
+}
+
+int dtb_init_scan_virtio_dev(void)
+{
+	int node;
+	uint64_t addr = 0;
+	uint64_t size = 0;
+	uint32_t irq = 0;
+	struct virtio_device *vdev;
+	const char *name;
+
+	for (node = fdt_node_offset_by_compatible(dtb_virt, -1, "virtio,mmio");
+	     node >= 0; node = fdt_node_offset_by_compatible(dtb_virt, node,
+							     "virtio,mmio")) {
+		name = fdt_get_name(dtb_virt, node, NULL);
+
+		addr = 0;
+		size = 0;
+		if (dtb_get_one_reg(node, &addr, &size))
+			continue;
+
+		if (dtb_get_irq(node, &irq))
+			continue;
+
+		log_info(
+			"found virtio mmio node %s: addr=%#lx, size=%#lx, irq=%#x\n",
+			name, addr, size, irq);
+
+		vdev = virtio_dev_create(addr, size, irq);
+		if (!vdev) {
+			log_debug("%s(): failed to create virtio device\n",
+				  __func__);
+			continue;
+		}
+
+		virtio_dev_add(vdev);
+	}
 	return 0;
 }
