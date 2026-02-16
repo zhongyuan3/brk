@@ -7,7 +7,7 @@
 #include <aosd/printk.h>
 #include <aosd/riscv.h>
 #include <aosd/sbi.h>
-#include <aosd/sched/sched.h>
+#include <aosd/sched.h>
 #include <aosd/slab.h>
 #include <aosd/timer.h>
 #include <aosd/trap.h>

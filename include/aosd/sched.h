@@ -1,7 +1,7 @@
-#ifndef AOSD_SCHED_SCHED_H
-#define AOSD_SCHED_SCHED_H
+#ifndef AOSD_SCHED_H
+#define AOSD_SCHED_H
 
-#include <aosd/sched/types.h>
+#include <aosd/sched_types.h>
 
 void switch_context(struct context *prev, struct context *next);
 

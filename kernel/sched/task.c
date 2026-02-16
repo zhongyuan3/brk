@@ -2,7 +2,7 @@
 #include <aosd/pgalloc.h>
 #include <aosd/pgtable.h>
 #include <aosd/printk.h>
-#include <aosd/sched/sched.h>
+#include <aosd/sched.h>
 #include <aosd/slab.h>
 
 static struct kmem_cache task_cache;
@@ -63,7 +63,7 @@ struct task *task_create(void)
 	task = task_alloc();
 	if (!task)
 		return NULL;
-	
+
 	task->state = TASK_RUNNING;
 
 	task->pid = pid_alloc();

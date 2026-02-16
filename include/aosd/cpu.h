@@ -1,7 +1,7 @@
 #ifndef AOSD_CPU_H
 #define AOSD_CPU_H
 
-#include <aosd/sched/types.h>
+#include <aosd/sched_types.h>
 #include <aosd/types.h>
 
 struct cpu {
