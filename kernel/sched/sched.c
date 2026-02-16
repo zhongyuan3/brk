@@ -6,6 +6,7 @@
 #include <aosd/sched/sched.h>
 
 static LIST_HEAD(ready_queue);
+static LIST_HEAD(sleep_queue);
 
 static struct task *pick_next_task(void)
 {
@@ -32,6 +33,20 @@ static void switch_pgdir(pgde_t *pgd)
 	sfence_vma();
 }
 
+static void add_to_queue(struct task *task)
+{
+	switch (task->state) {
+	case TASK_RUNNING:
+		list_add_tail(&task->list, &ready_queue);
+		break;
+	case TASK_SLEEPING:
+		list_add_tail(&task->list, &sleep_queue);
+		break;
+	default:
+		panic("%s(): unknown task state %d\n", __func__, task->state);
+	}
+}
+
 void start_scheduler(void)
 {
 	struct task *next = NULL;
@@ -46,7 +61,7 @@ void start_scheduler(void)
 			cpu->current_task = next;
 			switch_context(&cpu->ctx, &next->ctx);
 			cpu->current_task = NULL;
-			sched_join(next);
+			add_to_queue(next);
 		} else {
 			enable_int();
 			asm volatile("wfi");
@@ -61,4 +76,25 @@ void sched_yield(void)
 	if (!current)
 		panic("%s(): no current task\n", __func__);
 	switch_context(&current->ctx, &cpu->ctx);
+}
+
+void sched_sleep(void *chan)
+{
+	struct task *current = my_cpu()->current_task;
+	current->state = TASK_SLEEPING;
+	current->chan = chan;
+	sched_yield();
+}
+
+void sched_wake_up(void *chan)
+{
+	struct task *curr, *next;
+
+	list_for_each_entry_safe(curr, next, &sleep_queue, list) {
+		if (curr->chan == chan) {
+			curr->state = TASK_RUNNING;
+			list_del(&curr->list);
+			list_add_tail(&curr->list, &ready_queue);
+		}
+	}
 }

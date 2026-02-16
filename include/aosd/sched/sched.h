@@ -8,6 +8,8 @@ void switch_context(struct context *prev, struct context *next);
 void sched_init(void);
 void sched_join(struct task *task);
 void sched_yield(void);
+void sched_sleep(void *chan);
+void sched_wake_up(void *chan);
 void start_scheduler(void);
 
 struct task *task_create(void);
