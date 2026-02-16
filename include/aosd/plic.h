@@ -1,7 +1,6 @@
 #ifndef AOSD_PLIC_H
 #define AOSD_PLIC_H
 
-#include <aosd/cpu.h>
 #include <aosd/types.h>
 
 #define PLIC_PRIORITY_OFFSET 0x000000
@@ -17,11 +16,11 @@ struct plic_device {
 };
 
 void plic_init(void);
-int plic_enable(struct cpu *cpu, uint32_t source);
+int plic_enable(uint32_t hart_id, uint32_t source);
 int plic_set_priority(uint32_t source, unsigned int priority);
-int plic_set_threshold(struct cpu *cpu, unsigned int threshold);
-int plic_claim(struct cpu *cpu, uint32_t *source);
-int plic_complete(struct cpu *cpu, uint32_t source);
+int plic_set_threshold(uint32_t hart_id, unsigned int threshold);
+int plic_claim(uint32_t hart_id, uint32_t *source);
+int plic_complete(uint32_t hart_id, uint32_t source);
 uint32_t plic_get_ndev(void);
 
 #endif

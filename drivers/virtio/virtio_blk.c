@@ -1,5 +1,6 @@
 #include <aosd/align.h>
 #include <aosd/assert.h>
+#include <aosd/cpu.h>
 #include <aosd/errno.h>
 #include <aosd/irq.h>
 #include <aosd/mm.h>
@@ -189,7 +190,7 @@ int virtio_blk_init(struct virtio_device *dev, unsigned int queue_size)
 
 	irq_register_handler(blk_dev->irq, virtio_blk_irq_handler, NULL);
 	plic_set_priority(blk_dev->irq, 1);
-	plic_enable(my_cpu(), blk_dev->irq);
+	plic_enable(my_cpu()->hart_id, blk_dev->irq);
 
 	return 0;
 

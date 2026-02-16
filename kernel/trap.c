@@ -1,4 +1,5 @@
 #include <aosd/assert.h>
+#include <aosd/cpu.h>
 #include <aosd/irq.h>
 #include <aosd/macros.h>
 #include <aosd/panic.h>
@@ -86,7 +87,7 @@ void trap_init(void)
 {
 	write_stvec((uint64_t)kernel_trap_vector);
 	write_sie(read_sie() | SIE_SEIE | SIE_STIE);
-	plic_set_threshold(my_cpu(), 0);
+	plic_set_threshold(my_cpu()->hart_id, 0);
 	timer_set_next();
 	enable_int();
 }
@@ -110,7 +111,7 @@ void kernel_trap_handler(void)
 				sched_yield();
 			break;
 		case 9:
-			irq_handle_external(my_cpu());
+			irq_handle_external(my_cpu()->hart_id);
 			break;
 		default:
 			panic("interrupt: %s, scause=%#lx, sepc=%#lx, stval=%#lx\n",

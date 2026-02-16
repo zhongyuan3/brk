@@ -41,11 +41,11 @@ int irq_unregister_handler(uint32_t source, irq_handler_t *old_handler)
 	return 0;
 }
 
-int irq_handle_external(struct cpu *cpu)
+int irq_handle_external(uint32_t hart_id)
 {
 	uint32_t source = 0;
 
-	int err = plic_claim(cpu, &source);
+	int err = plic_claim(hart_id, &source);
 	if (err)
 		return err;
 
@@ -55,5 +55,5 @@ int irq_handle_external(struct cpu *cpu)
 	if (irq_handlers[source])
 		irq_handlers[source]();
 
-	return plic_complete(cpu, source);
+	return plic_complete(hart_id, source);
 }

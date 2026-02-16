@@ -39,14 +39,14 @@ static volatile uint32_t *plic_senable(uint32_t hart_id)
 	return (volatile uint32_t *)(enable_base + ctx * 0x80);
 }
 
-int plic_enable(struct cpu *cpu, uint32_t source)
+int plic_enable(uint32_t hart_id, uint32_t source)
 {
 	volatile uint32_t *senable;
 
 	if (!plic_source_is_valid(source))
 		return -EINVAL;
 
-	senable = plic_senable(cpu->hart_id);
+	senable = plic_senable(hart_id);
 	if (!senable)
 		return -EINVAL;
 
@@ -70,11 +70,11 @@ static volatile uint32_t *plic_sthreshold(uint32_t hart_id)
 	return (volatile uint32_t *)(threshold_base + ctx * 0x1000);
 }
 
-int plic_set_threshold(struct cpu *cpu, unsigned int threshold)
+int plic_set_threshold(uint32_t hart_id, unsigned int threshold)
 {
 	volatile uint32_t *sthreshold;
 
-	sthreshold = plic_sthreshold(cpu->hart_id);
+	sthreshold = plic_sthreshold(hart_id);
 	if (!sthreshold)
 		return -EINVAL;
 
@@ -88,11 +88,11 @@ static volatile uint32_t *plic_sclaim_complete(uint32_t hart_id)
 	return (volatile uint32_t *)(claim_complete_base + ctx * 0x1000);
 }
 
-int plic_claim(struct cpu *cpu, uint32_t *source)
+int plic_claim(uint32_t hart_id, uint32_t *source)
 {
 	volatile uint32_t *sclaim;
 
-	sclaim = plic_sclaim_complete(cpu->hart_id);
+	sclaim = plic_sclaim_complete(hart_id);
 	if (!sclaim)
 		return -EINVAL;
 
@@ -100,14 +100,14 @@ int plic_claim(struct cpu *cpu, uint32_t *source)
 	return 0;
 }
 
-int plic_complete(struct cpu *cpu, uint32_t source)
+int plic_complete(uint32_t hart_id, uint32_t source)
 {
 	volatile uint32_t *scomplete;
 
 	if (!plic_source_is_valid(source))
 		return -EINVAL;
 
-	scomplete = plic_sclaim_complete(cpu->hart_id);
+	scomplete = plic_sclaim_complete(hart_id);
 	if (!scomplete)
 		return -EINVAL;
 
