@@ -134,20 +134,21 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 	dtb_init_scan_cpu();
 	save_cpu(hart_id);
 	timer_init();
+
 	plic_init();
 	irq_init();
-	uart_init();
+
+	uart_init(hart_id);
 	console_unregister(&sbi_console);
 	console_register(&uart_console);
-	trap_init();
+
+	trap_init(hart_id);
 
 	dtb_init_scan_virtio_dev();
+	struct virtio_device *dev = virtio_dev_get(VIRTIO_DEVICE_ID_BLK);
+	virtio_blk_init(hart_id, dev, 16);
 
 	sched_init();
-
-	struct virtio_device *dev = virtio_dev_get(VIRTIO_DEVICE_ID_BLK);
-
-	virtio_blk_init(dev, 16);
 
 	create_thread(thread0_entry);
 	create_thread(thread1_entry);

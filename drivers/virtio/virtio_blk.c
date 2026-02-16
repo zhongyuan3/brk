@@ -50,7 +50,8 @@ static void virtio_blk_irq_handler(void)
 	}
 }
 
-int virtio_blk_init(struct virtio_device *dev, unsigned int queue_size)
+int virtio_blk_init(uint32_t hart_id, struct virtio_device *dev,
+		    unsigned int queue_size)
 {
 	uint64_t mem_base;
 	uint32_t status;
@@ -190,7 +191,7 @@ int virtio_blk_init(struct virtio_device *dev, unsigned int queue_size)
 
 	irq_register_handler(blk_dev->irq, virtio_blk_irq_handler, NULL);
 	plic_set_priority(blk_dev->irq, 1);
-	plic_enable(my_cpu()->hart_id, blk_dev->irq);
+	plic_enable(hart_id, blk_dev->irq);
 
 	return 0;
 

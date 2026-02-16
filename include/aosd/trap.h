@@ -3,7 +3,7 @@
 
 void early_trap_vector(void);
 
-void trap_init(void);
+void trap_init(uint32_t hart_id);
 void kernel_trap_handler(void);
 void kernel_trap_vector(void);
 
