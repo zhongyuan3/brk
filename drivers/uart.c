@@ -89,7 +89,7 @@ void uart_init(void)
 
 	irq_register_handler(uart.irq, uart_handle_irq, NULL);
 	plic_set_priority(uart.irq, 1);
-	plic_enable(my_cpu(), uart.irq);
+	plic_enable(my_cpu()->hart_id, uart.irq);
 }
 
 void uart_putc(int c)
