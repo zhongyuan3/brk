@@ -8,6 +8,7 @@
 #include <aosd/riscv.h>
 #include <aosd/sbi.h>
 #include <aosd/sched.h>
+#include <aosd/sched_types.h>
 #include <aosd/slab.h>
 #include <aosd/timer.h>
 #include <aosd/trap.h>
@@ -61,16 +62,17 @@ static void thread0(void)
 
 static void thread0_entry(void)
 {
+	enable_int();
 	thread0();
 }
 
 static void thread1(void)
 {
-	char *buf = kmalloc(1024);
-	virtio_blk_read(1024, buf, 1024 / SECTOR_SIZE);
 	volatile size_t i = 0;
+	char *buf = kmalloc(SECTOR_SIZE);
+	virtio_blk_read(2, buf, 1);
 	size_t j = 0;
-	while (j < 1024) {
+	while (j < SECTOR_SIZE) {
 		if (i % INTERVAL == 0) {
 			printk("%s: %d\n", __func__, buf[j]);
 			++j;
@@ -88,6 +90,7 @@ static void thread1(void)
 
 static void thread1_entry(void)
 {
+	enable_int();
 	thread1();
 }
 
@@ -103,6 +106,7 @@ static void thread2(void)
 
 static void thread2_entry(void)
 {
+	enable_int();
 	thread2();
 }
 
@@ -115,7 +119,8 @@ static void create_thread(void (*entry)(void))
 	}
 
 	task->ctx.ra = (uint64_t)entry;
-	task->ctx.sp = task->kstack_top;
+	task->ctx.sp = task->stack + KSTACK_SIZE;
+	task->state = TASK_RUNNING;
 	sched_join(task);
 }
 
@@ -154,7 +159,7 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 	create_thread(thread1_entry);
 	create_thread(thread2_entry);
 
-	start_scheduler();
+	start_scheduling();
 
 	while (1) {
 	}

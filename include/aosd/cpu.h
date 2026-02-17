@@ -8,7 +8,6 @@ struct cpu {
 	struct cpu *next;
 	uint32_t hart_id;
 	struct task *current_task;
-	struct context ctx;
 };
 
 void cpu_add(struct cpu *cpu);

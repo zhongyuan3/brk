@@ -33,8 +33,7 @@ typedef enum {
 } task_state_t;
 
 struct task {
-	uint64_t kstack_base;
-	uint64_t kstack_top;
+	uint64_t stack;
 	struct context ctx;
 	pid_t pid;
 	struct list_head list;
