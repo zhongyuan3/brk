@@ -81,10 +81,8 @@ int dtb_early_init_scan_mem(void)
 	int addr_cells, size_cells;
 
 	node = fdt_path_offset(dtb_virt, "/memory");
-	if (node < 0) {
-		log_warn("memory node not found\n");
+	if (node < 0)
 		return -EINVAL;
-	}
 
 	err = dtb_get_parent_cells(node, &addr_cells, &size_cells);
 	if (err)
@@ -123,52 +121,21 @@ int dtb_early_init_scan_reserved_mem(void)
 
 int dtb_init_scan_cpu(void)
 {
-	int node, subnode;
-	char const *devtype;
-	struct cpu *cpu = NULL;
-	uint32_t hart_id = 0;
+	int node;
 	uint32_t timebase_freq = 0;
 	const uint32_t *freq;
-	const uint32_t *reg;
 	int len;
 
 	node = fdt_path_offset(dtb_virt, "/cpus");
-	if (node < 0) {
-		log_warn("CPU node not found\n");
+	if (node < 0)
 		return -EINVAL;
-	}
 
 	freq = fdt_getprop(dtb_virt, node, "timebase-frequency", &len);
-	if (!freq || len != sizeof(uint32_t)) {
-		log_warn("timebase-frequency property not found\n");
+	if (!freq || len != sizeof(uint32_t))
 		return -EINVAL;
-	}
+
 	timebase_freq = fdt32_to_cpu(*freq);
 	cpu_set_timebase_freq(timebase_freq);
-
-	fdt_for_each_subnode(subnode, dtb_virt, node) {
-		devtype = fdt_getprop(dtb_virt, subnode, "device_type", NULL);
-		if (!devtype || strcmp(devtype, "cpu") != 0)
-			continue;
-
-		log_info("found CPU node %s\n",
-			 fdt_get_name(dtb_virt, subnode, NULL));
-
-		cpu = kzalloc(sizeof(*cpu));
-		if (!cpu) {
-			log_warn("failed to allocate memory for CPU\n");
-			return -ENOMEM;
-		}
-
-		reg = fdt_getprop(dtb_virt, subnode, "reg", &len);
-		if (!reg || len != sizeof(uint32_t)) {
-			log_warn("CPU reg property not found\n");
-			return -EINVAL;
-		}
-		hart_id = fdt32_to_cpu(*reg);
-		cpu->hart_id = hart_id;
-		cpu_add(cpu);
-	}
 
 	return 0;
 }
@@ -205,24 +172,19 @@ int dtb_parse_plic(struct plic_device *plic)
 	uint64_t size = 0;
 
 	node = fdt_path_offset(dtb_virt, "/soc/plic");
-	if (node < 0) {
-		log_warn("PLIC node not found\n");
+	if (node < 0)
 		return -EINVAL;
-	}
 
-	if (dtb_get_one_reg(node, &addr, &size)) {
-		log_warn("PLIC reg property not found\n");
+	if (dtb_get_one_reg(node, &addr, &size))
 		return -EINVAL;
-	}
 
 	plic->phys_base = addr;
 	plic->size = size;
 
 	ndev = fdt_getprop(dtb_virt, node, "riscv,ndev", &len);
-	if (!ndev || len != sizeof(uint32_t)) {
-		log_warn("PLIC riscv,ndev property not found\n");
+	if (!ndev || len != sizeof(uint32_t))
 		return -EINVAL;
-	}
+
 	plic->ndev = fdt32_to_cpu(*ndev);
 
 	return 0;
@@ -251,30 +213,24 @@ int dtb_parse_uart(struct uart_device *uart)
 	uint32_t irq = 0;
 
 	node = fdt_path_offset(dtb_virt, "/soc/serial");
-	if (node < 0) {
-		log_warn("UART node not found\n");
+	if (node < 0)
 		return -EINVAL;
-	}
 
-	if (dtb_get_one_reg(node, &addr, &size)) {
-		log_warn("UART reg property not found\n");
+	if (dtb_get_one_reg(node, &addr, &size))
 		return -EINVAL;
-	}
 
 	uart->phys_base = addr;
 	uart->size = size;
 
-	if (dtb_get_irq(node, &irq)) {
-		log_warn("UART interrupts property not found\n");
+	if (dtb_get_irq(node, &irq))
 		return -EINVAL;
-	}
+
 	uart->irq = irq;
 
 	clock_freq = fdt_getprop(dtb_virt, node, "clock-frequency", &len);
-	if (!clock_freq || len != sizeof(uint32_t)) {
-		log_warn("UART clock-frequency property not found\n");
+	if (!clock_freq || len != sizeof(uint32_t))
 		return -EINVAL;
-	}
+
 	uart->clock_freq = fdt32_to_cpu(*clock_freq);
 
 	return 0;
@@ -287,13 +243,10 @@ int dtb_init_scan_virtio_dev(void)
 	uint64_t size = 0;
 	uint32_t irq = 0;
 	struct virtio_device *vdev;
-	const char *name;
 
 	for (node = fdt_node_offset_by_compatible(dtb_virt, -1, "virtio,mmio");
 	     node >= 0; node = fdt_node_offset_by_compatible(dtb_virt, node,
 							     "virtio,mmio")) {
-		name = fdt_get_name(dtb_virt, node, NULL);
-
 		addr = 0;
 		size = 0;
 		if (dtb_get_one_reg(node, &addr, &size))
@@ -302,16 +255,10 @@ int dtb_init_scan_virtio_dev(void)
 		if (dtb_get_irq(node, &irq))
 			continue;
 
-		log_info(
-			"found virtio mmio node %s: addr=%#lx, size=%#lx, irq=%#x\n",
-			name, addr, size, irq);
-
 		vdev = virtio_dev_create(addr, size, irq);
-		if (!vdev) {
-			log_debug("%s(): failed to create virtio device\n",
-				  __func__);
+		if (!vdev)
+
 			continue;
-		}
 
 		virtio_dev_add(vdev);
 	}

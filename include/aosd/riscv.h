@@ -131,4 +131,16 @@ static inline bool is_int_enabled(void)
 	return read_sstatus() & SSTATUS_SIE;
 }
 
+static inline uint64_t read_sscratch(void)
+{
+	uint64_t x;
+	asm volatile("csrr %0, sscratch" : "=r"(x));
+	return x;
+}
+
+static inline void write_sscratch(uint64_t x)
+{
+	asm volatile("csrw sscratch, %0" : : "r"(x));
+}
+
 #endif

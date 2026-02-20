@@ -1,4 +1,5 @@
 #include <aosd/cpu.h>
+#include <aosd/errno.h>
 #include <aosd/list.h>
 #include <aosd/mm.h>
 #include <aosd/panic.h>
@@ -32,6 +33,7 @@ static void switch_pgdir(pgde_t *pgd)
 {
 	uint64_t paddr = virt_to_phys((uint64_t)pgd);
 	uint64_t satp = make_satp_sv39(paddr);
+	sfence_vma();
 	write_satp(satp);
 	sfence_vma();
 }
@@ -45,9 +47,31 @@ static void add_to_queue(struct task *task)
 	case TASK_SLEEPING:
 		list_add_tail(&task->list, &sleep_queue);
 		break;
+	case TASK_ZOMBIE:
+		/* Do nothing, just wait for parent to wait */
+		break;
 	default:
 		panic("%s(): unknown task state %d\n", __func__, task->state);
 	}
+}
+
+void start_scheduling(void)
+{
+	struct task *next = NULL;
+	struct cpu *cpu = current_cpu();
+
+	while (1) {
+		next = pick_next_task();
+		if (next)
+			break;
+		enable_int();
+		asm volatile("wfi");
+	}
+
+	cpu->current = next;
+	next->cpu = cpu;
+	switch_pgdir(next->pgd);
+	switch_to(&next->ctx);
 }
 
 void schedule(void)
@@ -56,19 +80,23 @@ void schedule(void)
 	struct cpu *cpu;
 
 	enable_int();
+	disable_int();
 
-	cpu = my_cpu();
-	prev = cpu->current_task;
+	cpu = current_cpu();
+	prev = cpu->current;
+	cpu->current = NULL;
 	add_to_queue(prev);
 
 	next = pick_next_task();
-	cpu->current_task = next;
+	cpu->current = next;
+	next->cpu = cpu;
 	switch_pgdir(next->pgd);
-
 	switch_context(&prev->ctx, &next->ctx);
 
-	cpu = my_cpu();
-	cpu->current_task = prev;
+	prev->time_slice = 5;
+	cpu = current_cpu();
+	cpu->current = prev;
+	prev->cpu = cpu;
 	switch_pgdir(prev->pgd);
 }
 
@@ -79,7 +107,7 @@ void sched_yield(void)
 
 void sched_sleep(void *chan)
 {
-	struct task *current = my_cpu()->current_task;
+	struct task *current = current_cpu()->current;
 	current->state = TASK_SLEEPING;
 	current->chan = chan;
 	schedule();
@@ -98,18 +126,55 @@ void sched_wake_up(void *chan)
 	}
 }
 
-void start_scheduling(void)
+static void move_children_to_init_task(struct task *parent)
 {
-	struct task *next = NULL;
-	struct cpu *cpu = my_cpu();
-	while (1) {
-		next = pick_next_task();
-		if (next)
-			break;
-		enable_int();
-		asm volatile("wfi");
+	struct task *curr, *next;
+
+	list_for_each_entry_safe(curr, next, &parent->children, child_list) {
+		list_del(&curr->child_list);
+		curr->parent = init_task;
+		list_add_tail(&curr->list, &init_task->children);
 	}
-	cpu->current_task = next;
-	switch_pgdir(next->pgd);
-	switch_to(&next->ctx);
+}
+
+void sched_exit(int status)
+{
+	struct task *current = current_cpu()->current;
+	if (current == init_task)
+		panic("%s(): init task exit\n", __func__);
+
+	move_children_to_init_task(current);
+
+	current->state = TASK_ZOMBIE;
+	current->exit_status = status;
+
+	sched_wake_up(current->parent);
+
+	schedule();
+
+	panic("scheduling zombie task\n");
+}
+
+pid_t sched_wait(int *status)
+{
+	struct task *curr, *next;
+	struct task *parent = current_cpu()->current;
+
+	if (list_empty(&parent->children))
+		return -ECHILD;
+
+again:
+	list_for_each_entry_safe(curr, next, &parent->children, child_list) {
+		if (curr->state == TASK_ZOMBIE) {
+			list_del(&curr->child_list);
+			if (status)
+				*status = curr->exit_status;
+			task_destroy(curr);
+			return curr->pid;
+		}
+	}
+
+	sched_sleep(parent);
+
+	goto again;
 }

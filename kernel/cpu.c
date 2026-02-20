@@ -3,30 +3,16 @@
 #include <aosd/panic.h>
 #include <aosd/riscv.h>
 
-static struct cpu *cpus;
 static uint32_t timebase_freq;
+static struct cpu cpus[NR_CPUS];
 
-void cpu_add(struct cpu *cpu)
+void cpu_init(uint32_t hart_id)
 {
-	cpu->next = cpus;
-	cpus = cpu;
+	cpus[hart_id].hart_id = hart_id;
+	write_tp((uint64_t)&cpus[hart_id]);
 }
 
-void save_cpu(uint32_t hart_id)
-{
-	struct cpu *cpu = cpus;
-	while (cpu) {
-		if (cpu->hart_id == hart_id) {
-			write_tp((uint64_t)cpu);
-			return;
-		}
-		cpu = cpu->next;
-	}
-
-	panic("%s(): no cpu with hart id %u\n", __func__, hart_id);
-}
-
-struct cpu *my_cpu(void)
+struct cpu *current_cpu(void)
 {
 	return (struct cpu *)read_tp();
 }

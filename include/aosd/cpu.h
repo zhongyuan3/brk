@@ -4,15 +4,15 @@
 #include <aosd/sched_types.h>
 #include <aosd/types.h>
 
+#define NR_CPUS 8
+
 struct cpu {
-	struct cpu *next;
+	struct task *current;
 	uint32_t hart_id;
-	struct task *current_task;
 };
 
-void cpu_add(struct cpu *cpu);
-void save_cpu(uint32_t hart_id);
-struct cpu *my_cpu(void);
+void cpu_init(uint32_t hart_id);
+struct cpu *current_cpu(void);
 void cpu_set_timebase_freq(uint32_t freq);
 uint32_t cpu_get_timebase_freq(void);
 

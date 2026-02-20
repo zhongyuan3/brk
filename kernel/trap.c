@@ -7,6 +7,8 @@
 #include <aosd/riscv.h>
 #include <aosd/sbi.h>
 #include <aosd/sched.h>
+#include <aosd/sched_types.h>
+#include <aosd/syscall.h>
 #include <aosd/timer.h>
 #include <aosd/trap.h>
 #include <aosd/types.h>
@@ -65,28 +67,10 @@ static char const *exception_str(unsigned int excno)
 		return excstrs[excno];
 }
 
-void early_trap_vector(void)
-{
-	uint64_t scause = read_scause();
-
-	if (scause & (1ULL << 63)) {
-		sbi_console_putstr("interrupt: ");
-		sbi_console_putstr(interrupt_str(scause & 0x3FF));
-	} else {
-		sbi_console_putstr("exception: ");
-		sbi_console_putstr(exception_str(scause & 0x3FF));
-	}
-
-	sbi_console_putchar('\n');
-
-	for (;;)
-		;
-}
-
 void trap_init(uint32_t hart_id)
 {
 	write_stvec((uint64_t)kernel_trap_vector);
-	write_sie(read_sie() | SIE_SEIE | SIE_STIE);
+	write_sie(read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
 	plic_set_threshold(hart_id, 0);
 	timer_set_next();
 	enable_int();
@@ -99,6 +83,7 @@ void kernel_trap_handler(void)
 	uint64_t sepc = read_sepc();
 	uint64_t stval = read_stval();
 	uint32_t code = scause & 0x3FF;
+	struct task *task;
 
 	assert(sstatus & SSTATUS_SPP);
 	assert(!is_int_enabled());
@@ -107,11 +92,14 @@ void kernel_trap_handler(void)
 		switch (code) {
 		case 5:
 			timer_handle_int();
-			if (my_cpu()->current_task)
-				sched_yield();
+			task = current_cpu()->current;
+			if (task) {
+				if (--task->time_slice <= 0)
+					sched_yield();
+			}
 			break;
 		case 9:
-			irq_handle_external(my_cpu()->hart_id);
+			irq_handle_external(current_cpu()->hart_id);
 			break;
 		default:
 			panic("interrupt: %s, scause=%#lx, sepc=%#lx, stval=%#lx\n",
@@ -124,4 +112,73 @@ void kernel_trap_handler(void)
 
 	write_sepc(sepc);
 	write_sstatus(sstatus);
+}
+
+struct task *user_trap_handler(void)
+{
+	struct task *task;
+	uint64_t scause;
+	uint32_t code;
+	struct cpu *cpu;
+
+	write_stvec((uint64_t)kernel_trap_vector);
+	task = (struct task *)read_sscratch();
+	cpu = task->cpu;
+	write_tp((uint64_t)cpu);
+
+	assert(!(read_sstatus() & SSTATUS_SPP));
+	assert(!is_int_enabled());
+
+	scause = read_scause();
+	code = scause & 0x3FF;
+	if (scause & (1ULL << 63)) {
+		switch (code) {
+		case 5:
+			timer_handle_int();
+			if (task) {
+				if (--task->time_slice <= 0)
+					sched_yield();
+			}
+			break;
+		case 9:
+			irq_handle_external(cpu->hart_id);
+			break;
+		default:
+			sched_exit(1);
+		}
+	} else {
+		switch (code) {
+		case 8:
+			task->tf.epc += 4;
+			enable_int();
+			syscall();
+			break;
+		default:
+			sched_exit(1);
+		}
+	}
+
+	prepare_to_return();
+	return task;
+}
+
+void prepare_to_return(void)
+{
+	uint64_t sstatus;
+	struct task *task;
+
+	disable_int();
+
+	write_stvec((uint64_t)user_trap_vector);
+
+	task = current_cpu()->current;
+
+	sstatus = read_sstatus();
+	sstatus &= ~SSTATUS_SPP;
+	sstatus |= SSTATUS_SPIE;
+	write_sstatus(sstatus);
+
+	task->tf.kernel_sp = task->stack + KSTACK_SIZE;
+
+	write_sepc(task->tf.epc);
 }
