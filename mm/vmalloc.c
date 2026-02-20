@@ -363,3 +363,30 @@ void vfree_nomap(void *ptr)
 		return;
 	free_vmem_area(area);
 }
+
+int uvmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
+	  unsigned int flags)
+{
+	struct vmap_ops ops = {
+		.alloc_pgd = alloc_pgd,
+		.alloc_pmd = alloc_pmd,
+		.alloc_pt = alloc_pt,
+		.get_pgd_virt = get_pgd_virt,
+		.get_pmd_virt = get_pmd_virt,
+		.get_pt_virt = get_pt_virt,
+	};
+	return vmap(pgd, addr, size, paddr, flags | PTE_U, &ops);
+}
+
+void uvunmap(pgde_t *pgd, uint64_t addr, size_t size)
+{
+	struct vmap_ops ops = {
+		.alloc_pgd = alloc_pgd,
+		.alloc_pmd = alloc_pmd,
+		.alloc_pt = alloc_pt,
+		.get_pgd_virt = get_pgd_virt,
+		.get_pmd_virt = get_pmd_virt,
+		.get_pt_virt = get_pt_virt,
+	};
+	vunmap(pgd, addr, size, &ops);
+}
