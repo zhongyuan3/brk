@@ -64,7 +64,7 @@ void start_scheduling(void)
 		next = pick_next_task();
 		if (next)
 			break;
-		enable_int();
+		intr_on();
 		asm volatile("wfi");
 	}
 
@@ -79,8 +79,8 @@ void schedule(void)
 	struct task *prev, *next;
 	struct cpu *cpu;
 
-	enable_int();
-	disable_int();
+	intr_on();
+	intr_off();
 
 	cpu = current_cpu();
 	prev = cpu->current;
