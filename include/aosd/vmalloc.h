@@ -18,6 +18,9 @@ int vmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 void vunmap(pgde_t *pgd, uint64_t addr, size_t size, struct vmap_ops *ops);
 int kvmap(uint64_t addr, size_t size, uint64_t paddr, unsigned int flags);
 void kvunmap(uint64_t addr, size_t size);
+int uvmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
+	  unsigned int flags);
+void uvunmap(pgde_t *pgd, uint64_t addr, size_t size);
 
 struct vmem_area {
 	struct list_head list;
