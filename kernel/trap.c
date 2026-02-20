@@ -73,7 +73,7 @@ void trap_init(uint32_t hart_id)
 	write_sie(read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
 	plic_set_threshold(hart_id, 0);
 	timer_set_next();
-	enable_int();
+	intr_on();
 }
 
 void kernel_trap_handler(void)
@@ -86,7 +86,7 @@ void kernel_trap_handler(void)
 	struct task *task;
 
 	assert(sstatus & SSTATUS_SPP);
-	assert(!is_int_enabled());
+	assert(!intr_enabled());
 
 	if (scause & (1ULL << 63)) {
 		switch (code) {
@@ -127,7 +127,7 @@ struct task *user_trap_handler(void)
 	write_tp((uint64_t)cpu);
 
 	assert(!(read_sstatus() & SSTATUS_SPP));
-	assert(!is_int_enabled());
+	assert(!intr_enabled());
 
 	scause = read_scause();
 	code = scause & 0x3FF;
@@ -150,7 +150,7 @@ struct task *user_trap_handler(void)
 		switch (code) {
 		case 8:
 			task->tf.epc += 4;
-			enable_int();
+			intr_on();
 			syscall();
 			break;
 		default:
@@ -167,7 +167,7 @@ void prepare_to_return(void)
 	uint64_t sstatus;
 	struct task *task;
 
-	disable_int();
+	intr_off();
 
 	write_stvec((uint64_t)user_trap_vector);
 

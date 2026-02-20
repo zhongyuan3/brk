@@ -7,7 +7,7 @@ void panic(char const *fmt, ...)
 {
 	va_list ap;
 
-	disable_int();
+	intr_off();
 
 	va_start(ap, fmt);
 	vprintk(fmt, ap);
@@ -19,7 +19,7 @@ void panic(char const *fmt, ...)
 
 void assert_fail(char const *file, int line, char const *expr)
 {
-	disable_int();
+	intr_off();
 	printk("Assertion failed: %s:%d: %s\n", file, line, expr);
 	for (;;)
 		;

@@ -116,17 +116,17 @@ static inline uint64_t read_time(void)
 	return time;
 }
 
-static inline void enable_int(void)
+static inline void intr_on(void)
 {
 	write_sstatus(read_sstatus() | SSTATUS_SIE);
 }
 
-static inline void disable_int(void)
+static inline void intr_off(void)
 {
 	write_sstatus(read_sstatus() & ~SSTATUS_SIE);
 }
 
-static inline bool is_int_enabled(void)
+static inline bool intr_enabled(void)
 {
 	return read_sstatus() & SSTATUS_SIE;
 }
