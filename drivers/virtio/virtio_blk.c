@@ -61,81 +61,53 @@ int virtio_blk_init(uint32_t hart_id, struct virtio_device *dev,
 	uint32_t queue_max_size;
 	size_t size;
 
-	if (dev->id != VIRTIO_DEVICE_ID_BLK) {
-		log_debug("%s(): invalid device id %#x\n", __func__, dev->id);
+	if (dev->id != VIRTIO_DEVICE_ID_BLK)
 		return -EINVAL;
-	}
 
 	mem_base = (uint64_t)dev->mem_base;
 
-	if (readl(mem_base + VIRTIO_MAGIC_VALUE_OFFSET) != VIRTIO_MAGIC_VALUE) {
-		log_debug("%s(): invalid magic value %#x\n", __func__,
-			  readl(mem_base + VIRTIO_MAGIC_VALUE_OFFSET));
+	if (readl(mem_base + VIRTIO_MAGIC_VALUE_OFFSET) != VIRTIO_MAGIC_VALUE)
 		return -EINVAL;
-	}
 
-	if (readl(mem_base + VIRTIO_VERSION_OFFSET) != 2) {
-		log_debug("%s(): invalid version %#x\n", __func__,
-			  readl(mem_base + VIRTIO_VERSION_OFFSET));
+	if (readl(mem_base + VIRTIO_VERSION_OFFSET) != 2)
 		return -EINVAL;
-	}
 
-	if (readl(mem_base + VIRTIO_VENDOR_ID_OFFSET) != VIRTIO_VENDOR_ID) {
-		log_debug("%s(): invalid vendor id %#x\n", __func__,
-			  readl(mem_base + VIRTIO_VENDOR_ID_OFFSET));
+	if (readl(mem_base + VIRTIO_VENDOR_ID_OFFSET) != VIRTIO_VENDOR_ID)
 		return -EINVAL;
-	}
 
 	queue_max_size = readl(mem_base + VIRTIO_QUEUE_SIZE_MAX_OFFSET);
-	if (queue_max_size < queue_size) {
-		log_debug("%s(): queue size %u is too large, max size is %u",
-			  __func__, queue_size, queue_max_size);
+	if (queue_max_size < queue_size)
 		return -EINVAL;
-	}
 
 	blk_vq.desc = kcalloc(queue_size, sizeof(struct virtq_desc));
-	if (!blk_vq.desc) {
-		log_debug("%s(): failed to allocate desc", __func__);
+	if (!blk_vq.desc)
 		goto alloc_desc_failed;
-	}
 
 	size = sizeof(struct virtq_avail) + sizeof(uint16_t) * queue_size;
 	blk_vq.avail = kzalloc(size);
-	if (!blk_vq.avail) {
-		log_debug("%s(): failed to allocate avail", __func__);
+	if (!blk_vq.avail)
 		goto alloc_avail_failed;
-	}
 
 	size = sizeof(struct virtq_used) +
 	       sizeof(struct virtq_used_elem) * queue_size;
 	blk_vq.used = kzalloc(size);
-	if (!blk_vq.used) {
-		log_debug("%s(): failed to allocate used", __func__);
+	if (!blk_vq.used)
 		goto alloc_used_failed;
-	}
 
 	blk_reqs = kcalloc(queue_size, sizeof(struct virtio_blk_req));
-	if (!blk_reqs) {
-		log_debug("%s(): failed to allocate reqs", __func__);
+	if (!blk_reqs)
 		goto alloc_reqs_failed;
-	}
 
 	blk_tracks = kcalloc(queue_size, sizeof(struct virtio_blk_track));
-	if (!blk_tracks) {
-		log_debug("%s(): failed to allocate tracks", __func__);
+	if (!blk_tracks)
 		goto alloc_tracks_failed;
-	}
 
 	err = kmem_cache_init(&blk_trans_cache,
 			      sizeof(struct virtio_blk_transation),
 			      alignof(struct virtio_blk_transation),
 			      "blk_trans_cache");
-	if (err) {
-		log_debug(
-			"%s(): failed to initialize blk_trans_cache, err %d\n",
-			__func__, err);
+	if (err)
 		goto init_trans_cache_failed;
-	}
 
 	blk_vq.num = queue_size;
 

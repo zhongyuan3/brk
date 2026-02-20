@@ -11,9 +11,13 @@ void sched_join(struct task *task);
 void sched_yield(void);
 void sched_sleep(void *chan);
 void sched_wake_up(void *chan);
+void sched_exit(int status);
+pid_t sched_wait(int *status);
 void start_scheduling(void);
 
 struct task *task_create(void);
 void task_destroy(struct task *task);
+
+extern struct task *init_task;
 
 #endif

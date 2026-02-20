@@ -3,9 +3,6 @@
 	.section ".text.head"
 	.global _start
 _start:
-	la t0, early_trap_vector
-	csrw stvec, t0
-
 	mv s2, a0
 	mv s3, a1
 

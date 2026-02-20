@@ -36,6 +36,7 @@ SRCS := \
 	kernel/sched/sched.c \
 	kernel/sched/task.c \
 	kernel/sched/switch.S \
+	kernel/syscall.c \
 	mm/init.c \
 	mm/memblock.c \
 	mm/pgalloc.c \
@@ -63,6 +64,9 @@ AOSD_LD      := aosd.ld
 AOSD_ELF     := aosd.elf
 AOSD_DIS     := aosd.dis
 
+USER_LD_S    := user.ld.S
+USER_LD      := user.ld
+
 DTB          := virt.dtb
 DTS          := virt.dts
 ROOTFS_IMG   := rootfs.img
@@ -82,6 +86,7 @@ aosd: $(AOSD_ELF)
 
 clean:
 	$(Q)$(RM) $(AOSD_ELF) $(AOSD_LD) $(AOSD_DIS) $(DTB) $(DTS)
+	$(Q)$(RM) $(USER_LD)
 	$(Q)find . -name "*.d" -delete
 	$(Q)find . -name "*.o" -delete
 
@@ -101,12 +106,22 @@ dts: $(DTS)
 
 rootfs: $(ROOTFS_IMG)
 
+.PHONY: initcode
+initcode: user/initcode.o $(USER_LD)
+	$(Q)$(LD) -z max-page-size=4096 -T $(USER_LD) -o user/initcode.out user/initcode.o
+	$(Q)$(OBJCOPY) -S -O binary user/initcode.out user/initcode
+	$(Q)xxd -i user/initcode > include/aosd/initcode.h
+	$(Q)rm -f user/initcode user/initcode.o user/initcode.out
+
 $(AOSD_LD): $(AOSD_LD_S)
 	$(Q)$(CPP) $(CFLAGS) -o $@ $<
 
 $(AOSD_ELF): $(OBJS) $(AOSD_LD)
 	$(Q)echo "LD $@"
 	$(Q)$(LD) -z max-page-size=4096 -T $(AOSD_LD) -o $@ $(OBJS)
+
+$(USER_LD): $(USER_LD_S)
+	$(Q)$(CPP) $(CFLAGS) -o $@ $<
 
 $(DTB):
 	$(Q)$(QEMU) $(QEMU_COMMON) -M dumpdtb=$@
