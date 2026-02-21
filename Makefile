@@ -50,6 +50,7 @@ SRCS := \
 	drivers/virtio/virtio_blk.c \
 	lib/string.c \
 	lib/printf.c \
+	lib/qsort.c \
 	lib/libfdt/fdt.c \
 	lib/libfdt/fdt_ro.c \
 	lib/libfdt/fdt_wip.c \
