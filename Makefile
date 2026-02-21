@@ -13,7 +13,7 @@ CFLAGS := -O0 -ggdb -gdwarf-2 -Wall -Wextra -Werror -Wno-unused-parameter \
 -mcmodel=medany -ffreestanding -fno-common -nostdlib -fno-stack-protector \
 -fno-pie -no-pie
 
-CFLAGS += -I./include -I./lib/libfdt -MMD
+CFLAGS += -I./include -I./lib/libfdt -I./lib/lwext4/include -MMD
 
 ifeq ($(V),1)
 Q :=
@@ -56,6 +56,10 @@ SRCS := \
 	lib/libfdt/fdt_wip.c \
 	lib/libfdt/fdt_addresses.c \
 	lib/libfdt/fdt_rw.c
+
+LWEXT4_SRCS := $(wildcard lib/lwext4/src/*.c)
+
+SRCS += $(LWEXT4_SRCS)
 
 OBJS := $(patsubst %.c,%.o,$(patsubst %.S,%.o,$(SRCS)))
 DEPS := $(OBJS:.o=.d)
