@@ -73,6 +73,8 @@ ForEachMacros:
     - "list_for_each_entry_safe"
     - "list_for_each_entry_reverse"
     - "list_for_each_entry_reverse_safe"
+    - "hlist_for_each"
+    - "hlist_for_each_entry"
     - "for_each_mem_range"
     - "for_each_mem_pfn_range"
     - "for_each_memblock_type"

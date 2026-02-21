@@ -5,7 +5,7 @@
 #include <aosd/slab.h>
 #include <aosd/virtio.h>
 
-static LIST_HEAD(virtio_dev_list);
+static list_head_define(virtio_dev_list);
 
 struct virtio_device *virtio_dev_create(uint64_t phys_base, size_t size,
 					uint32_t irq)
