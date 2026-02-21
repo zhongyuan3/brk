@@ -9,6 +9,7 @@ void *memset(void *s, int c, size_t n);
 void *memchr(void const *s, int c, size_t n);
 void *memrchr(void const *s, int c, size_t n);
 int memcmp(void const *s1, void const *s2, size_t n);
+void memswap(void *s1, void *s2, size_t size);
 
 size_t strlen(char const *s);
 size_t strnlen(char const *s, size_t n);
