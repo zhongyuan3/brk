@@ -9,8 +9,8 @@
 #include <aosd/sched_types.h>
 #include <aosd/types.h>
 
-static LIST_HEAD(running_queue);
-static LIST_HEAD(sleep_queue);
+static list_head_define(running_queue);
+static list_head_define(sleep_queue);
 
 static struct task *pick_next_task(void)
 {
