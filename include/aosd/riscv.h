@@ -20,6 +20,7 @@ static inline void write_tp(uint64_t x)
 #define SSTATUS_UPIE (1 << 4) /* User Previous Interrupt Enable */
 #define SSTATUS_SIE (1 << 1) /* Supervisor Interrupt Enable */
 #define SSTATUS_UIE (1 << 0) /* User Interrupt Enable */
+#define SSTATUS_SUM (1 << 18) /* Permit Supervisor User Memory access */
 
 static inline uint64_t read_sstatus(void)
 {

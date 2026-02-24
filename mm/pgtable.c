@@ -1,9 +1,13 @@
 #include <aosd/align.h>
+#include <aosd/lock.h>
 #include <aosd/mm.h>
 #include <aosd/panic.h>
 #include <aosd/pgalloc.h>
 #include <aosd/pgtable.h>
+#include <aosd/spinlock.h>
 #include <aosd/string.h>
+
+spinlock_define(kernel_pgdir_lock);
 
 static uint64_t alloc_pgtable_before_buddy(void)
 {
@@ -31,7 +35,9 @@ pgde_t *create_user_pgtable(void)
 	if (!page)
 		return NULL;
 	void *pgtable = (void *)page_to_virt(page);
+	spinlock_acquire(&kernel_pgdir_lock);
 	memcpy(pgtable, kernel_pgdir, PAGE_SIZE);
+	spinlock_release(&kernel_pgdir_lock);
 	return pgtable;
 }
 
@@ -163,7 +169,7 @@ static void cleanup_user_pmd(pmde_t *pmd)
 
 		if (pmde_large(pmd[j])) {
 			page_free(phys_to_page(pmde_get_large(pmd[j])),
-				   page_order(PAGE_SIZE_2M));
+				  page_order(PAGE_SIZE_2M));
 			continue;
 		}
 
@@ -182,7 +188,7 @@ static void cleanup_user_pgd(pgde_t *pgd)
 
 		if (pgde_large(pgd[i])) {
 			page_free(phys_to_page(pgde_get_large(pgd[i])),
-				   page_order(PAGE_SIZE_1G));
+				  page_order(PAGE_SIZE_1G));
 			continue;
 		}
 
@@ -194,6 +200,8 @@ static void cleanup_user_pgd(pgde_t *pgd)
 
 void destroy_user_pgtable(pgde_t *pgd)
 {
+	spinlock_acquire(&kernel_pgdir_lock);
 	cleanup_user_pgd(pgd);
+	spinlock_release(&kernel_pgdir_lock);
 	page_free(virt_to_page((uint64_t)pgd), 0);
 }

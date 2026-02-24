@@ -15,13 +15,7 @@ typedef struct {
 	uint64_t pte;
 } pte_t;
 
-struct kmem_cache {
-	const char *name;
-	size_t size;
-	size_t align;
-	struct list_head slab_list;
-	unsigned int page_order;
-};
+struct kmem_cache;
 
 struct page {
 	unsigned int flags;

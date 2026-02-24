@@ -4,6 +4,7 @@
 #include <aosd/macros.h>
 #include <aosd/panic.h>
 #include <aosd/plic.h>
+#include <aosd/printk.h>
 #include <aosd/riscv.h>
 #include <aosd/sbi.h>
 #include <aosd/sched.h>
@@ -67,11 +68,15 @@ static char const *exception_str(unsigned int excno)
 		return excstrs[excno];
 }
 
-void trap_init(uint32_t hart_id)
+void trap_init(void)
+{
+	timer_init();
+}
+
+void trap_init_hart(uint32_t hart_id)
 {
 	write_stvec((uint64_t)kernel_trap_vector);
 	write_sie(read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
-	plic_set_threshold(hart_id, 0);
 	timer_set_next();
 	intr_on();
 }
@@ -92,7 +97,7 @@ void kernel_trap_handler(void)
 		switch (code) {
 		case 5:
 			timer_handle_int();
-			task = current_cpu()->current;
+			task = current_task();
 			if (task) {
 				if (--task->time_slice <= 0)
 					sched_yield();
@@ -125,6 +130,7 @@ struct task *user_trap_handler(void)
 	task = (struct task *)read_sscratch();
 	cpu = task->cpu;
 	write_tp((uint64_t)cpu);
+	write_sstatus(read_sstatus() | SSTATUS_SUM);
 
 	assert(!(read_sstatus() & SSTATUS_SPP));
 	assert(!intr_enabled());
@@ -136,6 +142,8 @@ struct task *user_trap_handler(void)
 		case 5:
 			timer_handle_int();
 			if (task) {
+				if (task_is_killed(task))
+					sched_exit(1);
 				if (--task->time_slice <= 0)
 					sched_yield();
 			}
@@ -145,19 +153,27 @@ struct task *user_trap_handler(void)
 			break;
 		default:
 			sched_exit(1);
+			break;
 		}
 	} else {
 		switch (code) {
 		case 8:
+			if (task_is_killed(task))
+				sched_exit(1);
 			task->tf.epc += 4;
 			intr_on();
 			syscall();
 			break;
 		default:
-			sched_exit(1);
+			task_set_killed(task);
+			break;
 		}
 	}
 
+	if (task_is_killed(task))
+		sched_exit(1);
+
+	write_sstatus(read_sstatus() & ~SSTATUS_SUM);
 	prepare_to_return();
 	return task;
 }

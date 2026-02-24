@@ -3,6 +3,7 @@
 #include <aosd/cpu.h>
 #include <aosd/errno.h>
 #include <aosd/irq.h>
+#include <aosd/lock.h>
 #include <aosd/mm.h>
 #include <aosd/mmio.h>
 #include <aosd/panic.h>
@@ -10,6 +11,7 @@
 #include <aosd/printk.h>
 #include <aosd/sched.h>
 #include <aosd/slab.h>
+#include <aosd/spinlock.h>
 #include <aosd/virtio.h>
 #include <aosd/virtio_blk.h>
 #include <aosd/virtio_queue.h>
@@ -20,6 +22,7 @@ static struct virtio_blk_req *blk_reqs;
 static struct virtio_blk_track *blk_tracks;
 static struct kmem_cache blk_trans_cache;
 static uint16_t used_idx;
+static spinlock_define(virtio_blk_lock);
 
 static void virtio_blk_irq_handler(void)
 {
@@ -50,8 +53,7 @@ static void virtio_blk_irq_handler(void)
 	}
 }
 
-int virtio_blk_init(uint32_t hart_id, struct virtio_device *dev,
-		    unsigned int queue_size)
+int virtio_blk_init(struct virtio_device *dev, unsigned int queue_size)
 {
 	uint64_t mem_base;
 	uint32_t status;
@@ -163,7 +165,6 @@ int virtio_blk_init(uint32_t hart_id, struct virtio_device *dev,
 
 	irq_register_handler(blk_dev->irq, virtio_blk_irq_handler, NULL);
 	plic_set_priority(blk_dev->irq, 1);
-	plic_enable(hart_id, blk_dev->irq);
 
 	return 0;
 
@@ -184,6 +185,11 @@ alloc_avail_failed:
 	blk_vq.desc = NULL;
 alloc_desc_failed:
 	return -ENOMEM;
+}
+
+void virtio_blk_init_hart(uint32_t hart_id)
+{
+	plic_enable(hart_id, blk_dev->irq);
 }
 
 static int alloc_desc(unsigned int *desc_idx)
@@ -234,10 +240,12 @@ static int virtio_blk_transfer(struct virtio_blk_transation *trans)
 	struct virtio_blk_req *req;
 	char *status;
 
+	spinlock_acquire(&virtio_blk_lock);
+
 	while (1) {
 		if (alloc_desc_chain(idx, 3) == 0)
 			break;
-		sched_sleep(&blk_vq.desc);
+		sched_sleep(&blk_vq.desc, &virtio_blk_lock);
 	}
 
 	req = &blk_reqs[idx[0]];
@@ -277,10 +285,13 @@ static int virtio_blk_transfer(struct virtio_blk_transation *trans)
 	writel(0, blk_dev->mem_base + VIRTIO_QUEUE_NOTIFY_OFFSET);
 
 	while (!trans->completed)
-		sched_sleep(&trans->completed);
+		sched_sleep(&trans->completed, &virtio_blk_lock);
 
 	blk_tracks[idx[0]].trans = NULL;
 	free_desc_chain(idx[0]);
+	sched_wake_up(&blk_vq.desc);
+
+	spinlock_release(&virtio_blk_lock);
 
 	return 0;
 }

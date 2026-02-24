@@ -9,6 +9,7 @@
 #include <aosd/pgalloc.h>
 #include <aosd/printk.h>
 #include <aosd/slab.h>
+#include <aosd/spinlock.h>
 #include <aosd/string.h>
 
 static struct kmem_cache kmalloc_caches[NR_KMALLOC_CACHES];
@@ -125,6 +126,8 @@ static int kmem_cache_add_page(struct kmem_cache *cache)
 int kmem_cache_init(struct kmem_cache *cache, size_t size, size_t align,
 		    const char *name)
 {
+	int ret;
+
 	if (size == 0 || align == 0)
 		return -EINVAL;
 
@@ -138,16 +141,24 @@ int kmem_cache_init(struct kmem_cache *cache, size_t size, size_t align,
 	cache->align = align;
 	cache->page_order = page_order(size);
 	cache->name = name;
+	spinlock_init(&cache->lock, name);
 
 	list_init_head(&cache->slab_list);
-	return kmem_cache_add_page(cache);
+
+	spinlock_acquire(&cache->lock);
+	ret = kmem_cache_add_page(cache);
+	spinlock_release(&cache->lock);
+	return ret;
 }
 
 void kmem_cache_deinit(struct kmem_cache *cache)
 {
 	struct list_head *first;
 	struct page *page;
-	struct list_head *list = &cache->slab_list;
+	struct list_head *list;
+
+	spinlock_acquire(&cache->lock);
+	list = &cache->slab_list;
 	while (!list_empty(list)) {
 		first = list->next;
 		list_del(first);
@@ -156,6 +167,7 @@ void kmem_cache_deinit(struct kmem_cache *cache)
 		bitflags_clear(page->flags, PAGE_FLAGS_SLUB);
 		page_free(page, 0);
 	}
+	spinlock_release(&cache->lock);
 }
 
 void *kmem_cache_alloc(struct kmem_cache *cache)
@@ -163,23 +175,31 @@ void *kmem_cache_alloc(struct kmem_cache *cache)
 	struct page *curr;
 	void *obj;
 	int attempt = 0;
-	struct list_head *list = &cache->slab_list;
+	struct list_head *list;
+
+	spinlock_acquire(&cache->lock);
+	list = &cache->slab_list;
 
 retry:
-	if (attempt > 1)
+	if (attempt > 1) {
+		spinlock_release(&cache->lock);
 		return NULL;
+	}
 
 	list_for_each_entry(curr, list, slub_list) {
 		if (curr->free_count > 0) {
 			obj = curr->free_list;
 			curr->free_list = *(void **)obj;
 			curr->free_count--;
+			spinlock_release(&cache->lock);
 			return obj;
 		}
 	}
 
-	if (attempt == 0 && kmem_cache_add_page(cache) < 0)
+	if (attempt == 0 && kmem_cache_add_page(cache) < 0) {
+		spinlock_release(&cache->lock);
 		return NULL;
+	}
 
 	attempt++;
 	goto retry;
@@ -194,6 +214,8 @@ void kmem_cache_free(struct kmem_cache *cache, void *obj)
 	if (!obj)
 		return;
 
+	spinlock_acquire(&cache->lock);
+
 	assert(is_aligned((uint64_t)obj, cache->align));
 
 	list = &cache->slab_list;
@@ -207,4 +229,6 @@ void kmem_cache_free(struct kmem_cache *cache, void *obj)
 			break;
 		}
 	}
+
+	spinlock_release(&cache->lock);
 }

@@ -1,10 +1,13 @@
 #include <aosd/cpu.h>
+#include <aosd/lock.h>
 #include <aosd/riscv.h>
 #include <aosd/sbi.h>
+#include <aosd/spinlock.h>
 #include <aosd/timer.h>
 
 static uint64_t timer_interval;
 static uint64_t jiffies;
+static spinlock_define(jiffies_lock);
 
 void timer_init(void)
 {
@@ -24,6 +27,11 @@ void timer_set_next(void)
 
 void timer_handle_int(void)
 {
-	++jiffies;
+	if (current_cpu()->hart_id == 0) {
+		spinlock_acquire(&jiffies_lock);
+		++jiffies;
+		spinlock_release(&jiffies_lock);
+	}
+
 	timer_set_next();
 }

@@ -1,15 +1,20 @@
 #include <aosd/assert.h>
 #include <aosd/list.h>
+#include <aosd/lock.h>
 #include <aosd/panic.h>
 #include <aosd/pgalloc.h>
+#include <aosd/spinlock.h>
 
 static struct free_area areas[PAGE_ORDER_MAX + 1];
+static spinlock_define(areas_lock);
 
 struct page *page_alloc(unsigned int order)
 {
 	unsigned int curr_order = order;
 	struct page *curr = NULL;
 	struct page *buddy = NULL;
+
+	spinlock_acquire(&areas_lock);
 
 	for (; curr_order <= PAGE_ORDER_MAX; ++curr_order) {
 		if (!list_empty(&areas[curr_order].free_list)) {
@@ -19,6 +24,8 @@ struct page *page_alloc(unsigned int order)
 			goto found;
 		}
 	}
+
+	spinlock_release(&areas_lock);
 	return NULL;
 
 found:
@@ -32,6 +39,7 @@ found:
 	}
 
 	mark_page_busy(curr);
+	spinlock_release(&areas_lock);
 	return curr;
 }
 
@@ -57,6 +65,8 @@ void page_free(struct page *page, unsigned int order)
 {
 	struct page *buddy;
 
+	spinlock_acquire(&areas_lock);
+
 	assert(bitflags_check(page->flags, PAGE_FLAGS_BUDDY));
 	assert(!bitflags_check(page->flags, PAGE_FLAGS_FREE));
 	assert(bitflags_check(page->flags, PAGE_FLAGS_HEAD));
@@ -77,6 +87,8 @@ void page_free(struct page *page, unsigned int order)
 	page->flags = PAGE_FLAGS_NEW_FREE_PAGE;
 	page->order = order;
 	list_add(&page->lru, &areas[order].free_list);
+
+	spinlock_release(&areas_lock);
 }
 
 void page_alloc_init(void)

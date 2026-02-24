@@ -1,8 +1,10 @@
+#include <aosd/asm.h>
 #include <aosd/console.h>
 #include <aosd/cpu.h>
 #include <aosd/dtb.h>
 #include <aosd/irq.h>
 #include <aosd/mm.h>
+#include <aosd/pgtable.h>
 #include <aosd/plic.h>
 #include <aosd/printk.h>
 #include <aosd/riscv.h>
@@ -10,49 +12,99 @@
 #include <aosd/sched.h>
 #include <aosd/sched_types.h>
 #include <aosd/slab.h>
+#include <aosd/spinlock.h>
 #include <aosd/timer.h>
 #include <aosd/trap.h>
 #include <aosd/uart.h>
 #include <aosd/virtio.h>
 #include <aosd/virtio_blk.h>
+#include <aosd/vmalloc.h>
 
-static int sbi_console_write(struct console *con, char const *buf, size_t n,
-			     size_t *written)
+void start_other_harts(uint64_t init_hart_id)
 {
-	for (size_t i = 0; i < n; ++i)
-		sbi_console_putchar(buf[i]);
+	uint64_t start_addr;
 
-	if (written)
-		*written = n;
+	start_addr = symbol_phys(hart_entry);
+	for (uint64_t id = 0; id < NR_CPUS; ++id) {
+		if (id == init_hart_id)
+			continue;
 
-	return 0;
+		sbi_hart_start(id, start_addr, 0);
+	}
 }
 
-static struct console sbi_console = {
-	.write = sbi_console_write,
-};
-
-static int uart_write(struct console *con, char const *buf, size_t n,
-		      size_t *written)
+void thread_create(void (*entry)(void))
 {
-	for (size_t i = 0; i < n; ++i)
-		uart_putc(buf[i]);
-
-	if (written)
-		*written = n;
-
-	return 0;
+	struct task *t = task_create();
+	if (!t) {
+		printk("create task failed\n");
+		return;
+	}
+	t->thread_entry = entry;
+	t->state = TASK_RUNNABLE;
+	t->parent = init_task;
+	spinlock_release(&t->lock);
 }
 
-static struct console uart_console = {
-	.write = uart_write,
-};
+void thread0(void)
+{
+	intr_on();
+	printk("%s: hello\n", __func__);
+	while (1) {
+	}
+}
+
+void thread1(void)
+{
+	intr_on();
+	printk("%s: hello\n", __func__);
+	while (1) {
+	}
+}
+
+void thread2(void)
+{
+	intr_on();
+	printk("%s: hello\n", __func__);
+	while (1) {
+	}
+}
+
+void thread3(void)
+{
+	intr_on();
+	printk("%s: hello\n", __func__);
+	char *buf = kmalloc(SECTOR_SIZE);
+	virtio_blk_read(2, buf, 1);
+	printk("%s: read disk succeed\n", __func__);
+	kfree(buf);
+	intr_on();
+	sched_exit(0);
+}
+
+void thread4(void)
+{
+	intr_on();
+	printk("%s: hello\n", __func__);
+	while (1) {
+	}
+}
+
+void thread5(void)
+{
+	intr_on();
+	printk("%s: hello\n", __func__);
+	char *buf = kmalloc(SECTOR_SIZE);
+	virtio_blk_read(2, buf, 1);
+	printk("%s: read disk succeed\n", __func__);
+	kfree(buf);
+	intr_on();
+	sched_exit(0);
+}
 
 void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 {
-	struct virtio_device *dev;
-
-	console_register(&sbi_console);
+	cpu_init_hart(hart_id);
 
 	kernel_map.load_offset = load_offset;
 	dtb_phys = dtb;
@@ -61,22 +113,48 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 	dtb_virt = (void *)phys_to_virt(dtb);
 
 	dtb_init_scan_cpu();
-	cpu_init(hart_id);
-	timer_init();
 
-	plic_init();
 	irq_init();
+	irq_init_hart(hart_id);
 
-	uart_init(hart_id);
-	console_unregister(&sbi_console);
-	console_register(&uart_console);
+	uart_init();
+	uart_init_hart(hart_id);
 
-	trap_init(hart_id);
+	trap_init();
+	trap_init_hart(hart_id);
 
 	dtb_init_scan_virtio_dev();
-	dev = virtio_dev_get(VIRTIO_DEVICE_ID_BLK);
-	virtio_blk_init(hart_id, dev, 16);
+
+	virtio_blk_init(virtio_dev_get(VIRTIO_DEVICE_ID_BLK), 16);
+	virtio_blk_init_hart(hart_id);
 
 	sched_init();
-	start_scheduling();
+
+	thread_create(thread0);
+	thread_create(thread1);
+	thread_create(thread2);
+	thread_create(thread3);
+	thread_create(thread4);
+	thread_create(thread5);
+
+	start_other_harts(hart_id);
+
+	scheduler();
+}
+
+void start_hart(uint64_t hart_id)
+{
+	cpu_init_hart(hart_id);
+
+	write_satp(make_satp_sv39(symbol_phys(kernel_pgdir)));
+	sfence_vma();
+
+	printk("hart %lu starting\n", hart_id);
+
+	irq_init_hart(hart_id);
+	uart_init_hart(hart_id);
+	virtio_blk_init_hart(hart_id);
+	trap_init_hart(hart_id);
+
+	scheduler();
 }

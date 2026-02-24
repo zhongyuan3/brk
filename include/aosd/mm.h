@@ -17,9 +17,12 @@ extern struct kernel_mapping kernel_map;
 
 extern char _skernel[], _ekernel[];
 extern char _stext[], _etext[];
+extern char _stexthead[], _etexthead[];
 extern char _srodata[], _erodata[];
 extern char _sdata[], _edata[];
 extern char _sbss[], _ebss[];
+extern char init_stack[], init_stack_top[];
+extern char hart_entry[];
 
 static inline uint64_t symbol_phys(void *vaddr)
 {
@@ -35,6 +38,11 @@ static inline uint64_t symbol_phys(void *vaddr)
 #define _ETEXT_ALIGNED_PHYS align_up(_ETEXT_PHYS, PAGE_SIZE)
 #define _TEXT_SIZE ((uint64_t)_etext - (uint64_t)_stext)
 
+#define _STEXTHEAD_PHYS symbol_phys(_stexthead)
+#define _ETEXTHEAD_PHYS symbol_phys(_etexthead)
+#define _ETEXTHEAD_ALIGNED_PHYS align_up(_ETEXTHEAD_PHYS, PAGE_SIZE)
+#define _TEXTHEAD_SIZE ((uint64_t)_etexthead - (uint64_t)_stexthead)
+
 #define _SRODATA_PHYS symbol_phys(_srodata)
 #define _ERODATA_PHYS symbol_phys(_erodata)
 #define _ERODATA_ALIGNED_PHYS align_up(_ERODATA_PHYS, PAGE_SIZE)
@@ -49,6 +57,11 @@ static inline uint64_t symbol_phys(void *vaddr)
 #define _EBSS_PHYS symbol_phys(_ebss)
 #define _EBSS_ALIGNED_PHYS align_up(_EBSS_PHYS, PAGE_SIZE)
 #define _BSS_SIZE ((uint64_t)_ebss - (uint64_t)_sbss)
+
+#define INIT_STACK_PHYS symbol_phys(init_stack)
+#define INIT_STACK_TOP_PHYS symbol_phys(init_stack_top)
+#define INIT_STACK_TOP_ALIGNED_PHYS align_up(INIT_STACK_TOP_PHYS, PAGE_SIZE)
+#define INIT_STACK_SIZE ((uint64_t)init_stack_top - (uint64_t)init_stack)
 
 static inline uint64_t phys_to_virt(uint64_t paddr)
 {

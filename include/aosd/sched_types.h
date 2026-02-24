@@ -2,6 +2,7 @@
 #define AOSD_SCHED_TYPES_H
 
 #include <aosd/asm.h>
+#include <aosd/lock.h>
 #include <aosd/mm_types.h>
 #include <aosd/types.h>
 
@@ -66,6 +67,9 @@ struct context {
 typedef long pid_t;
 
 typedef enum {
+	TASK_UNUSED,
+	TASK_USED,
+	TASK_RUNNABLE,
 	TASK_RUNNING,
 	TASK_SLEEPING,
 	TASK_ZOMBIE,
@@ -76,16 +80,16 @@ struct task {
 	uint64_t stack;
 	struct context ctx;
 	pid_t pid;
-	struct list_head list;
 	pgde_t *pgd;
 	task_state_t state;
 	void *chan;
 	struct task *parent;
-	struct list_head children;
-	struct list_head child_list;
 	int exit_status;
 	struct cpu *cpu;
 	int time_slice;
+	void (*thread_entry)(void);
+	spinlock_t lock;
+	bool killed;
 };
 
 #endif
