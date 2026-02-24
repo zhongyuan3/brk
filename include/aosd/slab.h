@@ -2,8 +2,18 @@
 #define AOSD_SLAB_H
 
 #include <aosd/mm_types.h>
+#include <aosd/spinlock.h>
 
 #define NR_KMALLOC_CACHES 10
+
+struct kmem_cache {
+	const char *name;
+	size_t size;
+	size_t align;
+	struct list_head slab_list;
+	unsigned int page_order;
+	spinlock_t lock;
+};
 
 int kmem_cache_init(struct kmem_cache *cache, size_t size, size_t align,
 		    const char *name);

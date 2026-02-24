@@ -3,15 +3,16 @@
 #include <aosd/printk.h>
 #include <aosd/riscv.h>
 
+volatile bool panicked;
+
 void panic(char const *fmt, ...)
 {
 	va_list ap;
 
-	intr_off();
-
 	va_start(ap, fmt);
 	vprintk(fmt, ap);
 	va_end(ap);
+	panicked = true;
 
 	for (;;)
 		;

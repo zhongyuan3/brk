@@ -4,7 +4,8 @@
 #include <aosd/sched_types.h>
 #include <aosd/types.h>
 
-void trap_init(uint32_t hart_id);
+void trap_init(void);
+void trap_init_hart(uint32_t hart_id);
 void kernel_trap_handler(void);
 void kernel_trap_vector(void);
 

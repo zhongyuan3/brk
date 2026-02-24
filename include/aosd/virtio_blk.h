@@ -51,8 +51,8 @@ struct virtio_blk_track {
 	char status;
 };
 
-int virtio_blk_init(uint32_t hart_id, struct virtio_device *dev,
-		    unsigned int queue_size);
+int virtio_blk_init(struct virtio_device *dev, unsigned int queue_size);
+void virtio_blk_init_hart(uint32_t hart_id);
 int virtio_blk_read(uint64_t sector, void *buf, size_t sec_count);
 int virtio_blk_write(uint64_t sector, const void *buf, size_t sec_count);
 

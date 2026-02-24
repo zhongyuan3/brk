@@ -1,43 +1,18 @@
 #include <aosd/console.h>
 #include <aosd/errno.h>
+#include <aosd/lock.h>
 #include <aosd/macros.h>
 #include <aosd/printf.h>
 #include <aosd/printk.h>
+#include <aosd/spinlock.h>
 
-static struct console *console_head;
-
-void console_register(struct console *con)
-{
-	con->next = console_head;
-	console_head = con;
-}
-
-int console_unregister(struct console *con)
-{
-	struct console **prev = &console_head;
-	while (*prev) {
-		if (*prev == con) {
-			*prev = con->next;
-			return 0;
-		}
-		prev = &(*prev)->next;
-	}
-	return -EINVAL;
-}
-
-static void write_all_console(char const *buf, size_t n)
-{
-	struct console *con = console_head;
-	while (con) {
-		con->write(con, buf, n, NULL);
-		con = con->next;
-	}
-}
+static spinlock_define(printk_lock);
 
 static int display_write(struct display *dis, char const *buf, size_t len,
 			 size_t *wlen)
 {
-	write_all_console(buf, len);
+	for (size_t i = 0; i < len; ++i)
+		console_putc(buf[i]);
 
 	if (wlen)
 		*wlen = len;
@@ -59,5 +34,7 @@ void vprintk(char const *fmt, va_list ap)
 		.write = display_write,
 		.priv = NULL,
 	};
+	spinlock_acquire(&printk_lock);
 	printf_core(&dis, fmt, ap);
+	spinlock_release(&printk_lock);
 }

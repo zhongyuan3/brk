@@ -25,4 +25,6 @@
 #define INIT_STACK_PAGES 2
 #define EARLY_PGDIR_PAGES 4
 
+#define NR_CPUS 8
+
 #endif

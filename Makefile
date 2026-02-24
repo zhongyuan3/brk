@@ -37,6 +37,9 @@ SRCS := \
 	kernel/sched/task.c \
 	kernel/sched/switch.S \
 	kernel/syscall.c \
+	kernel/console.c \
+	kernel/locking/sleeplock.c \
+	kernel/locking/spinlock.c \
 	mm/init.c \
 	mm/memblock.c \
 	mm/pgalloc.c \
@@ -77,7 +80,7 @@ DTS          := virt.dts
 ROOTFS_IMG   := rootfs.img
 
 QEMU           := qemu-system-riscv64
-QEMU_COMMON    := -machine virt -nographic -m 128M -smp 1 -bios default \
+QEMU_COMMON    := -machine virt -nographic -m 128M -smp 3 -bios default \
 -drive file=$(ROOTFS_IMG),if=none,format=raw,id=x0 \
 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 -d guest_errors \
@@ -104,8 +107,11 @@ gdb-server: $(AOSD_ELF) $(ROOTFS_IMG)
 gdb-client: $(AOSD_ELF)
 	$(Q)$(GDB) --tui -quiet -ex "target remote :1234" $(AOSD_ELF)
 
+# dis: $(AOSD_ELF)
+# 	$(Q)$(OBJDUMP) -d -S -l --source-comment $< > $(AOSD_DIS)
+
 dis: $(AOSD_ELF)
-	$(Q)$(OBJDUMP) -d -S -l --source-comment $< > $(AOSD_DIS)
+	$(Q)$(OBJDUMP) -d $< > $(AOSD_DIS)
 
 dts: $(DTS)
 
@@ -147,3 +153,8 @@ $(ROOTFS_IMG):
 %.o: %.S
 	$(Q)echo "CC $@"
 	$(Q)$(CC) $(CFLAGS) -o $@ -c $<
+
+.PHONY: echo
+echo:
+	@echo "Source files"
+	@echo $(SRCS)

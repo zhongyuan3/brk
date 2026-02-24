@@ -1,14 +1,17 @@
 #include <aosd/align.h>
+#include <aosd/console.h>
 #include <aosd/cpu.h>
 #include <aosd/dtb.h>
 #include <aosd/ioremap.h>
 #include <aosd/irq.h>
+#include <aosd/lock.h>
 #include <aosd/mm.h>
 #include <aosd/mmio.h>
 #include <aosd/panic.h>
 #include <aosd/pgtable.h>
 #include <aosd/plic.h>
 #include <aosd/printk.h>
+#include <aosd/spinlock.h>
 #include <aosd/uart.h>
 
 #define RHR 0 /* Receiver Holding Register */
@@ -34,6 +37,7 @@
 
 static struct uart_device uart;
 static uint8_t volatile *mem_base;
+static spinlock_define(uart_lock);
 
 static volatile uint8_t *uart_reg(unsigned int reg)
 {
@@ -55,10 +59,10 @@ static void uart_handle_irq(void)
 	int c = uart_getc();
 	if (c < 0)
 		return;
-	uart_putc(c);
+	console_intr(c);
 }
 
-void uart_init(uint32_t hart_id)
+void uart_init(void)
 {
 	dtb_parse_uart(&uart);
 
@@ -89,26 +93,40 @@ void uart_init(uint32_t hart_id)
 
 	irq_register_handler(uart.irq, uart_handle_irq, NULL);
 	plic_set_priority(uart.irq, 1);
+}
+
+void uart_init_hart(uint32_t hart_id)
+{
 	plic_enable(hart_id, uart.irq);
 }
 
 void uart_putc(int c)
 {
+	spinlock_acquire(&uart_lock);
+
+	if (panicked)
+		for (;;)
+			;
+
 	while (!(uart_read_reg(LSR) & LSR_TX_IDLE))
 		;
 	uart_write_reg(THR, c);
-}
 
-void uart_puts(char const *s)
-{
-	while (*s)
-		uart_putc(*s++);
+	spinlock_release(&uart_lock);
 }
 
 int uart_getc(void)
 {
+	int c;
+
+	spinlock_acquire(&uart_lock);
+
 	if (uart_read_reg(LSR) & LSR_RX_READY)
-		return uart_read_reg(RHR);
+		c = uart_read_reg(RHR);
 	else
-		return -1;
+		c = -1;
+
+	spinlock_release(&uart_lock);
+
+	return c;
 }

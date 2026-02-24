@@ -10,7 +10,10 @@ SECTIONS
 
   .text : AT(KERNEL_LOAD_ADDR + (ADDR(.text) - KERNEL_LINK_ADDR)) {
     _stext = .;
+    _stexthead = .;
     *(.text.head)
+    . = ALIGN(PAGE_SIZE);
+    _etexthead = .;
     *(.text)
     *(.text.*)
     _etext = .;
@@ -44,9 +47,9 @@ SECTIONS
     *(.bss)
     *(.bss.*)
 
-    . = ALIGN(16);
+    . = ALIGN(PAGE_SIZE);
     init_stack = .;
-    . += INIT_STACK_PAGES * PAGE_SIZE;
+    . += INIT_STACK_PAGES * PAGE_SIZE * NR_CPUS;
     init_stack_top = .;
 
     . = ALIGN(PAGE_SIZE);

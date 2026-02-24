@@ -10,9 +10,9 @@ struct uart_device {
 	uint32_t clock_freq;
 };
 
-void uart_init(uint32_t hart_id);
+void uart_init(void);
+void uart_init_hart(uint32_t hart_id);
 void uart_putc(int c);
-void uart_puts(char const *s);
 int uart_getc(void);
 
 #endif

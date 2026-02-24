@@ -5,6 +5,7 @@
 #include <aosd/mm.h>
 #include <aosd/mm_types.h>
 #include <aosd/types.h>
+#include <aosd/spinlock.h>
 
 #define PTE_V 1 /* Valid */
 #define PTE_R 2 /* Read */
@@ -157,6 +158,7 @@ static inline void pte_clear(pte_t *ptep)
 
 extern pgde_t early_pgdir[];
 extern pgde_t kernel_pgdir[];
+extern spinlock_t kernel_pgdir_lock;
 
 pgde_t *create_user_pgtable(void);
 void destroy_user_pgtable(pgde_t *pgd);

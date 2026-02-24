@@ -8,16 +8,21 @@
 #include <aosd/sbi.h>
 #include <aosd/types.h>
 
-static uint64_t alloc_pmd_early(void)
-{
-	static size_t current = 1;
-	uint64_t addr;
+static uint64_t alloc_pmd_early(uint64_t)
+	__attribute__((section(".text.head")));
+static void vmap_early(uint64_t addr, size_t size, uint64_t paddr,
+		       unsigned int flags)
+	__attribute__((section(".text.head")));
+void make_early_pgtable(uint64_t dtb) __attribute__((section(".text.head")));
+void setup_early_pgtable(void) __attribute__((section(".text.head")));
 
-	if (current < EARLY_PGDIR_PAGES) {
-		addr = (uint64_t)early_pgdir + current * PAGE_SIZE;
-		++current;
-		return addr;
-	}
+static uint64_t alloc_pmd_early(uint64_t prev)
+{
+	uint64_t end;
+
+	end = (uint64_t)early_pgdir + EARLY_PGDIR_PAGES * PAGE_SIZE;
+	if (prev + PAGE_SIZE < end)
+		return prev + PAGE_SIZE;
 
 	sbi_console_putstr("OOM\n");
 	while (1)
@@ -31,12 +36,15 @@ static void vmap_early(uint64_t addr, size_t size, uint64_t paddr,
 	pmde_t *pmdep;
 	uint64_t pmd_phys;
 	uint64_t end_addr = addr + size;
+	uint64_t prev = (uint64_t)early_pgdir;
+
 	while (addr < end_addr) {
 		pgdep = (pgde_t *)early_pgdir + pgde_index(addr);
 		if (pgde_present(*pgdep)) {
 			pmd_phys = pgde_get_pmd(*pgdep);
 		} else {
-			pmd_phys = alloc_pmd_early();
+			pmd_phys = alloc_pmd_early(prev);
+			prev = pmd_phys;
 			pgde_set_pmd(pgdep, pmd_phys);
 		}
 		pmdep = (pmde_t *)pmd_phys + pmde_index(addr);
@@ -46,7 +54,7 @@ static void vmap_early(uint64_t addr, size_t size, uint64_t paddr,
 	}
 }
 
-void setup_early_pgtable(uint64_t dtb)
+void make_early_pgtable(uint64_t dtb)
 {
 	uint64_t start = (uint64_t)_skernel;
 	uint64_t end = align_up((uint64_t)_ekernel, PAGE_SIZE_2M);
@@ -70,7 +78,10 @@ void setup_early_pgtable(uint64_t dtb)
 	size = end - start;
 	flags = PTE_R | PTE_W;
 	vmap_early(start, size, start, flags);
+}
 
+void setup_early_pgtable(void)
+{
 	write_satp(make_satp_sv39((uint64_t)early_pgdir));
 	sfence_vma();
 }
