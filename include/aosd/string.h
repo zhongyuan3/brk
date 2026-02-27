@@ -21,4 +21,6 @@ char *strchr(char const *s, int c);
 char *strrchr(char const *s, int c);
 char *strstr(char const *haystack, char const *needle);
 
+const char *strerror(int errnum);
+
 #endif
