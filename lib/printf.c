@@ -329,20 +329,24 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 		case 'o':
 			raw = fmt_o(arg.i, buf + sizeof(buf), digits);
 			radix = prefixes + 3;
-			radix_len = 1;
-			if (prec > 0)
-				prec -= 1;
+			if (bitflags_check(flags, ALT_FORM)) {
+				radix_len = 1;
+				if (prec > 0)
+					prec -= 1;
+			}
 			break;
 		case 'x':
 			raw = fmt_x(arg.i, buf + sizeof(buf), digits);
 			radix = prefixes + 3;
-			radix_len = 2;
+			if (bitflags_check(flags, ALT_FORM))
+				radix_len = 2;
 			break;
 		case 'X':
 			digits = "0123456789ABCDEF";
 			raw = fmt_x(arg.i, buf + sizeof(buf), digits);
 			radix = prefixes + 5;
-			radix_len = 2;
+			if (bitflags_check(flags, ALT_FORM))
+				radix_len = 2;
 			break;
 		case 'p':
 			flags = ALT_FORM;
