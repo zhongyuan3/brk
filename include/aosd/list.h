@@ -117,6 +117,11 @@ static inline void hlist_del(struct hlist_node *node)
 	*(node->pprev) = node->next;
 }
 
+static inline bool hlist_empty(struct hlist_head *head)
+{
+	return head->first == NULL;
+}
+
 #define hlist_entry(ptr, type, member) container_of(ptr, type, member)
 
 #define hlist_for_each(curr, head) \
