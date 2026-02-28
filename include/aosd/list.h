@@ -103,32 +103,4 @@ static inline void list_del(struct list_head *node)
 	     !list_entry_is_head(curr, head, member);              \
 	     curr = next, next = list_prev_entry(next, member))
 
-static inline void hlist_add(struct hlist_node *node, struct hlist_head *head)
-{
-	node->next = head->first;
-	node->pprev = &(head->first);
-	if (node->next)
-		node->next->pprev = &(node->next);
-	head->first = node;
-}
-
-static inline void hlist_del(struct hlist_node *node)
-{
-	*(node->pprev) = node->next;
-}
-
-static inline bool hlist_empty(struct hlist_head *head)
-{
-	return head->first == NULL;
-}
-
-#define hlist_entry(ptr, type, member) container_of(ptr, type, member)
-
-#define hlist_for_each(curr, head) \
-	for (curr = (head)->first; curr; curr = curr->next)
-
-#define hlist_for_each_entry(curr, head, member)                               \
-	for (curr = hlist_entry((head)->first, typeof(*(curr)), member); curr; \
-	     curr = hlist_entry((curr)->member.next, typeof(*(curr)), member))
-
 #endif
