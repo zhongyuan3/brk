@@ -154,6 +154,50 @@ char *strncpy(char *dst, const char *src, size_t n)
 	return ret;
 }
 
+size_t strlcpy(char *dst, char const *src, size_t size)
+{
+	char *d = dst;
+
+	if (!size--)
+		goto finally;
+
+	while (size && *src) {
+		--size;
+		*dst++ = *src++;
+	}
+
+	*dst = '\0';
+
+finally:
+	return (size_t)(dst - d) + strlen(src);
+}
+
+char *strcat(char *dst, char const *src)
+{
+	strcpy(dst + strlen(dst), src);
+	return dst;
+}
+
+char *strncat(char *dst, char const *src, size_t n)
+{
+	char *d = dst;
+	dst += strlen(dst);
+	while (n && *src) {
+		--n;
+		*dst++ = *src++;
+	}
+	*dst++ = '\0';
+	return d;
+}
+
+size_t strlcat(char *dst, char const *src, size_t size)
+{
+	size_t len = strnlen(dst, size);
+	if (len == size)
+		return size + strlen(src);
+	return len + strlcpy(dst + len, src, size - len);
+}
+
 char *strchr(const char *s, int c)
 {
 	unsigned char uc = (unsigned char)c;
@@ -307,4 +351,26 @@ const char *strerror(int errnum)
 	if ((size_t)errnum >= countof(errmsgs))
 		return "Unknown error";
 	return errmsgs[errnum];
+}
+
+size_t strspn(const char *s, const char *accept)
+{
+	bool map[256] = { false };
+	for (int i = 0; accept[i] != '\0'; ++i)
+		map[(int)accept[i]] = true;
+	size_t cnt = 0;
+	while (map[(int)s[cnt]])
+		++cnt;
+	return cnt;
+}
+
+size_t strcspn(const char *s, const char *reject)
+{
+	bool map[256] = { false };
+	for (int i = 0; reject[i] != '\0'; ++i)
+		map[(int)reject[i]] = true;
+	size_t cnt = 0;
+	while (!map[(int)s[cnt]])
+		++cnt;
+	return cnt;
 }
