@@ -23,7 +23,20 @@ static inline void __list_del(struct list_head *prev, struct list_head *next)
 	prev->next = next;
 }
 
-static inline bool list_empty(struct list_head *head)
+static inline void __list_splice(const struct list_head *list,
+				 struct list_head *prev, struct list_head *next)
+{
+	struct list_head *first = list->next;
+	struct list_head *last = list->prev;
+
+	first->prev = prev;
+	prev->next = first;
+
+	last->next = next;
+	next->prev = last;
+}
+
+static inline bool list_empty(const struct list_head *head)
 {
 	return head->next == head;
 }
@@ -49,6 +62,13 @@ static inline void list_del(struct list_head *node)
 	__list_del(node->prev, node->next);
 	node->next = NULL;
 	node->prev = NULL;
+}
+
+static inline void list_splice(const struct list_head *list,
+			       struct list_head *head)
+{
+	if (!list_empty(list))
+		__list_splice(list, head, head->next);
 }
 
 #define list_for_each(curr, head) \
