@@ -2,10 +2,10 @@
 #define AOSD_PGTABLE_H
 
 #include <aosd/asm.h>
+#include <aosd/lock.h>
 #include <aosd/mm.h>
 #include <aosd/mm_types.h>
 #include <aosd/types.h>
-#include <aosd/spinlock.h>
 
 #define PTE_V 1 /* Valid */
 #define PTE_R 2 /* Read */

@@ -9,6 +9,10 @@ void panic(char const *fmt, ...)
 {
 	va_list ap;
 
+	intr_off();
+
+	printk("PANIC: ");
+
 	va_start(ap, fmt);
 	vprintk(fmt, ap);
 	va_end(ap);

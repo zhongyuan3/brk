@@ -121,61 +121,79 @@ void kernel_trap_handler(void)
 
 struct task *user_trap_handler(void)
 {
-	struct task *task;
+	struct task *t;
 	uint64_t scause;
 	uint32_t code;
-	struct cpu *cpu;
+	struct cpu *c;
+	uint64_t sepc;
+	uint64_t stval;
 
 	write_stvec((uint64_t)kernel_trap_vector);
-	task = (struct task *)read_sscratch();
-	cpu = task->cpu;
-	write_tp((uint64_t)cpu);
+
+	t = (struct task *)read_sscratch();
+	c = t->cpu;
+	write_tp((uint64_t)c);
 	write_sstatus(read_sstatus() | SSTATUS_SUM);
 
 	assert(!(read_sstatus() & SSTATUS_SPP));
 	assert(!intr_enabled());
 
+	uint64_t jiffies = jiffies_get();
+	t->proc_tms.tms_utime += jiffies - t->last_utime;
+	t->last_ktime = jiffies;
+
 	scause = read_scause();
+	sepc = read_sepc();
+	stval = read_stval();
 	code = scause & 0x3FF;
+	t->tf.epc = sepc;
 	if (scause & (1ULL << 63)) {
 		switch (code) {
 		case 5:
 			timer_handle_int();
-			if (task) {
-				if (task_is_killed(task))
+			if (t) {
+				if (task_is_killed(t))
 					sched_exit(1);
-				if (--task->time_slice <= 0)
+				if (--t->time_slice <= 0)
 					sched_yield();
 			}
 			break;
 		case 9:
-			irq_handle_external(cpu->hart_id);
+			irq_handle_external(c->hart_id);
 			break;
 		default:
+			printk("USER INTERRUPT: %s: pid=%ld,scause=%#lx,sepc=%#lx,stval=%#lx\n",
+			       interrupt_str(code), t->pid, scause, sepc,
+			       stval);
 			sched_exit(1);
 			break;
 		}
 	} else {
 		switch (code) {
 		case 8:
-			if (task_is_killed(task))
+			if (task_is_killed(t))
 				sched_exit(1);
-			task->tf.epc += 4;
+			t->tf.epc += 4;
 			intr_on();
 			syscall();
 			break;
 		default:
-			task_set_killed(task);
+			printk("USER EXCEPTION: %s: pid=%ld,scause=%#lx,sepc=%#lx,stval=%#lx\n",
+			       exception_str(code), t->pid, scause, sepc,
+			       stval);
+			task_set_killed(t);
 			break;
 		}
 	}
 
-	if (task_is_killed(task))
+	if (task_is_killed(t))
 		sched_exit(1);
 
-	write_sstatus(read_sstatus() & ~SSTATUS_SUM);
 	prepare_to_return();
-	return task;
+	jiffies = jiffies_get();
+	t->proc_tms.tms_stime += jiffies - t->last_ktime;
+	t->last_utime = jiffies;
+	return t;
 }
 
 void prepare_to_return(void)
@@ -197,4 +215,6 @@ void prepare_to_return(void)
 	task->tf.kernel_sp = task->stack + KSTACK_SIZE;
 
 	write_sepc(task->tf.epc);
+
+	write_sstatus(read_sstatus() & ~SSTATUS_SUM);
 }

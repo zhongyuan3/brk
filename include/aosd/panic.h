@@ -6,7 +6,6 @@
 void panic(char const *fmt, ...)
 	__attribute__((noreturn, format(printf, 1, 2)));
 
-
 extern volatile bool panicked;
 
 #endif

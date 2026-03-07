@@ -4,7 +4,6 @@
 #include <aosd/macros.h>
 #include <aosd/printf.h>
 #include <aosd/printk.h>
-#include <aosd/spinlock.h>
 
 static spinlock_define(printk_lock);
 

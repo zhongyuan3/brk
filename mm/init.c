@@ -1,21 +1,17 @@
 #include <aosd/align.h>
-#include <aosd/assert.h>
 #include <aosd/dtb.h>
-#include <aosd/libfdt.h>
-#include <aosd/list.h>
-#include <aosd/macros.h>
 #include <aosd/memblock.h>
 #include <aosd/mm.h>
+#include <aosd/mm_types.h>
 #include <aosd/panic.h>
 #include <aosd/pgalloc.h>
 #include <aosd/pgtable.h>
 #include <aosd/riscv.h>
-#include <aosd/sbi.h>
-#include <aosd/slab.h>
-#include <aosd/types.h>
 #include <aosd/vmalloc.h>
+#include <libfdt.h>
 
-struct kernel_mapping kernel_map;
+size_t kernel_load_offset;
+uint64_t ram_phys_offset;
 
 static uint64_t alloc_pgtable_before_final(void)
 {
@@ -68,7 +64,9 @@ static void vmap_before_final(uint64_t addr, size_t size, uint64_t paddr,
 		.get_pt_virt = get_pt_virt_before_final,
 	};
 	size = align_up(size, PAGE_SIZE);
+	spinlock_acquire(&kernel_pgdir_lock);
 	vmap(kernel_pgdir, addr, size, paddr, flags, &ops);
+	spinlock_release(&kernel_pgdir_lock);
 }
 
 static void map_mem(void)
@@ -140,7 +138,7 @@ static uint64_t make_final_pgtable(void)
 	return make_satp_sv39(symbol_phys(kernel_pgdir));
 }
 
-static void setup_final_pgtable(void)
+void setup_final_pgtable(void)
 {
 	write_satp(make_final_pgtable());
 	sfence_vma();
@@ -196,10 +194,13 @@ static void vmap_before_buddy(uint64_t addr, size_t size, uint64_t paddr,
 		.get_pmd_virt = get_pmd_virt_before_buddy,
 		.get_pt_virt = get_pt_virt_before_buddy,
 	};
+	size = align_up(size, PAGE_SIZE);
+	spinlock_acquire(&kernel_pgdir_lock);
 	vmap(kernel_pgdir, addr, size, paddr, flags, &ops);
+	spinlock_release(&kernel_pgdir_lock);
 }
 
-static void mem_map_init(void)
+void vmemmap_init(void)
 {
 	uint32_t idx;
 	uint64_t start, end;
@@ -216,23 +217,10 @@ static void mem_map_init(void)
 	}
 }
 
-void mm_init(void)
+void switch_pgtable(pgde_t *pgd)
 {
-	memblock_init();
-	memblock_reserve(_SKERNEL_PHYS, _KERNEL_SIZE);
-	memblock_reserve(dtb_phys,
-			 align_up(fdt_totalsize(dtb_phys), PAGE_SIZE));
-	dtb_early_init_scan_mem();
-	dtb_early_init_scan_reserved_mem();
-
-	kernel_map.phys_offset = memblock_get_ram_base();
-
-	setup_final_pgtable();
-
-	mem_map_init();
-	page_alloc_init();
-	memblock_free_all();
-
-	kmalloc_init();
-	vmalloc_init();
+	uint64_t paddr = virt_to_phys((uint64_t)pgd);
+	uint64_t satp = make_satp_sv39(paddr);
+	write_satp(satp);
+	sfence_vma();
 }

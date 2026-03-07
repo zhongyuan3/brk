@@ -8,7 +8,6 @@
 #include <aosd/pgalloc.h>
 #include <aosd/pgtable.h>
 #include <aosd/slab.h>
-#include <aosd/spinlock.h>
 #include <aosd/string.h>
 #include <aosd/vmalloc.h>
 
@@ -156,10 +155,10 @@ void vunmap(pgde_t *pgd, uint64_t addr, size_t size, struct vmap_ops *ops)
 
 static uint64_t alloc_pgtable(void)
 {
-	struct page *page = page_alloc(0);
-	if (!page)
+	struct page *pg = page_alloc(0);
+	if (!pg)
 		return 0;
-	uint64_t paddr = page_to_phys(page);
+	uint64_t paddr = page_to_phys(pg);
 	memset((void *)phys_to_virt(paddr), 0, PAGE_SIZE);
 	return paddr;
 }
@@ -274,7 +273,7 @@ static void merge_free_vmem_areas(void)
 			next->addr = curr->addr;
 			next->size += curr->size;
 			list_del(&curr->list);
-			kmem_cache_free(&vma_cache, curr);
+			vmem_area_free(curr);
 		}
 	}
 }
@@ -295,7 +294,7 @@ static struct vmem_area *get_free_vmem_area(size_t size)
 			area->is_free = false;
 			return area;
 		} else {
-			new_area = kmem_cache_alloc(&vma_cache);
+			new_area = vmem_area_alloc();
 			if (!new_area)
 				return NULL;
 			new_area->addr = area->addr + size;
@@ -322,7 +321,7 @@ void vmalloc_init(void)
 	kmem_cache_init(&vma_cache, sizeof(struct vmem_area),
 			alignof(struct vmem_area), "vma_cache");
 	list_init_head(&vma);
-	struct vmem_area *area = kmem_cache_alloc(&vma_cache);
+	struct vmem_area *area = vmem_area_alloc();
 	area->addr = VMALLOC_START;
 	area->size = VMALLOC_SIZE;
 	area->is_free = true;
@@ -341,26 +340,26 @@ void *vmalloc(size_t size)
 		return NULL;
 	}
 
-	size_t nr_pages = size >> PAGE_SHIFT;
+	size_t npgs = size >> PAGE_SHIFT;
 
-	area->pages = kcalloc(nr_pages, sizeof(struct page *));
+	area->pages = kcalloc(npgs, sizeof(struct page *));
 	if (!area->pages) {
 		free_vmem_area(area);
 		spinlock_release(&vma_lock);
 		return NULL;
 	}
-	area->nr_pages = nr_pages;
+	area->nr_pages = npgs;
 
 	size_t i = 0;
 	uint64_t vaddr = area->addr;
-	for (; i < nr_pages; ++i) {
-		struct page *page = page_alloc(0);
-		if (!page)
+	for (; i < npgs; ++i) {
+		struct page *pg = page_alloc(0);
+		if (!pg)
 			goto out_cleanup;
-		area->pages[i] = page;
-		if (kvmap(vaddr, PAGE_SIZE, page_to_phys(page),
-			  PTE_R | PTE_W)) {
-			page_free(page, 0);
+		area->pages[i] = pg;
+		if (kvmap(vaddr, PAGE_SIZE, page_to_phys(pg), PTE_R | PTE_W)) {
+			assert(pg);
+			page_free(pg, 0);
 			goto out_cleanup;
 		}
 		vaddr += PAGE_SIZE;
@@ -370,8 +369,10 @@ void *vmalloc(size_t size)
 	return (void *)area->addr;
 
 out_cleanup:
-	for (size_t j = 0; j < i; ++j)
+	for (size_t j = 0; j < i; ++j) {
+		assert(area->pages[j]);
 		page_free(area->pages[j], 0);
+	}
 	kfree(area->pages);
 	free_vmem_area(area);
 	spinlock_release(&vma_lock);
@@ -390,8 +391,10 @@ void vfree(void *ptr)
 	}
 
 	kvunmap(area->addr, area->size);
-	for (size_t i = 0; i < area->nr_pages; ++i)
+	for (size_t i = 0; i < area->nr_pages; ++i) {
+		assert(area->pages[i]);
 		page_free(area->pages[i], 0);
+	}
 	kfree(area->pages);
 	free_vmem_area(area);
 	spinlock_release(&vma_lock);
@@ -422,4 +425,19 @@ void vfree_nomap(void *ptr)
 	}
 	free_vmem_area(area);
 	spinlock_release(&vma_lock);
+}
+
+struct vmem_area *vmem_area_alloc(void)
+{
+	struct vmem_area *vma = kmem_cache_alloc(&vma_cache);
+	if (vma) {
+		memset(vma, 0, sizeof(*vma));
+		list_init_head(&vma->list);
+	}
+	return vma;
+}
+
+void vmem_area_free(struct vmem_area *area)
+{
+	kmem_cache_free(&vma_cache, area);
 }

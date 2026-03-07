@@ -13,3 +13,7 @@ compile_commands.json
 
 aosd.ld
 aosd.elf
+
+*.dis
+*.a
+*.so

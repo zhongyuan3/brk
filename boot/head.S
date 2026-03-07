@@ -21,7 +21,7 @@ _start:
 
 	li t0, 1
 	slli t0, t0, PAGE_SHIFT
-	li t1, INIT_STACK_PAGES
+	li t1, NR_INIT_STACK_PAGES
 	mul t0, t0, t1
 	addi t1, a0, 1
 	mul t0, t1, t0
@@ -58,7 +58,7 @@ hart_entry:
 
 	li t0, 1
 	slli t0, t0, PAGE_SHIFT
-	li t1, INIT_STACK_PAGES
+	li t1, NR_INIT_STACK_PAGES
 	mul t0, t0, t1
 	addi t1, a0, 1
 	mul t0, t1, t0

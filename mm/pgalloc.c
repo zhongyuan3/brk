@@ -3,7 +3,6 @@
 #include <aosd/lock.h>
 #include <aosd/panic.h>
 #include <aosd/pgalloc.h>
-#include <aosd/spinlock.h>
 
 static struct free_area areas[PAGE_ORDER_MAX + 1];
 static spinlock_define(areas_lock);
@@ -38,21 +37,21 @@ found:
 		list_add(&buddy->lru, &areas[buddy->order].free_list);
 	}
 
-	mark_page_busy(curr);
+	curr->flags &= ~PAGE_FLAGS_FREE;
 	spinlock_release(&areas_lock);
 	return curr;
 }
 
-static bool page_is_buddy(struct page *page, struct page *buddy,
+static bool page_is_buddy(struct page *pg, struct page *buddy,
 			  unsigned int order)
 {
-	if (!bitflags_check(buddy->flags, PAGE_FLAGS_BUDDY))
+	if (!(buddy->flags & PAGE_FLAGS_BUDDY))
 		return false;
 
-	if (!bitflags_check(buddy->flags, PAGE_FLAGS_HEAD))
+	if (!(buddy->flags & PAGE_FLAGS_HEAD))
 		return false;
 
-	if (!bitflags_check(buddy->flags, PAGE_FLAGS_FREE))
+	if (!(buddy->flags & PAGE_FLAGS_FREE))
 		return false;
 
 	if (buddy->order != order)
@@ -61,32 +60,32 @@ static bool page_is_buddy(struct page *page, struct page *buddy,
 	return true;
 }
 
-void page_free(struct page *page, unsigned int order)
+void page_free(struct page *pg, unsigned int order)
 {
 	struct page *buddy;
 
 	spinlock_acquire(&areas_lock);
 
-	assert(bitflags_check(page->flags, PAGE_FLAGS_BUDDY));
-	assert(!bitflags_check(page->flags, PAGE_FLAGS_FREE));
-	assert(bitflags_check(page->flags, PAGE_FLAGS_HEAD));
-	assert(is_aligned(page_to_phys(page), (1ULL << (PAGE_SHIFT + order))));
+	assert((pg->flags & PAGE_FLAGS_BUDDY));
+	assert(!(pg->flags & PAGE_FLAGS_FREE));
+	assert((pg->flags & PAGE_FLAGS_HEAD));
+	assert(is_aligned(page_to_phys(pg), (1ULL << (PAGE_SHIFT + order))));
 
-	page->flags = 0;
+	pg->flags = 0;
 
 	while (order < PAGE_ORDER_MAX) {
-		buddy = find_buddy_page(page, order);
-		if (!page_is_buddy(page, buddy, order))
+		buddy = find_buddy_page(pg, order);
+		if (!page_is_buddy(pg, buddy, order))
 			break;
 		list_del(&buddy->lru);
 		buddy->flags = 0;
-		page = min(page, buddy);
+		pg = min(pg, buddy);
 		++order;
 	}
 
-	page->flags = PAGE_FLAGS_NEW_FREE_PAGE;
-	page->order = order;
-	list_add(&page->lru, &areas[order].free_list);
+	pg->flags = PAGE_FLAGS_NEW_FREE_PAGE;
+	pg->order = order;
+	list_add(&pg->lru, &areas[order].free_list);
 
 	spinlock_release(&areas_lock);
 }

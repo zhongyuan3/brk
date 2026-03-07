@@ -25,10 +25,6 @@
 #define countof(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
-#define bitflags_set(flags, flags_bit) ((flags) |= (flags_bit))
-#define bitflags_clear(flags, flags_bit) ((flags) &= ~(flags_bit))
-#define bitflags_check(flags, flags_bit) (((flags) & (flags_bit)) != 0)
-
 #define container_of(ptr, type, member)                              \
 	({                                                           \
 		typeof((((type *)0)->member)) const *__mptr = (ptr); \

@@ -4,7 +4,6 @@
 #include <aosd/mmio.h>
 #include <aosd/pgtable.h>
 #include <aosd/slab.h>
-#include <aosd/spinlock.h>
 #include <aosd/virtio.h>
 
 static list_head_define(vdevs);

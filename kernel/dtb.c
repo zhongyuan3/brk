@@ -1,13 +1,13 @@
 #include <aosd/cpu.h>
 #include <aosd/dtb.h>
 #include <aosd/errno.h>
-#include <aosd/libfdt.h>
 #include <aosd/memblock.h>
 #include <aosd/mm.h>
 #include <aosd/panic.h>
 #include <aosd/printk.h>
 #include <aosd/slab.h>
 #include <aosd/virtio.h>
+#include <libfdt.h>
 
 uint64_t dtb_phys;
 void *dtb_virt;
