@@ -3,21 +3,19 @@
 
 #include <aosd/align.h>
 #include <aosd/asm.h>
+#include <aosd/assert.h>
 #include <aosd/mm_types.h>
+#include <aosd/printk.h>
 #include <aosd/types.h>
+#include <aosd/vmalloc.h>
 
-struct kernel_mapping {
-	/* Offset between kernel mapping virtual address and kernel load address */
-	size_t load_offset;
-	/* Offset between the physical address of the RAM starting address and 0 */
-	uint64_t phys_offset;
-};
-
-extern struct kernel_mapping kernel_map;
+/* Offset between kernel mapping virtual address and kernel load address */
+extern size_t kernel_load_offset;
+/* Offset between the physical address of the RAM starting address and 0 */
+extern uint64_t ram_phys_offset;
 
 extern char _skernel[], _ekernel[];
 extern char _stext[], _etext[];
-extern char _stexthead[], _etexthead[];
 extern char _srodata[], _erodata[];
 extern char _sdata[], _edata[];
 extern char _sbss[], _ebss[];
@@ -26,7 +24,7 @@ extern char hart_entry[];
 
 static inline uint64_t symbol_phys(void *vaddr)
 {
-	return (uint64_t)vaddr + kernel_map.load_offset;
+	return (uint64_t)vaddr + kernel_load_offset;
 }
 
 #define _SKERNEL_PHYS symbol_phys(_skernel)
@@ -37,11 +35,6 @@ static inline uint64_t symbol_phys(void *vaddr)
 #define _ETEXT_PHYS symbol_phys(_etext)
 #define _ETEXT_ALIGNED_PHYS align_up(_ETEXT_PHYS, PAGE_SIZE)
 #define _TEXT_SIZE ((uint64_t)_etext - (uint64_t)_stext)
-
-#define _STEXTHEAD_PHYS symbol_phys(_stexthead)
-#define _ETEXTHEAD_PHYS symbol_phys(_etexthead)
-#define _ETEXTHEAD_ALIGNED_PHYS align_up(_ETEXTHEAD_PHYS, PAGE_SIZE)
-#define _TEXTHEAD_SIZE ((uint64_t)_etexthead - (uint64_t)_stexthead)
 
 #define _SRODATA_PHYS symbol_phys(_srodata)
 #define _ERODATA_PHYS symbol_phys(_erodata)
@@ -58,21 +51,23 @@ static inline uint64_t symbol_phys(void *vaddr)
 #define _EBSS_ALIGNED_PHYS align_up(_EBSS_PHYS, PAGE_SIZE)
 #define _BSS_SIZE ((uint64_t)_ebss - (uint64_t)_sbss)
 
-#define INIT_STACK_PHYS symbol_phys(init_stack)
-#define INIT_STACK_TOP_PHYS symbol_phys(init_stack_top)
-#define INIT_STACK_TOP_ALIGNED_PHYS align_up(INIT_STACK_TOP_PHYS, PAGE_SIZE)
-#define INIT_STACK_SIZE ((uint64_t)init_stack_top - (uint64_t)init_stack)
-
 static inline uint64_t phys_to_virt(uint64_t paddr)
 {
-	return (paddr - kernel_map.phys_offset) + PAGE_OFFSET;
+	return (paddr - ram_phys_offset) + PAGE_OFFSET;
 }
 
 static inline uint64_t virt_to_phys(uint64_t vaddr)
 {
-	return (vaddr - PAGE_OFFSET) + kernel_map.phys_offset;
+	return (vaddr - PAGE_OFFSET) + ram_phys_offset;
 }
 
-void mm_init(void);
+void vmemmap_init(void);
+void setup_final_pgtable(void);
+void switch_pgtable(pgde_t *pgd);
+
+void mm_cache_init(void);
+struct mem_mgmt *mm_alloc(void);
+void mm_free(struct mem_mgmt *mm);
+int mm_copy(struct mem_mgmt *dst, struct mem_mgmt *src);
 
 #endif

@@ -1,8 +1,8 @@
 #ifndef AOSD_SLAB_H
 #define AOSD_SLAB_H
 
+#include <aosd/lock.h>
 #include <aosd/mm_types.h>
-#include <aosd/spinlock.h>
 
 #define NR_KMALLOC_CACHES 10
 

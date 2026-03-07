@@ -4,7 +4,6 @@
 #include <aosd/panic.h>
 #include <aosd/plic.h>
 #include <aosd/slab.h>
-#include <aosd/spinlock.h>
 
 static irq_handler_t *irq_handlers;
 static uint32_t irq_handlers_num;

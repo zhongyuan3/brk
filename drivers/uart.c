@@ -11,7 +11,6 @@
 #include <aosd/pgtable.h>
 #include <aosd/plic.h>
 #include <aosd/printk.h>
-#include <aosd/spinlock.h>
 #include <aosd/uart.h>
 
 #define RHR 0 /* Receiver Holding Register */

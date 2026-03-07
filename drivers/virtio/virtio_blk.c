@@ -11,7 +11,6 @@
 #include <aosd/printk.h>
 #include <aosd/sched.h>
 #include <aosd/slab.h>
-#include <aosd/spinlock.h>
 #include <aosd/types.h>
 #include <aosd/virtio.h>
 #include <aosd/virtio_blk.h>

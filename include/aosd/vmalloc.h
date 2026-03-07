@@ -28,6 +28,7 @@ struct vmem_area {
 	size_t size;
 	struct page **pages;
 	size_t nr_pages;
+	unsigned int flags;
 	bool is_free;
 };
 
@@ -36,5 +37,7 @@ void *vmalloc(size_t size);
 void vfree(void *ptr);
 void *vmalloc_nomap(size_t size);
 void vfree_nomap(void *ptr);
+struct vmem_area *vmem_area_alloc(void);
+void vmem_area_free(struct vmem_area *area);
 
 #endif

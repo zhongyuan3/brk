@@ -1,12 +1,12 @@
 #include <aosd/align.h>
 #include <aosd/asm.h>
-#include <aosd/libfdt.h>
 #include <aosd/macros.h>
 #include <aosd/mm.h>
 #include <aosd/pgtable.h>
 #include <aosd/riscv.h>
 #include <aosd/sbi.h>
 #include <aosd/types.h>
+#include <libfdt.h>
 
 static uint64_t alloc_pmd_early(uint64_t)
 	__attribute__((section(".text.head")));
@@ -20,7 +20,7 @@ static uint64_t alloc_pmd_early(uint64_t prev)
 {
 	uint64_t end;
 
-	end = (uint64_t)early_pgdir + EARLY_PGDIR_PAGES * PAGE_SIZE;
+	end = (uint64_t)early_pgdir + NR_EARLY_PGDIR_PAGES * PAGE_SIZE;
 	if (prev + PAGE_SIZE < end)
 		return prev + PAGE_SIZE;
 

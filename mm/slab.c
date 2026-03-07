@@ -2,6 +2,7 @@
 #include <aosd/assert.h>
 #include <aosd/errno.h>
 #include <aosd/list.h>
+#include <aosd/lock.h>
 #include <aosd/macros.h>
 #include <aosd/memblock.h>
 #include <aosd/mm.h>
@@ -9,7 +10,6 @@
 #include <aosd/pgalloc.h>
 #include <aosd/printk.h>
 #include <aosd/slab.h>
-#include <aosd/spinlock.h>
 #include <aosd/string.h>
 
 static struct kmem_cache kmalloc_caches[NR_KMALLOC_CACHES];
@@ -59,11 +59,11 @@ void *kmalloc(size_t size)
 	if (index >= 0)
 		return kmem_cache_alloc(&kmalloc_caches[index]);
 
-	struct page *page = page_alloc(page_order(size));
-	if (!page)
+	struct page *pg = page_alloc(page_order(size));
+	if (!pg)
 		return NULL;
 
-	return (void *)page_to_virt(page);
+	return (void *)page_to_virt(pg);
 }
 
 void *kcalloc(size_t nmemb, size_t size)
@@ -83,11 +83,15 @@ void *kzalloc(size_t size)
 
 void kfree(void *ptr)
 {
-	struct page *page = virt_to_page((uint64_t)ptr);
-	if (bitflags_check(page->flags, PAGE_FLAGS_SLUB))
-		kmem_cache_free(page->cache, ptr);
-	else
-		page_free(page, page->order);
+	if (!ptr)
+		return;
+	struct page *pg = virt_to_page((uint64_t)ptr);
+	if (pg->flags & PAGE_FLAGS_SLUB) {
+		kmem_cache_free(pg->cache, ptr);
+	} else {
+		assert(pg);
+		page_free(pg, pg->order);
+	}
 }
 
 static int kmem_cache_add_page(struct kmem_cache *cache)
@@ -95,21 +99,21 @@ static int kmem_cache_add_page(struct kmem_cache *cache)
 	size_t align = cache->align;
 	size_t size = cache->size;
 
-	struct page *page = page_alloc(cache->page_order);
-	if (!page)
+	struct page *pg = page_alloc(cache->page_order);
+	if (!pg)
 		return -ENOMEM;
 
-	bitflags_set(page->flags, PAGE_FLAGS_SLUB);
-	page->cache = cache;
+	pg->flags |= PAGE_FLAGS_SLUB;
+	pg->cache = cache;
 
-	uint64_t addr = page_to_virt(page);
+	uint64_t addr = page_to_virt(pg);
 	uint64_t end_addr = addr + (1 << (PAGE_SHIFT + cache->page_order));
 	if (!is_aligned(addr, align))
 		addr = align_up(addr, align);
 
-	page->free_list = (void *)addr;
+	pg->free_list = (void *)addr;
 
-	page->object_count = page->free_count = (end_addr - addr) / size;
+	pg->object_count = pg->free_count = (end_addr - addr) / size;
 	while (addr + size < end_addr) {
 		void **curr_next_ptr = (void **)addr;
 		void *next = (void *)(addr + size);
@@ -118,7 +122,7 @@ static int kmem_cache_add_page(struct kmem_cache *cache)
 	}
 	*(void **)addr = NULL;
 
-	list_add(&page->slub_list, &cache->slab_list);
+	list_add(&pg->slub_list, &cache->slab_list);
 
 	return 0;
 }
@@ -154,7 +158,7 @@ int kmem_cache_init(struct kmem_cache *cache, size_t size, size_t align,
 void kmem_cache_deinit(struct kmem_cache *cache)
 {
 	struct list_head *first;
-	struct page *page;
+	struct page *pg;
 	struct list_head *list;
 
 	spinlock_acquire(&cache->lock);
@@ -162,10 +166,11 @@ void kmem_cache_deinit(struct kmem_cache *cache)
 	while (!list_empty(list)) {
 		first = list->next;
 		list_del(first);
-		page = list_entry(first, struct page, slub_list);
-		assert(page->free_count == page->object_count);
-		bitflags_clear(page->flags, PAGE_FLAGS_SLUB);
-		page_free(page, 0);
+		pg = list_entry(first, struct page, slub_list);
+		assert(pg->free_count == pg->object_count);
+		pg->flags &= ~PAGE_FLAGS_SLUB;
+		assert(pg);
+		page_free(pg, 0);
 	}
 	spinlock_release(&cache->lock);
 }

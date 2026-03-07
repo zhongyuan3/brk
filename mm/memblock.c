@@ -318,7 +318,7 @@ void __next_mem_pfn_range(uint32_t *pidx, uint64_t *pstart, uint64_t *pend)
 static void memblock_free_range(uint64_t start, uint64_t end)
 {
 	unsigned int order;
-	size_t nr_pages;
+	size_t npgs;
 
 	while (start < end) {
 		order = page_order(end - start);
@@ -327,13 +327,14 @@ static void memblock_free_range(uint64_t start, uint64_t end)
 		while (!is_aligned(start, (size_t)1 << (PAGE_SHIFT + order)))
 			--order;
 
-		nr_pages = (1 << order);
+		npgs = (1 << order);
 
-		struct page *page = pfn_to_page(phys_to_pfn(start));
-		page->flags = PAGE_FLAGS_NEW_PAGE;
-		page_free(page, order);
+		struct page *pg = pfn_to_page(phys_to_pfn(start));
+		pg->flags = PAGE_FLAGS_NEW_PAGE;
+		assert(pg);
+		page_free(pg, order);
 
-		start += (nr_pages << PAGE_SHIFT);
+		start += (npgs << PAGE_SHIFT);
 	}
 }
 

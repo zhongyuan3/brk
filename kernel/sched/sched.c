@@ -1,6 +1,8 @@
 #include <aosd/assert.h>
 #include <aosd/cpu.h>
 #include <aosd/errno.h>
+#include <aosd/fs.h>
+#include <aosd/limits.h>
 #include <aosd/list.h>
 #include <aosd/lock.h>
 #include <aosd/mm.h>
@@ -9,25 +11,19 @@
 #include <aosd/riscv.h>
 #include <aosd/sched.h>
 #include <aosd/sched_types.h>
-#include <aosd/spinlock.h>
+#include <aosd/string.h>
+#include <aosd/timer.h>
 #include <aosd/trap.h>
 #include <aosd/types.h>
 
 static spinlock_define(wait_lock);
-
-static void switch_pgtable(pgde_t *pgd)
-{
-	uint64_t paddr = virt_to_phys((uint64_t)pgd);
-	uint64_t satp = make_satp_sv39(paddr);
-	write_satp(satp);
-	sfence_vma();
-}
 
 void scheduler(void)
 {
 	struct cpu *c = current_cpu();
 	struct task *n = NULL;
 	bool have_runnable = false;
+	uint64_t jiffies = 0;
 
 	for (;;) {
 		intr_on();
@@ -42,10 +38,16 @@ void scheduler(void)
 				n->cpu = c;
 				n->state = TASK_RUNNING;
 				n->time_slice = DEFAULT_TIME_SLICE;
-				switch_pgtable(n->pgd);
+				switch_pgtable(n->mm->pgd);
+				write_sstatus(read_sstatus() | SSTATUS_SUM);
+				jiffies = jiffies_get();
+				n->last_ktime = jiffies;
 				switch_context(&c->ctx, &n->ctx);
 				c->current = NULL;
 				n->cpu = NULL;
+				jiffies = jiffies_get();
+				n->proc_tms.tms_stime +=
+					jiffies - n->last_ktime;
 				have_runnable = true;
 			}
 			spinlock_release(&n->lock);
@@ -138,31 +140,38 @@ void sched_exit(int status)
 	panic("scheduling zombie task\n");
 }
 
-int sched_wait(int *status, pid_t *pid)
+pid_t do_wait4(pid_t child_pid, int *status, int options, struct rusage *rus)
 {
 	bool have_kids;
-	struct task *t;
-	struct task *c = current_task();
+	struct task *child;
+	struct task *parent = current_task();
 
 	spinlock_acquire(&wait_lock);
 
 again:
 	have_kids = false;
 
-	for (t = tasks; t < tasks + NR_TASKS; ++t) {
-		if (t->parent == c) {
-			spinlock_acquire(&t->lock);
-			have_kids = true;
-			if (t->state == TASK_ZOMBIE) {
-				if (pid)
-					*pid = t->pid;
-				if (status)
-					*status = t->exit_status;
-				task_destroy(t);
-				spinlock_release(&wait_lock);
-				return 0;
+	for (child = tasks; child < tasks + NR_TASKS; ++child) {
+		if (child->parent == parent) {
+			spinlock_acquire(&child->lock);
+			if (child_pid >= 0 && child->pid != child_pid) {
+				spinlock_release(&child->lock);
+				continue;
 			}
-			spinlock_release(&t->lock);
+			have_kids = true;
+			if (child->state == TASK_ZOMBIE) {
+				if (status)
+					*status = child->exit_status;
+				child_pid = child->pid;
+				parent->proc_tms.tms_cstime +=
+					child->proc_tms.tms_stime;
+				parent->proc_tms.tms_cutime +=
+					child->proc_tms.tms_utime;
+				task_free(child);
+				spinlock_release(&wait_lock);
+				return child_pid;
+			}
+			spinlock_release(&child->lock);
 		}
 	}
 
@@ -171,7 +180,7 @@ again:
 		return -ECHILD;
 	}
 
-	sched_sleep(c, &wait_lock);
+	sched_sleep(parent, &wait_lock);
 
 	goto again;
 }
@@ -189,8 +198,22 @@ void fork_return(void)
 {
 	struct task *t = current_task();
 	spinlock_release(&t->lock);
-	if (t->thread_entry)
-		t->thread_entry();
+
+	if (t == init_task)
+		init_task_entry();
+
+	static volatile bool first = true;
+	if (first) {
+		first = false;
+		fs_init();
+		char *argv[] = { "/sh", 0 };
+		char *envp[] = { 0 };
+		int ret = do_execve(argv[0], argv, envp);
+		if (ret < 0)
+			panic("execve %s failed: %s\n", argv[0], strerror(ret));
+		t->tf.a0 = ret;
+	}
+
 	prepare_to_return();
 	user_trap_return(t);
 }
@@ -209,4 +232,45 @@ bool task_is_killed(struct task *t)
 	killed = t->killed;
 	spinlock_release(&t->lock);
 	return killed;
+}
+
+int task_fork(void)
+{
+	pid_t child_pid;
+	size_t i = 0;
+	struct task *parent = current_task();
+	struct task *child = task_alloc();
+	int err;
+
+	if (!child)
+		return -ENOMEM;
+
+	err = mm_copy(child->mm, parent->mm);
+	if (err) {
+		task_free(child);
+		return err;
+	}
+
+	memcpy(&child->tf, &parent->tf, sizeof(parent->tf));
+
+	for (; i <= OPEN_MAX; ++i)
+		if (parent->ofiles[i] != NULL)
+			child->ofiles[i] = file_dup(parent->ofiles[i]);
+
+	child->cwd = dentry_dup(parent->cwd);
+
+	child->tf.a0 = 0;
+
+	child_pid = child->pid;
+	spinlock_release(&child->lock);
+
+	spinlock_acquire(&wait_lock);
+	child->parent = parent;
+	spinlock_release(&wait_lock);
+
+	spinlock_acquire(&child->lock);
+	child->state = TASK_RUNNABLE;
+	spinlock_release(&child->lock);
+
+	return child_pid;
 }

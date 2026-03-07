@@ -1,7 +1,6 @@
 #include <aosd/console.h>
 #include <aosd/lock.h>
 #include <aosd/sched.h>
-#include <aosd/spinlock.h>
 #include <aosd/uart.h>
 
 #define BACKSPACE 0x100
@@ -97,7 +96,7 @@ void console_intr(int c)
 		}
 		break;
 	case CTRL('P'):
-		show_all_tasks();
+		task_dump();
 		break;
 	default:
 		if (c != 0 && cons_e - cons_r < CONSOLE_BUF_SIZE) {

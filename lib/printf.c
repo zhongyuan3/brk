@@ -323,13 +323,13 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 		case 'i':
 		case 'd':
 		case 'u':
-			bitflags_clear(flags, ALT_FORM);
+			flags &= ~ALT_FORM;
 			raw = fmt_u(arg.i, buf + sizeof(buf), digits);
 			break;
 		case 'o':
 			raw = fmt_o(arg.i, buf + sizeof(buf), digits);
 			radix = prefixes + 3;
-			if (bitflags_check(flags, ALT_FORM)) {
+			if (flags & ALT_FORM) {
 				radix_len = 1;
 				if (prec > 0)
 					prec -= 1;
@@ -338,14 +338,14 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 		case 'x':
 			raw = fmt_x(arg.i, buf + sizeof(buf), digits);
 			radix = prefixes + 3;
-			if (bitflags_check(flags, ALT_FORM))
+			if (flags & ALT_FORM)
 				radix_len = 2;
 			break;
 		case 'X':
 			digits = "0123456789ABCDEF";
 			raw = fmt_x(arg.i, buf + sizeof(buf), digits);
 			radix = prefixes + 5;
-			if (bitflags_check(flags, ALT_FORM))
+			if (flags & ALT_FORM)
 				radix_len = 2;
 			break;
 		case 'p':
@@ -364,11 +364,11 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 			if (has_prec && prec < raw_len)
 				raw_len = prec;
 			if (has_width && width > raw_len &&
-			    !bitflags_check(flags, LEFT_ALIGN))
+			    !(flags & LEFT_ALIGN))
 				pad(&idis, width - raw_len, ' ');
 			out(&idis, arg.p, raw_len);
 			if (has_width && width > raw_len &&
-			    bitflags_check(flags, LEFT_ALIGN))
+			    (flags & LEFT_ALIGN))
 				pad(&idis, width - raw_len, ' ');
 			continue;
 		case 'c':
@@ -379,13 +379,13 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 
 		raw_len = buf + sizeof(buf) - raw;
 
-		if (has_prec || bitflags_check(flags, LEFT_ALIGN))
-			bitflags_clear(flags, ZERO_PAD);
+		if (has_prec || (flags & LEFT_ALIGN))
+			flags &= ~ZERO_PAD;
 
 		if (has_prec && prec > raw_len)
 			lzero_pad = prec - raw_len;
 
-		if (bitflags_check(flags, PAD_POS)) {
+		if (flags & PAD_POS) {
 			sign = prefixes + 2;
 			sign_len = 1;
 		}
@@ -393,16 +393,16 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 			sign = prefixes + 1;
 			sign_len = 1;
 		}
-		if (bitflags_check(flags, MARK_POS)) {
+		if (flags & MARK_POS) {
 			sign = prefixes + 0;
 			sign_len = 1;
 		}
 
 		size_t total_len = sign_len + radix_len + lzero_pad + raw_len;
 		if (has_width && width > total_len) {
-			if (bitflags_check(flags, LEFT_ALIGN))
+			if (flags & LEFT_ALIGN)
 				rspace_pad = width - total_len;
-			if (bitflags_check(flags, ZERO_PAD))
+			if (flags & ZERO_PAD)
 				lzero_pad = width - total_len;
 		}
 

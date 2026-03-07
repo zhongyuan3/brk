@@ -1,10 +1,12 @@
 #ifndef AOSD_LOCK_H
 #define AOSD_LOCK_H
 
+#include <aosd/types.h>
+
 struct cpu;
 struct task;
 
-typedef struct {
+typedef struct spinlock {
 	volatile unsigned int locked;
 
 	/* For debuging: */
@@ -15,7 +17,12 @@ typedef struct {
 #define spinlock_initializer(name) { 0, NULL, name }
 #define spinlock_define(name) spinlock_t name = spinlock_initializer(#name)
 
-typedef struct {
+void spinlock_init(spinlock_t *lock, const char *name);
+void spinlock_acquire(spinlock_t *lock);
+void spinlock_release(spinlock_t *lock);
+bool spinlock_holding(spinlock_t *lock);
+
+typedef struct sleeplock {
 	volatile unsigned int locked;
 	spinlock_t lock;
 
@@ -26,5 +33,11 @@ typedef struct {
 
 #define sleeplock_initializer(name) \
 	{ 0, spinlock_initializer("sleeplock"), NULL, name }
+#define sleeplock_define(name) sleeplock_t name = sleeplock_initializer(#name)
+
+void sleeplock_init(sleeplock_t *lock, const char *name);
+void sleeplock_acquire(sleeplock_t *lock);
+void sleeplock_release(sleeplock_t *lock);
+bool sleeplock_holding(sleeplock_t *lock);
 
 #endif
