@@ -1,4 +1,5 @@
 #include "ulib.h"
+#include "internal.h"
 
 int errno = 0;
 static char *environ[] = { NULL };
@@ -56,4 +57,21 @@ int execvpe(const char *file, char *const argv[], char *const envp[])
 	}
 
 	return -1;
+}
+
+void *sbrk(intptr_t increment)
+{
+	static uint64_t curr_brk = 0;
+	if (curr_brk == 0)
+		curr_brk = syscall(SYS_brk, 0);
+	uint64_t new_brk = (uint64_t)((intptr_t)curr_brk + increment);
+	int ret = syscall(SYS_brk, new_brk);
+	if (ret != 0) {
+		errno = -ret;
+		return (void *)-1;
+	}
+	uint64_t old_brk = curr_brk;
+	curr_brk = new_brk;
+	errno = 0;
+	return (void *)old_brk;
 }

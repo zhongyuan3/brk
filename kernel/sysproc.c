@@ -18,27 +18,9 @@
 uint64_t sys_brk(void)
 {
 	uint64_t addr = syscall_arg_raw(0);
+	if (addr == 0)
+		return current_task()->mm->brk;
 	return task_set_brk(addr);
-}
-
-uint64_t sys_sbrk(void)
-{
-	intptr_t incr = syscall_arg_raw(0);
-	uint64_t curr_brk = current_task()->mm->brk;
-	if (incr == 0)
-		return curr_brk;
-
-	uint64_t new_brk;
-	if (incr < 0)
-		new_brk = curr_brk - (uint64_t)(-incr);
-	else
-		new_brk = curr_brk + (uint64_t)incr;
-
-	int err = task_set_brk(new_brk);
-	if (err)
-		return -1;
-
-	return curr_brk;
 }
 
 uint64_t sys_clone(void)
