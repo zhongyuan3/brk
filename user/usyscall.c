@@ -3,7 +3,7 @@
 
 ssize_t read(int fd, void *buf, size_t count)
 {
-	ssize_t rcnt = syscall(SYS_READ, fd, buf, count);
+	ssize_t rcnt = syscall(SYS_read, fd, buf, count);
 	if (rcnt < 0) {
 		errno = -rcnt;
 		return -1;
@@ -14,7 +14,7 @@ ssize_t read(int fd, void *buf, size_t count)
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
-	ssize_t wcnt = syscall(SYS_WRITE, fd, buf, count);
+	ssize_t wcnt = syscall(SYS_write, fd, buf, count);
 	if (wcnt < 0) {
 		errno = -wcnt;
 		return -1;
@@ -25,7 +25,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 
 void exit(int status)
 {
-	syscall(SYS_EXIT, status);
+	syscall(SYS_exit, status);
 	errno = 0;
 	while (1) {
 	}
@@ -33,7 +33,7 @@ void exit(int status)
 
 int open(const char *path, int flags, ...)
 {
-	int fd = syscall(SYS_OPEN, path, flags, 0);
+	int fd = syscall(SYS_open, path, flags, 0);
 	if (fd < 0) {
 		errno = -fd;
 		return -1;
@@ -44,7 +44,7 @@ int open(const char *path, int flags, ...)
 
 int openat(int dirfd, const char *path, int flags, mode_t mode)
 {
-	int fd = syscall(SYS_OPENAT, dirfd, path, flags, mode);
+	int fd = syscall(SYS_openat, dirfd, path, flags, mode);
 	if (fd < 0) {
 		errno = -fd;
 		return -1;
@@ -55,7 +55,7 @@ int openat(int dirfd, const char *path, int flags, mode_t mode)
 
 int close(int fd)
 {
-	int err = syscall(SYS_CLOSE, fd);
+	int err = syscall(SYS_close, fd);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -66,7 +66,7 @@ int close(int fd)
 
 int dup(int oldfd)
 {
-	int fd = syscall(SYS_DUP, oldfd);
+	int fd = syscall(SYS_dup, oldfd);
 	if (fd < 0) {
 		errno = -fd;
 		return -1;
@@ -77,7 +77,7 @@ int dup(int oldfd)
 
 int dup2(int oldfd, int newfd)
 {
-	int fd = syscall(SYS_DUP2, oldfd, newfd);
+	int fd = syscall(SYS_dup2, oldfd, newfd);
 	if (fd < 0) {
 		errno = -fd;
 		return -1;
@@ -88,7 +88,7 @@ int dup2(int oldfd, int newfd)
 
 int execve(const char *path, char *const argv[], char *const envp[])
 {
-	int err = syscall(SYS_EXECVE, path, argv, envp);
+	int err = syscall(SYS_execve, path, argv, envp);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -99,7 +99,7 @@ int execve(const char *path, char *const argv[], char *const envp[])
 
 pid_t getpid(void)
 {
-	int pid = syscall(SYS_GETPID);
+	int pid = syscall(SYS_getpid);
 	if (pid < 0) {
 		errno = -pid;
 		return -1;
@@ -110,7 +110,7 @@ pid_t getpid(void)
 
 pid_t getppid(void)
 {
-	int ppid = syscall(SYS_GETPPID);
+	int ppid = syscall(SYS_getppid);
 	if (ppid < 0) {
 		errno = -ppid;
 		return -1;
@@ -121,7 +121,7 @@ pid_t getppid(void)
 
 int mkdir(const char *path, mode_t mode)
 {
-	int err = syscall(SYS_MKDIR, path, mode);
+	int err = syscall(SYS_mkdir, path, mode);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -132,7 +132,7 @@ int mkdir(const char *path, mode_t mode)
 
 int mkdirat(int dirfd, const char *path, mode_t mode)
 {
-	int err = syscall(SYS_MKDIRAT, dirfd, path, mode);
+	int err = syscall(SYS_mkdirat, dirfd, path, mode);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -143,7 +143,7 @@ int mkdirat(int dirfd, const char *path, mode_t mode)
 
 int chdir(const char *path)
 {
-	int err = syscall(SYS_CHDIR, path);
+	int err = syscall(SYS_chdir, path);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -154,10 +154,10 @@ int chdir(const char *path)
 
 char *getcwd(char *buf, size_t size)
 {
-	int err = syscall(SYS_GETCWD, buf, size);
+	int err = syscall(SYS_getcwd, buf, size);
 	if (err) {
 		errno = -err;
-		return NULL;
+		return 0;
 	}
 	errno = 0;
 	return buf;
@@ -165,7 +165,7 @@ char *getcwd(char *buf, size_t size)
 
 int mknod(const char *path, mode_t mode, dev_t dev)
 {
-	int err = syscall(SYS_MKNOD, path, mode, dev);
+	int err = syscall(SYS_mknod, path, mode, dev);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -176,7 +176,7 @@ int mknod(const char *path, mode_t mode, dev_t dev)
 
 int mknodat(int dirfd, const char *path, mode_t mode, dev_t dev)
 {
-	int err = syscall(SYS_MKNODAT, dirfd, path, mode, dev);
+	int err = syscall(SYS_mknodat, dirfd, path, mode, dev);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -187,7 +187,7 @@ int mknodat(int dirfd, const char *path, mode_t mode, dev_t dev)
 
 int link(const char *oldpath, const char *newpath)
 {
-	int err = syscall(SYS_LINK, oldpath, newpath);
+	int err = syscall(SYS_link, oldpath, newpath);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -199,7 +199,7 @@ int link(const char *oldpath, const char *newpath)
 int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath,
 	   int flags)
 {
-	int err = syscall(SYS_LINKAT, olddirfd, oldpath, newdirfd, newpath,
+	int err = syscall(SYS_linkat, olddirfd, oldpath, newdirfd, newpath,
 			  flags);
 	if (err) {
 		errno = -err;
@@ -211,7 +211,7 @@ int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath,
 
 int unlink(const char *path)
 {
-	int err = syscall(SYS_UNLINK, path);
+	int err = syscall(SYS_unlink, path);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -222,7 +222,7 @@ int unlink(const char *path)
 
 int unlinkat(int dirfd, const char *path, int flags)
 {
-	int err = syscall(SYS_UNLINKAT, dirfd, path, flags);
+	int err = syscall(SYS_unlinkat, dirfd, path, flags);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -233,7 +233,7 @@ int unlinkat(int dirfd, const char *path, int flags)
 
 int pipe(int pipefd[2])
 {
-	int err = syscall(SYS_PIPE, pipefd);
+	int err = syscall(SYS_pipe, pipefd);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -244,7 +244,7 @@ int pipe(int pipefd[2])
 
 int pipe2(int pipefd[2], int flags)
 {
-	int err = syscall(SYS_PIPE2, pipefd, flags);
+	int err = syscall(SYS_pipe2, pipefd, flags);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -255,7 +255,7 @@ int pipe2(int pipefd[2], int flags)
 
 int uname(struct utsname *buf)
 {
-	int err = syscall(SYS_UNAME, buf);
+	int err = syscall(SYS_uname, buf);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -266,17 +266,14 @@ int uname(struct utsname *buf)
 
 int brk(void *addr)
 {
-	return syscall(SYS_BRK, addr);
-}
-
-void *sbrk(intptr_t increment)
-{
-	return (void *)syscall(SYS_SBRK, increment);
+	if (!addr)
+		return 0;
+	return syscall(SYS_brk, addr);
 }
 
 ssize_t getdents64(int fd, void *dirp, size_t count)
 {
-	ssize_t rcnt = syscall(SYS_GETDENTS64, fd, dirp, count);
+	ssize_t rcnt = syscall(SYS_getdents64, fd, dirp, count);
 	if (rcnt < 0) {
 		errno = -rcnt;
 		return -1;
@@ -287,7 +284,7 @@ ssize_t getdents64(int fd, void *dirp, size_t count)
 
 pid_t wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage)
 {
-	pid_t child_pid = syscall(SYS_WAIT4, pid, wstatus, options, rusage);
+	pid_t child_pid = syscall(SYS_wait4, pid, wstatus, options, rusage);
 	if (child_pid < 0) {
 		errno = -child_pid;
 		return -1;
@@ -298,7 +295,7 @@ pid_t wait4(pid_t pid, int *wstatus, int options, struct rusage *rusage)
 
 pid_t fork(void)
 {
-	pid_t pid = syscall(SYS_FORK);
+	pid_t pid = syscall(SYS_fork);
 	if (pid < 0) {
 		errno = -pid;
 		return -1;
@@ -309,7 +306,7 @@ pid_t fork(void)
 
 int nanosleep(const struct timespec *duration, struct timespec *rem)
 {
-	int err = syscall(SYS_NANOSLEEP, duration, rem);
+	int err = syscall(SYS_nanosleep, duration, rem);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -320,7 +317,7 @@ int nanosleep(const struct timespec *duration, struct timespec *rem)
 
 clock_t times(struct tms *buf)
 {
-	clock_t t = syscall(SYS_TIMES, buf);
+	clock_t t = syscall(SYS_times, buf);
 	if (t < 0) {
 		errno = -t;
 		return -1;
@@ -332,7 +329,7 @@ clock_t times(struct tms *buf)
 int mount(const char *source, const char *target, const char *filesystemtype,
 	  unsigned long mountflags, const void *data)
 {
-	int err = syscall(SYS_MOUNT, source, target, filesystemtype, mountflags,
+	int err = syscall(SYS_mount, source, target, filesystemtype, mountflags,
 			  data);
 	if (err) {
 		errno = -err;
@@ -344,7 +341,7 @@ int mount(const char *source, const char *target, const char *filesystemtype,
 
 int umount2(const char *target, int flags)
 {
-	int err = syscall(SYS_UMOUNT2, target, flags);
+	int err = syscall(SYS_umount2, target, flags);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -355,7 +352,7 @@ int umount2(const char *target, int flags)
 
 int gettimeofday(struct timeval *tv, struct timezone *tz)
 {
-	int err = syscall(SYS_GETTIMEOFDAY, tv, tz);
+	int err = syscall(SYS_gettimeofday, tv, tz);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -366,7 +363,7 @@ int gettimeofday(struct timeval *tv, struct timezone *tz)
 
 int settimeofday(const struct timeval *tv, const struct timezone *tz)
 {
-	int err = syscall(SYS_SETTIMEOFDAY, tv, tz);
+	int err = syscall(SYS_settimeofday, tv, tz);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -377,7 +374,7 @@ int settimeofday(const struct timeval *tv, const struct timezone *tz)
 
 int fstat(int fd, struct stat *buf)
 {
-	int err = syscall(SYS_FSTAT, fd, buf);
+	int err = syscall(SYS_fstat, fd, buf);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -388,7 +385,7 @@ int fstat(int fd, struct stat *buf)
 
 int stat(const char *path, struct stat *buf)
 {
-	int err = syscall(SYS_STAT, path, buf);
+	int err = syscall(SYS_stat, path, buf);
 	if (err) {
 		errno = -err;
 		return -1;
@@ -399,7 +396,7 @@ int stat(const char *path, struct stat *buf)
 
 int lstat(const char *path, struct stat *buf)
 {
-	int err = syscall(SYS_LSTAT, path, buf);
+	int err = syscall(SYS_lstat, path, buf);
 	if (err) {
 		errno = -err;
 		return -1;
