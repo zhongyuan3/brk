@@ -17,3 +17,6 @@ aosd.elf
 *.dis
 *.a
 *.so
+*.ld
+
+user/bin/*
