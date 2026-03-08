@@ -1,5 +1,5 @@
-#include "aosd/fs.h"
 #include <aosd/errno.h>
+#include <aosd/fs.h>
 #include <aosd/lock.h>
 #include <aosd/pipe.h>
 #include <aosd/sched.h>
@@ -31,8 +31,10 @@ int pipe_alloc(struct file **rf, struct file **wf)
 	spinlock_init(&p->lock, "pipe");
 	(*rf)->f_mode = FMODE_READ;
 	(*rf)->f_pipe = p;
+	(*rf)->f_ops = &pipe_fops;
 	(*wf)->f_mode = FMODE_WRITE;
 	(*wf)->f_pipe = p;
+	(*wf)->f_ops = &pipe_fops;
 	return 0;
 
 err2:
@@ -119,3 +121,44 @@ int pipe_write(struct pipe *p, const void *buf, size_t n, size_t *written)
 
 	return i;
 }
+
+static int pipe_fopen(struct file *, struct inode *, int)
+{
+	return -EOPNOTSUPP;
+}
+
+static int pipe_fread(struct file *fp, void *buf, size_t cnt, off_t *off,
+		      size_t *rcnt)
+{
+	return pipe_read(fp->f_pipe, buf, cnt, rcnt);
+}
+
+static int pipe_fwrite(struct file *fp, const void *buf, size_t cnt, off_t *off,
+		       size_t *written)
+{
+	return pipe_write(fp->f_pipe, buf, cnt, written);
+}
+
+static int pipe_fstat(struct file *, struct stat *)
+{
+	return -EOPNOTSUPP;
+}
+
+static off_t pipe_fseek(struct file *, off_t, int)
+{
+	return -EOPNOTSUPP;
+}
+
+static int pipe_ftruncate(struct file *, off_t)
+{
+	return -EOPNOTSUPP;
+}
+
+struct file_operations pipe_fops = {
+	.open = pipe_fopen,
+	.read = pipe_fread,
+	.write = pipe_fwrite,
+	.stat = pipe_fstat,
+	.seek = pipe_fseek,
+	.truncate = pipe_ftruncate,
+};

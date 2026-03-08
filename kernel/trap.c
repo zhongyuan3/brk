@@ -14,60 +14,6 @@
 #include <aosd/trap.h>
 #include <aosd/types.h>
 
-static char const *interrupt_str(unsigned int intno)
-{
-	static char const *intstrs[] = {
-		"U-mode software interrupt",
-		"S-mode software interrupt",
-		"reserved-1",
-		"M-mode software interrupt",
-		"U-mode timer interrupt",
-		"S-mode timer interrupt",
-		"reserved-2",
-		"M-mode timer interrupt",
-		"U-mode external interrupt",
-		"S-mode external interrupt",
-		"reserved-3",
-		"M-mode external interrupt",
-		"reserved-4",
-		"reserved-5",
-		"reserved-6",
-		"reserved-7",
-	};
-
-	if (intno >= countof(intstrs))
-		return "unknown interrupt";
-	else
-		return intstrs[intno];
-}
-
-static char const *exception_str(unsigned int excno)
-{
-	static char const *excstrs[] = {
-		"Instruction address misaligned",
-		"Instruction access fault",
-		"Illegal instruction",
-		"Breakpoint",
-		"Load address misaligned",
-		"Load access fault",
-		"Store/AMO address misaligned",
-		"Store/AMO access fault",
-		"Environment call from U-mode",
-		"Environment call from S-mode",
-		"reserved-1",
-		"Environment call from M-mode",
-		"Instruction page fault",
-		"Load page fault",
-		"reserved-2",
-		"Store/AMO page fault",
-	};
-
-	if (excno >= countof(excstrs))
-		return "unknown exception";
-	else
-		return excstrs[excno];
-}
-
 void trap_init(void)
 {
 	timer_init();
@@ -87,14 +33,21 @@ void kernel_trap_handler(void)
 	uint64_t scause = read_scause();
 	uint64_t sepc = read_sepc();
 	uint64_t stval = read_stval();
-	uint32_t code = scause & 0x3FF;
 	struct task *task;
 
 	assert(sstatus & SSTATUS_SPP);
 	assert(!intr_enabled());
 
-	if (scause & (1ULL << 63)) {
-		switch (code) {
+	if (TRAP_IS_INTERRUPT(scause)) {
+		switch (TRAP_CAUSE_CODE(scause)) {
+		case 1:
+			panic("Supervisor software interrupt: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 3:
+			panic("Machine software interrupt: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
 		case 5:
 			timer_handle_int();
 			task = current_task();
@@ -103,16 +56,101 @@ void kernel_trap_handler(void)
 					sched_yield();
 			}
 			break;
+		case 7:
+			panic("Supervisor timer interrupt: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
 		case 9:
 			irq_handle_external(current_cpu()->hart_id);
 			break;
+		case 11:
+			panic("Machine external interrupt: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 13:
+			panic("Counter-overflow interrupt: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
 		default:
-			panic("interrupt: %s, scause=%#lx, sepc=%#lx, stval=%#lx\n",
-			      interrupt_str(code), scause, sepc, stval);
+			panic("Unexpected interrupt: scause=%#lx,sepc=%#lx,stval=%#lx\n",
+			      scause, sepc, stval);
+			break;
 		}
 	} else {
-		panic("exception: %s, scause=%#lx, sepc=%#lx, stval=%#lx\n",
-		      exception_str(code), scause, sepc, stval);
+		switch (TRAP_CAUSE_CODE(scause)) {
+		case 0:
+			panic("Instruction address misaligned: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 1:
+			panic("Instruction access fault: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 2:
+			panic("Illegal instruction: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 3:
+			panic("Breakpoint: sepc=%#lx,stval=%#lx\n", sepc,
+			      stval);
+			break;
+		case 4:
+			panic("Load address misaligned: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 5:
+			panic("Load access fault: sepc=%#lx,stval=%#lx\n", sepc,
+			      stval);
+			break;
+		case 6:
+			panic("Store/AMO address misaligned: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 7:
+			panic("Store/AMO access fault: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 8:
+			panic("Environment call from U-mode: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 9:
+			panic("Environment call from S-mode: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 11:
+			panic("Environment call from M-mode: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 12:
+			panic("Instruction page fault: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 13:
+			panic("Load page fault: sepc=%#lx,stval=%#lx\n", sepc,
+			      stval);
+			break;
+		case 15:
+			panic("Store/AMO page fault: sepc=%#lx,stval=%#lx\n",
+			      sepc, stval);
+			break;
+		case 16:
+			panic("Double trap: sepc=%#lx,stval=%#lx\n", sepc,
+			      stval);
+			break;
+		case 18:
+			panic("Software check: sepc=%#lx,stval=%#lx\n", sepc,
+			      stval);
+			break;
+		case 19:
+			panic("Hardware error: sepc=%#lx,stval=%#lx\n", sepc,
+			      stval);
+			break;
+		default:
+			panic("Unexpected exception: scause=%#lx,sepc=%#lx,stval=%#lx\n",
+			      scause, sepc, stval);
+			break;
+		}
 	}
 
 	write_sepc(sepc);
@@ -123,7 +161,6 @@ struct task *user_trap_handler(void)
 {
 	struct task *t;
 	uint64_t scause;
-	uint32_t code;
 	struct cpu *c;
 	uint64_t sepc;
 	uint64_t stval;
@@ -145,10 +182,20 @@ struct task *user_trap_handler(void)
 	scause = read_scause();
 	sepc = read_sepc();
 	stval = read_stval();
-	code = scause & 0x3FF;
 	t->tf.epc = sepc;
-	if (scause & (1ULL << 63)) {
-		switch (code) {
+
+	if (TRAP_IS_INTERRUPT(scause)) {
+		switch (TRAP_CAUSE_CODE(scause)) {
+		case 1:
+			printk("Supervisor software interrupt: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
+		case 3:
+			printk("Machine software interrupt: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
 		case 5:
 			timer_handle_int();
 			if (t) {
@@ -158,29 +205,122 @@ struct task *user_trap_handler(void)
 					sched_yield();
 			}
 			break;
+		case 7:
+			printk("Supervisor timer interrupt: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
 		case 9:
 			irq_handle_external(c->hart_id);
 			break;
+		case 11:
+			printk("Machine external interrupt: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
+		case 13:
+			printk("Counter-overflow interrupt: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
 		default:
-			printk("USER INTERRUPT: %s: pid=%ld,scause=%#lx,sepc=%#lx,stval=%#lx\n",
-			       interrupt_str(code), t->pid, scause, sepc,
-			       stval);
-			sched_exit(1);
+			printk("Unexpected interrupt: scause=%#lx,sepc=%#lx,stval=%#lx\n",
+			       scause, sepc, stval);
+			task_set_killed(t);
 			break;
 		}
 	} else {
-		switch (code) {
+		switch (TRAP_CAUSE_CODE(scause)) {
+		case 0:
+			printk("Instruction address misaligned: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
+		case 1:
+			printk("Instruction access fault: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
+		case 2:
+			printk("Illegal instruction: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
+		case 3:
+			printk("Breakpoint: sepc=%#lx,stval=%#lx\n", sepc,
+			       stval);
+			task_set_killed(t);
+			break;
+		case 4:
+			printk("Load address misaligned: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
+		case 5:
+			printk("Load access fault: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
+		case 6:
+			printk("Store/AMO address misaligned: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
+		case 7:
+			printk("Store/AMO access fault: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
 		case 8:
 			if (task_is_killed(t))
 				sched_exit(1);
-			t->tf.epc += 4;
+			t->tf.epc += 4; /* skip ecall */
 			intr_on();
 			syscall();
 			break;
-		default:
-			printk("USER EXCEPTION: %s: pid=%ld,scause=%#lx,sepc=%#lx,stval=%#lx\n",
-			       exception_str(code), t->pid, scause, sepc,
+		case 9:
+			printk("Environment call from S-mode: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
+		case 11:
+			printk("Environment call from M-mode: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
+		case 12:
+			printk("Instruction page fault: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
+		case 13:
+			printk("Load page fault: sepc=%#lx,stval=%#lx\n", sepc,
 			       stval);
+			task_set_killed(t);
+			break;
+		case 15:
+			printk("Store/AMO page fault: sepc=%#lx,stval=%#lx\n",
+			       sepc, stval);
+			task_set_killed(t);
+			break;
+		case 16:
+			printk("Double trap: sepc=%#lx,stval=%#lx\n", sepc,
+			       stval);
+			task_set_killed(t);
+			break;
+		case 18:
+			printk("Software check: sepc=%#lx,stval=%#lx\n", sepc,
+			       stval);
+			task_set_killed(t);
+			break;
+		case 19:
+			printk("Hardware error: sepc=%#lx,stval=%#lx\n", sepc,
+			       stval);
+			task_set_killed(t);
+			break;
+		default:
+			printk("Unexpected exception: scause=%#lx,sepc=%#lx,stval=%#lx\n",
+			       scause, sepc, stval);
 			task_set_killed(t);
 			break;
 		}

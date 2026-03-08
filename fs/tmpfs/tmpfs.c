@@ -602,7 +602,7 @@ static int tmpfs_fwrite(struct file *file, const void *buf, size_t n,
 	return -EOPNOTSUPP;
 }
 
-static int tmpfs_fseek(struct file *file, off_t offset, int whence)
+static off_t tmpfs_fseek(struct file *file, off_t offset, int whence)
 {
 	return -EOPNOTSUPP;
 }
@@ -647,6 +647,11 @@ static int tmpfs_fopen(struct file *file, struct inode *inode, int flags)
 	return ret;
 }
 
+static int tmpfs_ftruncate(struct file *file, off_t len)
+{
+	return -EOPNOTSUPP;
+}
+
 static int tmpfs_dentry_compare(struct dentry *dentry, const char *name,
 				size_t len)
 {
@@ -677,6 +682,7 @@ struct file_operations tmpfs_fops = {
 	.seek = tmpfs_fseek,
 	.stat = tmpfs_fstat,
 	.open = tmpfs_fopen,
+	.truncate = tmpfs_ftruncate,
 };
 
 struct file_system_type tmpfs_fs_type = {

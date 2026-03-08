@@ -284,7 +284,7 @@ unlock_and_out:
 	return ret;
 }
 
-static int chrdev_fseek(struct file *file, off_t offset, int whence)
+static off_t chrdev_fseek(struct file *file, off_t offset, int whence)
 {
 	return -EOPNOTSUPP;
 }
@@ -324,6 +324,11 @@ static int chrdev_fopen(struct file *file, struct inode *inode, int flags)
 	return 0;
 }
 
+static int chrdev_ftruncate(struct file *file, off_t len)
+{
+	return -EOPNOTSUPP;
+}
+
 static int blkdev_fread(struct file *file, void *buf, size_t n, off_t *offset,
 			size_t *rcnt)
 {
@@ -336,7 +341,7 @@ static int blkdev_fwrite(struct file *file, const void *buf, size_t n,
 	return -EOPNOTSUPP;
 }
 
-static int blkdev_fseek(struct file *file, off_t offset, int whence)
+static off_t blkdev_fseek(struct file *file, off_t offset, int whence)
 {
 	return -EOPNOTSUPP;
 }
@@ -351,12 +356,18 @@ static int blkdev_fopen(struct file *file, struct inode *inode, int flags)
 	return -EOPNOTSUPP;
 }
 
+static int blkdev_ftruncate(struct file *file, off_t len)
+{
+	return -EOPNOTSUPP;
+}
+
 struct file_operations chrdev_fops = {
 	.read = chrdev_fread,
 	.write = chrdev_fwrite,
 	.seek = chrdev_fseek,
 	.stat = chrdev_fstat,
 	.open = chrdev_fopen,
+	.truncate = chrdev_ftruncate,
 };
 
 struct file_operations blkdev_fops = {
@@ -365,4 +376,5 @@ struct file_operations blkdev_fops = {
 	.seek = blkdev_fseek,
 	.stat = blkdev_fstat,
 	.open = blkdev_fopen,
+	.truncate = blkdev_ftruncate,
 };
