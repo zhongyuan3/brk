@@ -88,7 +88,8 @@ struct file_operations {
 	int (*read)(struct file *, void *, size_t, off_t *, size_t *);
 	int (*write)(struct file *, const void *, size_t, off_t *, size_t *);
 	int (*stat)(struct file *, struct stat *);
-	int (*seek)(struct file *, off_t, int);
+	off_t (*seek)(struct file *, off_t, int);
+	int (*truncate)(struct file *, off_t);
 };
 
 #define SEEK_SET 0 /* Seek from beginning of file.  */
@@ -117,8 +118,9 @@ void file_put(struct file *fp);
 struct file *file_dup(struct file *fp);
 int file_read(struct file *fp, void *buf, size_t cnt, size_t *rcnt);
 int file_write(struct file *fp, const void *buf, size_t cnt, size_t *wcnt);
-int file_seek(struct file *fp, off_t offset, int whence);
+off_t file_seek(struct file *fp, off_t offset, int whence);
 int file_stat(struct file *fp, struct stat *buf);
+int file_truncate(struct file *fp, off_t len);
 
 extern struct file_system_type ext4_fs_type;
 extern struct dentry_operations ext4_dops;
@@ -134,6 +136,8 @@ extern struct file_operations tmpfs_fops;
 
 extern struct file_operations chrdev_fops;
 extern struct file_operations blkdev_fops;
+
+extern struct file_operations pipe_fops;
 
 void fs_init(void);
 int do_openat(int dirfd, const char *path, int flags, mode_t mode,

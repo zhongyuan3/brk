@@ -535,15 +535,18 @@ uint64_t sys_getdents64(void)
 	return rcnt;
 }
 
-struct dentry *fd_to_dentry(int fd, const char *path)
+static struct dentry *path_to_dentry(const char *path)
 {
-	struct task *t = current_task();
-
 	if (path[0] == '/')
 		return dentry_get(NULL, "/");
-
 	if (path[0] == '.' && path[1] == '/')
-		return dentry_dup(t->cwd);
+		return dentry_dup(current_task()->cwd);
+	return NULL;
+}
+
+static struct dentry *fd_to_dentry(int fd)
+{
+	struct task *t = current_task();
 
 	if (fd == AT_FDCWD)
 		return dentry_dup(t->cwd);
@@ -568,9 +571,12 @@ int do_openat(int dirfd, const char *path, int flags, mode_t mode,
 	if ((flags & O_RDWR) && (flags & O_WRONLY))
 		return -EINVAL;
 
-	dir_dp = fd_to_dentry(dirfd, path);
-	if (!dir_dp)
-		return -EINVAL;
+	dir_dp = path_to_dentry(path);
+	if (!dir_dp) {
+		dir_dp = fd_to_dentry(dirfd);
+		if (!dir_dp)
+			return -EBADF;
+	}
 
 	file_dp = path_lookup_at(dir_dp, path);
 	if (!file_dp && !(flags & O_CREAT)) {
@@ -612,26 +618,39 @@ int do_openat(int dirfd, const char *path, int flags, mode_t mode,
 		return -ENOMEM;
 	}
 
-	fmode_t fmode = 0;
-	if (flags & O_RDWR)
-		fmode = FMODE_READ | FMODE_WRITE;
-
 	if (flags == O_RDONLY)
-		fmode = FMODE_READ;
+		fp->f_mode = FMODE_READ;
 
 	if (flags & O_WRONLY)
-		fmode = O_WRONLY;
+		fp->f_mode = FMODE_WRITE;
 
-	fp->f_mode = fmode;
+	if (flags & O_RDWR)
+		fp->f_mode = FMODE_READ | FMODE_WRITE;
 
 	err = file_dp->d_inode->i_fops->open(fp, file_dp->d_inode, flags);
 	if (err) {
-		dentry_put(file_dp);
 		file_put(fp);
+		dentry_put(file_dp);
 		return err;
 	}
 
 	dentry_put(file_dp);
+
+	if (flags & O_TRUNC) {
+		err = file_truncate(fp, 0);
+		if (err) {
+			file_put(fp);
+			return err;
+		}
+	}
+
+	if (flags & O_APPEND) {
+		off_t ret = file_seek(fp, 0, SEEK_END);
+		if (ret < 0) {
+			file_put(fp);
+			return err;
+		}
+	}
 
 	*file = fp;
 
@@ -641,21 +660,20 @@ int do_openat(int dirfd, const char *path, int flags, mode_t mode,
 int do_mkdirat(int dirfd, const char *path, mode_t mode)
 {
 	char buf[NAME_MAX] = { 0 };
-	int err = 0;
-	struct dentry *parent_dp;
-	struct dentry *new_dp;
-	struct dentry *dir_dp;
+	struct dentry *dir_dp, *parent_dp, *new_dp;
+	int err;
 
-	dir_dp = fd_to_dentry(dirfd, path);
-	if (!dir_dp)
-		return -EINVAL;
+	dir_dp = path_to_dentry(path);
+	if (!dir_dp) {
+		dir_dp = fd_to_dentry(dirfd);
+		if (!dir_dp)
+			return -EBADF;
+	}
 
 	parent_dp = path_lookup_parent_at(dir_dp, path, buf, NAME_MAX);
-	if (!parent_dp) {
-		dentry_put(dir_dp);
-		return -ENOENT;
-	}
 	dentry_put(dir_dp);
+	if (!parent_dp)
+		return -ENOENT;
 
 	new_dp = dentry_alloc(buf, strlen(buf));
 	if (!new_dp) {
@@ -680,101 +698,125 @@ int do_mkdirat(int dirfd, const char *path, mode_t mode)
 int do_linkat(int olddirfd, const char *oldpath, int newdirfd,
 	      const char *newpath, int flags)
 {
-	char name_buf[256];
-	struct dentry *old_dir_dp = NULL;
-	struct dentry *new_dir_dp = NULL;
-	struct dentry *old_entry_dp = NULL;
-	struct dentry new_entry = { 0 };
-	struct dentry *parent_dp = NULL;
-	int ret = -1;
+	char buf[NAME_MAX] = { 0 };
+	struct dentry *old_dir_dp, *old_dp;
+	struct dentry *new_dir_dp, *parent_dp, *new_dp;
+	int err;
 
-	old_dir_dp = fd_to_dentry(olddirfd, oldpath);
-	if (!old_dir_dp)
-		goto out0;
+	old_dir_dp = path_to_dentry(oldpath);
+	if (!old_dir_dp) {
+		old_dir_dp = fd_to_dentry(olddirfd);
+		if (!old_dir_dp) {
+			err = -EBADF;
+			goto err0;
+		}
+	}
 
-	new_dir_dp = fd_to_dentry(newdirfd, newpath);
-	if (!new_dir_dp)
-		goto out1;
+	new_dir_dp = path_to_dentry(newpath);
+	if (!new_dir_dp) {
+		new_dir_dp = fd_to_dentry(newdirfd);
+		if (!new_dir_dp) {
+			err = -EBADF;
+			goto err1;
+		}
+	}
 
-	old_entry_dp = path_lookup_at(old_dir_dp, oldpath);
-	if (!old_entry_dp)
-		goto out2;
+	old_dp = path_lookup_at(old_dir_dp, oldpath);
+	if (!old_dp) {
+		err = -ENOENT;
+		goto err2;
+	}
 
-	parent_dp = path_lookup_parent_at(new_dir_dp, newpath, name_buf, 256);
-	if (!parent_dp)
-		goto out3;
+	parent_dp = path_lookup_parent_at(new_dir_dp, newpath, buf, NAME_MAX);
+	if (!parent_dp) {
+		err = -ENOENT;
+		goto err3;
+	}
 
-	new_entry.d_name = name_buf;
-	ret = parent_dp->d_inode->i_ops->link(old_entry_dp, parent_dp->d_inode,
-					      &new_entry);
+	new_dp = dentry_alloc(buf, strlen(buf));
+	if (!new_dp) {
+		err = -ENOMEM;
+		goto err4;
+	}
 
-	dentry_put(parent_dp);
-out3:
-	dentry_put(old_entry_dp);
-out2:
+	err = parent_dp->d_inode->i_ops->link(old_dp, parent_dp->d_inode,
+					      new_dp);
+	if (err)
+		goto err5;
+	new_dp->d_parent = parent_dp;
+	dentry_add(new_dp);
+	dentry_put(new_dp);
+	dentry_put(old_dp);
 	dentry_put(new_dir_dp);
-out1:
 	dentry_put(old_dir_dp);
-out0:
-	return ret;
+	return 0;
+
+err5:
+	dentry_free(new_dp);
+err4:
+	dentry_put(parent_dp);
+err3:
+	dentry_put(old_dp);
+err2:
+	dentry_put(new_dir_dp);
+err1:
+	dentry_put(old_dir_dp);
+err0:
+	return err;
 }
 
 int do_unlinkat(int dirfd, const char *path, int flags)
 {
-	char name_buf[256];
-	struct dentry *dir_dp = NULL;
-	struct dentry *file_dp = NULL;
-	struct dentry *parent_dp = NULL;
-	struct dentry old_entry = { 0 };
-	int ret = -1;
+	struct dentry *dir_dp, *parent_dp, *old_dp;
+	int ret;
 
-	dir_dp = fd_to_dentry(dirfd, path);
-	if (!dir_dp)
-		goto out0;
-
-	file_dp = path_lookup_at(dir_dp, path);
-	if (!file_dp)
-		goto out0;
-
-	if (file_dp->d_rc > 2 || file_dp->d_inode->i_rc > 1) {
-		dentry_put(file_dp);
-		goto out0;
+	dir_dp = path_to_dentry(path);
+	if (!dir_dp) {
+		dir_dp = fd_to_dentry(dirfd);
+		if (!dir_dp)
+			return -EBADF;
 	}
-	dentry_put(file_dp);
-	dentry_put(file_dp);
 
-	parent_dp = path_lookup_parent_at(dir_dp, path, name_buf, 256);
-	if (parent_dp == NULL)
-		goto out1;
+	old_dp = path_lookup_at(dir_dp, path);
+	if (!old_dp) {
+		dentry_put(dir_dp);
+		return -ENOENT;
+	}
 
-	old_entry.d_name = name_buf;
-	ret = parent_dp->d_inode->i_ops->unlink(parent_dp->d_inode, &old_entry);
+	if (old_dp->d_rc > 1 || old_dp->d_inode->i_rc > 1) {
+		dentry_put(old_dp);
+		dentry_put(dir_dp);
+		return -EBUSY;
+	}
+
+	parent_dp = dentry_dup(old_dp->d_parent);
+
+	ret = parent_dp->d_inode->i_ops->unlink(parent_dp->d_inode, old_dp);
 
 	dentry_put(parent_dp);
-out1:
+	dentry_put(old_dp);
 	dentry_put(dir_dp);
-out0:
+
 	return ret;
 }
 
 int do_mknodat(int dirfd, const char *path, mode_t mode, dev_t dev)
 {
 	char buf[NAME_MAX] = { 0 };
-	int err = 0;
-	struct dentry *parent_dp;
-	struct dentry *new_dp;
-	struct dentry *dir_dp;
+	struct dentry *dir_dp, *parent_dp, *new_dp;
+	int err;
 
-	dir_dp = fd_to_dentry(dirfd, path);
-	if (!dir_dp)
-		return -EINVAL;
+	dir_dp = path_to_dentry(path);
+	if (!dir_dp) {
+		dir_dp = fd_to_dentry(dirfd);
+		if (!dir_dp)
+			return -EBADF;
+	}
 
 	parent_dp = path_lookup_parent_at(dir_dp, path, buf, NAME_MAX);
-	if (!parent_dp) {
-		dentry_put(dir_dp);
-		return -ENOENT;
-	}
 	dentry_put(dir_dp);
+	if (!parent_dp)
+		return -ENOENT;
 
 	new_dp = dentry_alloc(buf, strlen(buf));
 	if (!new_dp) {

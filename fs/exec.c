@@ -126,8 +126,8 @@ static int map_seg(struct mem_mgmt *mm, struct vmem_area *vma,
 		if (filesz > 0) {
 			size_t rsz = filesz > PAGE_SIZE ? PAGE_SIZE : filesz;
 			size_t rcnt = 0;
-			err = file_seek(fp, off, SEEK_SET);
-			if (err) {
+			off_t ret = file_seek(fp, off, SEEK_SET);
+			if (ret < 0) {
 				assert(pg);
 				page_free(pg, 0);
 				goto failed;
@@ -290,8 +290,8 @@ static int __do_execve(const char *path, struct execve_args *args)
 	uint16_t i = 0;
 	uint64_t off = elf_hdr.e_phoff;
 	for (; i < elf_hdr.e_phnum; ++i, off += sizeof(phdr)) {
-		err = file_seek(f, off, SEEK_SET);
-		if (err)
+		off_t ret = file_seek(f, off, SEEK_SET);
+		if (ret < 0)
 			goto err;
 		err = file_read(f, &phdr, sizeof(phdr), &r);
 		if (err)

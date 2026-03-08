@@ -100,16 +100,20 @@ int file_write(struct file *fp, const void *buf, size_t cnt, size_t *wcnt)
 	return fp->f_ops->write(fp, buf, cnt, &fp->f_off, wcnt);
 }
 
-int file_seek(struct file *fp, off_t offset, int whence)
+off_t file_seek(struct file *fp, off_t offset, int whence)
 {
-	int err = fp->f_ops->seek(fp, offset, whence);
-	if (err)
-		return err;
-	fp->f_off = offset;
-	return 0;
+	off_t ret = fp->f_ops->seek(fp, offset, whence);
+	if (ret >= 0)
+		fp->f_off = ret;
+	return ret;
 }
 
 int file_stat(struct file *fp, struct stat *buf)
 {
 	return fp->f_ops->stat(fp, buf);
+}
+
+int file_truncate(struct file *fp, off_t len)
+{
+	return fp->f_ops->truncate(fp, len);
 }

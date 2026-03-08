@@ -5,12 +5,35 @@
 #include <aosd/errno.h>
 #include <aosd/fs.h>
 #include <aosd/lock.h>
+#include <aosd/printk.h>
 #include <aosd/string.h>
 #include <aosd/types.h>
 #include <ext4.h>
 #include <ext4_oflags.h>
 #include <uapi/aosd/dirent.h>
 #include <uapi/aosd/stat.h>
+
+static unsigned char ext4fs_get_de_type(const struct ext4_direntry *de)
+{
+	switch (de->inode_type) {
+	case EXT4_DE_REG_FILE:
+		return DT_REG;
+	case EXT4_DE_DIR:
+		return DT_DIR;
+	case EXT4_DE_SYMLINK:
+		return DT_LNK;
+	case EXT4_DE_SOCK:
+		return DT_SOCK;
+	case EXT4_DE_FIFO:
+		return DT_FIFO;
+	case EXT4_DE_CHRDEV:
+		return DT_CHR;
+	case EXT4_DE_BLKDEV:
+		return DT_BLK;
+	default:
+		return DT_UNKNOWN;
+	}
+}
 
 static int ext4fs_readdir(struct inode *ip, struct ext4_dir *dir, void *buf,
 			  size_t size, off_t *offset, size_t *rcnt)
@@ -39,7 +62,7 @@ static int ext4fs_readdir(struct inode *ip, struct ext4_dir *dir, void *buf,
 		de64->d_ino = de->inode;
 		de64->d_off = *offset;
 		de64->d_reclen = reclen;
-		de64->d_type = de->inode_type;
+		de64->d_type = ext4fs_get_de_type(de);
 		memcpy(de64->d_name, de->name, de->name_length);
 		de64->d_name[de->name_length] = '\0';
 		p += reclen;
@@ -114,10 +137,10 @@ unlock_and_out:
 	return ret;
 }
 
-static int ext4fs_fseek(struct file *file, off_t offset, int whence)
+static off_t ext4fs_fseek(struct file *file, off_t offset, int whence)
 {
 	struct ext4fs_inode_info *info;
-	int ret = 0;
+	off_t ret = 0;
 
 	assert(file->f_inode);
 
@@ -125,11 +148,13 @@ static int ext4fs_fseek(struct file *file, off_t offset, int whence)
 
 	info = file->f_inode->i_private;
 	if (info->i_is_dir) {
-		ret = -EBADF;
+		ret = -EISDIR;
 		goto unlock_and_out;
 	}
 
 	ret = ext4_fseek(&info->i_file, offset, whence);
+	if (ret == 0)
+		ret = ext4_ftell(&info->i_file);
 
 unlock_and_out:
 	sleeplock_release(&file->f_inode->i_lock);
@@ -166,14 +191,8 @@ static int ext4fs_fopen(struct file *file, struct inode *inode, int flags)
 
 	info = inode->i_private;
 	if (info->i_is_dir && flags != O_RDONLY) {
-		ret = -EPERM;
+		ret = -EISDIR;
 		goto unlock_and_out;
-	}
-
-	if (flags & O_TRUNC) {
-		ret = ext4_ftruncate(&info->i_file, 0);
-		if (ret != 0)
-			goto unlock_and_out;
 	}
 
 	file->f_ops = &ext4_fops;
@@ -184,10 +203,31 @@ unlock_and_out:
 	return ret;
 }
 
+static int ext4fs_ftruncate(struct file *file, off_t len)
+{
+	struct ext4fs_inode_info *info;
+	int ret = 0;
+
+	sleeplock_acquire(&file->f_inode->i_lock);
+
+	info = file->f_inode->i_private;
+	if (info->i_is_dir) {
+		ret = -EISDIR;
+		goto unlock_and_out;
+	}
+
+	ret = ext4_ftruncate(&info->i_file, len);
+
+unlock_and_out:
+	sleeplock_release(&file->f_inode->i_lock);
+	return ret;
+}
+
 struct file_operations ext4_fops = {
 	.read = ext4fs_fread,
 	.write = ext4fs_fwrite,
 	.seek = ext4fs_fseek,
 	.stat = ext4fs_fstat,
 	.open = ext4fs_fopen,
+	.truncate = ext4fs_ftruncate,
 };

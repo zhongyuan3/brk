@@ -120,6 +120,14 @@ void sched_exit(int status)
 	if (t == init_task)
 		panic("%s(): init task exit\n", __func__);
 
+	for (int i = 0; i <= OPEN_MAX; ++i) {
+		if (t->ofiles[i]) {
+			file_put(t->ofiles[i]);
+			t->ofiles[i] = NULL;
+		}
+	}
+	dentry_put(t->cwd);
+
 	spinlock_acquire(&wait_lock);
 
 	for (k = tasks; k < tasks + NR_TASKS; ++k)
