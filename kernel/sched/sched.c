@@ -214,7 +214,7 @@ void fork_return(void)
 	if (first) {
 		first = false;
 		fs_init();
-		char *argv[] = { "/sh", 0 };
+		char *argv[] = { "/bin/sh", 0 };
 		char *envp[] = { 0 };
 		int ret = do_execve(argv[0], argv, envp);
 		if (ret < 0)

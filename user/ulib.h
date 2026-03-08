@@ -1,6 +1,8 @@
 #ifndef USER_ULIB_H
 #define USER_ULIB_H
 
+#include <aosd/errno.h>
+#include <aosd/limits.h>
 #include <aosd/printf.h>
 #include <aosd/string.h>
 #include <aosd/types.h>
@@ -77,5 +79,9 @@ void free(void *ptr);
 
 #define printf(fmt, ...) dprintf(STDOUT_FILENO, fmt, ##__VA_ARGS__)
 #define vprintf(fmt, ap) vdprintf(STDOUT_FILENO, fmt, ap)
+
+void perror(const char *s);
+
+extern int errno;
 
 #endif

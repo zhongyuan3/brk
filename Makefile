@@ -189,22 +189,31 @@ USER_CFLAGS += -I./include
 
 USER_LD_S := user/user.ld.S
 
-USER_PROG_SRCS := \
-user/cat.c \
-user/echo.c \
-user/ls.c \
-user/mkdir.c \
-user/rm.c \
-user/sh.c
+USER_PROG_OBJS := \
+user/cat.o \
+user/echo.o \
+user/grep.o \
+user/link.o \
+user/ls.o \
+user/mkdir.o \
+user/rm.o \
+user/sh.o \
+user/unlink.o \
+user/wc.o
 
 USER_LIB_OBJS := \
 user/printf.o \
 user/string.o \
 user/qsort.o \
-user/ulib.o
+user/ulib.o \
+user/umalloc.o \
+user/uprintf.o \
+user/usyscall.o
 
-USER_PROG_OBJS := $(patsubst %.c,%.o,$(USER_PROG_SRCS))
-USER_PROG := $(patsubst %.c,%,$(USER_PROG_SRCS))
+USER_PROG := $(patsubst user/%.o,user/bin/%,$(USER_PROG_OBJS))
+
+USER_PROG_DEPS := $(USER_PROG_OBJS:.o=.d)
+USER_LIB_DEPS := $(USER_LIB_OBJS:.o=.d)
 
 USER_LD := user/user.ld
 USER_LIB := user/libulib.a
@@ -218,8 +227,17 @@ clean:
 .PHONY: user
 user: $(USER_LIB) $(USER_PROG) $(USER_PROG_OBJS)
 
-user/%: user/%.o $(USER_LIB) $(USER_LD)
+.PHONY: clean_user
+clean_user:
+	$(RM) $(USER_LIB) $(USER_PROG) $(USER_LD)
+	find ./user -name "*.d" -delete
+	find ./user -name "*.o" -delete
+
+user/bin/%: user/%.o $(USER_LIB) $(USER_LD)
+	if [ ! -d user/bin ]; then mkdir user/bin; fi
 	$(LD) -z max-page-size=4096 -T $(USER_LD) -static -o $@ $< -L./user -lulib
+
+-include $(USER_PROG_DEPS) $(USER_LIB_DEPS)
 
 $(USER_LIB): $(USER_LIB_OBJS)
 	$(AR) rcs $@ $^

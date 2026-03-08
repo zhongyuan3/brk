@@ -1,39 +1,104 @@
 #include "ulib.h"
 
-static struct dirent64 buf[3];
+struct ls_option {
+	const char *path;
+	bool long_format;
+};
 
-int main(int argc, char *argv[])
+static struct dirent64 buf[30];
+
+static void print_dirent_long(struct dirent64 *p)
 {
-	char *path = ".";
-
-	if (argc > 1)
-		path = argv[1];
-
-	int fd = open(path, O_RDONLY);
-	if (fd < 0) {
-		printf("ls: open %s failed\n", path);
-		return 1;
+	const char *type = "?";
+	switch (p->d_type) {
+	case DT_FIFO:
+		type = "p";
+		break;
+	case DT_CHR:
+		type = "c";
+		break;
+	case DT_DIR:
+		type = "d";
+		break;
+	case DT_BLK:
+		type = "b";
+		break;
+	case DT_REG:
+		type = "-";
+		break;
+	case DT_LNK:
+		type = "l";
+		break;
+	case DT_SOCK:
+		type = "s";
+		break;
+	case DT_WHT:
+		type = "w";
+		break;
 	}
+	printf("%s %s%s\n", type, p->d_name, p->d_type == DT_DIR ? "/" : "");
+}
 
+static int ls(int fd, const struct ls_option *opt)
+{
 	ssize_t rcnt;
 
 	while ((rcnt = getdents64(fd, buf, sizeof(buf))) > 0) {
 		ssize_t i = 0;
 		struct dirent64 *p = buf;
 		while (i < rcnt) {
-			printf("%s\n", p->d_name);
+			if (opt->long_format)
+				print_dirent_long(p);
+			else
+				printf("%s\n", p->d_name);
 			i += p->d_reclen;
 			p = (struct dirent64 *)((uint64_t)p + p->d_reclen);
 		}
 	}
 
-	if (rcnt < 0) {
-		close(fd);
-		printf("ls: getdents64 failed: %s\n", strerror(rcnt));
+	if (rcnt < 0)
+		return 1;
+
+	return 0;
+}
+
+static int parse_config(int argc, char *argv[], struct ls_option *opt)
+{
+	for (int i = 1; i < argc; ++i) {
+		if (argv[i][0] == '-') {
+			if (!strcmp(argv[i], "--long") ||
+			    !strcmp(argv[i], "-l")) {
+				opt->long_format = true;
+			} else {
+				dprintf(STDERR_FILENO,
+					"ls: unknown option %s\n", argv[i]);
+				return 1;
+			}
+		} else {
+			opt->path = argv[i];
+		}
+	}
+
+	return 0;
+}
+
+int main(int argc, char *argv[])
+{
+	struct ls_option opt = { .path = "." };
+
+	int ret = parse_config(argc, argv, &opt);
+	if (ret != 0) {
 		return 1;
 	}
 
+	int fd = open(opt.path, O_RDONLY);
+	if (fd < 0) {
+		printf("ls: open %s failed: %s\n", opt.path, strerror(fd));
+		return 1;
+	}
+
+	ret = ls(fd, &opt);
 	close(fd);
 
-	return 0;
+	return ret;
 }
