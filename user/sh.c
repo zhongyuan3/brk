@@ -11,11 +11,11 @@ enum tok_type {
 	TOK_EOF,
 	TOK_ARG,
 	TOK_PIPE,
-	TOK_RI,
-	TOK_RO,
-	TOK_ROA,
-	TOK_RE,
-	TOK_REA,
+	TOK_REDIR_IN,
+	TOK_REDIR_OUT,
+	TOK_REDIR_OUT_APPEND,
+	TOK_REDIR_ERR,
+	TOK_REDIR_ERR_APPEND,
 };
 
 enum cmd_type {
@@ -63,7 +63,7 @@ static struct redir_cmd *sh_redir_cmd_new(struct cmd *cmd, char *file,
 static void sh_run_cmd(struct cmd *cmd) __attribute__((noreturn));
 static void sh_end_cmd(struct cmd *cmd);
 static void sh_free_tokens(struct token *toks);
-static char *sh_safe_gets(char *buf, size_t max_len);
+static char *sh_gets(char *buf, size_t max_len);
 static int sh_get_cmd(char *buf, size_t max_len);
 static struct token *sh_get_token(char **input);
 static struct token *sh_parse_line(char *input);
@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 		sh_panic("getcwd failed");
 
 	while (true) {
-		printf("%s $ ", cwd);
+		printf("$ ");
 		if (sh_get_cmd(buf, INPUT_BUF_SIZE) < 0)
 			break;
 		if (buf[0] == '\n' || buf[0] == '\r')
@@ -108,6 +108,8 @@ int main(int argc, char *argv[])
 		} else if (!strncmp(buf, "exit", 4)) {
 			printf("exit\n");
 			exit(0);
+		} else if (!strncmp(buf, "pwd", 3)) {
+			printf("%s\n", cwd);
 		} else {
 			toks = sh_parse_line(buf);
 			cmd = sh_parse_cmd(toks);
@@ -189,13 +191,13 @@ static void sh_run_cmd(struct cmd *cmd)
 		cpid = sh_fork();
 		if (cpid == 0) {
 			close(pipefd[0]);
-			dup2(pipefd[1], 1);
+			dup2(pipefd[1], STDOUT_FILENO);
 			sh_run_cmd(pcmd->left);
 		}
 		cpid = sh_fork();
 		if (cpid == 0) {
 			close(pipefd[1]);
-			dup2(pipefd[0], 0);
+			dup2(pipefd[0], STDIN_FILENO);
 			sh_run_cmd(pcmd->right);
 		}
 		close(pipefd[0]);
@@ -241,10 +243,13 @@ static void sh_free_tokens(struct token *toks)
 	}
 }
 
-static char *sh_safe_gets(char *buf, size_t max_len)
+static char *sh_gets(char *buf, size_t max_len)
 {
 	size_t i;
 	char c;
+
+	if (!buf || max_len < 1)
+		return NULL;
 
 	for (i = 0; i + 1 < max_len;) {
 		if (read(0, &c, 1) < 1)
@@ -259,7 +264,7 @@ static char *sh_safe_gets(char *buf, size_t max_len)
 
 static int sh_get_cmd(char *buf, size_t max_len)
 {
-	sh_safe_gets(buf, max_len);
+	sh_gets(buf, max_len);
 	return !buf[0] ? -1 : 0;
 }
 
@@ -281,24 +286,24 @@ static struct token *sh_get_token(char **input)
 		break;
 	case '>':
 		if (*(i + 1) == '>') {
-			tok = sh_token_new(TOK_ROA, i, 2);
+			tok = sh_token_new(TOK_REDIR_OUT_APPEND, i, 2);
 			i++;
 		} else {
-			tok = sh_token_new(TOK_RO, i, 1);
+			tok = sh_token_new(TOK_REDIR_OUT, i, 1);
 		}
 		i++;
 		break;
 	case '<':
-		tok = sh_token_new(TOK_RI, i, 1);
+		tok = sh_token_new(TOK_REDIR_IN, i, 1);
 		i++;
 		break;
 	case '2':
 		if (*(i + 1) == '>') {
 			if (*(i + 2) == '>') {
-				tok = sh_token_new(TOK_REA, i, 3);
+				tok = sh_token_new(TOK_REDIR_ERR_APPEND, i, 3);
 				i += 3;
 			} else {
-				tok = sh_token_new(TOK_RE, i, 2);
+				tok = sh_token_new(TOK_REDIR_ERR, i, 2);
 				i += 2;
 			}
 			break;
@@ -370,25 +375,25 @@ static struct cmd *sh_parse_redir(struct token *toks, struct token *op,
 	if (!file || file->type != TOK_ARG)
 		sh_panic("missing arguments for redirect");
 	switch (op->type) {
-	case TOK_RI:
+	case TOK_REDIR_IN:
 		omode = O_RDONLY;
-		fd = 0;
+		fd = STDIN_FILENO;
 		break;
-	case TOK_RO:
+	case TOK_REDIR_OUT:
 		omode = O_WRONLY | O_CREAT | O_TRUNC;
-		fd = 1;
+		fd = STDOUT_FILENO;
 		break;
-	case TOK_ROA:
+	case TOK_REDIR_OUT_APPEND:
 		omode = O_WRONLY | O_CREAT | O_APPEND;
-		fd = 1;
+		fd = STDOUT_FILENO;
 		break;
-	case TOK_RE:
+	case TOK_REDIR_ERR:
 		omode = O_WRONLY | O_CREAT | O_TRUNC;
-		fd = 2;
+		fd = STDERR_FILENO;
 		break;
-	case TOK_REA:
+	case TOK_REDIR_ERR_APPEND:
 		omode = O_WRONLY | O_CREAT | O_APPEND;
-		fd = 2;
+		fd = STDERR_FILENO;
 		break;
 	default:
 		sh_panic("unsupported redirect operation");
@@ -411,11 +416,11 @@ static struct cmd *sh_parse_cmd(struct token *toks)
 		case TOK_PIPE:
 			tok->type = TOK_EOF;
 			return sh_parse_pipe(toks, tok->next);
-		case TOK_RI:
-		case TOK_RO:
-		case TOK_ROA:
-		case TOK_RE:
-		case TOK_REA:
+		case TOK_REDIR_IN:
+		case TOK_REDIR_OUT:
+		case TOK_REDIR_OUT_APPEND:
+		case TOK_REDIR_ERR:
+		case TOK_REDIR_ERR_APPEND:
 			return sh_parse_redir(toks, tok, tok->next);
 		case TOK_ARG:
 			break;
