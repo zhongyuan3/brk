@@ -28,7 +28,7 @@ struct virtio_device *virtio_dev_create(uint64_t phys_base, size_t size,
 		return NULL;
 	}
 
-	list_init_head(&dev->list);
+	list_init(&dev->list);
 
 	dev->id = readl(dev->mem_base + VIRTIO_DEVICE_ID_OFFSET);
 

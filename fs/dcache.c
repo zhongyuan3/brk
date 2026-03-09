@@ -19,7 +19,7 @@ static struct kmem_cache dcache;
 int dentry_cache_init(void)
 {
 	for (int i = 0; i < NR_DTABLE_BUCKETS; ++i)
-		list_init_head(&dtable[i]);
+		list_init(&dtable[i]);
 	return kmem_cache_init(&dcache, sizeof(struct dentry),
 			       alignof(struct dentry), "dcache");
 }
@@ -118,7 +118,7 @@ struct dentry *dentry_alloc(const char *name, size_t len)
 	dname[len] = '\0';
 	dp->d_rc = 1;
 	dp->d_name = dname;
-	list_init_head(&dp->d_hash);
+	list_init(&dp->d_hash);
 	return dp;
 }
 

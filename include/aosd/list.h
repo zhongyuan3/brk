@@ -41,7 +41,7 @@ static inline bool list_empty(const struct list_head *head)
 	return head->next == head;
 }
 
-static inline void list_init_head(struct list_head *head)
+static inline void list_init(struct list_head *head)
 {
 	head->next = head;
 	head->prev = head;

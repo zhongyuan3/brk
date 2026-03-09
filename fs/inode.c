@@ -2,7 +2,6 @@
 #include <aosd/assert.h>
 #include <aosd/dcache.h>
 #include <aosd/fs.h>
-#include <aosd/hash.h>
 #include <aosd/limits.h>
 #include <aosd/list.h>
 #include <aosd/lock.h>
@@ -18,7 +17,7 @@ static struct kmem_cache icache;
 int inode_cache_init(void)
 {
 	for (int i = 0; i < NR_ITABLE_BUCKETS; ++i)
-		list_init_head(&itable[i]);
+		list_init(&itable[i]);
 	return kmem_cache_init(&icache, sizeof(struct inode),
 			       alignof(struct inode), "icache");
 }
@@ -88,7 +87,7 @@ struct inode *inode_alloc(void)
 	if (!ip)
 		return NULL;
 	ip->i_rc = 1;
-	list_init_head(&ip->i_list);
+	list_init(&ip->i_list);
 	sleeplock_init(&ip->i_lock, "inode");
 	return ip;
 }

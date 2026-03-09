@@ -320,7 +320,7 @@ void vmalloc_init(void)
 {
 	kmem_cache_init(&vma_cache, sizeof(struct vmem_area),
 			alignof(struct vmem_area), "vma_cache");
-	list_init_head(&vma);
+	list_init(&vma);
 	struct vmem_area *area = vmem_area_alloc();
 	area->addr = VMALLOC_START;
 	area->size = VMALLOC_SIZE;
@@ -432,7 +432,7 @@ struct vmem_area *vmem_area_alloc(void)
 	struct vmem_area *vma = kmem_cache_alloc(&vma_cache);
 	if (vma) {
 		memset(vma, 0, sizeof(*vma));
-		list_init_head(&vma->list);
+		list_init(&vma->list);
 	}
 	return vma;
 }
