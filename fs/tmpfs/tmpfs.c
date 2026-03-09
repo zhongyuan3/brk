@@ -99,12 +99,15 @@ static void tmpfs_read_inode(struct inode *inode, struct tmpfs_node *node)
 	assert(sleeplock_holding(&inode->i_lock));
 	spinlock_acquire(&node->n_inode->i_lock);
 	inode->i_num = node->n_inode->i_inum;
-	inode->i_dev = node->n_inode->i_dev;
+	inode->i_rdev = node->n_inode->i_dev;
 	inode->i_flags = node->n_inode->i_flags;
 	inode->i_mode = node->n_inode->i_mode;
 	inode->i_links = node->n_inode->i_links;
 	inode->i_size = sizeof(struct tmpfs_node);
 	inode->i_private = node;
+	inode->i_atime = 0;
+	inode->i_mtime = 0;
+	inode->i_ctime = 0;
 	spinlock_release(&node->n_inode->i_lock);
 }
 
@@ -225,7 +228,6 @@ static int __tmpfs_dir_lookup(struct inode *dir_inode, struct dentry *dentry)
 
 	dentry->d_ops = &tmpfs_dops;
 	dentry->d_inode = inode;
-	inode->i_dentry = dentry;
 
 	inode_add(inode);
 
@@ -282,7 +284,6 @@ static int tmpfs_mount(struct file_system_type *fs_type, const char *dev_name,
 	mnt_dp->d_ops = &tmpfs_dops;
 	mnt_dp->d_flags |= DENTRY_MOUNTED;
 	mnt_dp->d_inode = mnt_ip;
-	mnt_ip->i_dentry = mnt_dp;
 
 	mnt_tnode = tmpfs_node_alloc(mnt_dname, mnt_dname_len);
 	if (!mnt_tnode) {
@@ -326,13 +327,13 @@ static void tmpfs_deinit_inode(struct inode *inode)
 {
 }
 
-static int tmpfs_create(struct inode *dir_inode, struct dentry *new_dentry,
+static int tmpfs_create(struct dentry *dir, struct dentry *new_dentry,
 			mode_t mode)
 {
 	return -EOPNOTSUPP;
 }
 
-static int tmpfs_link(struct dentry *old_dentry, struct inode *dir_inode,
+static int tmpfs_link(struct dentry *old_dentry, struct dentry *dir,
 		      struct dentry *new_dentry)
 {
 	struct tmpfs_node *dir_tnode;
@@ -340,6 +341,7 @@ static int tmpfs_link(struct dentry *old_dentry, struct inode *dir_inode,
 	struct tmpfs_node *old_tnode;
 	struct tmpfs_inode *old_tinode;
 	int ret = 0;
+	struct inode *dir_inode = dir->d_inode;
 
 	sleeplock_acquire(&dir_inode->i_lock);
 
@@ -373,12 +375,13 @@ unlock_and_out:
 	return ret;
 }
 
-static int tmpfs_unlink(struct inode *dir_inode, struct dentry *old_dentry)
+static int tmpfs_unlink(struct dentry *dir, struct dentry *old_dentry)
 {
 	struct tmpfs_node *dir_tnode;
 	struct tmpfs_node *old_tnode;
 	struct tmpfs_inode *old_tinode;
 	int ret = 0;
+	struct inode *dir_inode = dir->d_inode;
 
 	sleeplock_acquire(&dir_inode->i_lock);
 
@@ -407,13 +410,14 @@ unlock_and_out:
 	return ret;
 }
 
-static int tmpfs_mkdir(struct inode *dir_inode, struct dentry *new_dentry,
+static int tmpfs_mkdir(struct dentry *dir, struct dentry *new_dentry,
 		       mode_t mode)
 {
 	struct tmpfs_node *dir_tnode;
 	struct tmpfs_node *new_tnode;
 	struct tmpfs_inode *new_tinode;
 	int ret = 0;
+	struct inode *dir_inode = dir->d_inode;
 
 	sleeplock_acquire(&dir_inode->i_lock);
 
@@ -445,12 +449,13 @@ unlock_and_out:
 	return ret;
 }
 
-static int tmpfs_rmdir(struct inode *dir_inode, struct dentry *old_dentry)
+static int tmpfs_rmdir(struct dentry *dir, struct dentry *old_dentry)
 {
 	struct tmpfs_node *dir_tnode;
 	struct tmpfs_node *old_tnode;
 	struct tmpfs_inode *old_tinode;
 	int ret = 0;
+	struct inode *dir_inode = dir->d_inode;
 
 	sleeplock_acquire(&dir_inode->i_lock);
 
@@ -489,24 +494,24 @@ unlock_and_out:
 	return ret;
 }
 
-static int tmpfs_lookup(struct inode *dir_inode, struct dentry *dentry)
+static int tmpfs_lookup(struct dentry *dir, struct dentry *dentry)
 {
 	int ret;
-
+	struct inode *dir_inode = dir->d_inode;
 	sleeplock_acquire(&dir_inode->i_lock);
 	ret = __tmpfs_dir_lookup(dir_inode, dentry);
 	sleeplock_release(&dir_inode->i_lock);
-
 	return ret;
 }
 
-static int tmpfs_mknod(struct inode *dir_inode, struct dentry *new_dentry,
+static int tmpfs_mknod(struct dentry *dir, struct dentry *new_dentry,
 		       mode_t mode, dev_t dev)
 {
 	struct tmpfs_node *new_tnode;
 	struct tmpfs_inode *new_tinode;
 	struct tmpfs_node *dir_tnode;
 	int ret = 0;
+	struct inode *dir_inode = dir->d_inode;
 
 	sleeplock_acquire(&dir_inode->i_lock);
 
@@ -619,7 +624,7 @@ static int tmpfs_fstat(struct file *file, struct stat *st)
 	st->st_ino = file->f_inode->i_num;
 	st->st_mode = file->f_inode->i_mode;
 	st->st_nlink = file->f_inode->i_links;
-	st->st_rdev = file->f_inode->i_dev;
+	st->st_rdev = file->f_inode->i_rdev;
 	st->st_size = file->f_inode->i_size;
 	st->st_blksize = file->f_inode->i_sb->s_block_size;
 	st->st_blocks = file->f_inode->i_size / st->st_blksize;
@@ -628,17 +633,20 @@ static int tmpfs_fstat(struct file *file, struct stat *st)
 	return 0;
 }
 
-static int tmpfs_fopen(struct file *file, struct inode *inode, int flags)
+static int tmpfs_fopen(struct file *file, struct dentry *dentry, int flags)
 {
 	int ret = 0;
+	struct inode *inode = dentry->d_inode;
 	sleeplock_acquire(&inode->i_lock);
 	if (IS_CHRDEV(inode->i_mode)) {
-		file->f_dev = inode->i_dev;
+		file->f_dev = inode->i_rdev;
 		file->f_inode = inode_dup(inode);
+		file->f_dentry = dentry_dup(dentry);
 		file->f_ops = &chrdev_fops;
 	} else if (IS_BLKDEV(inode->i_mode)) {
-		file->f_dev = inode->i_dev;
+		file->f_dev = inode->i_rdev;
 		file->f_inode = inode_dup(inode);
+		file->f_dentry = dentry_dup(dentry);
 		file->f_ops = &blkdev_fops;
 	} else {
 		ret = -EOPNOTSUPP;

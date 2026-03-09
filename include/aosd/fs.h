@@ -43,29 +43,31 @@ struct super_operations {
 
 struct inode {
 	struct list_head i_list;
-	struct dentry *i_dentry;
 	int i_rc;
 	sleeplock_t i_lock;
 	struct super_block *i_sb;
 	uint32_t i_num;
-	dev_t i_dev;
+	dev_t i_rdev;
 	uint32_t i_flags;
 	mode_t i_mode;
 	uint32_t i_links;
 	uint64_t i_size;
+	long i_atime;
+	long i_mtime;
+	long i_ctime;
 	void *i_private;
 	const struct inode_operations *i_ops;
 	const struct file_operations *i_fops;
 };
 
 struct inode_operations {
-	int (*create)(struct inode *, struct dentry *, mode_t);
-	int (*link)(struct dentry *, struct inode *, struct dentry *);
-	int (*unlink)(struct inode *, struct dentry *);
-	int (*mkdir)(struct inode *, struct dentry *, mode_t);
-	int (*rmdir)(struct inode *, struct dentry *);
-	int (*lookup)(struct inode *, struct dentry *);
-	int (*mknod)(struct inode *, struct dentry *, mode_t, dev_t);
+	int (*create)(struct dentry *, struct dentry *, mode_t);
+	int (*link)(struct dentry *, struct dentry *, struct dentry *);
+	int (*unlink)(struct dentry *, struct dentry *);
+	int (*mkdir)(struct dentry *, struct dentry *, mode_t);
+	int (*rmdir)(struct dentry *, struct dentry *);
+	int (*lookup)(struct dentry *, struct dentry *);
+	int (*mknod)(struct dentry *, struct dentry *, mode_t, dev_t);
 };
 
 #define FMODE_READ 1
@@ -80,11 +82,12 @@ struct file {
 	off_t f_off;
 	struct inode *f_inode;
 	struct pipe *f_pipe;
+	struct dentry *f_dentry;
 	const struct file_operations *f_ops;
 };
 
 struct file_operations {
-	int (*open)(struct file *, struct inode *, int);
+	int (*open)(struct file *, struct dentry *, int);
 	int (*read)(struct file *, void *, size_t, off_t *, size_t *);
 	int (*write)(struct file *, const void *, size_t, off_t *, size_t *);
 	int (*stat)(struct file *, struct stat *);
@@ -103,7 +106,10 @@ void sblock_free(struct super_block *sb);
 int sblock_add(struct super_block *sb);
 int sblock_rc(struct super_block *sb);
 
+#define NR_ITABLE_BUCKETS 64
+
 int inode_cache_init(void);
+struct inode *inode_get(struct super_block *sb, uint32_t inum);
 struct inode *inode_dup(struct inode *ip);
 void inode_put(struct inode *ip);
 struct inode *inode_alloc(void);

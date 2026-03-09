@@ -304,7 +304,7 @@ uint64_t sys_fchdir(void)
 		return -EBADF;
 
 	path = syscall_arg_ptr(1);
-	newcwd = path_lookup_at(fp->f_inode->i_dentry, path);
+	newcwd = path_lookup_at(fp->f_dentry, path);
 	if (!newcwd)
 		return -ENOENT;
 
@@ -552,8 +552,8 @@ static struct dentry *fd_to_dentry(int fd)
 		return dentry_dup(t->cwd);
 
 	if (fd >= 0 && fd <= OPEN_MAX && t->ofiles[fd] &&
-	    t->ofiles[fd]->f_inode)
-		return dentry_dup(t->ofiles[fd]->f_inode->i_dentry);
+	    t->ofiles[fd]->f_dentry)
+		return dentry_dup(t->ofiles[fd]->f_dentry);
 
 	return NULL;
 }
@@ -598,8 +598,8 @@ int do_openat(int dirfd, const char *path, int flags, mode_t mode,
 			return -ENOMEM;
 		}
 
-		err = parent_dp->d_inode->i_ops->create(parent_dp->d_inode,
-							file_dp, mode);
+		err = parent_dp->d_inode->i_ops->create(parent_dp, file_dp,
+							mode);
 		if (err) {
 			dentry_free(file_dp);
 			dentry_put(parent_dp);
@@ -627,7 +627,7 @@ int do_openat(int dirfd, const char *path, int flags, mode_t mode,
 	if (flags & O_RDWR)
 		fp->f_mode = FMODE_READ | FMODE_WRITE;
 
-	err = file_dp->d_inode->i_fops->open(fp, file_dp->d_inode, flags);
+	err = file_dp->d_inode->i_fops->open(fp, file_dp, flags);
 	if (err) {
 		file_put(fp);
 		dentry_put(file_dp);
@@ -681,8 +681,7 @@ int do_mkdirat(int dirfd, const char *path, mode_t mode)
 		return -ENOMEM;
 	}
 
-	err = parent_dp->d_inode->i_ops->mkdir(parent_dp->d_inode, new_dp,
-					       mode);
+	err = parent_dp->d_inode->i_ops->mkdir(parent_dp, new_dp, mode);
 	if (err) {
 		dentry_free(new_dp);
 		dentry_put(parent_dp);
@@ -739,8 +738,7 @@ int do_linkat(int olddirfd, const char *oldpath, int newdirfd,
 		goto err4;
 	}
 
-	err = parent_dp->d_inode->i_ops->link(old_dp, parent_dp->d_inode,
-					      new_dp);
+	err = parent_dp->d_inode->i_ops->link(old_dp, parent_dp, new_dp);
 	if (err)
 		goto err5;
 	new_dp->d_parent = parent_dp;
@@ -791,7 +789,7 @@ int do_unlinkat(int dirfd, const char *path, int flags)
 
 	parent_dp = dentry_dup(old_dp->d_parent);
 
-	ret = parent_dp->d_inode->i_ops->unlink(parent_dp->d_inode, old_dp);
+	ret = parent_dp->d_inode->i_ops->unlink(parent_dp, old_dp);
 
 	dentry_put(parent_dp);
 	dentry_put(old_dp);
@@ -824,8 +822,7 @@ int do_mknodat(int dirfd, const char *path, mode_t mode, dev_t dev)
 		return -ENOMEM;
 	}
 
-	err = parent_dp->d_inode->i_ops->mknod(parent_dp->d_inode, new_dp, mode,
-					       dev);
+	err = parent_dp->d_inode->i_ops->mknod(parent_dp, new_dp, mode, dev);
 	if (err) {
 		dentry_free(new_dp);
 		dentry_put(parent_dp);

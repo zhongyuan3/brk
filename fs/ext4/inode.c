@@ -7,6 +7,7 @@
 #include <aosd/path.h>
 #include <aosd/slab.h>
 #include <aosd/string.h>
+#include <aosd/types.h>
 #include <ext4.h>
 #include <ext4_blockdev.h>
 #include <ext4_dir.h>
@@ -15,86 +16,47 @@
 #include <ext4_oflags.h>
 #include <uapi/aosd/stat.h>
 
-static int ext4fs_create(struct inode *dir_inode, struct dentry *new_dentry,
+static int ext4fs_create(struct dentry *dir, struct dentry *new_dentry,
 			 mode_t mode)
 {
 	char *path;
-	struct inode *new_inode;
-	struct ext4fs_inode_info *new_inode_info;
-	int err;
+	struct ext4_file file;
+	int ret;
+	struct inode *dir_inode = dir->d_inode;
 
 	sleeplock_acquire(&dir_inode->i_lock);
 
-	path = path_get_full(dir_inode->i_dentry);
+	path = path_get_full(dir);
 	if (!path) {
-		err = -ENOMEM;
-		goto err0;
+		ret = -ENOMEM;
+		goto out0;
 	}
 
-	err = path_cat(path, new_dentry->d_name, strlen(new_dentry->d_name));
-	if (err)
-		goto err1;
+	ret = path_cat(path, new_dentry->d_name, strlen(new_dentry->d_name));
+	if (ret != 0)
+		goto out1;
 
-	new_inode_info = kzalloc(sizeof(*new_inode_info));
-	if (!new_inode_info) {
-		err = -ENOMEM;
-		goto err1;
-	}
+	ret = ext4_fopen2(&file, path, O_CREAT);
+	if (ret != 0)
+		goto out1;
+	ext4_fclose(&file);
 
-	err = ext4_fopen2(&new_inode_info->i_file, path, O_CREAT | O_EXCL);
-	if (err)
-		goto err2;
+	ret = ext4fs_dir_find_entry(dir, new_dentry);
 
-	new_inode = inode_alloc();
-	if (!new_inode) {
-		err = -ENOMEM;
-		goto err3;
-	}
-
-	new_inode->i_ops = &ext4_iops;
-	new_inode->i_fops = &ext4_fops;
-	sleeplock_acquire(&new_inode->i_lock);
-	new_inode->i_sb = sblock_dup(dir_inode->i_sb);
-	new_inode->i_num = new_inode_info->i_file.inode;
-	new_inode->i_private = new_inode_info;
-	err = ext4fs_read_inode(new_inode);
-	sleeplock_release(&new_inode->i_lock);
-	if (err) {
-		sblock_put(new_inode->i_sb);
-		goto err4;
-	}
-
-	new_dentry->d_inode = new_inode;
-	new_inode->i_dentry = new_dentry;
-	new_dentry->d_ops = &ext4_dops;
-
-	inode_add(new_inode);
-
-	sleeplock_release(&dir_inode->i_lock);
-
+out1:
 	kfree(path);
-
-	return 0;
-
-err4:
-	inode_free(new_inode);
-err3:
-	ext4_fclose(&new_inode_info->i_file);
-err2:
-	kfree(new_inode_info);
-err1:
-	kfree(path);
-err0:
+out0:
 	sleeplock_release(&dir_inode->i_lock);
-	return err;
+	return ret;
 }
 
-static int ext4fs_link(struct dentry *old_dentry, struct inode *dir_inode,
+static int ext4fs_link(struct dentry *old_dentry, struct dentry *dir,
 		       struct dentry *new_dentry)
 {
-	char *old_path = NULL;
-	char *new_path = NULL;
-	int ret = 0;
+	char *old_path;
+	char *new_path;
+	int ret;
+	struct inode *dir_inode = dir->d_inode;
 
 	sleeplock_acquire(&dir_inode->i_lock);
 
@@ -104,7 +66,7 @@ static int ext4fs_link(struct dentry *old_dentry, struct inode *dir_inode,
 		goto out0;
 	}
 
-	new_path = path_get_full(dir_inode->i_dentry);
+	new_path = path_get_full(dir);
 	if (!new_path) {
 		ret = -ENOMEM;
 		goto out1;
@@ -117,7 +79,7 @@ static int ext4fs_link(struct dentry *old_dentry, struct inode *dir_inode,
 
 	ret = ext4_flink(old_path, new_path);
 	if (ret == 0)
-		ret = ext4fs_dir_find_entry(dir_inode, new_dentry);
+		ret = ext4fs_dir_find_entry(dir, new_dentry);
 
 out2:
 	kfree(new_path);
@@ -128,102 +90,156 @@ out0:
 	return ret;
 }
 
-static int ext4fs_unlink(struct inode *dir_inode, struct dentry *old_dentry)
+static int ext4fs_unlink(struct dentry *dir, struct dentry *old_dentry)
 {
-	char *path = NULL;
-	int ret = 0;
+	char *path;
+	int ret;
+	struct inode *dir_inode = dir->d_inode;
 
 	sleeplock_acquire(&dir_inode->i_lock);
 
-	path = path_get_full(dir_inode->i_dentry);
+	path = path_get_full(dir);
 	if (!path) {
 		ret = -ENOMEM;
-		goto out;
+		goto out0;
 	}
 
 	ret = path_cat(path, old_dentry->d_name, strlen(old_dentry->d_name));
 	if (ret != 0)
-		goto out;
+		goto out1;
 
 	ret = ext4_fremove(path);
 
-out:
-	sleeplock_release(&dir_inode->i_lock);
+out1:
 	kfree(path);
+out0:
+	sleeplock_release(&dir_inode->i_lock);
 	return ret;
 }
 
-static int ext4fs_lookup(struct inode *dir_inode, struct dentry *dentry)
+static int ext4fs_lookup(struct dentry *dir, struct dentry *dentry)
 {
 	int ret;
-
+	struct inode *dir_inode = dir->d_inode;
 	sleeplock_acquire(&dir_inode->i_lock);
-	ret = ext4fs_dir_find_entry(dir_inode, dentry);
+	ret = ext4fs_dir_find_entry(dir, dentry);
 	sleeplock_release(&dir_inode->i_lock);
-
 	return ret;
 }
 
-static int ext4fs_mkdir(struct inode *dir_inode, struct dentry *new_dentry,
+static int ext4fs_mkdir(struct dentry *dir, struct dentry *new_dentry,
 			mode_t mode)
 {
-	char *path = NULL;
-	int ret = 0;
+	char *path;
+	int ret;
+	struct inode *dir_inode = dir->d_inode;
 
 	sleeplock_acquire(&dir_inode->i_lock);
 
-	path = path_get_full(dir_inode->i_dentry);
+	path = path_get_full(dir);
 	if (!path) {
 		ret = -ENOMEM;
-		goto out;
+		goto out0;
 	}
 
 	ret = path_cat(path, new_dentry->d_name, strlen(new_dentry->d_name));
 	if (ret != 0)
-		goto out;
+		goto out1;
 
 	ret = ext4_dir_mk(path);
 	if (ret == 0)
-		ret = ext4fs_dir_find_entry(dir_inode, new_dentry);
+		ret = ext4fs_dir_find_entry(dir, new_dentry);
 
-out:
-	sleeplock_release(&dir_inode->i_lock);
+out1:
 	kfree(path);
+out0:
+	sleeplock_release(&dir_inode->i_lock);
 	return ret;
 }
 
-static int ext4fs_rmdir(struct inode *dir_inode, struct dentry *old_dentry)
+static int ext4fs_rmdir(struct dentry *dir, struct dentry *old_dentry)
 {
-	char *path = NULL;
-	int ret = 0;
+	char *path;
+	int ret;
+	struct inode *dir_inode = dir->d_inode;
 
 	sleeplock_acquire(&dir_inode->i_lock);
 
-	path = path_get_full(dir_inode->i_dentry);
+	path = path_get_full(dir);
 	if (!path) {
 		ret = -ENOMEM;
-		goto out;
+		goto out0;
 	}
 
 	ret = path_cat(path, old_dentry->d_name, strlen(old_dentry->d_name));
 	if (ret != 0)
-		goto out;
+		goto out1;
 
 	ret = ext4_dir_rm(path);
 
-out:
-	sleeplock_release(&dir_inode->i_lock);
+out1:
 	kfree(path);
+out0:
+	sleeplock_release(&dir_inode->i_lock);
 	return ret;
 }
 
-static int ext4fs_mknod(struct inode *dir_inode, struct dentry *new_dentry,
-			mode_t mode, dev_t dev)
+static int ext4fs_mode_to_filetype(mode_t mode)
 {
-	return -EOPNOTSUPP;
+	if (mode & S_IFSOCK)
+		return EXT4_DE_SOCK;
+	else if (mode & S_IFLNK)
+		return EXT4_DE_SYMLINK;
+	else if (mode & S_IFREG)
+		return EXT4_DE_REG_FILE;
+	else if (mode & S_IFBLK)
+		return EXT4_DE_BLKDEV;
+	else if (mode & S_IFDIR)
+		return EXT4_DE_DIR;
+	else if (mode & S_IFCHR)
+		return EXT4_DE_CHRDEV;
+	else if (mode & S_IFIFO)
+		return EXT4_DE_FIFO;
+	else
+		return -EINVAL;
 }
 
-int ext4fs_dir_find_entry(struct inode *dir_inode, struct dentry *dentry)
+static int ext4fs_mknod(struct dentry *dir, struct dentry *new_dentry,
+			mode_t mode, dev_t dev)
+{
+	char *path;
+	int ret;
+	int filetype;
+	struct inode *dir_inode = dir->d_inode;
+
+	filetype = ext4fs_mode_to_filetype(mode);
+	if (filetype < 0)
+		return -EINVAL;
+
+	sleeplock_acquire(&dir_inode->i_lock);
+
+	path = path_get_full(dir);
+	if (!path) {
+		ret = -ENOMEM;
+		goto out0;
+	}
+
+	ret = path_cat(path, new_dentry->d_name, strlen(new_dentry->d_name));
+	if (ret != 0)
+		goto out1;
+
+	ret = ext4_mknod(path, filetype, dev);
+	if (ret == 0)
+		ret = ext4fs_dir_find_entry(dir, new_dentry);
+
+out1:
+	kfree(path);
+out0:
+	sleeplock_release(&dir_inode->i_lock);
+	return ret;
+}
+
+int ext4fs_dir_find_entry(struct dentry *dir, struct dentry *dentry)
 {
 	struct ext4fs_inode_info *dir_inode_info;
 	struct ext4fs_sb_info *sb_info;
@@ -231,6 +247,7 @@ int ext4fs_dir_find_entry(struct inode *dir_inode, struct dentry *dentry)
 	struct ext4_inode_ref dir_inode_ref = { 0 };
 	struct ext4_dir_search_result result = { 0 };
 	int ret = 0;
+	struct inode *dir_inode = dir->d_inode;
 
 	assert(sleeplock_holding(&dir_inode->i_lock));
 
@@ -239,7 +256,7 @@ int ext4fs_dir_find_entry(struct inode *dir_inode, struct dentry *dentry)
 	fs = sb_info->s_blkdev.fs;
 
 	if (!dir_inode_info->i_is_dir) {
-		ret = -EINVAL;
+		ret = -ENOTDIR;
 		goto out0;
 	}
 
@@ -252,7 +269,7 @@ int ext4fs_dir_find_entry(struct inode *dir_inode, struct dentry *dentry)
 	if (ret != 0)
 		goto out1;
 
-	ret = ext4fs_open_direntry(result.dentry, dir_inode, dentry);
+	ret = ext4fs_open_direntry(dir, result.dentry, dentry);
 
 	ext4_dir_destroy_result(&dir_inode_ref, &result);
 out1:
@@ -284,7 +301,10 @@ int ext4fs_read_inode(struct inode *inode)
 	inode->i_mode = ext4_inode_get_mode(&fs->sb, inode_ref.inode);
 	inode->i_links = ext4_inode_get_links_cnt(inode_ref.inode);
 	inode->i_size = ext4_inode_get_size(&fs->sb, inode_ref.inode);
-	inode->i_dev = ext4_inode_get_dev(inode_ref.inode);
+	inode->i_rdev = ext4_inode_get_dev(inode_ref.inode);
+	inode->i_atime = ext4_inode_get_access_time(inode_ref.inode);
+	inode->i_mtime = ext4_inode_get_modif_time(inode_ref.inode);
+	inode->i_ctime = ext4_inode_get_change_inode_time(inode_ref.inode);
 	inode_info->i_dir_size = inode->i_size;
 
 	ext4_fs_put_inode_ref(&inode_ref);

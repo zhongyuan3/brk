@@ -2,6 +2,7 @@
 #include <aosd/assert.h>
 #include <aosd/dcache.h>
 #include <aosd/fs.h>
+#include <aosd/hash.h>
 #include <aosd/limits.h>
 #include <aosd/list.h>
 #include <aosd/lock.h>
@@ -10,14 +11,47 @@
 #include <aosd/string.h>
 #include <aosd/types.h>
 
-static list_head_define(ilist);
-static spinlock_define(ilist_lock);
+static struct list_head itable[NR_ITABLE_BUCKETS];
+static spinlock_define(itable_lock);
 static struct kmem_cache icache;
 
 int inode_cache_init(void)
 {
+	for (int i = 0; i < NR_ITABLE_BUCKETS; ++i)
+		list_init_head(&itable[i]);
 	return kmem_cache_init(&icache, sizeof(struct inode),
 			       alignof(struct inode), "icache");
+}
+
+static inline uint32_t inode_hash(struct super_block *sb, uint32_t inum)
+{
+	const uint8_t *k = (uint8_t *)&sb;
+	uint32_t h = 0x811c9dc5;
+	for (size_t i = 0; i < sizeof(void *); ++i) {
+		h ^= k[i];
+		h *= 0x01000193;
+	}
+	k = (uint8_t *)&inum;
+	for (size_t i = 0; i < sizeof(inum); ++i) {
+		h ^= k[i];
+		h *= 0x01000193;
+	}
+	return h;
+}
+
+static struct inode *__inode_get(struct super_block *sb, uint32_t inum)
+{
+	struct inode *ip;
+	uint32_t idx = inode_hash(sb, inum) % NR_ITABLE_BUCKETS;
+	struct list_head *bkt = &itable[idx];
+
+	list_for_each_entry(ip, bkt, i_list)
+		if (ip->i_num == inum && ip->i_sb == sb) {
+			++ip->i_rc;
+			return ip;
+		}
+
+	return NULL;
 }
 
 static struct inode *__inode_alloc(void)
@@ -37,7 +71,8 @@ static void __inode_free(struct inode *ip)
 
 static void __inode_add(struct inode *ip)
 {
-	list_add(&ip->i_list, &ilist);
+	uint32_t idx = inode_hash(ip->i_sb, ip->i_num) % NR_ITABLE_BUCKETS;
+	list_add(&ip->i_list, &itable[idx]);
 }
 
 static void __inode_del(struct inode *ip)
@@ -65,34 +100,34 @@ void inode_free(struct inode *ip)
 
 int inode_add(struct inode *ip)
 {
-	spinlock_acquire(&ilist_lock);
+	spinlock_acquire(&itable_lock);
 	__inode_add(ip);
-	spinlock_release(&ilist_lock);
+	spinlock_release(&itable_lock);
 	return 0;
 }
 
 struct inode *inode_dup(struct inode *ip)
 {
 	assert(ip->i_rc > 0);
-	spinlock_acquire(&ilist_lock);
+	spinlock_acquire(&itable_lock);
 	++ip->i_rc;
-	spinlock_release(&ilist_lock);
+	spinlock_release(&itable_lock);
 	return ip;
 }
 
 void inode_put(struct inode *ip)
 {
 	assert(ip->i_rc > 0);
-	spinlock_acquire(&ilist_lock);
+	spinlock_acquire(&itable_lock);
 	--ip->i_rc;
 	if (ip->i_rc == 0) {
 		__inode_del(ip);
-		spinlock_release(&ilist_lock);
+		spinlock_release(&itable_lock);
 		ip->i_sb->s_ops->deinit_inode(ip);
 		sblock_put(ip->i_sb);
 		inode_free(ip);
 	} else {
-		spinlock_release(&ilist_lock);
+		spinlock_release(&itable_lock);
 	}
 }
 
@@ -108,8 +143,18 @@ mode_t inode_mode(struct inode *ip)
 int inode_rc(struct inode *ip)
 {
 	int rc;
-	spinlock_acquire(&ilist_lock);
+	spinlock_acquire(&itable_lock);
 	rc = ip->i_rc;
-	spinlock_release(&ilist_lock);
+	spinlock_release(&itable_lock);
 	return rc;
+}
+
+struct inode *inode_get(struct super_block *sb, uint32_t inum)
+{
+	struct inode *ip;
+
+	spinlock_acquire(&itable_lock);
+	ip = __inode_get(sb, inum);
+	spinlock_release(&itable_lock);
+	return ip;
 }

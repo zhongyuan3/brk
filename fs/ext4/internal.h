@@ -22,9 +22,9 @@ struct ext4fs_inode_info {
 };
 
 int ext4fs_read_inode(struct inode *inode);
-int ext4fs_open_direntry(struct ext4_dir_en *dir_en, struct inode *dir_inode,
+int ext4fs_open_direntry(struct dentry *dir, struct ext4_dir_en *dir_en,
 			 struct dentry *en_dentry);
-int ext4fs_dir_find_entry(struct inode *dir_inode, struct dentry *dentry);
+int ext4fs_dir_find_entry(struct dentry *dir, struct dentry *dentry);
 struct ext4fs_sb_info *ext4fs_sbi_create(struct blkdev *bd);
 void ext4fs_sbi_destroy(struct ext4fs_sb_info *sbi);
 

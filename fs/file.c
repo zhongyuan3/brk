@@ -1,5 +1,6 @@
 #include <aosd/align.h>
 #include <aosd/assert.h>
+#include <aosd/dcache.h>
 #include <aosd/dev.h>
 #include <aosd/errno.h>
 #include <aosd/fs.h>
@@ -68,6 +69,8 @@ void file_put(struct file *fp)
 			pipe_close(fp->f_pipe, fp->f_mode & FMODE_WRITE);
 		if (fp->f_inode)
 			inode_put(fp->f_inode);
+		if (fp->f_dentry)
+			dentry_put(fp->f_dentry);
 		__file_free(fp);
 	} else {
 		spinlock_release(&flist_lock);

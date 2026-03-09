@@ -41,26 +41,25 @@ static void __dentry_free(struct dentry *dp)
 
 static uint32_t dentry_hash(struct dentry *parent, const char *name)
 {
-	uint32_t h = 0;
-	uint64_t a = (uint64_t)parent;
-
-	h = (h << 5) - h + (a & 0xFFFFFFFF);
-	h = (h << 5) - h + (a >> 32);
-
-	if (name)
-		while (*name)
-			h = (h << 5) - h + *name++;
-
-	h = (h << 5) - h + (h >> 16);
-
-	return h % countof(dtable);
+	const uint8_t *k = (uint8_t *)&parent;
+	uint32_t h = 0x811c9dc5;
+	for (size_t i = 0; i < sizeof(void *); ++i) {
+		h ^= k[i];
+		h *= 0x01000193;
+	}
+	k = (uint8_t *)name;
+	for (; *k; ++k) {
+		h ^= *k;
+		h *= 0x01000193;
+	}
+	return h;
 }
 
 static void __dentry_add(struct dentry *dp)
 {
 	struct list_head *bkt;
-
-	bkt = dtable + dentry_hash(dp->d_parent, dp->d_name);
+	size_t idx = dentry_hash(dp->d_parent, dp->d_name) % NR_DTABLE_BUCKETS;
+	bkt = dtable + idx;
 	list_add(&dp->d_hash, bkt);
 }
 
@@ -73,7 +72,8 @@ static struct dentry *__dentry_get(struct dentry *parent, const char *name)
 {
 	struct dentry *dp = NULL;
 	size_t len = strlen(name);
-	struct list_head *bkt = dtable + dentry_hash(parent, name);
+	size_t idx = dentry_hash(parent, name) % NR_DTABLE_BUCKETS;
+	struct list_head *bkt = dtable + idx;
 
 	if (list_empty(bkt))
 		return NULL;
@@ -95,7 +95,6 @@ static void dentry_destroy(struct dentry *dp)
 	assert(dp->d_rc == 0);
 	if (dp->d_parent)
 		dentry_put(dp->d_parent);
-	dp->d_inode->i_dentry = NULL;
 	inode_put(dp->d_inode);
 	dentry_free(dp);
 }
@@ -158,7 +157,7 @@ struct dentry *dentry_get(struct dentry *parent, const char *name)
 	newdp = dentry_alloc(name, strlen(name));
 	if (!newdp)
 		return NULL;
-	if (parent->d_inode->i_ops->lookup(parent->d_inode, newdp) != 0) {
+	if (parent->d_inode->i_ops->lookup(parent, newdp) != 0) {
 		dentry_free(newdp);
 		return NULL;
 	}

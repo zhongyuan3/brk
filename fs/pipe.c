@@ -122,7 +122,7 @@ int pipe_write(struct pipe *p, const void *buf, size_t n, size_t *written)
 	return i;
 }
 
-static int pipe_fopen(struct file *, struct inode *, int)
+static int pipe_fopen(struct file *fp, struct dentry *dentry, int flags)
 {
 	return -EOPNOTSUPP;
 }
@@ -139,17 +139,17 @@ static int pipe_fwrite(struct file *fp, const void *buf, size_t cnt, off_t *off,
 	return pipe_write(fp->f_pipe, buf, cnt, written);
 }
 
-static int pipe_fstat(struct file *, struct stat *)
+static int pipe_fstat(struct file *fp, struct stat *st)
 {
 	return -EOPNOTSUPP;
 }
 
-static off_t pipe_fseek(struct file *, off_t, int)
+static off_t pipe_fseek(struct file *fp, off_t offset, int whence)
 {
 	return -EOPNOTSUPP;
 }
 
-static int pipe_ftruncate(struct file *, off_t)
+static int pipe_ftruncate(struct file *fp, off_t offset)
 {
 	return -EOPNOTSUPP;
 }
