@@ -99,8 +99,7 @@ int main(int argc, char *argv[])
 		buf[strcspn(buf, "\n\r")] = 0;
 		if (!strncmp(buf, "cd ", 3)) {
 			if (chdir(buf + 3) < 0) {
-				dprintf(STDERR_FILENO, "cannot cd %s\n",
-					buf + 3);
+				perror("cd failed");
 				continue;
 			}
 			if (!getcwd(cwd, sizeof(cwd)))
