@@ -50,7 +50,7 @@ static int ext4fs_mount(struct file_system_type *fs_type, const char *dev_name,
 		err = -EINVAL;
 		goto err0;
 	}
-	mnt_sb->s_dev = dev_dentry->d_inode->i_dev;
+	mnt_sb->s_dev = dev_dentry->d_inode->i_rdev;
 	dentry_put(dev_dentry);
 	blkdev = blkdev_get(mnt_sb->s_dev);
 	if (!blkdev) {
@@ -117,7 +117,6 @@ static int ext4fs_mount(struct file_system_type *fs_type, const char *dev_name,
 	mnt_inode->i_sb = mnt_sb;
 	mnt_inode->i_ops = &ext4_iops;
 	mnt_inode->i_fops = &ext4_fops;
-	mnt_inode->i_dentry = mnt_dentry;
 	sleeplock_acquire(&mnt_inode->i_lock);
 	err = ext4fs_read_inode(mnt_inode);
 	sleeplock_release(&mnt_inode->i_lock);

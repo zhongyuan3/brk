@@ -1,6 +1,7 @@
 #include <aosd/asm.h>
 #include <aosd/assert.h>
 #include <aosd/console.h>
+#include <aosd/dcache.h>
 #include <aosd/dev.h>
 #include <aosd/errno.h>
 #include <aosd/fs.h>
@@ -249,7 +250,7 @@ static int chrdev_fread(struct file *file, void *buf, size_t n, off_t *offset,
 
 	sleeplock_acquire(&ip->i_lock);
 
-	cd = chrdev_get(ip->i_dev);
+	cd = chrdev_get(ip->i_rdev);
 	if (!cd) {
 		ret = -ENODEV;
 		goto unlock_and_out;
@@ -271,7 +272,7 @@ static int chrdev_fwrite(struct file *file, const void *buf, size_t n,
 
 	sleeplock_acquire(&ip->i_lock);
 
-	cd = chrdev_get(ip->i_dev);
+	cd = chrdev_get(ip->i_rdev);
 	if (!cd) {
 		ret = -ENODEV;
 		goto unlock_and_out;
@@ -301,7 +302,7 @@ static int chrdev_fstat(struct file *file, struct stat *st)
 	st->st_ino = file->f_inode->i_num;
 	st->st_mode = file->f_inode->i_mode;
 	st->st_nlink = file->f_inode->i_links;
-	st->st_rdev = file->f_inode->i_dev;
+	st->st_rdev = file->f_inode->i_rdev;
 	st->st_size = file->f_inode->i_size;
 	st->st_blksize = file->f_inode->i_sb->s_block_size;
 	st->st_blocks = file->f_inode->i_size / st->st_blksize;
@@ -310,16 +311,18 @@ static int chrdev_fstat(struct file *file, struct stat *st)
 	return 0;
 }
 
-static int chrdev_fopen(struct file *file, struct inode *inode, int flags)
+static int chrdev_fopen(struct file *file, struct dentry *dentry, int flags)
 {
+	struct inode *inode = dentry->d_inode;
 	sleeplock_acquire(&inode->i_lock);
 	if (!(inode->i_mode & S_IFCHR) && !(inode->i_mode & S_IFBLK)) {
 		sleeplock_release(&inode->i_lock);
 		return -EOPNOTSUPP;
 	}
-	file->f_dev = inode->i_dev;
-	file->f_ops = &tmpfs_fops;
+	file->f_dev = inode->i_rdev;
+	file->f_ops = &chrdev_fops;
 	file->f_inode = inode_dup(inode);
+	file->f_dentry = dentry_dup(dentry);
 	sleeplock_release(&inode->i_lock);
 	return 0;
 }
@@ -351,7 +354,7 @@ static int blkdev_fstat(struct file *file, struct stat *st)
 	return -EOPNOTSUPP;
 }
 
-static int blkdev_fopen(struct file *file, struct inode *inode, int flags)
+static int blkdev_fopen(struct file *file, struct dentry *dentry, int flags)
 {
 	return -EOPNOTSUPP;
 }

@@ -173,7 +173,7 @@ static int ext4fs_fstat(struct file *file, struct stat *st)
 	st->st_ino = file->f_inode->i_num;
 	st->st_mode = file->f_inode->i_mode;
 	st->st_nlink = file->f_inode->i_links;
-	st->st_rdev = file->f_inode->i_dev;
+	st->st_rdev = file->f_inode->i_rdev;
 	st->st_size = file->f_inode->i_size;
 	st->st_blksize = file->f_inode->i_sb->s_block_size;
 	st->st_blocks = file->f_inode->i_size / st->st_blksize;
@@ -182,10 +182,11 @@ static int ext4fs_fstat(struct file *file, struct stat *st)
 	return 0;
 }
 
-static int ext4fs_fopen(struct file *file, struct inode *inode, int flags)
+static int ext4fs_fopen(struct file *file, struct dentry *dentry, int flags)
 {
 	struct ext4fs_inode_info *info;
 	int ret = 0;
+	struct inode *inode = dentry->d_inode;
 
 	sleeplock_acquire(&inode->i_lock);
 
@@ -197,6 +198,7 @@ static int ext4fs_fopen(struct file *file, struct inode *inode, int flags)
 
 	file->f_ops = &ext4_fops;
 	file->f_inode = inode_dup(inode);
+	file->f_dentry = dentry_dup(dentry);
 
 unlock_and_out:
 	sleeplock_release(&inode->i_lock);
