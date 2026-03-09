@@ -278,19 +278,23 @@ uint64_t sys_chdir(void)
 {
 	char *path = syscall_arg_ptr(0);
 	struct task *t = current_task();
-	struct dentry *newdp = path_lookup(path);
-	if (!newdp)
+	struct dentry *new_cwd = path_lookup(path);
+	if (!new_cwd)
 		return -ENOENT;
-	struct dentry *olddp = t->cwd;
-	t->cwd = newdp;
-	dentry_put(olddp);
+	if (!new_cwd->d_inode || !(new_cwd->d_inode->i_mode & S_IFDIR)) {
+		dentry_put(new_cwd);
+		return -ENOTDIR;
+	}
+	struct dentry *old_cwd = t->cwd;
+	t->cwd = new_cwd;
+	dentry_put(old_cwd);
 	return 0;
 }
 
 uint64_t sys_fchdir(void)
 {
 	int err;
-	struct dentry *newcwd, *oldcwd;
+	struct dentry *new_cwd, *old_cwd;
 	char *path;
 	int fd = 0;
 	struct file *fp = NULL;
@@ -304,13 +308,17 @@ uint64_t sys_fchdir(void)
 		return -EBADF;
 
 	path = syscall_arg_ptr(1);
-	newcwd = path_lookup_at(fp->f_dentry, path);
-	if (!newcwd)
+	new_cwd = path_lookup_at(fp->f_dentry, path);
+	if (!new_cwd)
 		return -ENOENT;
+	if (!new_cwd->d_inode || !(new_cwd->d_inode->i_mode & S_IFDIR)) {
+		dentry_put(new_cwd);
+		return -ENOTDIR;
+	}
 
-	oldcwd = t->cwd;
-	t->cwd = newcwd;
-	dentry_put(oldcwd);
+	old_cwd = t->cwd;
+	t->cwd = new_cwd;
+	dentry_put(old_cwd);
 	return 0;
 }
 
