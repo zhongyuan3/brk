@@ -239,7 +239,7 @@ static void pop_arg(va_list *ap, unsigned int st, union fmt_arg *arg)
 int printf_core(struct display *dis, char const *format, va_list ap)
 {
 	char buf[32];
-	union fmt_arg arg;
+	union fmt_arg arg = { 0 };
 	struct internal_display idis = {
 		.dis = dis,
 		.cnt = 0,
