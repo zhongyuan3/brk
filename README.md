@@ -1,0 +1,16 @@
+# aosd (An Operating System Design)
+
+## Overview
+
+aosd (An Operating System Design) is a simple operating system kernel
+designed to run on the RISC-V 64-bit architecture. As my undergraduate
+graduation project, it is based on xv6-riscv and has been extensively
+extended with reference to the Linux kernel.
+
+## Acknowledgements
+
+xv6 is a re-implementation of Dennis Ritchie's and Ken Thompson's Unix
+Version 6 (v6). xv6 loosely follows the structure and style of v6,
+but is implemented for a modern RISC-V multiprocessor using ANSI C.
+See also https://github.com/mit-pdos/xv6-riscv, which is the original
+xv6-riscv repository.
