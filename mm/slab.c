@@ -147,7 +147,7 @@ int kmem_cache_init(struct kmem_cache *cache, size_t size, size_t align,
 	cache->name = name;
 	spinlock_init(&cache->lock, name);
 
-	list_init_head(&cache->slab_list);
+	list_init(&cache->slab_list);
 
 	spinlock_acquire(&cache->lock);
 	ret = kmem_cache_add_page(cache);

@@ -59,9 +59,9 @@ static struct tmpfs_node *tmpfs_node_alloc(const char *name, size_t len)
 		return NULL;
 	}
 
-	list_init_head(&node->n_subnodes);
-	list_init_head(&node->n_sub);
-	list_init_head(&node->n_root);
+	list_init(&node->n_subnodes);
+	list_init(&node->n_sub);
+	list_init(&node->n_root);
 
 	node->n_name = node_name;
 	node->n_inode = NULL;

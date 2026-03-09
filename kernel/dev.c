@@ -216,9 +216,9 @@ void dev_init(void)
 	struct blkdev *bd;
 
 	for (int i = 0; i < NR_DEVICES; ++i)
-		list_init_head(&cdev_list[i]);
+		list_init(&cdev_list[i]);
 	for (int i = 0; i < NR_DEVICES; ++i)
-		list_init_head(&bdev_list[i]);
+		list_init(&bdev_list[i]);
 
 	cd = chrdev_alloc();
 	assert(cd);

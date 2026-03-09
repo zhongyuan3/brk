@@ -33,7 +33,7 @@ struct mem_mgmt *mm_alloc(void)
 		return NULL;
 	}
 
-	list_init_head(&mm->seg);
+	list_init(&mm->seg);
 
 	mm->stack = vmem_area_alloc();
 	if (!mm->stack) {

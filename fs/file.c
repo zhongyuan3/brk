@@ -45,7 +45,7 @@ struct file *file_alloc(void)
 	if (!fp)
 		return NULL;
 
-	list_init_head(&fp->f_list);
+	list_init(&fp->f_list);
 	fp->f_rc = 1;
 
 	spinlock_acquire(&flist_lock);

@@ -93,5 +93,5 @@ void page_free(struct page *pg, unsigned int order)
 void page_alloc_init(void)
 {
 	for (int i = 0; i <= PAGE_ORDER_MAX; ++i)
-		list_init_head(&areas[i].free_list);
+		list_init(&areas[i].free_list);
 }
