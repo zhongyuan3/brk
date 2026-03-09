@@ -8,7 +8,21 @@ OBJCOPY := $(CROSS_COMPILE)objcopy
 OBJDUMP := $(CROSS_COMPILE)objdump
 GDB := gdb-multiarch
 
-CFLAGS := -O0 -ggdb -gdwarf-2 -Wall -Wextra -Werror
+ifndef build
+build := debug
+endif
+
+ifeq ($(build), debug)
+OPT := -O0
+else
+ifeq ($(build), release)
+OPT := -O2
+else
+$(error unknown build type $(build))
+endif
+endif
+
+CFLAGS := $(OPT) -ggdb -gdwarf-2 -Wall -Wextra -Werror
 CFLAGS += -Wno-unused-parameter -Wno-unknown-attributes -Wno-main
 CFLAGS += -march=rv64gc
 CFLAGS += -mcmodel=medany
