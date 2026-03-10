@@ -3,8 +3,8 @@
 #include <aosd/macros.h>
 #include <aosd/panic.h>
 #include <aosd/printk.h>
-#include <aosd/sched.h>
-#include <aosd/sched_types.h>
+#include <aosd/process.h>
+#include <aosd/process_types.h>
 #include <aosd/syscall.h>
 #include <uapi/aosd/syscall.h>
 
@@ -52,7 +52,6 @@ static uint64_t (*systable[])(void) = {
 	[SYS_mremap] = sys_mremap,
 	[SYS_msync] = sys_msync,
 	[SYS_sched_yield] = sys_sched_yield,
-	[SYS_shutdown] = sys_shutdown,
 	[SYS_kill] = sys_kill,
 	[SYS_fchdir] = sys_fchdir,
 	[SYS_rename] = sys_rename,
@@ -69,31 +68,31 @@ static uint64_t (*systable[])(void) = {
 
 void syscall(void)
 {
-	struct task *t = current_task();
-	uint64_t n = t->tf.a7;
-	if (n < countof(systable) && systable[n])
-		t->tf.a0 = systable[n]();
+	struct process *proc = proc_get_current();
+	uint64_t num = proc->tf.a7;
+	if (num < countof(systable) && systable[num])
+		proc->tf.a0 = systable[num]();
 	else
-		t->tf.a0 = -ENOSYS;
+		proc->tf.a0 = -ENOSYS;
 }
 
 uint64_t syscall_arg_raw(int argno)
 {
-	struct task *t = current_task();
+	struct process *proc = proc_get_current();
 
 	switch (argno) {
 	case 0:
-		return t->tf.a0;
+		return proc->tf.a0;
 	case 1:
-		return t->tf.a1;
+		return proc->tf.a1;
 	case 2:
-		return t->tf.a2;
+		return proc->tf.a2;
 	case 3:
-		return t->tf.a3;
+		return proc->tf.a3;
 	case 4:
-		return t->tf.a4;
+		return proc->tf.a4;
 	case 5:
-		return t->tf.a5;
+		return proc->tf.a5;
 	default:
 		panic("%s(): illegal argument number\n", __func__);
 	}
@@ -111,13 +110,13 @@ int syscall_arg_int(int argno)
 
 int syscall_arg_fd(int argno, int *pfd, struct file **pfp)
 {
-	int fd = syscall_arg_raw(argno);
-	struct task *t = current_task();
-	if (fd < 0 || fd > OPEN_MAX || !t->ofiles[fd])
+	int fd = syscall_arg_int(argno);
+	struct process *proc = proc_get_current();
+	if (!(0 <= fd && fd < OPEN_MAX) || !proc->ofiles[fd])
 		return -EBADF;
 	if (pfd)
 		*pfd = fd;
 	if (pfp)
-		*pfp = t->ofiles[fd];
+		*pfp = proc->ofiles[fd];
 	return 0;
 }

@@ -60,7 +60,6 @@ uint64_t sys_mremap(void);
 uint64_t sys_gettimeofday(void);
 uint64_t sys_settimeofday(void);
 uint64_t sys_sched_yield(void);
-uint64_t sys_shutdown(void);
 uint64_t sys_kill(void);
 uint64_t sys_fchdir(void);
 uint64_t sys_renameat(void);

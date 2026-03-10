@@ -7,7 +7,7 @@
 #include <aosd/lock.h>
 #include <aosd/mount.h>
 #include <aosd/printk.h>
-#include <aosd/sched.h>
+#include <aosd/process.h>
 #include <aosd/slab.h>
 #include <aosd/string.h>
 #include <aosd/types.h>

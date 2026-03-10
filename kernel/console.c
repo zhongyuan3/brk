@@ -1,6 +1,6 @@
 #include <aosd/console.h>
 #include <aosd/lock.h>
-#include <aosd/sched.h>
+#include <aosd/process.h>
 #include <aosd/uart.h>
 
 #define BACKSPACE 0x100
@@ -46,11 +46,11 @@ int console_read(char *buf, size_t n, size_t *read)
 	spinlock_acquire(&cons_lock);
 	while (n > 0) {
 		while (cons_r == cons_w) {
-			if (task_is_killed(current_task())) {
+			if (proc_is_killed(proc_get_current())) {
 				spinlock_release(&cons_lock);
 				return -1;
 			}
-			sched_sleep(&cons_r, &cons_lock);
+			proc_sleep(&cons_r, &cons_lock);
 		}
 
 		c = cons_buf[cons_r++ % CONSOLE_BUF_SIZE];
@@ -96,7 +96,7 @@ void console_intr(int c)
 		}
 		break;
 	case CTRL('P'):
-		task_dump();
+		proc_dump();
 		break;
 	default:
 		if (c != 0 && cons_e - cons_r < CONSOLE_BUF_SIZE) {
@@ -109,7 +109,7 @@ void console_intr(int c)
 			if (c == '\n' || c == CTRL('D') ||
 			    cons_e - cons_r == CONSOLE_BUF_SIZE) {
 				cons_w = cons_e;
-				sched_wake_up(&cons_r);
+				proc_wake_up(&cons_r);
 			}
 		}
 		break;

@@ -1,8 +1,8 @@
 #include <aosd/cpu.h>
 #include <aosd/lock.h>
+#include <aosd/process.h>
 #include <aosd/riscv.h>
 #include <aosd/sbi.h>
-#include <aosd/sched.h>
 #include <aosd/timer.h>
 
 static uint64_t timer_interval;
@@ -70,7 +70,7 @@ uint64_t do_nanosleep(const struct timeval *dur, struct timeval *rem)
 	walltime_get(&start);
 	spinlock_acquire(&jiffies_lock);
 	for (;;) {
-		if (task_is_killed(current_task())) {
+		if (proc_is_killed(proc_get_current())) {
 			spinlock_release(&jiffies_lock);
 			return -1;
 		}
@@ -78,7 +78,7 @@ uint64_t do_nanosleep(const struct timeval *dur, struct timeval *rem)
 		if ((curr.tv_sec - start.tv_sec >= dur->tv_sec) &&
 		    (curr.tv_usec - start.tv_usec >= dur->tv_usec))
 			break;
-		sched_sleep(&jiffies, &jiffies_lock);
+		proc_sleep(&jiffies, &jiffies_lock);
 	}
 	spinlock_release(&jiffies_lock);
 

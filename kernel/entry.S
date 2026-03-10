@@ -52,6 +52,11 @@ kernel_trap_vector:
 	.global user_trap_vector
 	.align 4
 user_trap_vector:
+	/*
+	 * The struct trapframe pointer of the current process is stored in the
+	 * sscratch register. We temporarily swap the values of sscratch and a0
+	 * to save the registers.
+	 */
 	csrrw a0, sscratch, a0
 
 	sd ra, 8(a0)
@@ -85,11 +90,14 @@ user_trap_vector:
 	sd t5, 240(a0)
 	sd t6, 248(a0)
 
+	/* Now save the a0 register */
 	csrr t0, sscratch
 	sd t0, 80(a0)
 
+	/* Write the struct trapframe pointer back to sscratch */
 	csrw sscratch, a0
 
+	/* Set kernel stack */
 	ld sp, 0(a0)
 
 	call user_trap_handler

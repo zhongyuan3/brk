@@ -5,7 +5,7 @@
 #include <aosd/mm_types.h>
 #include <aosd/pgalloc.h>
 #include <aosd/pgtable.h>
-#include <aosd/sched_types.h>
+#include <aosd/process_types.h>
 #include <aosd/slab.h>
 #include <aosd/string.h>
 #include <aosd/types.h>

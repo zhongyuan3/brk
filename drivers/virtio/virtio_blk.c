@@ -9,7 +9,7 @@
 #include <aosd/panic.h>
 #include <aosd/plic.h>
 #include <aosd/printk.h>
-#include <aosd/sched.h>
+#include <aosd/process.h>
 #include <aosd/slab.h>
 #include <aosd/types.h>
 #include <aosd/virtio.h>
@@ -269,7 +269,7 @@ static int virtio_blk_transfer(struct virtio_blk_transation *trans)
 	while (1) {
 		if (alloc_desc_chain(idx, 3) == 0)
 			break;
-		sched_sleep(&blk_vq.desc, &blk_lock);
+		proc_sleep(&blk_vq.desc, &blk_lock);
 	}
 
 	req = &blk_reqs[idx[0]];
@@ -315,11 +315,11 @@ static int virtio_blk_transfer(struct virtio_blk_transation *trans)
 	writel(0, blk_dev->mem_base + VIRTIO_QUEUE_NOTIFY_OFFSET);
 
 	while (!trans->completed)
-		sched_sleep(&trans->completed, &blk_lock);
+		proc_sleep(&trans->completed, &blk_lock);
 
 	blk_tracks[idx[0]].trans = NULL;
 	free_desc_chain(idx[0]);
-	sched_wake_up(&blk_vq.desc);
+	proc_wake_up(&blk_vq.desc);
 
 	spinlock_release(&blk_lock);
 
@@ -396,7 +396,7 @@ void virtio_blk_intr(void)
 
 		trans = blk_tracks[id].trans;
 		trans->completed = true;
-		sched_wake_up(&trans->completed);
+		proc_wake_up(&trans->completed);
 
 		blk_used_idx += 1;
 	}

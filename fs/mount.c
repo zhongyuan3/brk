@@ -10,8 +10,8 @@
 #include <aosd/panic.h>
 #include <aosd/path.h>
 #include <aosd/printk.h>
-#include <aosd/sched.h>
-#include <aosd/sched_types.h>
+#include <aosd/process.h>
+#include <aosd/process_types.h>
 #include <aosd/slab.h>
 #include <aosd/string.h>
 #include <aosd/types.h>
@@ -182,11 +182,11 @@ void fs_init(void)
 	err = do_openat(AT_FDCWD, "/dev/console", O_RDWR, 0, &f);
 	assert(!err);
 
-	struct task *t = current_task();
-	t->ofiles[0] = f;
-	t->ofiles[1] = file_dup(f);
-	t->ofiles[2] = file_dup(f);
+	struct process *proc = proc_get_current();
+	proc->ofiles[0] = f;
+	proc->ofiles[1] = file_dup(f);
+	proc->ofiles[2] = file_dup(f);
 
-	t->cwd = path_lookup("/");
-	assert(t->cwd != NULL);
+	proc->cwd = path_lookup("/");
+	assert(proc->cwd != NULL);
 }
