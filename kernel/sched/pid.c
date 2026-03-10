@@ -2,7 +2,7 @@
 
 pid_t pid_alloc(void)
 {
-	static spinlock_define(pid_lock);
+	static SPINLOCK_DEFINE(pid_lock);
 	static pid_t pid = 1;
 
 	pid_t ret;

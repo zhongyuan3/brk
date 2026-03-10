@@ -16,7 +16,7 @@
 #include <aosd/trap.h>
 #include <aosd/types.h>
 
-static spinlock_define(wait_lock);
+static SPINLOCK_DEFINE(wait_lock);
 
 void scheduler(void)
 {

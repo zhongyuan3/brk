@@ -13,7 +13,7 @@
 #include <aosd/types.h>
 
 static struct list_head dtable[NR_DTABLE_BUCKETS];
-static spinlock_define(dtable_lock);
+static SPINLOCK_DEFINE(dtable_lock);
 static struct kmem_cache dcache;
 
 int dentry_cache_init(void)

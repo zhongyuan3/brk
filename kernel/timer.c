@@ -7,7 +7,7 @@
 
 static uint64_t timer_interval;
 static uint64_t jiffies;
-static spinlock_define(jiffies_lock);
+static SPINLOCK_DEFINE(jiffies_lock);
 static uint64_t xorshift_state;
 static struct timeval walltime;
 

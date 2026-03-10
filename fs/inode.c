@@ -11,7 +11,7 @@
 #include <aosd/types.h>
 
 static struct list_head itable[NR_ITABLE_BUCKETS];
-static spinlock_define(itable_lock);
+static SPINLOCK_DEFINE(itable_lock);
 static struct kmem_cache icache;
 
 int inode_cache_init(void)

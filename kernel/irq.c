@@ -7,7 +7,7 @@
 
 static irq_handler_t *irq_handlers;
 static uint32_t irq_handlers_num;
-static spinlock_define(irq_handlers_lock);
+static SPINLOCK_DEFINE(irq_handlers_lock);
 
 void irq_init(void)
 {

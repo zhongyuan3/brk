@@ -4,9 +4,8 @@
 #include <aosd/macros.h>
 #include <aosd/types.h>
 
-#define list_head_initializer(name) { &name, &name }
-#define list_head_define(name) \
-	struct list_head name = list_head_initializer(name)
+#define LIST_INITIALIZER(name) { &name, &name }
+#define LIST_DEFINE(name) struct list_head name = LIST_INITIALIZER(name)
 
 static inline void __list_add(struct list_head *node, struct list_head *prev,
 			      struct list_head *next)

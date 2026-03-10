@@ -13,8 +13,8 @@
 #include <aosd/string.h>
 
 static struct kmem_cache fcache;
-static list_head_define(flist);
-static spinlock_define(flist_lock);
+static LIST_DEFINE(flist);
+static SPINLOCK_DEFINE(flist_lock);
 
 int file_cache_init(void)
 {

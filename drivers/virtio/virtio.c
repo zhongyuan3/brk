@@ -6,8 +6,8 @@
 #include <aosd/slab.h>
 #include <aosd/virtio.h>
 
-static list_head_define(vdevs);
-static spinlock_define(vdevs_lock);
+static LIST_DEFINE(vdevs);
+static SPINLOCK_DEFINE(vdevs_lock);
 
 struct virtio_device *virtio_dev_create(uint64_t phys_base, size_t size,
 					uint32_t irq)

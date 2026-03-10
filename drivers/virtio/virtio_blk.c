@@ -23,7 +23,7 @@ static struct virtio_blk_track *blk_tracks;
 static bool *blk_desc_used;
 static struct kmem_cache blk_trans_cache;
 static uint16_t blk_used_idx;
-static spinlock_define(blk_lock);
+static SPINLOCK_DEFINE(blk_lock);
 
 static int virtio_blk_init_alloc(uint32_t queue_size)
 {

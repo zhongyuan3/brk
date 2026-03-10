@@ -5,8 +5,8 @@
 #include <aosd/lock.h>
 #include <aosd/slab.h>
 
-static list_head_define(sblist);
-static spinlock_define(sblist_lock);
+static LIST_DEFINE(sblist);
+static SPINLOCK_DEFINE(sblist_lock);
 
 struct super_block *sblock_alloc(void)
 {

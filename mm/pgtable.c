@@ -9,7 +9,7 @@
 #include <aosd/pgtable.h>
 #include <aosd/string.h>
 
-spinlock_define(kernel_pgdir_lock);
+SPINLOCK_DEFINE(kernel_pgdir_lock);
 
 static uint64_t alloc_pgtable(void)
 {

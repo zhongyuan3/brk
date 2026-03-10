@@ -5,7 +5,7 @@
 #include <aosd/pgalloc.h>
 
 static struct free_area areas[PAGE_ORDER_MAX + 1];
-static spinlock_define(areas_lock);
+static SPINLOCK_DEFINE(areas_lock);
 
 struct page *page_alloc(unsigned int order)
 {

@@ -36,7 +36,7 @@
 
 static struct uart_device uart;
 static uint8_t volatile *mem_base;
-static spinlock_define(uart_lock);
+static SPINLOCK_DEFINE(uart_lock);
 
 static volatile uint8_t *uart_reg(unsigned int reg)
 {

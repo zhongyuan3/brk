@@ -13,7 +13,7 @@
 
 static struct kmem_cache vma_cache;
 static struct list_head vma;
-static spinlock_define(vma_lock);
+static SPINLOCK_DEFINE(vma_lock);
 
 static void vunmap_range(pgde_t *pgd, uint64_t addr, uint64_t end_addr,
 			 struct vmap_ops *ops)
