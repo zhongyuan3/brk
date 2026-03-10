@@ -15,8 +15,8 @@
 #include <uapi/aosd/fcntl.h>
 #include <uapi/aosd/stat.h>
 
-static list_head_define(tmpfs_roots);
-static spinlock_define(tmpfs_lock);
+static LIST_DEFINE(tmpfs_roots);
+static SPINLOCK_DEFINE(tmpfs_lock);
 
 static struct tmpfs_inode *tmpfs_inode_alloc(dev_t dev, uint32_t flags,
 					     mode_t mode)

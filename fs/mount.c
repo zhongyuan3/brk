@@ -18,8 +18,8 @@
 #include <uapi/aosd/fcntl.h>
 #include <uapi/aosd/stat.h>
 
-static list_head_define(mnt_list);
-static spinlock_define(mnt_list_lock);
+static LIST_DEFINE(mnt_list);
+static SPINLOCK_DEFINE(mnt_list_lock);
 
 struct vfsmount *mount_alloc(const char *mount_point)
 {

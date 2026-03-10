@@ -6,7 +6,7 @@
 #define BACKSPACE 0x100
 #define CTRL(x) ((x) - '@')
 
-static spinlock_define(cons_lock);
+static SPINLOCK_DEFINE(cons_lock);
 static char cons_buf[CONSOLE_BUF_SIZE];
 static size_t cons_r;
 static size_t cons_w;

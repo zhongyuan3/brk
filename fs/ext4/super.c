@@ -6,7 +6,7 @@
 #include <ext4.h>
 #include <ext4_blockdev.h>
 
-static sleeplock_define(ext4fs_lock);
+static SLEEPLOCK_DEFINE(ext4fs_lock);
 
 static void ext4fs_fs_lock(void)
 {

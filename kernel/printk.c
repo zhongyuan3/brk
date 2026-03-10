@@ -5,7 +5,7 @@
 #include <aosd/printf.h>
 #include <aosd/printk.h>
 
-static spinlock_define(printk_lock);
+static SPINLOCK_DEFINE(printk_lock);
 
 static int display_write(struct display *dis, char const *buf, size_t len,
 			 size_t *wlen)

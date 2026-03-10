@@ -165,7 +165,7 @@ failed:
 
 static int mm_copy_seg(struct mem_mgmt *dst, struct mem_mgmt *src)
 {
-	list_head_define(seg);
+	LIST_DEFINE(seg);
 	struct vmem_area *curr, *next;
 	size_t npgs;
 	struct page **pgs;

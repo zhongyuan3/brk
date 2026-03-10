@@ -17,9 +17,9 @@
 #include <aosd/virtio_blk.h>
 
 struct list_head cdev_list[NR_DEVICES];
-static spinlock_define(cdev_list_lock);
+static SPINLOCK_DEFINE(cdev_list_lock);
 struct list_head bdev_list[NR_DEVICES];
-static spinlock_define(bdev_list_lock);
+static SPINLOCK_DEFINE(bdev_list_lock);
 
 struct chrdev *chrdev_alloc(void)
 {
