@@ -14,10 +14,10 @@
 #include <aosd/pgtable.h>
 #include <aosd/plic.h>
 #include <aosd/printk.h>
+#include <aosd/process.h>
+#include <aosd/process_types.h>
 #include <aosd/riscv.h>
 #include <aosd/sbi.h>
-#include <aosd/sched.h>
-#include <aosd/sched_types.h>
 #include <aosd/slab.h>
 #include <aosd/string.h>
 #include <aosd/timer.h>
@@ -92,11 +92,11 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 	file_cache_init();
 	inode_cache_init();
 
-	sched_init();
+	proc_init();
 
 	// start_other_harts(hart_id);
 
-	scheduler();
+	proc_scheduler();
 }
 
 void start_hart(uint64_t hart_id)
@@ -113,5 +113,5 @@ void start_hart(uint64_t hart_id)
 	virtio_blk_init_hart(hart_id);
 	trap_init_hart(hart_id);
 
-	scheduler();
+	proc_scheduler();
 }

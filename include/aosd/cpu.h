@@ -1,12 +1,12 @@
 #ifndef AOSD_CPU_H
 #define AOSD_CPU_H
 
+#include <aosd/process_types.h>
 #include <aosd/riscv.h>
-#include <aosd/sched_types.h>
 #include <aosd/types.h>
 
 struct cpu {
-	struct task *current;
+	struct process *current;
 	uint32_t hart_id;
 	struct context ctx;
 	short noff;

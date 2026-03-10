@@ -1,5 +1,5 @@
-#ifndef AOSD_SCHED_TYPES_H
-#define AOSD_SCHED_TYPES_H
+#ifndef AOSD_PROCESS_TYPES_H
+#define AOSD_PROCESS_TYPES_H
 
 #include <aosd/asm.h>
 #include <aosd/limits.h>
@@ -12,10 +12,12 @@
 #define KSTACK_SIZE (PAGE_SIZE * (1 << KSTACK_PAGE_ORDER))
 #define USTACK_PAGE_ORDER 4
 #define USTACK_SIZE (PAGE_SIZE * (1 << USTACK_PAGE_ORDER))
+#define PROCESS_NAME_MAX 64
 
 struct cpu;
 struct file;
 struct dentry;
+struct process;
 
 struct trapframe {
 	/* 0   */ uint64_t kernel_sp;
@@ -70,34 +72,40 @@ struct context {
 	uint64_t s11;
 };
 
-enum task_state {
-	TASK_UNUSED,
-	TASK_USED,
-	TASK_RUNNABLE,
-	TASK_RUNNING,
-	TASK_SLEEPING,
-	TASK_ZOMBIE,
+enum process_state {
+	PROCESS_UNUSED,
+	PROCESS_USED,
+	PROCESS_RUNNABLE,
+	PROCESS_RUNNING,
+	PROCESS_SLEEPING,
+	PROCESS_ZOMBIE,
 };
 
-struct task {
-	struct trapframe tf;
-	uint64_t stack;
-	struct context ctx;
-	pid_t pid;
-	enum task_state state;
-	void *chan;
-	struct task *parent;
-	int exit_status;
-	struct cpu *cpu;
-	int time_slice;
+struct process {
+	/* Protected by wait_lock */
+	struct process *parent; /* Parent process */
+
 	spinlock_t lock;
+	/* The following fields are protected by a lock: */
+	void *chan; /* If non-NULL, sleeping on chan */
+	pid_t pid;
+	enum process_state state;
+	int exit_status;
 	bool killed;
-	struct file *ofiles[OPEN_MAX + 1];
+
+	/* The following fields are private fields: */
+	struct mem_mgmt *mm; /* Memory management structure */
+	struct cpu *cpu;
+	struct file *ofiles[OPEN_MAX];
 	struct dentry *cwd;
-	struct mem_mgmt *mm;
 	struct tms proc_tms;
+	struct trapframe tf;
+	struct context ctx;
+	uint64_t kstack;
 	uint64_t last_ktime;
 	uint64_t last_utime;
+	int time_slice;
+	char name[PROCESS_NAME_MAX];
 };
 
 #endif

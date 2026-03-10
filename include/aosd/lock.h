@@ -4,7 +4,7 @@
 #include <aosd/types.h>
 
 struct cpu;
-struct task;
+struct process;
 
 typedef struct spinlock {
 	volatile unsigned int locked;
@@ -27,7 +27,7 @@ typedef struct sleeplock {
 	spinlock_t lock;
 
 	/* For debuging: */
-	struct task *task; /* Task holding the lock. */
+	struct process *proc; /* Process holding the lock. */
 	const char *name; /* Name of the lock. */
 } sleeplock_t;
 

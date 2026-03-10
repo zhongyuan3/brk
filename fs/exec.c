@@ -11,9 +11,9 @@
 #include <aosd/pgalloc.h>
 #include <aosd/pgtable.h>
 #include <aosd/printk.h>
+#include <aosd/process.h>
+#include <aosd/process_types.h>
 #include <aosd/riscv.h>
-#include <aosd/sched.h>
-#include <aosd/sched_types.h>
 #include <aosd/slab.h>
 #include <aosd/string.h>
 #include <aosd/timer.h>
@@ -29,8 +29,18 @@ struct execve_args {
 	int envc;
 };
 
+static uint64_t random_ustack(void)
+{
+	uint64_t ustack_top = TASK_SIZE_MAX;
+	timer_srand();
+	ustack_top -= (timer_rand() % 32 + 1) * PAGE_SIZE;
+	ustack_top -= USTACK_SIZE;
+	return ustack_top;
+}
+
 static void push_args(struct execve_args *args, uint64_t *psp,
-		      uint64_t stack_virt, struct mem_mgmt *mm, struct task *t)
+		      uint64_t stack_virt, struct mem_mgmt *mm,
+		      struct process *proc)
 {
 	uint64_t n;
 	uint64_t sp = *psp;
@@ -51,7 +61,7 @@ static void push_args(struct execve_args *args, uint64_t *psp,
 	ksp = align_down(ksp, sizeof(char *));
 	sp -= n;
 	sp = align_down(sp, sizeof(char *));
-	t->tf.a2 = sp;
+	proc->tf.a2 = sp;
 	char **envp_kstart = (char **)ksp;
 
 	n = (args->argc + 1) * sizeof(uint64_t);
@@ -59,7 +69,7 @@ static void push_args(struct execve_args *args, uint64_t *psp,
 	ksp = align_down(ksp, sizeof(char *));
 	sp -= n;
 	sp = align_down(sp, sizeof(char *));
-	t->tf.a1 = sp;
+	proc->tf.a1 = sp;
 	char **argv_kstart = (char **)ksp;
 
 	for (int i = 0; i < args->envc; ++i) {
@@ -230,7 +240,7 @@ static int map_stack(struct mem_mgmt *mm)
 	}
 
 	uint64_t pa = page_to_phys(pg);
-	uint64_t base = make_user_stack();
+	uint64_t base = random_ustack();
 	int err = uvmap(mm->pgd, base, USTACK_SIZE, pa, PTE_R | PTE_W);
 	if (err) {
 		kfree(pgs);
@@ -252,7 +262,7 @@ static int __do_execve(const char *path, struct execve_args *args)
 {
 	struct elf64_hdr elf_hdr = { 0 };
 	struct elf64_phdr phdr = { 0 };
-	struct task *t = current_task();
+	struct process *proc = proc_get_current();
 	struct file *f = NULL;
 	struct mem_mgmt *new_mm = NULL;
 	int err = 0;
@@ -321,15 +331,17 @@ static int __do_execve(const char *path, struct execve_args *args)
 	struct page *stack_pg = new_mm->stack->pages[0];
 	uint64_t stack_phys = page_to_phys(stack_pg);
 	uint64_t stack_virt = phys_to_virt(stack_phys);
-	push_args(args, &sp, stack_virt, new_mm, t);
+	push_args(args, &sp, stack_virt, new_mm, proc);
+
+	strlcpy(proc->name, args->argv[0], sizeof(proc->name));
 
 	switch_pgtable(new_mm->pgd);
 
-	struct mem_mgmt *old_mm = t->mm;
-	t->mm = new_mm;
+	struct mem_mgmt *old_mm = proc->mm;
+	proc->mm = new_mm;
 	mm_free(old_mm);
-	t->tf.epc = elf_hdr.e_entry;
-	t->tf.sp = sp;
+	proc->tf.epc = elf_hdr.e_entry;
+	proc->tf.sp = sp;
 
 	return args->argc;
 
