@@ -103,7 +103,6 @@ QEMU_COMMON += -bios default
 QEMU_COMMON += -drive file=$(ROOTFS_IMG),if=none,format=raw,id=x0
 QEMU_COMMON += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 QEMU_COMMON += -global virtio-mmio.force-legacy=false
-QEMU_COMMON += -d guest_errors
 
 OBJS := $(patsubst %.c,%.o,$(patsubst %.S,%.o,$(SRCS)))
 DEPS := $(OBJS:.o=.d)

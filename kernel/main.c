@@ -94,7 +94,7 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 
 	proc_init();
 
-	// start_other_harts(hart_id);
+	start_other_harts(hart_id);
 
 	proc_scheduler();
 }
