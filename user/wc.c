@@ -2,31 +2,36 @@
 
 char buf[512];
 
-void wc(int fd, char *name)
+int wc(int fd, char *name)
 {
-	ssize_t i, n;
-	int l, w, c, inword;
-
-	l = w = c = 0;
-	inword = 0;
-	while ((n = read(fd, buf, sizeof(buf))) > 0) {
-		for (i = 0; i < n; i++) {
-			c++;
+	size_t line_cnt = 0;
+	size_t word_cnt = 0;
+	size_t char_cnt = 0;
+	bool word = false;
+	while (1) {
+		ssize_t rcnt = read(fd, buf, sizeof(buf));
+		if (rcnt < 0) {
+			perror("wc: read error");
+			return 1;
+		}
+		if (rcnt < 1)
+			break;
+		for (ssize_t i = 0; i < rcnt; i++) {
+			char_cnt++;
 			if (buf[i] == '\n')
-				l++;
+				line_cnt++;
 			if (strchr(" \r\t\n\v", buf[i]))
-				inword = 0;
-			else if (!inword) {
-				w++;
-				inword = 1;
+				word = false;
+			else if (!word) {
+				word_cnt++;
+				word = true;
 			}
 		}
 	}
-	if (n < 0) {
-		printf("wc: read error\n");
-		exit(1);
-	}
-	printf("%d %d %d %s\n", l, w, c, name);
+
+	dprintf(STDOUT_FILENO, "%lu %lu %lu %s\n", line_cnt, word_cnt, char_cnt,
+		name);
+	return 0;
 }
 
 int main(int argc, char *argv[])
@@ -39,12 +44,15 @@ int main(int argc, char *argv[])
 	}
 
 	for (i = 1; i < argc; i++) {
-		if ((fd = open(argv[i], O_RDONLY)) < 0) {
-			printf("wc: cannot open %s\n", argv[i]);
+		fd = open(argv[i], O_RDONLY);
+		if (fd < 0) {
+			perror("wc: open failed");
 			return 1;
 		}
-		wc(fd, argv[i]);
+		int ret = wc(fd, argv[i]);
 		close(fd);
+		if (ret != 0)
+			return 1;
 	}
 
 	return 0;

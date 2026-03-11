@@ -215,25 +215,6 @@ void proc_fork_return(void)
 {
 	struct process *proc = proc_get_current();
 	spinlock_release(&proc->lock);
-
-	if (proc == init) {
-		intr_on();
-		while (1)
-			proc_wait(-1, 0, 0, 0);
-	}
-
-	static volatile bool first = true;
-	if (first) {
-		first = false;
-		fs_init();
-		char *argv[] = { "/bin/sh", 0 };
-		char *envp[] = { 0 };
-		int ret = do_execve(argv[0], argv, envp);
-		if (ret < 0)
-			panic("execve %s failed: %s\n", argv[0], strerror(ret));
-		proc->tf.a0 = ret;
-	}
-
 	prepare_to_return();
 	user_trap_return(&proc->tf);
 }
@@ -337,24 +318,18 @@ found:
 	if (!proc->mm)
 		goto create_mm_failed;
 
-	proc->chan = NULL;
-	proc->parent = NULL;
-	proc->exit_status = 0;
-	proc->cpu = NULL;
 	proc->time_slice = PROCESS_TIME_SLICE;
-	proc->killed = false;
 	proc->ctx.ra = (uint64_t)proc_fork_return;
 	proc->ctx.sp = proc->kstack + KSTACK_SIZE;
-	memset(&proc->proc_tms, 0, sizeof(proc->proc_tms));
-	proc->last_ktime = 0;
-	proc->last_utime = 0;
 
 	return proc;
 
 create_mm_failed:
 	proc_free_kstack(proc->kstack);
+	proc->kstack = 0;
 kstack_alloc_failed:
 	pid_free(proc->pid);
+	proc->pid = 0;
 pid_alloc_failed:
 	proc->state = PROCESS_UNUSED;
 	spinlock_release(&proc->lock);
@@ -364,28 +339,58 @@ pid_alloc_failed:
 void proc_free(struct process *proc)
 {
 	mm_free(proc->mm);
+	proc->mm = NULL;
 	proc_free_kstack(proc->kstack);
+	proc->kstack = 0;
 	pid_free(proc->pid);
+	proc->pid = 0;
+
+	proc->parent = NULL;
+	proc->chan = NULL;
+	proc->exit_status = 0;
+	proc->killed = false;
+	proc->cpu = NULL;
+	memset(proc->ofiles, 0, sizeof(proc->ofiles));
+	proc->cwd = NULL;
 	memset(&proc->proc_tms, 0, sizeof(proc->proc_tms));
+	memset(&proc->tf, 0, sizeof(proc->tf));
+	memset(&proc->ctx, 0, sizeof(proc->ctx));
 	proc->last_ktime = 0;
 	proc->last_utime = 0;
-	proc->state = PROCESS_UNUSED;
+	proc->time_slice = 0;
 	memset(proc->name, 0, sizeof(proc->name));
+
+	proc->state = PROCESS_UNUSED;
 	spinlock_release(&proc->lock);
+}
+
+static void proc_init_return(void)
+{
+	struct process *proc = proc_get_current();
+	spinlock_release(&proc->lock);
+	fs_init();
+	char *argv[] = { "/bin/init", 0 };
+	char *envp[] = { 0 };
+	int ret = do_execve(argv[0], argv, envp);
+	if (ret < 0)
+		panic("execve %s failed: %s\n", argv[0], strerror(ret));
+	proc->tf.a0 = ret;
+	prepare_to_return();
+	user_trap_return(&proc->tf);
 }
 
 void proc_init(void)
 {
-	init = proc_alloc();
-	init->state = PROCESS_RUNNABLE;
-	strlcpy(init->name, "init", sizeof(init->name));
-	spinlock_release(&init->lock);
+	struct process *proc;
 
-	struct process *uinit = proc_alloc();
-	uinit->parent = init;
-	uinit->state = PROCESS_RUNNABLE;
-	strlcpy(uinit->name, "uinit", sizeof(uinit->name));
-	spinlock_release(&uinit->lock);
+	for (proc = processes; proc < processes + NR_PROCESSES; ++proc)
+		spinlock_init(&proc->lock, "process");
+
+	init = proc_alloc();
+	strlcpy(init->name, "init", sizeof(init->name));
+	init->ctx.ra = (uint64_t)proc_init_return;
+	init->state = PROCESS_RUNNABLE;
+	spinlock_release(&init->lock);
 }
 
 void proc_dump(void)

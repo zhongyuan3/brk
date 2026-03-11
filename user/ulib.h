@@ -77,9 +77,6 @@ void *calloc(size_t nmemb, size_t size);
 void *realloc(void *ptr, size_t size);
 void free(void *ptr);
 
-#define printf(fmt, ...) dprintf(STDOUT_FILENO, fmt, ##__VA_ARGS__)
-#define vprintf(fmt, ap) vdprintf(STDOUT_FILENO, fmt, ap)
-
 void perror(const char *s);
 
 extern int errno;

@@ -9,8 +9,7 @@ int main(int argc, char *argv[])
 
 	int err = link(argv[1], argv[2]);
 	if (err) {
-		dprintf(STDERR_FILENO, "link: %s failed to create: %s\n",
-			argv[2], strerror(err));
+		perror("link");
 		return 1;
 	}
 
