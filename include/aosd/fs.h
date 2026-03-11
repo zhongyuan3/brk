@@ -72,6 +72,7 @@ struct inode_operations {
 
 #define FMODE_READ 1
 #define FMODE_WRITE 2
+#define FMODE_DIR 4
 
 struct file {
 	struct list_head f_list;

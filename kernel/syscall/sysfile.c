@@ -27,6 +27,8 @@ uint64_t sys_read(void)
 	err = syscall_arg_fd(0, &fd, &fp);
 	if (err)
 		return err;
+	if (fp->f_mode & FMODE_DIR)
+		return -EISDIR;
 	buf = syscall_arg_ptr(1);
 	n = syscall_arg_raw(2);
 	err = file_read(fp, buf, n, &r);
@@ -47,6 +49,8 @@ uint64_t sys_write(void)
 	err = syscall_arg_fd(0, &fd, &fp);
 	if (err)
 		return err;
+	if (fp->f_mode & FMODE_DIR)
+		return -EISDIR;
 	buf = syscall_arg_ptr(1);
 	n = syscall_arg_raw(2);
 	err = file_write(fp, buf, n, &w);
@@ -634,6 +638,9 @@ int do_openat(int dirfd, const char *path, int flags, mode_t mode,
 
 	if (flags & O_RDWR)
 		fp->f_mode = FMODE_READ | FMODE_WRITE;
+
+	if (inode_mode(file_dp->d_inode) & S_IFDIR)
+		fp->f_mode |= FMODE_DIR;
 
 	err = file_dp->d_inode->i_fops->open(fp, file_dp, flags);
 	if (err) {
