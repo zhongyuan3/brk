@@ -14,6 +14,5 @@ int dtb_parse_plic(struct plic_device *plic);
 int dtb_parse_uart(struct uart_device *uart);
 
 extern uint64_t dtb_phys;
-extern void *dtb_virt;
 
 #endif

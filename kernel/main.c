@@ -45,7 +45,6 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 {
 	kernel_load_offset = load_offset;
 	dtb_phys = dtb;
-	dtb_virt = (void *)dtb;
 
 	cpu_init_hart(hart_id);
 
@@ -68,8 +67,6 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 	vmalloc_init();
 
 	mm_cache_init();
-
-	dtb_virt = (void *)phys_to_virt(dtb);
 
 	dtb_init_scan_cpu();
 

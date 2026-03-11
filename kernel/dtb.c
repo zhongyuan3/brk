@@ -10,9 +10,9 @@
 #include <libfdt.h>
 
 uint64_t dtb_phys;
-void *dtb_virt;
 
-static int dtb_get_cells(int node, int *addr_cells, int *size_cells)
+static int dtb_get_cells(void *dtb_virt, int node, int *addr_cells,
+			 int *size_cells)
 {
 	int ret;
 
@@ -29,15 +29,17 @@ static int dtb_get_cells(int node, int *addr_cells, int *size_cells)
 	return 0;
 }
 
-static int dtb_get_parent_cells(int node, int *addr_cells, int *size_cells)
+static int dtb_get_parent_cells(void *dtb_virt, int node, int *addr_cells,
+				int *size_cells)
 {
 	int ret = fdt_parent_offset(dtb_virt, node);
 	if (ret < 0)
 		return ret;
-	return dtb_get_cells(ret, addr_cells, size_cells);
+	return dtb_get_cells(dtb_virt, ret, addr_cells, size_cells);
 }
 
-static int dtb_for_each_reg(int node, int addr_cells, int size_cells,
+static int dtb_for_each_reg(void *dtb_virt, int node, int addr_cells,
+			    int size_cells,
 			    int (*callback)(uint64_t addr, size_t size))
 {
 	const uint32_t *reg;
@@ -79,16 +81,18 @@ int dtb_early_init_scan_mem(void)
 	int err;
 	int node;
 	int addr_cells, size_cells;
+	void *dtb_virt = (void *)dtb_phys;
 
 	node = fdt_path_offset(dtb_virt, "/memory");
 	if (node < 0)
 		return -EINVAL;
 
-	err = dtb_get_parent_cells(node, &addr_cells, &size_cells);
+	err = dtb_get_parent_cells(dtb_virt, node, &addr_cells, &size_cells);
 	if (err)
 		return err;
 
-	err = dtb_for_each_reg(node, addr_cells, size_cells, memblock_add);
+	err = dtb_for_each_reg(dtb_virt, node, addr_cells, size_cells,
+			       memblock_add);
 	if (err)
 		return err;
 
@@ -100,18 +104,19 @@ int dtb_early_init_scan_reserved_mem(void)
 	int err;
 	int node, subnode;
 	int addr_cells, size_cells;
+	void *dtb_virt = (void *)dtb_phys;
 
 	node = fdt_path_offset(dtb_virt, "/reserved-memory");
 	if (node < 0)
 		return 0;
 
-	err = dtb_get_cells(node, &addr_cells, &size_cells);
+	err = dtb_get_cells(dtb_virt, node, &addr_cells, &size_cells);
 	if (err)
 		return err;
 
 	fdt_for_each_subnode(subnode, dtb_virt, node) {
-		err = dtb_for_each_reg(subnode, addr_cells, size_cells,
-				       memblock_reserve);
+		err = dtb_for_each_reg(dtb_virt, subnode, addr_cells,
+				       size_cells, memblock_reserve);
 		if (err)
 			return err;
 	}
@@ -125,6 +130,7 @@ int dtb_init_scan_cpu(void)
 	uint32_t timebase_freq = 0;
 	const uint32_t *freq;
 	int len;
+	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
 	node = fdt_path_offset(dtb_virt, "/cpus");
 	if (node < 0)
@@ -145,8 +151,9 @@ static int dtb_get_one_reg(int node, uint64_t *addr, uint64_t *size)
 	int len;
 	uint32_t const *reg;
 	int addr_cells, size_cells;
+	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
-	if (dtb_get_parent_cells(node, &addr_cells, &size_cells))
+	if (dtb_get_parent_cells(dtb_virt, node, &addr_cells, &size_cells))
 		return -EINVAL;
 
 	int cell_bytes = (addr_cells + size_cells) * sizeof(uint32_t);
@@ -170,6 +177,7 @@ int dtb_parse_plic(struct plic_device *plic)
 	int len;
 	uint64_t addr = 0;
 	uint64_t size = 0;
+	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
 	node = fdt_path_offset(dtb_virt, "/soc/plic");
 	if (node < 0)
@@ -194,6 +202,7 @@ static int dtb_get_irq(int node, uint32_t *irq)
 {
 	int len;
 	const uint32_t *prop;
+	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
 	prop = fdt_getprop(dtb_virt, node, "interrupts", &len);
 	if (!prop || len != sizeof(uint32_t))
@@ -211,6 +220,7 @@ int dtb_parse_uart(struct uart_device *uart)
 	uint64_t addr = 0;
 	uint64_t size = 0;
 	uint32_t irq = 0;
+	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
 	node = fdt_path_offset(dtb_virt, "/soc/serial");
 	if (node < 0)
@@ -243,6 +253,7 @@ int dtb_init_scan_virtio_dev(void)
 	uint64_t size = 0;
 	uint32_t irq = 0;
 	struct virtio_device *vdev;
+	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
 	for (node = fdt_node_offset_by_compatible(dtb_virt, -1, "virtio,mmio");
 	     node >= 0; node = fdt_node_offset_by_compatible(dtb_virt, node,
