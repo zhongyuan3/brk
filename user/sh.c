@@ -84,14 +84,14 @@ int main(int argc, char *argv[])
 	struct token *toks = NULL;
 	struct cmd *cmd = NULL;
 
-	printf("Simple Shell v0.1.0\n");
-	printf("Type 'exit' to quit\n");
+	dprintf(STDOUT_FILENO, "Simple Shell v0.1.0\n");
+	dprintf(STDOUT_FILENO, "Type 'exit' to quit\n");
 
 	if (!getcwd(cwd, sizeof(cwd)))
 		sh_panic("getcwd failed");
 
 	while (true) {
-		printf("$ ");
+		dprintf(STDOUT_FILENO, "$ ");
 		if (sh_get_cmd(buf, INPUT_BUF_SIZE) < 0)
 			break;
 		if (buf[0] == '\n' || buf[0] == '\r')
@@ -105,10 +105,10 @@ int main(int argc, char *argv[])
 			if (!getcwd(cwd, sizeof(cwd)))
 				sh_panic("getcwd failed");
 		} else if (!strncmp(buf, "exit", 4)) {
-			printf("exit\n");
+			dprintf(STDOUT_FILENO, "exit\n");
 			exit(0);
 		} else if (!strncmp(buf, "pwd", 3)) {
-			printf("%s\n", cwd);
+			dprintf(STDOUT_FILENO, "%s\n", cwd);
 		} else {
 			toks = sh_parse_line(buf);
 			cmd = sh_parse_cmd(toks);
@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	printf("\nexit\n");
+	dprintf(STDOUT_FILENO, "\nexit\n");
 	return 0;
 }
 

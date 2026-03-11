@@ -4,11 +4,19 @@ static char buf[1024];
 
 int cat(int fd)
 {
-	ssize_t rcnt;
+	ssize_t rcnt, wcnt;
 
-	while ((rcnt = read(fd, buf, 1024)) > 0) {
-		if (write(STDOUT_FILENO, buf, rcnt) != rcnt) {
-			dprintf(STDERR_FILENO, "cat: write error\n");
+	while (1) {
+		rcnt = read(fd, buf, 1024);
+		if (rcnt < 0) {
+			perror("cat: read error");
+			return 1;
+		}
+		if (rcnt < 1)
+			break;
+		wcnt = write(STDOUT_FILENO, buf, rcnt);
+		if (wcnt < 0) {
+			perror("cat: write error");
 			return 1;
 		}
 	}
@@ -25,8 +33,7 @@ int main(int argc, char *argv[])
 
 	fd = open(argv[1], O_RDONLY);
 	if (fd < 0) {
-		dprintf(STDERR_FILENO, "cat: open %s failed: %s\n", argv[1],
-			strerror(fd));
+		perror("cat: open failed");
 		return 1;
 	}
 

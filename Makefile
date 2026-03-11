@@ -114,7 +114,7 @@ DTS := virt.dts
 
 .PHONY: all aosd clean gdb-server gdb-client dis dts rootfs run
 
-all: aosd
+all: aosd user
 
 aosd: $(AOSD_ELF)
 
@@ -206,6 +206,7 @@ USER_PROG_OBJS := \
 user/cat.o \
 user/echo.o \
 user/grep.o \
+user/init.o \
 user/link.o \
 user/ls.o \
 user/mkdir.o \

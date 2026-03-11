@@ -36,28 +36,33 @@ static void print_dirent_long(struct dirent64 *p)
 		type = "w";
 		break;
 	}
-	printf("%s %s%s\n", type, p->d_name, p->d_type == DT_DIR ? "/" : "");
+	dprintf(STDOUT_FILENO, "%s %s%s\n", type, p->d_name,
+		p->d_type == 4 ? "/" : "");
 }
 
 static int ls(int fd, const struct ls_option *opt)
 {
 	ssize_t rcnt;
 
-	while ((rcnt = getdents64(fd, buf, sizeof(buf))) > 0) {
+	while (1) {
+		rcnt = getdents64(fd, buf, sizeof(buf));
+		if (rcnt < 0) {
+			perror("ls: getdents64 failed");
+			return 1;
+		}
+		if (rcnt < 1)
+			break;
 		ssize_t i = 0;
 		struct dirent64 *p = buf;
 		while (i < rcnt) {
 			if (opt->long_format)
 				print_dirent_long(p);
 			else
-				printf("%s\n", p->d_name);
+				dprintf(STDOUT_FILENO, "%s\n", p->d_name);
 			i += p->d_reclen;
 			p = (struct dirent64 *)((uint64_t)p + p->d_reclen);
 		}
 	}
-
-	if (rcnt < 0)
-		return 1;
 
 	return 0;
 }
@@ -93,7 +98,7 @@ int main(int argc, char *argv[])
 
 	int fd = open(opt.path, O_RDONLY);
 	if (fd < 0) {
-		printf("ls: open %s failed: %s\n", opt.path, strerror(fd));
+		perror("ls: open failed");
 		return 1;
 	}
 

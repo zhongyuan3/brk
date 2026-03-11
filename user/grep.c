@@ -12,14 +12,23 @@ static int grep(int fd, const char *pattern)
 	int line_number = 1;
 	int found = 0;
 
-	while ((rcnt = read(fd, buf, sizeof(buf))) > 0) {
+	while (1) {
+		rcnt = read(fd, buf, sizeof(buf));
+		if (rcnt < 0) {
+			perror("grep: read error");
+			return 1;
+		}
+
+		if (rcnt < 1)
+			break;
+
 		for (ssize_t i = 0; i < rcnt; i++) {
 			if (buf[i] == '\n') {
 				line_buf[line_pos] = '\0';
 
 				if (strstr(line_buf, pattern)) {
-					printf("%d:%s\n", line_number,
-					       line_buf);
+					dprintf(STDOUT_FILENO, "%d:%s\n",
+						line_number, line_buf);
 					found = 1;
 				}
 
@@ -36,7 +45,8 @@ static int grep(int fd, const char *pattern)
 	if (line_pos > 0) {
 		line_buf[line_pos] = '\0';
 		if (strstr(line_buf, pattern)) {
-			printf("%d:%s\n", line_number, line_buf);
+			dprintf(STDOUT_FILENO, "%d:%s\n", line_number,
+				line_buf);
 			found = 1;
 		}
 	}
@@ -50,7 +60,7 @@ static int grep(int fd, const char *pattern)
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
-		printf("Usage: grep PATTERN [FILE]\n");
+		dprintf(STDOUT_FILENO, "Usage: grep PATTERN [FILE]\n");
 		return 1;
 	}
 
@@ -59,8 +69,7 @@ int main(int argc, char *argv[])
 
 	int fd = open(argv[2], O_RDONLY);
 	if (fd < 0) {
-		dprintf(STDERR_FILENO, "open %s failed: %s\n", argv[2],
-			strerror(fd));
+		perror("grep: open failed");
 		return 1;
 	}
 	int ret = grep(fd, argv[1]);
