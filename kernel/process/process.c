@@ -310,6 +310,10 @@ found:
 	if (proc->pid < 0)
 		goto pid_alloc_failed;
 
+	proc->ofiles = kcalloc(OPEN_MAX, sizeof(struct file *));
+	if (!proc->ofiles)
+		goto ofiles_alloc_failed;
+
 	proc->kstack = proc_alloc_kstack();
 	if (!proc->kstack)
 		goto kstack_alloc_failed;
@@ -328,6 +332,9 @@ create_mm_failed:
 	proc_free_kstack(proc->kstack);
 	proc->kstack = 0;
 kstack_alloc_failed:
+	kfree(proc->ofiles);
+	proc->ofiles = NULL;
+ofiles_alloc_failed:
 	pid_free(proc->pid);
 	proc->pid = 0;
 pid_alloc_failed:
@@ -342,6 +349,8 @@ void proc_free(struct process *proc)
 	proc->mm = NULL;
 	proc_free_kstack(proc->kstack);
 	proc->kstack = 0;
+	kfree(proc->ofiles);
+	proc->ofiles = NULL;
 	pid_free(proc->pid);
 	proc->pid = 0;
 
@@ -350,7 +359,6 @@ void proc_free(struct process *proc)
 	proc->exit_status = 0;
 	proc->killed = false;
 	proc->cpu = NULL;
-	memset(proc->ofiles, 0, sizeof(proc->ofiles));
 	proc->cwd = NULL;
 	memset(&proc->proc_tms, 0, sizeof(proc->proc_tms));
 	memset(&proc->tf, 0, sizeof(proc->tf));
