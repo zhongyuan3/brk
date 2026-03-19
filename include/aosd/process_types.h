@@ -96,7 +96,7 @@ struct process {
 	/* The following fields are private fields: */
 	struct mem_mgmt *mm; /* Memory management structure */
 	struct cpu *cpu;
-	struct file *ofiles[OPEN_MAX];
+	struct file **ofiles;
 	struct dentry *cwd;
 	struct tms proc_tms;
 	struct trapframe tf;
