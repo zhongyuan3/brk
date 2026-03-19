@@ -63,6 +63,12 @@ static inline void list_del(struct list_head *node)
 	node->prev = NULL;
 }
 
+static inline void list_del_init(struct list_head *node)
+{
+	__list_del(node->prev, node->next);
+	list_init(node);
+}
+
 static inline void list_splice(const struct list_head *list,
 			       struct list_head *head)
 {
