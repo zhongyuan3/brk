@@ -46,11 +46,11 @@ int console_read(char *buf, size_t n, size_t *read)
 	spinlock_acquire(&cons_lock);
 	while (n > 0) {
 		while (cons_r == cons_w) {
-			if (proc_is_killed(proc_get_current())) {
+			if (task_is_killed(current_task())) {
 				spinlock_release(&cons_lock);
 				return -1;
 			}
-			proc_sleep(&cons_r, &cons_lock);
+			task_sleep(&cons_r, &cons_lock);
 		}
 
 		c = cons_buf[cons_r++ % CONSOLE_BUF_SIZE];
@@ -96,7 +96,7 @@ void console_intr(int c)
 		}
 		break;
 	case CTRL('P'):
-		proc_dump();
+		task_dump();
 		break;
 	default:
 		if (c != 0 && cons_e - cons_r < CONSOLE_BUF_SIZE) {
@@ -109,7 +109,7 @@ void console_intr(int c)
 			if (c == '\n' || c == CTRL('D') ||
 			    cons_e - cons_r == CONSOLE_BUF_SIZE) {
 				cons_w = cons_e;
-				proc_wake_up(&cons_r);
+				task_wake_up(&cons_r);
 			}
 		}
 		break;

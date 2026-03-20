@@ -1,7 +1,7 @@
 #ifndef AOSD_TRAP_H
 #define AOSD_TRAP_H
 
-#include <aosd/process_types.h>
+#include <aosd/process.h>
 #include <aosd/types.h>
 
 #define TRAP_IS_INTERRUPT(scause) ((scause) & (1ULL << 63))

@@ -6,7 +6,6 @@
 #include <aosd/pgtable.h>
 #include <aosd/printk.h>
 #include <aosd/process.h>
-#include <aosd/process_types.h>
 #include <aosd/slab.h>
 #include <aosd/string.h>
 #include <aosd/syscall.h>
@@ -19,8 +18,8 @@ uint64_t sys_brk(void)
 {
 	uint64_t addr = syscall_arg_raw(0);
 	if (addr == 0)
-		return proc_get_current()->mm->brk;
-	return proc_set_brk(addr);
+		return current_task()->mm->brk;
+	return task_set_brk(addr);
 }
 
 uint64_t sys_clone(void)
@@ -34,18 +33,18 @@ uint64_t sys_wait4(void)
 	int *wstatus = (int *)syscall_arg_raw(1);
 	int opts = syscall_arg_raw(2);
 	struct rusage *rus = (struct rusage *)syscall_arg_raw(3);
-	return proc_wait(pid, wstatus, opts, rus);
+	return task_wait(pid, wstatus, opts, rus);
 }
 
 uint64_t sys_fork(void)
 {
-	return proc_fork();
+	return task_fork();
 }
 
 uint64_t sys_exit(void)
 {
 	int status = syscall_arg_raw(0);
-	proc_exit(status);
+	task_exit(status);
 	return 0;
 }
 
@@ -66,16 +65,16 @@ uint64_t sys_kill(void)
 
 uint64_t sys_sched_yield(void)
 {
-	proc_yield();
+	task_yield();
 	return 0;
 }
 
 uint64_t sys_getpid(void)
 {
-	return proc_get_current()->pid;
+	return current_task()->pid;
 }
 
 uint64_t sys_getppid(void)
 {
-	return proc_get_current()->parent->pid;
+	return current_task()->parent->pid;
 }

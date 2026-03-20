@@ -27,6 +27,6 @@
 #define NR_INIT_STACK_PAGES 2
 #define NR_EARLY_PGDIR_PAGES 4
 
-#define NR_CPUS 8
+#define NR_PROCESSORS 8
 
 #endif

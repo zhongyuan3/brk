@@ -46,6 +46,7 @@ kernel/timer.c \
 kernel/irq.c \
 kernel/entry.S \
 kernel/process/process.c \
+kernel/process/sched.c \
 kernel/process/switch.S \
 kernel/process/pid.c \
 kernel/syscall/syscall.c \

@@ -269,7 +269,7 @@ static int virtio_blk_transfer(struct virtio_blk_transation *trans)
 	while (1) {
 		if (alloc_desc_chain(idx, 3) == 0)
 			break;
-		proc_sleep(&blk_vq.desc, &blk_lock);
+		task_sleep(&blk_vq.desc, &blk_lock);
 	}
 
 	req = &blk_reqs[idx[0]];
@@ -315,11 +315,11 @@ static int virtio_blk_transfer(struct virtio_blk_transation *trans)
 	writel(0, blk_dev->mem_base + VIRTIO_QUEUE_NOTIFY_OFFSET);
 
 	while (!trans->completed)
-		proc_sleep(&trans->completed, &blk_lock);
+		task_sleep(&trans->completed, &blk_lock);
 
 	blk_tracks[idx[0]].trans = NULL;
 	free_desc_chain(idx[0]);
-	proc_wake_up(&blk_vq.desc);
+	task_wake_up(&blk_vq.desc);
 
 	spinlock_release(&blk_lock);
 
@@ -396,7 +396,7 @@ void virtio_blk_intr(void)
 
 		trans = blk_tracks[id].trans;
 		trans->completed = true;
-		proc_wake_up(&trans->completed);
+		task_wake_up(&trans->completed);
 
 		blk_used_idx += 1;
 	}

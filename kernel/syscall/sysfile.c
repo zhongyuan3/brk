@@ -6,7 +6,6 @@
 #include <aosd/pipe.h>
 #include <aosd/printk.h>
 #include <aosd/process.h>
-#include <aosd/process_types.h>
 #include <aosd/slab.h>
 #include <aosd/string.h>
 #include <aosd/syscall.h>
@@ -72,7 +71,7 @@ uint64_t sys_open(void)
 	if (err)
 		return err;
 
-	fd = proc_alloc_fd(proc_get_current(), fp);
+	fd = task_alloc_fd(current_task(), fp);
 	if (fd >= 0) {
 		return fd;
 	} else {
@@ -95,7 +94,7 @@ uint64_t sys_openat(void)
 	if (err)
 		return err;
 
-	fd = proc_alloc_fd(proc_get_current(), fp);
+	fd = task_alloc_fd(current_task(), fp);
 	if (fd >= 0) {
 		return fd;
 	} else {
@@ -114,7 +113,7 @@ uint64_t sys_close(void)
 	if (err)
 		return err;
 
-	proc_get_current()->ofiles[fd] = NULL;
+	current_task()->ofiles[fd] = NULL;
 	file_put(fp);
 	return 0;
 }
@@ -259,14 +258,14 @@ uint64_t sys_uname(void)
 
 uint64_t sys_getcwd(void)
 {
-	struct process *proc;
+	struct task_struct *task;
 	char *path;
 	size_t len;
 	char *buf = syscall_arg_ptr(0);
 	size_t size = syscall_arg_raw(1);
 
-	proc = proc_get_current();
-	path = path_get_full(proc->cwd);
+	task = current_task();
+	path = path_get_full(task->cwd);
 	len = strlen(path);
 	if (len + 1 > size) {
 		kfree(path);
@@ -281,7 +280,7 @@ uint64_t sys_getcwd(void)
 uint64_t sys_chdir(void)
 {
 	char *path = syscall_arg_ptr(0);
-	struct process *proc = proc_get_current();
+	struct task_struct *task = current_task();
 	struct dentry *new_cwd = path_lookup(path);
 	if (!new_cwd)
 		return -ENOENT;
@@ -289,8 +288,8 @@ uint64_t sys_chdir(void)
 		dentry_put(new_cwd);
 		return -ENOTDIR;
 	}
-	struct dentry *old_cwd = proc->cwd;
-	proc->cwd = new_cwd;
+	struct dentry *old_cwd = task->cwd;
+	task->cwd = new_cwd;
 	dentry_put(old_cwd);
 	return 0;
 }
@@ -302,7 +301,7 @@ uint64_t sys_fchdir(void)
 	char *path;
 	int fd = 0;
 	struct file *fp = NULL;
-	struct process *proc = proc_get_current();
+	struct task_struct *task = current_task();
 
 	err = syscall_arg_fd(0, &fd, &fp);
 	if (err)
@@ -320,8 +319,8 @@ uint64_t sys_fchdir(void)
 		return -ENOTDIR;
 	}
 
-	old_cwd = proc->cwd;
-	proc->cwd = new_cwd;
+	old_cwd = task->cwd;
+	task->cwd = new_cwd;
 	dentry_put(old_cwd);
 	return 0;
 }
@@ -378,19 +377,19 @@ uint64_t sys_pipe(void)
 	int fd1 = -1;
 	struct file *rf = NULL;
 	struct file *wf = NULL;
-	struct process *proc = proc_get_current();
+	struct task_struct *task = current_task();
 	int err;
 
 	err = pipe_alloc(&rf, &wf);
 	if (err)
 		return -ENOMEM;
 
-	fd0 = proc_alloc_fd(proc, rf);
+	fd0 = task_alloc_fd(task, rf);
 	if (fd0 < 0) {
 		err = -EMFILE;
 		goto err0;
 	}
-	fd1 = proc_alloc_fd(proc, wf);
+	fd1 = task_alloc_fd(task, wf);
 	if (fd1 < 0) {
 		err = -EMFILE;
 		goto err1;
@@ -403,7 +402,7 @@ uint64_t sys_pipe(void)
 	return 0;
 
 err1:
-	proc->ofiles[fd0] = NULL;
+	task->ofiles[fd0] = NULL;
 err0:
 	file_put(rf);
 	file_put(wf);
@@ -417,19 +416,19 @@ uint64_t sys_pipe2(void)
 	int fd1 = -1;
 	struct file *rf = NULL;
 	struct file *wf = NULL;
-	struct process *proc = proc_get_current();
+	struct task_struct *task = current_task();
 	int err;
 
 	err = pipe_alloc(&rf, &wf);
 	if (err)
 		return -ENOMEM;
 
-	fd0 = proc_alloc_fd(proc, rf);
+	fd0 = task_alloc_fd(task, rf);
 	if (fd0 < 0) {
 		err = -EMFILE;
 		goto err0;
 	}
-	fd1 = proc_alloc_fd(proc, wf);
+	fd1 = task_alloc_fd(task, wf);
 	if (fd1 < 0) {
 		err = -EMFILE;
 		goto err1;
@@ -442,7 +441,7 @@ uint64_t sys_pipe2(void)
 	return 0;
 
 err1:
-	proc->ofiles[fd0] = NULL;
+	task->ofiles[fd0] = NULL;
 err0:
 	file_put(rf);
 	file_put(wf);
@@ -461,7 +460,7 @@ uint64_t sys_dup(void)
 		return err;
 
 	fp = file_dup(fp);
-	newfd = proc_alloc_fd(proc_get_current(), fp);
+	newfd = task_alloc_fd(current_task(), fp);
 	if (newfd >= 0) {
 		return newfd;
 	} else {
@@ -475,7 +474,7 @@ uint64_t sys_dup2(void)
 	int oldfd;
 	int newfd;
 	int err;
-	struct process *proc = proc_get_current();
+	struct task_struct *task = current_task();
 	struct file *f = NULL;
 
 	err = syscall_arg_fd(0, &oldfd, &f);
@@ -486,16 +485,16 @@ uint64_t sys_dup2(void)
 	if (!(0 <= newfd && newfd < OPEN_MAX))
 		return -ERANGE;
 
-	if (proc->ofiles[newfd] && proc->ofiles[newfd] == f)
+	if (task->ofiles[newfd] && task->ofiles[newfd] == f)
 		return newfd;
 
-	if (proc->ofiles[newfd] && proc->ofiles[newfd] != f) {
-		file_put(proc->ofiles[newfd]);
-		proc->ofiles[newfd] = file_dup(f);
+	if (task->ofiles[newfd] && task->ofiles[newfd] != f) {
+		file_put(task->ofiles[newfd]);
+		task->ofiles[newfd] = file_dup(f);
 		return newfd;
 	}
 
-	proc->ofiles[newfd] = file_dup(f);
+	task->ofiles[newfd] = file_dup(f);
 	return newfd;
 }
 
@@ -552,20 +551,20 @@ static struct dentry *path_to_dentry(const char *path)
 	if (path[0] == '/')
 		return dentry_get(NULL, "/");
 	if (path[0] == '.' && path[1] == '/')
-		return dentry_dup(proc_get_current()->cwd);
+		return dentry_dup(current_task()->cwd);
 	return NULL;
 }
 
 static struct dentry *fd_to_dentry(int fd)
 {
-	struct process *proc = proc_get_current();
+	struct task_struct *task = current_task();
 
 	if (fd == AT_FDCWD)
-		return dentry_dup(proc->cwd);
+		return dentry_dup(task->cwd);
 
-	if (0 <= fd && fd < OPEN_MAX && proc->ofiles[fd] &&
-	    proc->ofiles[fd]->f_dentry)
-		return dentry_dup(proc->ofiles[fd]->f_dentry);
+	if (0 <= fd && fd < OPEN_MAX && task->ofiles[fd] &&
+	    task->ofiles[fd]->f_dentry)
+		return dentry_dup(task->ofiles[fd]->f_dentry);
 
 	return NULL;
 }
