@@ -12,7 +12,6 @@
 #include <aosd/pgtable.h>
 #include <aosd/printk.h>
 #include <aosd/process.h>
-#include <aosd/process_types.h>
 #include <aosd/riscv.h>
 #include <aosd/slab.h>
 #include <aosd/string.h>
@@ -40,7 +39,7 @@ static uint64_t random_ustack(void)
 
 static void push_args(struct execve_args *args, uint64_t *psp,
 		      uint64_t stack_virt, struct mem_mgmt *mm,
-		      struct process *proc)
+		      struct task_struct *task)
 {
 	uint64_t n;
 	uint64_t sp = *psp;
@@ -61,7 +60,7 @@ static void push_args(struct execve_args *args, uint64_t *psp,
 	ksp = align_down(ksp, sizeof(char *));
 	sp -= n;
 	sp = align_down(sp, sizeof(char *));
-	proc->tf.a2 = sp;
+	task->tf.a2 = sp;
 	char **envp_kstart = (char **)ksp;
 
 	n = (args->argc + 1) * sizeof(uint64_t);
@@ -69,7 +68,7 @@ static void push_args(struct execve_args *args, uint64_t *psp,
 	ksp = align_down(ksp, sizeof(char *));
 	sp -= n;
 	sp = align_down(sp, sizeof(char *));
-	proc->tf.a1 = sp;
+	task->tf.a1 = sp;
 	char **argv_kstart = (char **)ksp;
 
 	for (int i = 0; i < args->envc; ++i) {
@@ -262,7 +261,7 @@ static int __do_execve(const char *path, struct execve_args *args)
 {
 	struct elf64_hdr elf_hdr = { 0 };
 	struct elf64_phdr phdr = { 0 };
-	struct process *proc = proc_get_current();
+	struct task_struct *task = current_task();
 	struct file *f = NULL;
 	struct mem_mgmt *new_mm = NULL;
 	int err = 0;
@@ -331,17 +330,17 @@ static int __do_execve(const char *path, struct execve_args *args)
 	struct page *stack_pg = new_mm->stack->pages[0];
 	uint64_t stack_phys = page_to_phys(stack_pg);
 	uint64_t stack_virt = phys_to_virt(stack_phys);
-	push_args(args, &sp, stack_virt, new_mm, proc);
+	push_args(args, &sp, stack_virt, new_mm, task);
 
-	strlcpy(proc->name, args->argv[0], sizeof(proc->name));
+	strlcpy(task->name, args->argv[0], sizeof(task->name));
 
 	switch_pgtable(new_mm->pgd);
 
-	struct mem_mgmt *old_mm = proc->mm;
-	proc->mm = new_mm;
+	struct mem_mgmt *old_mm = task->mm;
+	task->mm = new_mm;
 	mm_free(old_mm);
-	proc->tf.epc = elf_hdr.e_entry;
-	proc->tf.sp = sp;
+	task->tf.epc = elf_hdr.e_entry;
+	task->tf.sp = sp;
 
 	return args->argc;
 

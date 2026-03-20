@@ -18,4 +18,6 @@ typedef long pid_t;
 typedef long clock_t;
 typedef long suseconds_t;
 
+typedef int processor_id_t;
+
 #endif

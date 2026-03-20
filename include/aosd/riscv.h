@@ -132,6 +132,20 @@ static inline bool intr_enabled(void)
 	return read_sstatus() & SSTATUS_SIE;
 }
 
+/**
+ * @brief Atomically disable the interrupts and return the previous state
+ *
+ * @return true if interrupts were enabled
+ * @return false if interrupts were disabled
+ */
+static inline bool intr_off_get(void)
+{
+	uint64_t old;
+	uint64_t i = SSTATUS_SIE;
+	asm volatile("csrrc %0, sstatus, %1" : "=r"(old) : "r"(i));
+	return (old & SSTATUS_SIE) != 0;
+}
+
 static inline uint64_t read_sscratch(void)
 {
 	uint64_t x;

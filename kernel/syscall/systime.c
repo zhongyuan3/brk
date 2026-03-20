@@ -6,7 +6,6 @@
 #include <aosd/pgtable.h>
 #include <aosd/printk.h>
 #include <aosd/process.h>
-#include <aosd/process_types.h>
 #include <aosd/slab.h>
 #include <aosd/string.h>
 #include <aosd/syscall.h>
@@ -38,6 +37,6 @@ uint64_t sys_times(void)
 	struct tms *buf;
 
 	buf = (struct tms *)syscall_arg_raw(0);
-	*buf = proc_get_current()->proc_tms;
+	*buf = current_task()->ptms;
 	return 0;
 }

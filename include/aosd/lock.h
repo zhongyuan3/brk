@@ -3,18 +3,15 @@
 
 #include <aosd/types.h>
 
-struct cpu;
-struct process;
-
 typedef struct spinlock {
 	volatile unsigned int locked;
 
 	/* For debuging: */
-	struct cpu *cpu; /* CPU holding the lock. */
+	processor_id_t proc_id; /* Processor holding the lock. */
 	const char *name; /* Name of the lock. */
 } spinlock_t;
 
-#define SPINLOCK_INITIALIZER(name) { 0, NULL, name }
+#define SPINLOCK_INITIALIZER(name) { 0, -1, name }
 #define SPINLOCK_DEFINE(name) spinlock_t name = SPINLOCK_INITIALIZER(#name)
 
 void spinlock_init(spinlock_t *lock, const char *name);
@@ -27,12 +24,12 @@ typedef struct sleeplock {
 	spinlock_t lock;
 
 	/* For debuging: */
-	struct process *proc; /* Process holding the lock. */
+	pid_t pid; /* Process holding the lock. */
 	const char *name; /* Name of the lock. */
 } sleeplock_t;
 
 #define SLEEPLOCK_INITIALIZER(name) \
-	{ 0, SPINLOCK_INITIALIZER("sleeplock"), NULL, name }
+	{ 0, SPINLOCK_INITIALIZER("sleeplock"), 0, name }
 #define SLEEPLOCK_DEFINE(name) sleeplock_t name = SLEEPLOCK_INITIALIZER(#name)
 
 void sleeplock_init(sleeplock_t *lock, const char *name);
