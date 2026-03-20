@@ -66,8 +66,8 @@ void setup_final_pgtable(void);
 void switch_pgtable(pgde_t *pgd);
 
 void mm_cache_init(void);
-struct mem_mgmt *mm_alloc(void);
-void mm_free(struct mem_mgmt *mm);
-int mm_copy(struct mem_mgmt *dst, struct mem_mgmt *src);
+struct mm_struct *mm_alloc(void);
+void mm_free(struct mm_struct *mm);
+int mm_copy(struct mm_struct *dst, struct mm_struct *src);
 
 #endif

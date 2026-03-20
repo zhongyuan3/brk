@@ -22,7 +22,7 @@ int uvmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 	  unsigned int flags);
 void uvunmap(pgde_t *pgd, uint64_t addr, size_t size);
 
-struct vmem_area {
+struct vm_area {
 	struct list_head list;
 	uint64_t addr;
 	size_t size;
@@ -37,7 +37,7 @@ void *vmalloc(size_t size);
 void vfree(void *ptr);
 void *vmalloc_nomap(size_t size);
 void vfree_nomap(void *ptr);
-struct vmem_area *vmem_area_alloc(void);
-void vmem_area_free(struct vmem_area *area);
+struct vm_area *vm_area_alloc(void);
+void vm_area_free(struct vm_area *area);
 
 #endif

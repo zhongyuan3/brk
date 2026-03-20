@@ -96,7 +96,7 @@ struct task_struct {
 	bool killed;
 
 	/* The following fields are private fields: */
-	struct mem_mgmt *mm; /* Memory management structure */
+	struct mm_struct *mm; /* Memory management structure */
 	struct file *ofiles[OPEN_MAX];
 	struct dentry *cwd;
 	struct tms ptms;

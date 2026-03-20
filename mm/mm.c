@@ -15,13 +15,13 @@ static struct kmem_cache mm_cache;
 
 void mm_cache_init(void)
 {
-	kmem_cache_init(&mm_cache, sizeof(struct mem_mgmt),
-			alignof(struct mem_mgmt), "mm_cache");
+	kmem_cache_init(&mm_cache, sizeof(struct mm_struct),
+			alignof(struct mm_struct), "mm_cache");
 }
 
-struct mem_mgmt *mm_alloc(void)
+struct mm_struct *mm_alloc(void)
 {
-	struct mem_mgmt *mm;
+	struct mm_struct *mm;
 
 	mm = kmem_cache_alloc(&mm_cache);
 	if (!mm)
@@ -35,16 +35,16 @@ struct mem_mgmt *mm_alloc(void)
 
 	list_init(&mm->seg);
 
-	mm->stack = vmem_area_alloc();
+	mm->stack = vm_area_alloc();
 	if (!mm->stack) {
 		destroy_user_pgtable(mm->pgd);
 		kmem_cache_free(&mm_cache, mm);
 		return NULL;
 	}
 
-	mm->heap = vmem_area_alloc();
+	mm->heap = vm_area_alloc();
 	if (!mm->heap) {
-		vmem_area_free(mm->stack);
+		vm_area_free(mm->stack);
 		destroy_user_pgtable(mm->pgd);
 		kmem_cache_free(&mm_cache, mm);
 		return NULL;
@@ -55,9 +55,9 @@ struct mem_mgmt *mm_alloc(void)
 	return mm;
 }
 
-static void mm_free_seg(struct mem_mgmt *mm)
+static void mm_free_seg(struct mm_struct *mm)
 {
-	struct vmem_area *curr, *next;
+	struct vm_area *curr, *next;
 
 	if (list_empty(&mm->seg))
 		return;
@@ -70,21 +70,21 @@ static void mm_free_seg(struct mem_mgmt *mm)
 			page_free(curr->pages[i], 0);
 		}
 		kfree(curr->pages);
-		vmem_area_free(curr);
+		vm_area_free(curr);
 	}
 }
 
-static void mm_free_stack(struct mem_mgmt *mm)
+static void mm_free_stack(struct mm_struct *mm)
 {
 	if (mm->stack->size > 0) {
 		uvunmap(mm->pgd, mm->stack->addr, mm->stack->size);
 		assert(mm->stack->pages[0]);
 		page_free(mm->stack->pages[0], USTACK_PAGE_ORDER);
 	}
-	vmem_area_free(mm->stack);
+	vm_area_free(mm->stack);
 }
 
-static void mm_free_heap(struct mem_mgmt *mm)
+static void mm_free_heap(struct mm_struct *mm)
 {
 	if (mm->heap->size > 0) {
 		uvunmap(mm->pgd, mm->heap->addr, mm->heap->size);
@@ -94,10 +94,10 @@ static void mm_free_heap(struct mem_mgmt *mm)
 		}
 		kfree(mm->heap->pages);
 	}
-	vmem_area_free(mm->heap);
+	vm_area_free(mm->heap);
 }
 
-void mm_free(struct mem_mgmt *mm)
+void mm_free(struct mm_struct *mm)
 {
 	mm_free_seg(mm);
 	mm_free_stack(mm);
@@ -106,8 +106,8 @@ void mm_free(struct mem_mgmt *mm)
 	kmem_cache_free(&mm_cache, mm);
 }
 
-static int mm_copy_area(struct vmem_area *dst, struct vmem_area *src,
-			struct mem_mgmt *mm)
+static int mm_copy_area(struct vm_area *dst, struct vm_area *src,
+			struct mm_struct *mm)
 {
 	size_t npgs;
 	struct page **pgs;
@@ -163,10 +163,10 @@ failed:
 	return err;
 }
 
-static int mm_copy_seg(struct mem_mgmt *dst, struct mem_mgmt *src)
+static int mm_copy_seg(struct mm_struct *dst, struct mm_struct *src)
 {
 	LIST_DEFINE(seg);
-	struct vmem_area *curr, *next;
+	struct vm_area *curr, *next;
 	size_t npgs;
 	struct page **pgs;
 	int err = 0;
@@ -175,14 +175,14 @@ static int mm_copy_seg(struct mem_mgmt *dst, struct mem_mgmt *src)
 		return 0;
 
 	list_for_each_entry(curr, &src->seg, list) {
-		struct vmem_area *vma = vmem_area_alloc();
+		struct vm_area *vma = vm_area_alloc();
 		if (!vma) {
 			err = -ENOMEM;
 			goto failed;
 		}
 		err = mm_copy_area(vma, curr, dst);
 		if (err) {
-			vmem_area_free(vma);
+			vm_area_free(vma);
 			goto failed;
 		}
 		list_add(&vma->list, &seg);
@@ -204,13 +204,13 @@ failed:
 				page_free(pgs[i], 0);
 			}
 			kfree(curr->pages);
-			vmem_area_free(curr);
+			vm_area_free(curr);
 		}
 	}
 	return err;
 }
 
-static int mm_copy_stack(struct mem_mgmt *dst, struct mem_mgmt *src)
+static int mm_copy_stack(struct mm_struct *dst, struct mm_struct *src)
 {
 	if (src->stack->size == 0)
 		return 0;
@@ -251,7 +251,7 @@ static int mm_copy_stack(struct mem_mgmt *dst, struct mem_mgmt *src)
 	return 0;
 }
 
-static int mm_copy_heap(struct mem_mgmt *dst, struct mem_mgmt *src)
+static int mm_copy_heap(struct mm_struct *dst, struct mm_struct *src)
 {
 	if (src->heap->size == 0)
 		return 0;
@@ -259,7 +259,7 @@ static int mm_copy_heap(struct mem_mgmt *dst, struct mem_mgmt *src)
 	return mm_copy_area(dst->heap, src->heap, dst);
 }
 
-int mm_copy(struct mem_mgmt *dst, struct mem_mgmt *src)
+int mm_copy(struct mm_struct *dst, struct mm_struct *src)
 {
 	int err;
 

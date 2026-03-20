@@ -228,8 +228,8 @@ void task_dump(void)
 int task_set_brk(uint64_t addr)
 {
 	struct task_struct *task = current_task();
-	struct mem_mgmt *mm = task->mm;
-	struct vmem_area *heap = mm->heap;
+	struct mm_struct *mm = task->mm;
+	struct vm_area *heap = mm->heap;
 	uint64_t heap_start = heap->addr;
 	uint64_t curr_heap_end = heap_start + heap->size;
 	int err = 0;

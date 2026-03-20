@@ -41,13 +41,13 @@ struct free_area {
 	struct list_head free_list;
 };
 
-struct vmem_area;
+struct vm_area;
 
-struct mem_mgmt {
+struct mm_struct {
 	pgde_t *pgd;
 	struct list_head seg;
-	struct vmem_area *stack;
-	struct vmem_area *heap;
+	struct vm_area *stack;
+	struct vm_area *heap;
 	uint64_t brk;
 };
 
