@@ -252,9 +252,9 @@ void uvunmap(pgde_t *pgd, uint64_t addr, size_t size)
 	vunmap(pgd, addr, size, &ops);
 }
 
-static struct vmem_area *find_vmem_area(uint64_t addr)
+static struct vm_area *find_vm_area(uint64_t addr)
 {
-	struct vmem_area *area;
+	struct vm_area *area;
 
 	list_for_each_entry(area, &vma, list)
 		if (area->addr == addr)
@@ -263,9 +263,9 @@ static struct vmem_area *find_vmem_area(uint64_t addr)
 	return NULL;
 }
 
-static void merge_free_vmem_areas(void)
+static void merge_free_vm_areas(void)
 {
-	struct vmem_area *curr, *next;
+	struct vm_area *curr, *next;
 
 	list_for_each_entry_safe(curr, next, &vma, list) {
 		if (curr->is_free && next->is_free &&
@@ -273,15 +273,15 @@ static void merge_free_vmem_areas(void)
 			next->addr = curr->addr;
 			next->size += curr->size;
 			list_del(&curr->list);
-			vmem_area_free(curr);
+			vm_area_free(curr);
 		}
 	}
 }
 
-static struct vmem_area *get_free_vmem_area(size_t size)
+static struct vm_area *find_free_vm_area(size_t size)
 {
-	struct vmem_area *area;
-	struct vmem_area *new_area;
+	struct vm_area *area;
+	struct vm_area *new_area;
 
 	size = align_up(size, PAGE_SIZE);
 
@@ -294,7 +294,7 @@ static struct vmem_area *get_free_vmem_area(size_t size)
 			area->is_free = false;
 			return area;
 		} else {
-			new_area = vmem_area_alloc();
+			new_area = vm_area_alloc();
 			if (!new_area)
 				return NULL;
 			new_area->addr = area->addr + size;
@@ -310,18 +310,18 @@ static struct vmem_area *get_free_vmem_area(size_t size)
 	return NULL;
 }
 
-static void free_vmem_area(struct vmem_area *area)
+static void free_vm_area(struct vm_area *area)
 {
 	area->is_free = true;
-	merge_free_vmem_areas();
+	merge_free_vm_areas();
 }
 
 void vmalloc_init(void)
 {
-	kmem_cache_init(&vma_cache, sizeof(struct vmem_area),
-			alignof(struct vmem_area), "vma_cache");
+	kmem_cache_init(&vma_cache, sizeof(struct vm_area),
+			alignof(struct vm_area), "vma_cache");
 	list_init(&vma);
-	struct vmem_area *area = vmem_area_alloc();
+	struct vm_area *area = vm_area_alloc();
 	area->addr = VMALLOC_START;
 	area->size = VMALLOC_SIZE;
 	area->is_free = true;
@@ -334,7 +334,7 @@ void *vmalloc(size_t size)
 
 	size = align_up(size, PAGE_SIZE);
 
-	struct vmem_area *area = get_free_vmem_area(size);
+	struct vm_area *area = find_free_vm_area(size);
 	if (!area) {
 		spinlock_release(&vma_lock);
 		return NULL;
@@ -344,7 +344,7 @@ void *vmalloc(size_t size)
 
 	area->pages = kcalloc(npgs, sizeof(struct page *));
 	if (!area->pages) {
-		free_vmem_area(area);
+		free_vm_area(area);
 		spinlock_release(&vma_lock);
 		return NULL;
 	}
@@ -374,17 +374,17 @@ out_cleanup:
 		page_free(area->pages[j], 0);
 	}
 	kfree(area->pages);
-	free_vmem_area(area);
+	free_vm_area(area);
 	spinlock_release(&vma_lock);
 	return NULL;
 }
 
 void vfree(void *ptr)
 {
-	struct vmem_area *area;
+	struct vm_area *area;
 
 	spinlock_acquire(&vma_lock);
-	area = find_vmem_area((uint64_t)ptr);
+	area = find_vm_area((uint64_t)ptr);
 	if (!area || area->is_free) {
 		spinlock_release(&vma_lock);
 		return;
@@ -396,16 +396,16 @@ void vfree(void *ptr)
 		page_free(area->pages[i], 0);
 	}
 	kfree(area->pages);
-	free_vmem_area(area);
+	free_vm_area(area);
 	spinlock_release(&vma_lock);
 }
 
 void *vmalloc_nomap(size_t size)
 {
-	struct vmem_area *area;
+	struct vm_area *area;
 
 	spinlock_acquire(&vma_lock);
-	area = get_free_vmem_area(align_up(size, PAGE_SIZE));
+	area = find_free_vm_area(align_up(size, PAGE_SIZE));
 	spinlock_release(&vma_lock);
 	if (!area)
 		return NULL;
@@ -415,21 +415,21 @@ void *vmalloc_nomap(size_t size)
 
 void vfree_nomap(void *ptr)
 {
-	struct vmem_area *area;
+	struct vm_area *area;
 
 	spinlock_acquire(&vma_lock);
-	area = find_vmem_area((uint64_t)ptr);
+	area = find_vm_area((uint64_t)ptr);
 	if (!area || area->is_free) {
 		spinlock_release(&vma_lock);
 		return;
 	}
-	free_vmem_area(area);
+	free_vm_area(area);
 	spinlock_release(&vma_lock);
 }
 
-struct vmem_area *vmem_area_alloc(void)
+struct vm_area *vm_area_alloc(void)
 {
-	struct vmem_area *vma = kmem_cache_alloc(&vma_cache);
+	struct vm_area *vma = kmem_cache_alloc(&vma_cache);
 	if (vma) {
 		memset(vma, 0, sizeof(*vma));
 		list_init(&vma->list);
@@ -437,7 +437,7 @@ struct vmem_area *vmem_area_alloc(void)
 	return vma;
 }
 
-void vmem_area_free(struct vmem_area *area)
+void vm_area_free(struct vm_area *area)
 {
 	kmem_cache_free(&vma_cache, area);
 }

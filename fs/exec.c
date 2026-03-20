@@ -38,7 +38,7 @@ static uint64_t random_ustack(void)
 }
 
 static void push_args(struct execve_args *args, uint64_t *psp,
-		      uint64_t stack_virt, struct mem_mgmt *mm,
+		      uint64_t stack_virt, struct mm_struct *mm,
 		      struct task_struct *task)
 {
 	uint64_t n;
@@ -109,7 +109,7 @@ static unsigned int flags_to_perm(unsigned int flags)
 	return perm;
 }
 
-static int map_seg(struct mem_mgmt *mm, struct vmem_area *vma,
+static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 		   struct elf64_phdr *ph, struct file *fp)
 {
 	int err = 0;
@@ -185,10 +185,11 @@ failed:
 	return err;
 }
 
-static int load_seg(struct mem_mgmt *mm, struct elf64_phdr *ph, struct file *fp)
+static int load_seg(struct mm_struct *mm, struct elf64_phdr *ph,
+		    struct file *fp)
 {
 	uint64_t start, end;
-	struct vmem_area *vma;
+	struct vm_area *vma;
 	int err;
 
 	start = align_down(ph->p_vaddr, PAGE_SIZE);
@@ -196,7 +197,7 @@ static int load_seg(struct mem_mgmt *mm, struct elf64_phdr *ph, struct file *fp)
 	if (end == start)
 		return 0;
 
-	vma = vmem_area_alloc();
+	vma = vm_area_alloc();
 	if (!vma)
 		return -ENOMEM;
 	vma->addr = start;
@@ -205,7 +206,7 @@ static int load_seg(struct mem_mgmt *mm, struct elf64_phdr *ph, struct file *fp)
 
 	err = map_seg(mm, vma, ph, fp);
 	if (err) {
-		vmem_area_free(vma);
+		vm_area_free(vma);
 		return err;
 	}
 
@@ -213,9 +214,9 @@ static int load_seg(struct mem_mgmt *mm, struct elf64_phdr *ph, struct file *fp)
 	return 0;
 }
 
-static uint64_t find_brk(struct mem_mgmt *mm)
+static uint64_t find_brk(struct mm_struct *mm)
 {
-	struct vmem_area *vma = NULL;
+	struct vm_area *vma = NULL;
 	uint64_t brk = 0;
 	list_for_each_entry(vma, &mm->seg, list) {
 		uint64_t end = vma->addr + vma->size;
@@ -225,7 +226,7 @@ static uint64_t find_brk(struct mem_mgmt *mm)
 	return brk;
 }
 
-static int map_stack(struct mem_mgmt *mm)
+static int map_stack(struct mm_struct *mm)
 {
 	struct page *pg = page_alloc(USTACK_PAGE_ORDER);
 	if (!pg)
@@ -263,7 +264,7 @@ static int __do_execve(const char *path, struct execve_args *args)
 	struct elf64_phdr phdr = { 0 };
 	struct task_struct *task = current_task();
 	struct file *f = NULL;
-	struct mem_mgmt *new_mm = NULL;
+	struct mm_struct *new_mm = NULL;
 	int err = 0;
 
 	err = do_openat(AT_FDCWD, path, O_RDONLY, 0, &f);
@@ -336,7 +337,7 @@ static int __do_execve(const char *path, struct execve_args *args)
 
 	switch_pgtable(new_mm->pgd);
 
-	struct mem_mgmt *old_mm = task->mm;
+	struct mm_struct *old_mm = task->mm;
 	task->mm = new_mm;
 	mm_free(old_mm);
 	task->tf.epc = elf_hdr.e_entry;
