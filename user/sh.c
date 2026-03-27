@@ -84,9 +84,6 @@ int main(int argc, char *argv[])
 	struct token *toks = NULL;
 	struct cmd *cmd = NULL;
 
-	dprintf(STDOUT_FILENO, "Simple Shell v0.1.0\n");
-	dprintf(STDOUT_FILENO, "Type 'exit' to quit\n");
-
 	if (!getcwd(cwd, sizeof(cwd)))
 		sh_panic("getcwd failed");
 
