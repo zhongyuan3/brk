@@ -194,7 +194,7 @@ static int mm_copy_seg(struct mm_struct *dst, struct mm_struct *src)
 
 failed:
 	if (!list_empty(&seg)) {
-		list_for_each_entry_safe(curr, next, &src->seg, list) {
+		list_for_each_entry_safe(curr, next, &seg, list) {
 			list_del(&curr->list);
 			uvunmap(dst->pgd, curr->addr, curr->size);
 			npgs = curr->nr_pages;

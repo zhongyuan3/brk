@@ -226,14 +226,17 @@ void kmem_cache_free(struct kmem_cache *cache, void *obj)
 	list = &cache->slab_list;
 	list_for_each_entry(curr, list, slub_list) {
 		start = page_to_virt(curr);
-		end = start + PAGE_SIZE;
+		end = start + (PAGE_SIZE << curr->cache->page_order);
 		if (start <= (uint64_t)obj && (uint64_t)obj < end) {
 			*(void **)obj = curr->free_list;
 			curr->free_list = obj;
 			curr->free_count++;
-			break;
+			spinlock_release(&cache->lock);
+			return;
 		}
 	}
 
 	spinlock_release(&cache->lock);
+
+	panic("%s(): invalid obj\n", __func__);
 }

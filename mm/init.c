@@ -13,62 +13,6 @@
 size_t kernel_load_offset;
 uint64_t ram_phys_offset;
 
-static uint64_t alloc_pgtable_before_final(void)
-{
-	uint64_t addr = memblock_alloc(PAGE_SIZE, _EKERNEL_PHYS, PAGE_SIZE);
-	if (!addr)
-		panic("%s(): memblock_alloc() failed\n", __func__);
-	memset((void *)addr, 0, PAGE_SIZE);
-	return addr;
-}
-
-static uint64_t alloc_pgd_before_final(void)
-{
-	return alloc_pgtable_before_final();
-}
-
-static uint64_t alloc_pmd_before_final(void)
-{
-	return alloc_pgtable_before_final();
-}
-
-static uint64_t alloc_pt_before_final(void)
-{
-	return alloc_pgtable_before_final();
-}
-
-static pgde_t *get_pgd_virt_before_final(uint64_t pgd_phys)
-{
-	return (pgde_t *)pgd_phys;
-}
-
-static pmde_t *get_pmd_virt_before_final(uint64_t pmd_phys)
-{
-	return (pmde_t *)pmd_phys;
-}
-
-static pte_t *get_pt_virt_before_final(uint64_t pt_phys)
-{
-	return (pte_t *)pt_phys;
-}
-
-static void vmap_before_final(uint64_t addr, size_t size, uint64_t paddr,
-			      unsigned int flags)
-{
-	struct vmap_ops ops = {
-		.alloc_pgd = alloc_pgd_before_final,
-		.alloc_pmd = alloc_pmd_before_final,
-		.alloc_pt = alloc_pt_before_final,
-		.get_pgd_virt = get_pgd_virt_before_final,
-		.get_pmd_virt = get_pmd_virt_before_final,
-		.get_pt_virt = get_pt_virt_before_final,
-	};
-	size = align_up(size, PAGE_SIZE);
-	spinlock_acquire(&kernel_pgdir_lock);
-	vmap(kernel_pgdir, addr, size, paddr, flags, &ops);
-	spinlock_release(&kernel_pgdir_lock);
-}
-
 static void map_mem(void)
 {
 	uint64_t idx;
@@ -96,38 +40,46 @@ static void map_mem(void)
 
 	for (size_t i = 0; i < regs_cnt; ++i) {
 		vaddr = phys_to_virt(regs[i].base);
-		vmap_before_final(vaddr, regs[i].size, regs[i].base, flags);
+		kvmap_with_mode(vaddr, regs[i].size, regs[i].base, flags,
+				VMAP_MODE_EARLY);
 	}
 
 	vaddr = phys_to_virt((uint64_t)regs);
-	vmap_before_final(vaddr, size, (uint64_t)regs, flags);
+	kvmap_with_mode(vaddr, size, (uint64_t)regs, flags, VMAP_MODE_EARLY);
 
 	memblock_free((uint64_t)regs, size);
 }
 
 static void map_kernel(void)
 {
-	vmap_before_final((uint64_t)_stext, _TEXT_SIZE, _STEXT_PHYS,
-			  PTE_R | PTE_X);
-	vmap_before_final((uint64_t)_srodata, _RODATA_SIZE, _SRODATA_PHYS,
-			  PTE_R);
-	vmap_before_final((uint64_t)_sdata, _DATA_SIZE, _SDATA_PHYS,
-			  PTE_R | PTE_W);
-	vmap_before_final((uint64_t)_sbss, _BSS_SIZE, _SBSS_PHYS,
-			  PTE_R | PTE_W);
-	uint64_t virt = phys_to_virt(_SRODATA_PHYS);
-	vmap_before_final(virt, _RODATA_SIZE, _SRODATA_PHYS, PTE_R);
+	uint64_t virt;
+
+	kvmap_with_mode((uint64_t)_stext, _TEXT_SIZE, _STEXT_PHYS,
+			PTE_R | PTE_X, VMAP_MODE_EARLY);
+	kvmap_with_mode((uint64_t)_srodata, _RODATA_SIZE, _SRODATA_PHYS, PTE_R,
+			VMAP_MODE_EARLY);
+	kvmap_with_mode((uint64_t)_sdata, _DATA_SIZE, _SDATA_PHYS,
+			PTE_R | PTE_W, VMAP_MODE_EARLY);
+	kvmap_with_mode((uint64_t)_sbss, _BSS_SIZE, _SBSS_PHYS, PTE_R | PTE_W,
+			VMAP_MODE_EARLY);
+
+	virt = phys_to_virt(_SRODATA_PHYS);
+	kvmap_with_mode(virt, _RODATA_SIZE, _SRODATA_PHYS, PTE_R,
+			VMAP_MODE_EARLY);
 	virt = phys_to_virt(_SDATA_PHYS);
-	vmap_before_final(virt, _DATA_SIZE, _SDATA_PHYS, PTE_R | PTE_W);
+	kvmap_with_mode(virt, _DATA_SIZE, _SDATA_PHYS, PTE_R | PTE_W,
+			VMAP_MODE_EARLY);
 	virt = phys_to_virt(_SBSS_PHYS);
-	vmap_before_final(virt, _BSS_SIZE, _SBSS_PHYS, PTE_R | PTE_W);
+	kvmap_with_mode(virt, _BSS_SIZE, _SBSS_PHYS, PTE_R | PTE_W,
+			VMAP_MODE_EARLY);
 }
 
 static void map_dtb(void)
 {
 	uint64_t dtb_virt = phys_to_virt(dtb_phys);
 	size_t dtb_size = fdt_totalsize(dtb_phys);
-	vmap_before_final(dtb_virt, dtb_size, dtb_phys, PTE_R | PTE_W);
+	kvmap_with_mode(dtb_virt, dtb_size, dtb_phys, PTE_R | PTE_W,
+			VMAP_MODE_EARLY);
 }
 
 static uint64_t make_final_pgtable(void)
@@ -144,62 +96,6 @@ void setup_final_pgtable(void)
 	sfence_vma();
 }
 
-static uint64_t alloc_pgtable_before_buddy(void)
-{
-	uint64_t addr = memblock_alloc(PAGE_SIZE, _EKERNEL_PHYS, PAGE_SIZE);
-	if (!addr)
-		panic("%s(): memblock_alloc() failed\n", __func__);
-	memset((void *)phys_to_virt(addr), 0, PAGE_SIZE);
-	return addr;
-}
-
-static uint64_t alloc_pgd_before_buddy(void)
-{
-	return alloc_pgtable_before_buddy();
-}
-
-static uint64_t alloc_pmd_before_buddy(void)
-{
-	return alloc_pgtable_before_buddy();
-}
-
-static uint64_t alloc_pt_before_buddy(void)
-{
-	return alloc_pgtable_before_buddy();
-}
-
-static pgde_t *get_pgd_virt_before_buddy(uint64_t pgd_phys)
-{
-	return (pgde_t *)phys_to_virt(pgd_phys);
-}
-
-static pmde_t *get_pmd_virt_before_buddy(uint64_t pmd_phys)
-{
-	return (pmde_t *)phys_to_virt(pmd_phys);
-}
-
-static pte_t *get_pt_virt_before_buddy(uint64_t pt_phys)
-{
-	return (pte_t *)phys_to_virt(pt_phys);
-}
-
-static void vmap_before_buddy(uint64_t addr, size_t size, uint64_t paddr,
-			      unsigned int flags)
-{
-	struct vmap_ops ops = {
-		.alloc_pgd = alloc_pgd_before_buddy,
-		.alloc_pmd = alloc_pmd_before_buddy,
-		.alloc_pt = alloc_pt_before_buddy,
-		.get_pgd_virt = get_pgd_virt_before_buddy,
-		.get_pmd_virt = get_pmd_virt_before_buddy,
-		.get_pt_virt = get_pt_virt_before_buddy,
-	};
-	size = align_up(size, PAGE_SIZE);
-	spinlock_acquire(&kernel_pgdir_lock);
-	vmap(kernel_pgdir, addr, size, paddr, flags, &ops);
-	spinlock_release(&kernel_pgdir_lock);
-}
-
 void vmemmap_init(void)
 {
 	uint32_t idx;
@@ -212,8 +108,8 @@ void vmemmap_init(void)
 		paddr = memblock_alloc(sz, 0, PAGE_SIZE);
 		assert(paddr);
 		memset((void *)phys_to_virt(paddr), 0, sz);
-		vmap_before_buddy((uint64_t)pfn_to_page(start), sz, paddr,
-				  PTE_R | PTE_W);
+		kvmap_with_mode((uint64_t)pfn_to_page(start), sz, paddr,
+				PTE_R | PTE_W, VMAP_MODE_INTERIM);
 	}
 }
 
