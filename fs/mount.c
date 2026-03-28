@@ -166,8 +166,6 @@ void fs_init(void)
 	assert(dentry_rc(mnt->mnt_sb->s_root) == 1);
 	assert(inode_rc(mnt->mnt_sb->s_root->d_inode) == 1);
 
-	printk("fs_init() succeed\n");
-
 	err = do_mkdirat(AT_FDCWD, "/dev", 0);
 	assert(!err);
 
@@ -181,11 +179,11 @@ void fs_init(void)
 	err = do_openat(AT_FDCWD, "/dev/console", O_RDWR, 0, &f);
 	assert(!err);
 
-	struct task_struct *task = current_task();
-	task->ofiles[0] = f;
-	task->ofiles[1] = file_dup(f);
-	task->ofiles[2] = file_dup(f);
+	struct process *proc = current_process();
+	proc->ofiles[0] = f;
+	proc->ofiles[1] = file_dup(f);
+	proc->ofiles[2] = file_dup(f);
 
-	task->cwd = path_lookup("/");
-	assert(task->cwd != NULL);
+	proc->cwd = path_lookup("/");
+	assert(proc->cwd != NULL);
 }

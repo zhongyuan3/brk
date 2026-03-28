@@ -2,9 +2,11 @@
 #include <aosd/errno.h>
 #include <aosd/fs.h>
 #include <aosd/limits.h>
+#include <aosd/list.h>
 #include <aosd/lock.h>
 #include <aosd/macros.h>
 #include <aosd/mm.h>
+#include <aosd/mm_types.h>
 #include <aosd/panic.h>
 #include <aosd/pgalloc.h>
 #include <aosd/pgtable.h>
@@ -13,92 +15,23 @@
 #include <aosd/riscv.h>
 #include <aosd/slab.h>
 #include <aosd/string.h>
+#include <aosd/timer.h>
 #include <aosd/trap.h>
 #include <aosd/types.h>
 #include <aosd/vmalloc.h>
 
-struct task_struct tasks[NR_TASKS];
-struct processor processors[NR_PROCESSORS];
-processor_id_t init_proc_id;
+cpuid_t init_cpuid;
+struct process *init_proc;
+struct cpu cpus[NR_CPUS];
 
-static void new_task_ret(void)
+static LIST_DEFINE(procs);
+static SPINLOCK_DEFINE(procs_lock);
+static struct kmem_cache proc_cache;
+
+void proc_cache_init(void)
 {
-	struct task_struct *task = current_task();
-	spinlock_release(&task->lock);
-	prepare_to_return();
-	user_trap_return(&task->tf);
-}
-
-static void init_task_ret(void)
-{
-	struct task_struct *task = current_task();
-	spinlock_release(&task->lock);
-	fs_init();
-	char *argv[] = { "/bin/init", 0 };
-	char *envp[] = { 0 };
-	int ret = do_execve(argv[0], argv, envp);
-	if (ret < 0)
-		panic("execve %s failed: %s\n", argv[0], strerror(ret));
-	task->tf.a0 = ret;
-	prepare_to_return();
-	user_trap_return(&task->tf);
-}
-
-int task_fork(void)
-{
-	int err;
-	pid_t cpid;
-	struct task_struct *child;
-	struct task_struct *parent = current_task();
-
-	child = task_alloc();
-	if (!child)
-		return -ENOMEM;
-
-	err = mm_copy(child->mm, parent->mm);
-	if (err) {
-		task_free(child);
-		return err;
-	}
-
-	memcpy(&child->tf, &parent->tf, sizeof(parent->tf));
-
-	for (int i = 0; i < OPEN_MAX; ++i) {
-		if (parent->ofiles[i])
-			child->ofiles[i] = file_dup(parent->ofiles[i]);
-	}
-	child->cwd = dentry_dup(parent->cwd);
-
-	child->tf.a0 = 0;
-
-	cpid = child->pid;
-	spinlock_release(&child->lock);
-
-	spinlock_acquire(&wait_lock);
-	child->parent = parent;
-	spinlock_release(&wait_lock);
-
-	spinlock_acquire(&child->lock);
-	child->state = TASK_STATE_RUNNABLE;
-	spinlock_release(&child->lock);
-
-	return cpid;
-}
-
-void task_set_killed(struct task_struct *task)
-{
-	spinlock_acquire(&task->lock);
-	task->killed = true;
-	spinlock_release(&task->lock);
-}
-
-bool task_is_killed(struct task_struct *task)
-{
-	bool killed;
-	spinlock_acquire(&task->lock);
-	killed = task->killed;
-	spinlock_release(&task->lock);
-	return killed;
+	kmem_cache_init(&proc_cache, sizeof(struct process),
+			alignof(struct process), "proc_cache");
 }
 
 static uint64_t kstack_alloc(void)
@@ -116,119 +49,121 @@ static void kstack_free(uint64_t stack)
 	page_free(pg, KSTACK_PAGE_ORDER);
 }
 
-static struct task_struct *__task_alloc(void)
+struct process *proc_alloc(void)
 {
-	struct task_struct *task;
-
-	for (task = tasks; task < tasks + NR_TASKS; ++task) {
-		spinlock_acquire(&task->lock);
-		if (task->state == TASK_STATE_UNUSED) {
-			task->state = TASK_STATE_USED;
-			return task;
-		}
-		spinlock_release(&task->lock);
-	}
-
-	return NULL;
-}
-
-static void __task_free(struct task_struct *task)
-{
-	task->state = TASK_STATE_UNUSED;
-	spinlock_release(&task->lock);
-}
-
-struct task_struct *task_alloc(void)
-{
-	struct task_struct *task = __task_alloc();
-	if (!task)
+	struct process *proc = kmem_cache_alloc(&proc_cache);
+	if (!proc)
 		return NULL;
+	memset(proc, 0, sizeof(*proc));
 
-	task->pid = pid_alloc();
-	if (task->pid < 0)
+	list_init(&proc->list);
+	list_init(&proc->queue);
+	list_init(&proc->children);
+	list_init(&proc->child);
+	spinlock_init(&proc->lock, "proc");
+	proc->state = PROCESS_STATE_NEW;
+
+	proc->pid = pid_alloc();
+	if (proc->pid < 0)
 		goto pid_alloc_failed;
 
-	task->kstack = kstack_alloc();
-	if (!task->kstack)
+	proc->kstack = kstack_alloc();
+	if (!proc->kstack)
 		goto kstack_alloc_failed;
 
-	task->mm = mm_alloc();
-	if (!task->mm)
+	proc->mm = mm_alloc();
+	if (!proc->mm)
 		goto create_mm_failed;
 
-	task->time_slice = TASK_TIME_SLICE;
-	task->ctx.ra = (uint64_t)new_task_ret;
-	task->ctx.sp = task->kstack + KSTACK_SIZE;
+	spinlock_acquire(&procs_lock);
+	list_add_tail(&proc->list, &procs);
+	spinlock_release(&procs_lock);
 
-	return task;
+	return proc;
 
 create_mm_failed:
-	kstack_free(task->kstack);
-	task->kstack = 0;
+	kstack_free(proc->kstack);
 kstack_alloc_failed:
-	pid_free(task->pid);
-	task->pid = 0;
+	pid_free(proc->pid);
 pid_alloc_failed:
-	__task_free(task);
+	kmem_cache_free(&proc_cache, proc);
 	return NULL;
 }
 
-void task_free(struct task_struct *task)
+void proc_free(struct process *proc)
 {
-	mm_free(task->mm);
-	task->mm = NULL;
-	kstack_free(task->kstack);
-	task->kstack = 0;
-	pid_free(task->pid);
-	task->pid = 0;
-	__task_free(task);
+	spinlock_acquire(&procs_lock);
+	list_del_init(&proc->list);
+	spinlock_release(&procs_lock);
+	mm_free(proc->mm);
+	kstack_free(proc->kstack);
+	pid_free(proc->pid);
+	kmem_cache_free(&proc_cache, proc);
 }
 
-void task_init(void)
+int proc_alloc_fd(struct process *proc, struct file *fp)
 {
-	struct task_struct *task;
-
-	for (task = tasks; task < tasks + NR_TASKS; ++task)
-		spinlock_init(&task->lock, "task");
-
-	init_task = task_alloc();
-	strlcpy(init_task->name, "init", sizeof(init_task->name));
-	init_task->ctx.ra = (uint64_t)init_task_ret;
-	init_task->state = TASK_STATE_RUNNABLE;
-	spinlock_release(&init_task->lock);
-}
-
-void task_dump(void)
-{
-	static char *states[] = {
-		[TASK_STATE_UNUSED] = "unused",
-		[TASK_STATE_USED] = "  used",
-		[TASK_STATE_SLEEPING] = " sleep",
-		[TASK_STATE_RUNNABLE] = "runble",
-		[TASK_STATE_RUNNING] = "   run",
-		[TASK_STATE_ZOMBIE] = "zombie",
-	};
-	struct task_struct *task;
-	char *state;
-
-	printk("\n");
-	for (task = tasks; task < tasks + NR_TASKS; ++task) {
-		if (task->state == TASK_STATE_UNUSED)
-			continue;
-		if (task->state >= 0 && task->state < countof(states) &&
-		    states[task->state])
-			state = states[task->state];
-		else
-			state = "???";
-		printk("%ld %s %s", task->pid, state, task->name);
-		printk("\n");
+	for (int i = 0; i < OPEN_MAX; ++i) {
+		if (!proc->ofiles[i]) {
+			proc->ofiles[i] = fp;
+			return i;
+		}
 	}
+
+	return -1;
 }
 
-int task_set_brk(uint64_t addr)
+static void user_init_proc_return(void)
 {
-	struct task_struct *task = current_task();
-	struct mm_struct *mm = task->mm;
+	proc_sched_resume();
+	struct process *proc = current_process();
+	spinlock_release(&proc->lock);
+	fs_init();
+	char *argv[] = { "/bin/init", 0 };
+	char *envp[] = { 0 };
+	int ret = do_execve(argv[0], argv, envp);
+	if (ret < 0)
+		panic("execve %s failed: %s\n", argv[0], strerror(ret));
+	proc->tf.a0 = ret;
+	prepare_to_return();
+	user_trap_return(&proc->tf);
+}
+
+void proc_init_user(void)
+{
+	init_proc = proc_alloc();
+	if (!init_proc)
+		panic("failed to create user init process\n");
+	spinlock_acquire(&init_proc->lock);
+	strlcpy(init_proc->name, "init", sizeof(init_proc->name));
+	init_proc->ctx.ra = (uint64_t)user_init_proc_return;
+	init_proc->ctx.sp = init_proc->kstack + KSTACK_SIZE;
+	init_proc->state = PROCESS_STATE_RUNNING;
+	init_proc->irq_enabled = true;
+	spinlock_release(&init_proc->lock);
+	proc_join(init_proc);
+}
+
+void proc_set_killed(struct process *proc)
+{
+	spinlock_acquire(&proc->lock);
+	proc->killed = true;
+	spinlock_release(&proc->lock);
+}
+
+bool proc_is_killed(struct process *proc)
+{
+	bool killed;
+	spinlock_acquire(&proc->lock);
+	killed = proc->killed;
+	spinlock_release(&proc->lock);
+	return killed;
+}
+
+int proc_set_brk(uint64_t addr)
+{
+	struct process *proc = current_process();
+	struct mm_struct *mm = proc->mm;
 	struct vm_area *heap = mm->heap;
 	uint64_t heap_start = heap->addr;
 	uint64_t curr_heap_end = heap_start + heap->size;
@@ -294,46 +229,120 @@ failed:
 	return err;
 }
 
-int task_alloc_fd(struct task_struct *task, struct file *fp)
+void proc_dump(void)
 {
-	for (int i = 0; i < OPEN_MAX; ++i) {
-		if (!task->ofiles[i]) {
-			task->ofiles[i] = fp;
-			return i;
-		}
+	static char *state_strs[] = {
+		[PROCESS_STATE_NEW] = "new    ",
+		[PROCESS_STATE_SLEEPING] = "sleep  ",
+		[PROCESS_STATE_RUNNING] = "running",
+		[PROCESS_STATE_ZOMBIE] = "zombie ",
+	};
+	struct process *proc;
+	char *state;
+
+	spinlock_acquire(&procs_lock);
+	printk("\n");
+	list_for_each_entry(proc, &procs, list) {
+		if (proc->state >= 0 && proc->state < countof(state_strs) &&
+		    state_strs[proc->state])
+			state = state_strs[proc->state];
+		else
+			state = "???    ";
+		printk("%ld %s %s\n", proc->pid, state, proc->name);
+	}
+	spinlock_release(&procs_lock);
+}
+
+static void proc_fork_return(void)
+{
+	proc_sched_resume();
+	struct process *proc = current_process();
+	spinlock_release(&proc->lock);
+	prepare_to_return();
+	user_trap_return(&proc->tf);
+}
+
+int proc_fork(void)
+{
+	int err;
+	pid_t cpid;
+	struct process *child;
+	struct process *parent = current_process();
+
+	child = proc_alloc();
+	if (!child)
+		return -ENOMEM;
+
+	err = mm_copy(child->mm, parent->mm);
+	if (err) {
+		proc_free(child);
+		return err;
 	}
 
-	return -1;
+	memcpy(&child->tf, &parent->tf, sizeof(parent->tf));
+
+	for (int i = 0; i < OPEN_MAX; ++i) {
+		if (parent->ofiles[i])
+			child->ofiles[i] = file_dup(parent->ofiles[i]);
+	}
+	child->cwd = dentry_dup(parent->cwd);
+
+	child->tf.a0 = 0;
+
+	spinlock_acquire(&wait_lock);
+	child->parent = parent;
+	list_add(&child->child, &parent->children);
+	spinlock_release(&wait_lock);
+
+	spinlock_acquire(&child->lock);
+	cpid = child->pid;
+	child->state = PROCESS_STATE_RUNNING;
+	child->ctx.ra = (uint64_t)proc_fork_return;
+	child->ctx.sp = child->kstack + KSTACK_SIZE;
+	spinlock_release(&child->lock);
+
+	proc_join(child);
+
+	return cpid;
+}
+
+struct process *current_process(void)
+{
+	push_off();
+	struct cpu *cpu = current_cpu();
+	struct process *proc = cpu->current;
+	pop_off();
+	return proc;
+}
+
+cpuid_t current_cpuid(void)
+{
+	return read_tp();
+}
+
+struct cpu *current_cpu(void)
+{
+	cpuid_t id = current_cpuid();
+	return &cpus[id];
 }
 
 void push_off(void)
 {
-	bool irq_enabled = intr_off_get();
-	struct processor *proc = current_processor();
-	if (proc->irq_nest == 0)
-		proc->irq_enabled = irq_enabled;
-	proc->irq_nest += 1;
+	int enabled = intr_off_get();
+	struct cpu *cpu = current_cpu();
+	if (cpu->irq_nest == 0)
+		cpu->irq_enabled = enabled;
+	cpu->irq_nest += 1;
 }
 
 void pop_off(void)
 {
-	struct processor *proc;
+	struct cpu *cpu = current_cpu();
 	if (intr_enabled())
 		panic("%s(): interruptible\n", __func__);
-	proc = current_processor();
-	if (proc->irq_nest < 1)
-		panic("%s(): nesting level 0\n", __func__);
-	proc->irq_nest -= 1;
-	if (proc->irq_nest == 0 && proc->irq_enabled)
+	if (cpu->irq_nest < 1)
+		panic("%s(): nesting level < 1\n", __func__);
+	cpu->irq_nest -= 1;
+	if (cpu->irq_nest == 0 && cpu->irq_enabled)
 		intr_on();
-}
-
-struct processor *current_processor(void)
-{
-	return &processors[current_processor_id()];
-}
-
-processor_id_t current_processor_id(void)
-{
-	return read_tp();
 }

@@ -15,9 +15,8 @@ typedef unsigned int mode_t;
 typedef unsigned int fmode_t;
 typedef long off_t;
 typedef long pid_t;
+typedef int cpuid_t;
 typedef long clock_t;
 typedef long suseconds_t;
-
-typedef int processor_id_t;
 
 #endif

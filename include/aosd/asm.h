@@ -11,7 +11,7 @@
 
 #define KERNEL_LOAD_ADDR 0x80200000
 
-#define TASK_SIZE_MAX ((1UL << 38) - PAGE_SIZE)
+#define USER_SPACE_SIZE_MAX ((1UL << 38) - PAGE_SIZE)
 
 #define PAGE_OFFSET 0xffffffc000000000
 #define LINEAR_MAPPING_SIZE 0x2000000000 /* 128G */
@@ -27,6 +27,6 @@
 #define NR_INIT_STACK_PAGES 2
 #define NR_EARLY_PGDIR_PAGES 4
 
-#define NR_PROCESSORS 8
+#define NR_CPUS 8
 
 #endif

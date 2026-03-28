@@ -46,7 +46,7 @@ SECTIONS
 
     . = ALIGN(PAGE_SIZE);
     init_stack = .;
-    . += NR_INIT_STACK_PAGES * PAGE_SIZE * NR_PROCESSORS;
+    . += NR_INIT_STACK_PAGES * PAGE_SIZE * NR_CPUS;
     init_stack_top = .;
 
     . = ALIGN(PAGE_SIZE);

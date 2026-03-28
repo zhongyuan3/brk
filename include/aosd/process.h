@@ -9,14 +9,13 @@
 #include <uapi/aosd/resource.h>
 #include <uapi/aosd/time.h>
 
-#define TASK_TIME_SLICE 5
-#define NR_TASKS 128
-
 #define KSTACK_PAGE_ORDER 1
 #define KSTACK_SIZE (PAGE_SIZE * (1 << KSTACK_PAGE_ORDER))
 #define USTACK_PAGE_ORDER 4
 #define USTACK_SIZE (PAGE_SIZE * (1 << USTACK_PAGE_ORDER))
-#define TASK_NAME_MAX 64
+
+#define TIME_SLICE_MAX 5
+#define PROCESS_NAME_MAX 32
 
 struct file;
 struct dentry;
@@ -55,6 +54,7 @@ struct trapframe {
 	/* 240 */ uint64_t t5;
 	/* 248 */ uint64_t t6;
 	/* 256 */ uint64_t epc;
+	/* 264 */ uint64_t cpuid;
 };
 
 struct context {
@@ -74,68 +74,72 @@ struct context {
 	uint64_t s11;
 };
 
-enum task_state {
-	TASK_STATE_UNUSED,
-	TASK_STATE_USED,
-	TASK_STATE_RUNNABLE,
-	TASK_STATE_RUNNING,
-	TASK_STATE_SLEEPING,
-	TASK_STATE_ZOMBIE,
+enum process_state {
+	PROCESS_STATE_NEW,
+	PROCESS_STATE_RUNNING,
+	PROCESS_STATE_SLEEPING,
+	PROCESS_STATE_ZOMBIE,
 };
 
-struct task_struct {
-	/* The following fields are protected by wait_lock: */
-	struct task_struct *parent; /* Parent process */
+struct process {
+	struct list_head list;
+
+	struct list_head queue;
+
+	struct process *parent;
+	struct list_head children;
+	struct list_head child;
 
 	spinlock_t lock;
-	/* The following fields are protected by task_struct::lock: */
-	void *chan; /* If non-NULL, sleeping on chan */
+	void *chan;
+	struct context ctx;
 	pid_t pid;
-	enum task_state state;
+	enum process_state state;
 	int exit_status;
 	bool killed;
 
-	/* The following fields are private fields: */
-	struct mm_struct *mm; /* Memory management structure */
+	struct mm_struct *mm;
 	struct file *ofiles[OPEN_MAX];
 	struct dentry *cwd;
 	struct tms ptms;
 	struct trapframe tf;
-	struct context ctx;
 	uint64_t kstack;
 	uint64_t ktime;
 	uint64_t utime;
-	processor_id_t on_proc;
 	int time_slice;
-	char name[TASK_NAME_MAX];
+	char name[PROCESS_NAME_MAX];
+	bool irq_enabled;
 };
 
-struct processor {
-	struct task_struct *task;
+struct cpu {
+	struct process *current;
+	struct process *handoff;
 	struct context ctx;
 	int irq_nest;
 	bool irq_enabled;
 };
 
-void task_init(void);
-struct task_struct *task_alloc(void);
-void task_free(struct task_struct *task);
+void proc_init_user(void);
 
-void task_set_killed(struct task_struct *task);
-bool task_is_killed(struct task_struct *task);
-int task_fork(void);
-int task_set_brk(uint64_t addr);
-int task_alloc_fd(struct task_struct *task, struct file *fp);
-void task_dump(void);
+void proc_cache_init(void);
+struct process *proc_alloc(void);
+void proc_free(struct process *proc);
+void proc_set_killed(struct process *proc);
+bool proc_is_killed(struct process *proc);
+int proc_fork(void);
+int proc_set_brk(uint64_t addr);
+int proc_alloc_fd(struct process *proc, struct file *fp);
+void proc_dump(void);
 
-void task_yield(void);
-void task_sleep(void *chan, spinlock_t *lock);
-void task_wake_up(void *chan);
-void task_exit(int status);
-pid_t task_wait(pid_t cpid, int *status, int options, struct rusage *rus);
-void scheduler(void);
-
-struct task_struct *current_task(void);
+void proc_yield(void);
+void proc_sleep(void *chan, spinlock_t *lock);
+void proc_wake_up(void *chan);
+void proc_exit(int status);
+pid_t proc_wait(pid_t cpid, int *status, int options, struct rusage *rus);
+void proc_sched(void);
+void proc_sched_resume(void);
+void proc_scheduler(void);
+void proc_join(struct process *proc);
 
 pid_t pid_alloc(void);
 void pid_free(pid_t pid);
@@ -143,13 +147,15 @@ void pid_free(pid_t pid);
 void push_off(void);
 void pop_off(void);
 
-struct processor *current_processor(void);
-processor_id_t current_processor_id(void);
+struct process *current_process(void);
+struct cpu *current_cpu(void);
+cpuid_t current_cpuid(void);
 
-extern struct task_struct tasks[NR_TASKS];
-extern struct processor processors[NR_PROCESSORS];
-extern struct task_struct *init_task;
+void switch_context(struct context *prev, struct context *next);
+
+extern cpuid_t init_cpuid;
+extern struct process *init_proc;
+extern struct cpu cpus[NR_CPUS];
 extern spinlock_t wait_lock;
-extern processor_id_t init_proc_id;
 
 #endif

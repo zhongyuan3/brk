@@ -67,31 +67,31 @@ static uint64_t (*systable[])(void) = {
 
 void syscall(void)
 {
-	struct task_struct *task = current_task();
-	uint64_t num = task->tf.a7;
+	struct process *proc = current_process();
+	uint64_t num = proc->tf.a7;
 	if (num < countof(systable) && systable[num])
-		task->tf.a0 = systable[num]();
+		proc->tf.a0 = systable[num]();
 	else
-		task->tf.a0 = -ENOSYS;
+		proc->tf.a0 = -ENOSYS;
 }
 
 uint64_t syscall_arg_raw(int argno)
 {
-	struct task_struct *task = current_task();
+	struct process *proc = current_process();
 
 	switch (argno) {
 	case 0:
-		return task->tf.a0;
+		return proc->tf.a0;
 	case 1:
-		return task->tf.a1;
+		return proc->tf.a1;
 	case 2:
-		return task->tf.a2;
+		return proc->tf.a2;
 	case 3:
-		return task->tf.a3;
+		return proc->tf.a3;
 	case 4:
-		return task->tf.a4;
+		return proc->tf.a4;
 	case 5:
-		return task->tf.a5;
+		return proc->tf.a5;
 	default:
 		panic("%s(): illegal argument number\n", __func__);
 	}
@@ -110,12 +110,12 @@ int syscall_arg_int(int argno)
 int syscall_arg_fd(int argno, int *pfd, struct file **pfp)
 {
 	int fd = syscall_arg_int(argno);
-	struct task_struct *task = current_task();
-	if (!(0 <= fd && fd < OPEN_MAX) || !task->ofiles[fd])
+	struct process *proc = current_process();
+	if (!(0 <= fd && fd < OPEN_MAX) || !proc->ofiles[fd])
 		return -EBADF;
 	if (pfd)
 		*pfd = fd;
 	if (pfp)
-		*pfp = task->ofiles[fd];
+		*pfp = proc->ofiles[fd];
 	return 0;
 }

@@ -37,6 +37,6 @@ uint64_t sys_times(void)
 	struct tms *buf;
 
 	buf = (struct tms *)syscall_arg_raw(0);
-	*buf = current_task()->ptms;
+	*buf = current_process()->ptms;
 	return 0;
 }
