@@ -4,19 +4,18 @@
 #include <aosd/mm_types.h>
 #include <aosd/types.h>
 
-struct vmap_ops {
-	uint64_t (*alloc_pgd)(void);
-	pgde_t *(*get_pgd_virt)(uint64_t pgd_phys);
-	uint64_t (*alloc_pmd)(void);
-	pmde_t *(*get_pmd_virt)(uint64_t pmd_phys);
-	uint64_t (*alloc_pt)(void);
-	pte_t *(*get_pt_virt)(uint64_t pt_phys);
+enum vmap_mode {
+	VMAP_MODE_EARLY,
+	VMAP_MODE_INTERIM,
+	VMAP_MODE_FINAL,
 };
 
 int vmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
-	 unsigned int flags, struct vmap_ops *ops);
-void vunmap(pgde_t *pgd, uint64_t addr, size_t size, struct vmap_ops *ops);
+	 unsigned int flags, enum vmap_mode mode);
+void vunmap(pgde_t *pgd, uint64_t addr, size_t size, enum vmap_mode mode);
 int kvmap(uint64_t addr, size_t size, uint64_t paddr, unsigned int flags);
+int kvmap_with_mode(uint64_t addr, size_t size, uint64_t paddr,
+		    unsigned int flags, enum vmap_mode mode);
 void kvunmap(uint64_t addr, size_t size);
 int uvmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 	  unsigned int flags);

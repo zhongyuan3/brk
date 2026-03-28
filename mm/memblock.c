@@ -147,7 +147,7 @@ uint64_t memblock_alloc(size_t size, uint64_t min_addr, size_t align)
 		if (start < min_addr)
 			continue;
 
-		uint64_t aligned_start = align_up(start, align);
+		uint64_t aligned_start = align_up(max(start, min_addr), align);
 		if (aligned_start + size > end)
 			continue;
 

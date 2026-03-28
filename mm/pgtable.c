@@ -161,6 +161,8 @@ static int copy_user_pgd(pgde_t *dst, pgde_t *src)
 			goto failed;
 	}
 
+	return 0;
+
 failed:
 	destroy_user_pgtable(dst);
 	return err;
