@@ -30,7 +30,7 @@ struct execve_args {
 
 static uint64_t random_ustack(void)
 {
-	uint64_t ustack_top = TASK_SIZE_MAX;
+	uint64_t ustack_top = USER_SPACE_SIZE_MAX;
 	timer_srand();
 	ustack_top -= (timer_rand() % 32 + 1) * PAGE_SIZE;
 	ustack_top -= USTACK_SIZE;
@@ -39,7 +39,7 @@ static uint64_t random_ustack(void)
 
 static void push_args(struct execve_args *args, uint64_t *psp,
 		      uint64_t stack_virt, struct mm_struct *mm,
-		      struct task_struct *task)
+		      struct process *proc)
 {
 	uint64_t n;
 	uint64_t sp = *psp;
@@ -60,7 +60,7 @@ static void push_args(struct execve_args *args, uint64_t *psp,
 	ksp = align_down(ksp, sizeof(char *));
 	sp -= n;
 	sp = align_down(sp, sizeof(char *));
-	task->tf.a2 = sp;
+	proc->tf.a2 = sp;
 	char **envp_kstart = (char **)ksp;
 
 	n = (args->argc + 1) * sizeof(uint64_t);
@@ -68,7 +68,7 @@ static void push_args(struct execve_args *args, uint64_t *psp,
 	ksp = align_down(ksp, sizeof(char *));
 	sp -= n;
 	sp = align_down(sp, sizeof(char *));
-	task->tf.a1 = sp;
+	proc->tf.a1 = sp;
 	char **argv_kstart = (char **)ksp;
 
 	for (int i = 0; i < args->envc; ++i) {
@@ -262,7 +262,7 @@ static int __do_execve(const char *path, struct execve_args *args)
 {
 	struct elf64_hdr elf_hdr = { 0 };
 	struct elf64_phdr phdr = { 0 };
-	struct task_struct *task = current_task();
+	struct process *proc = current_process();
 	struct file *f = NULL;
 	struct mm_struct *new_mm = NULL;
 	int err = 0;
@@ -331,17 +331,17 @@ static int __do_execve(const char *path, struct execve_args *args)
 	struct page *stack_pg = new_mm->stack->pages[0];
 	uint64_t stack_phys = page_to_phys(stack_pg);
 	uint64_t stack_virt = phys_to_virt(stack_phys);
-	push_args(args, &sp, stack_virt, new_mm, task);
+	push_args(args, &sp, stack_virt, new_mm, proc);
 
-	strlcpy(task->name, args->argv[0], sizeof(task->name));
+	strlcpy(proc->name, args->argv[0], sizeof(proc->name));
 
 	switch_pgtable(new_mm->pgd);
 
-	struct mm_struct *old_mm = task->mm;
-	task->mm = new_mm;
+	struct mm_struct *old_mm = proc->mm;
+	proc->mm = new_mm;
 	mm_free(old_mm);
-	task->tf.epc = elf_hdr.e_entry;
-	task->tf.sp = sp;
+	proc->tf.epc = elf_hdr.e_entry;
+	proc->tf.sp = sp;
 
 	return args->argc;
 

@@ -7,7 +7,7 @@ typedef struct spinlock {
 	volatile unsigned int locked;
 
 	/* For debuging: */
-	processor_id_t proc_id; /* Processor holding the lock. */
+	cpuid_t cpuid; /* CPU holding the lock. */
 	const char *name; /* Name of the lock. */
 } spinlock_t;
 
@@ -29,7 +29,7 @@ typedef struct sleeplock {
 } sleeplock_t;
 
 #define SLEEPLOCK_INITIALIZER(name) \
-	{ 0, SPINLOCK_INITIALIZER("sleeplock"), 0, name }
+	{ 0, SPINLOCK_INITIALIZER("sleeplock"), -1, name }
 #define SLEEPLOCK_DEFINE(name) sleeplock_t name = SLEEPLOCK_INITIALIZER(#name)
 
 void sleeplock_init(sleeplock_t *lock, const char *name);

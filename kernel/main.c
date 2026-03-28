@@ -32,7 +32,7 @@ void start_other_harts(uint64_t init_hart_id)
 	uint64_t start_addr;
 
 	start_addr = symbol_phys(hart_entry);
-	for (uint64_t id = 0; id < NR_PROCESSORS; ++id) {
+	for (uint64_t id = 0; id < NR_CPUS; ++id) {
 		if (id == init_hart_id)
 			continue;
 
@@ -42,11 +42,11 @@ void start_other_harts(uint64_t init_hart_id)
 
 void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 {
+	write_tp(hart_id);
+
 	kernel_load_offset = load_offset;
 	dtb_phys = dtb;
-	init_proc_id = hart_id;
-
-	write_tp(hart_id);
+	init_cpuid = hart_id;
 
 	memblock_init();
 	memblock_reserve(_SKERNEL_PHYS, _KERNEL_SIZE);
@@ -90,11 +90,12 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 	file_cache_init();
 	inode_cache_init();
 
-	task_init();
+	proc_cache_init();
+	proc_init_user();
 
-	start_other_harts(hart_id);
+	// start_other_harts(hart_id);
 
-	scheduler();
+	proc_scheduler();
 }
 
 void start_hart(uint64_t hart_id)
@@ -104,12 +105,12 @@ void start_hart(uint64_t hart_id)
 	write_satp(make_satp_sv39(symbol_phys(kernel_pgdir)));
 	sfence_vma();
 
-	printk("hart %lu starting\n", hart_id);
-
 	irq_init_hart(hart_id);
 	uart_init_hart(hart_id);
 	virtio_blk_init_hart(hart_id);
 	trap_init_hart(hart_id);
 
-	scheduler();
+	printk("hart %lu starting\n", hart_id);
+
+	proc_scheduler();
 }

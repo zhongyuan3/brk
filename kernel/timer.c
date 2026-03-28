@@ -31,7 +31,7 @@ void timer_set_next(void)
 
 void timer_handle_int(void)
 {
-	if (current_processor_id() == init_proc_id) {
+	if (current_cpuid() == init_cpuid) {
 		spinlock_acquire(&jiffies_lock);
 		++jiffies;
 		/* 1 ms = 1000 us */
@@ -70,7 +70,7 @@ uint64_t do_nanosleep(const struct timeval *dur, struct timeval *rem)
 	walltime_get(&start);
 	spinlock_acquire(&jiffies_lock);
 	for (;;) {
-		if (task_is_killed(current_task())) {
+		if (proc_is_killed(current_process())) {
 			spinlock_release(&jiffies_lock);
 			return -1;
 		}
@@ -78,7 +78,7 @@ uint64_t do_nanosleep(const struct timeval *dur, struct timeval *rem)
 		if ((curr.tv_sec - start.tv_sec >= dur->tv_sec) &&
 		    (curr.tv_usec - start.tv_usec >= dur->tv_usec))
 			break;
-		task_sleep(&jiffies, &jiffies_lock);
+		proc_sleep(&jiffies, &jiffies_lock);
 	}
 	spinlock_release(&jiffies_lock);
 

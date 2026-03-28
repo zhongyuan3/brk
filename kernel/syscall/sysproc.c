@@ -18,8 +18,8 @@ uint64_t sys_brk(void)
 {
 	uint64_t addr = syscall_arg_raw(0);
 	if (addr == 0)
-		return current_task()->mm->brk;
-	return task_set_brk(addr);
+		return current_process()->mm->brk;
+	return proc_set_brk(addr);
 }
 
 uint64_t sys_clone(void)
@@ -33,18 +33,18 @@ uint64_t sys_wait4(void)
 	int *wstatus = (int *)syscall_arg_raw(1);
 	int opts = syscall_arg_raw(2);
 	struct rusage *rus = (struct rusage *)syscall_arg_raw(3);
-	return task_wait(pid, wstatus, opts, rus);
+	return proc_wait(pid, wstatus, opts, rus);
 }
 
 uint64_t sys_fork(void)
 {
-	return task_fork();
+	return proc_fork();
 }
 
 uint64_t sys_exit(void)
 {
 	int status = syscall_arg_raw(0);
-	task_exit(status);
+	proc_exit(status);
 	return 0;
 }
 
@@ -65,16 +65,16 @@ uint64_t sys_kill(void)
 
 uint64_t sys_sched_yield(void)
 {
-	task_yield();
+	proc_yield();
 	return 0;
 }
 
 uint64_t sys_getpid(void)
 {
-	return current_task()->pid;
+	return current_process()->pid;
 }
 
 uint64_t sys_getppid(void)
 {
-	return current_task()->parent->pid;
+	return current_process()->parent->pid;
 }

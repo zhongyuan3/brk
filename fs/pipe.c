@@ -49,10 +49,10 @@ void pipe_close(struct pipe *p, bool writable)
 	spinlock_acquire(&p->lock);
 	if (writable) {
 		p->writable = false;
-		task_wake_up(&p->r_idx);
+		proc_wake_up(&p->r_idx);
 	} else {
 		p->readable = false;
-		task_wake_up(&p->w_idx);
+		proc_wake_up(&p->w_idx);
 	}
 	if (!p->readable && !p->writable) {
 		spinlock_release(&p->lock);
@@ -65,16 +65,16 @@ void pipe_close(struct pipe *p, bool writable)
 int pipe_read(struct pipe *p, void *buf, size_t n, size_t *read)
 {
 	size_t i;
-	struct task_struct *task = current_task();
+	struct process *proc = current_process();
 	uint8_t ch;
 
 	spinlock_acquire(&p->lock);
 	while (p->r_idx == p->w_idx && p->writable) {
-		if (task_is_killed(task)) {
+		if (proc_is_killed(proc)) {
 			spinlock_release(&p->lock);
 			return -1;
 		}
-		task_sleep(&p->r_idx, &p->lock);
+		proc_sleep(&p->r_idx, &p->lock);
 	}
 	for (i = 0; i < n; i++) {
 		if (p->r_idx == p->w_idx)
@@ -83,7 +83,7 @@ int pipe_read(struct pipe *p, void *buf, size_t n, size_t *read)
 		((uint8_t *)buf)[i] = ch;
 		p->r_idx = (p->r_idx + 1) % PIPE_BUF;
 	}
-	task_wake_up(&p->w_idx);
+	proc_wake_up(&p->w_idx);
 	spinlock_release(&p->lock);
 	if (read)
 		*read = i;
@@ -93,18 +93,18 @@ int pipe_read(struct pipe *p, void *buf, size_t n, size_t *read)
 int pipe_write(struct pipe *p, const void *buf, size_t n, size_t *written)
 {
 	size_t i = 0;
-	struct task_struct *task = current_task();
+	struct process *proc = current_process();
 	uint8_t ch;
 
 	spinlock_acquire(&p->lock);
 	while (i < n) {
-		if (!p->readable || task_is_killed(task)) {
+		if (!p->readable || proc_is_killed(proc)) {
 			spinlock_release(&p->lock);
 			return -1;
 		}
 		if ((p->w_idx + 1) % PIPE_BUF == p->r_idx) {
-			task_wake_up(&p->r_idx);
-			task_sleep(&p->w_idx, &p->lock);
+			proc_wake_up(&p->r_idx);
+			proc_sleep(&p->w_idx, &p->lock);
 		} else {
 			ch = ((const uint8_t *)buf)[i];
 			p->data[p->w_idx] = ch;
@@ -112,7 +112,7 @@ int pipe_write(struct pipe *p, const void *buf, size_t n, size_t *written)
 			i++;
 		}
 	}
-	task_wake_up(&p->r_idx);
+	proc_wake_up(&p->r_idx);
 	spinlock_release(&p->lock);
 
 	if (written)

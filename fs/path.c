@@ -163,7 +163,7 @@ struct dentry *path_lookup(const char *path)
 	if (path[0] == '/')
 		dirdp = dentry_get(NULL, "/");
 	else
-		dirdp = dentry_dup(current_task()->cwd);
+		dirdp = dentry_dup(current_process()->cwd);
 
 	dp = path_lookup_core(dirdp, path, name, NAME_MAX, false);
 	dentry_put(dirdp);
@@ -177,7 +177,7 @@ struct dentry *path_lookup_parent(const char *path, char *name, size_t size)
 	if (path[0] == '/')
 		dirdp = dentry_get(NULL, "/");
 	else
-		dirdp = dentry_dup(current_task()->cwd);
+		dirdp = dentry_dup(current_process()->cwd);
 
 	dp = path_lookup_core(dirdp, path, name, size, true);
 	dentry_put(dirdp);
