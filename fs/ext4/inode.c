@@ -14,7 +14,44 @@
 #include <ext4_fs.h>
 #include <ext4_inode.h>
 #include <ext4_oflags.h>
+#include <ext4_types.h>
 #include <uapi/aosd/stat.h>
+
+int ext4fs_read_inode_metadata(struct inode *ip)
+{
+	struct ext4fs_super_block *efs_sb;
+	struct ext4fs_inode *efs_ip;
+	struct ext4_fs *e_fs;
+	struct ext4_inode_ref e_iref = { 0 };
+	int err = 0;
+
+	assert(sleeplock_holding(&ip->i_lock));
+
+	efs_ip = ip->i_private;
+	efs_sb = ip->i_sb->s_private;
+	e_fs = efs_sb->s_blkdev.fs;
+
+	err = ext4_fs_get_inode_ref(e_fs, ip->i_no, &e_iref);
+	if (err)
+		return err;
+
+	ip->i_flags = ext4_inode_get_flags(e_iref.inode);
+	ip->i_mode = ext4_inode_get_mode(&e_fs->sb, e_iref.inode);
+	ip->i_nlink = ext4_inode_get_links_cnt(e_iref.inode);
+	ip->i_size = ext4_inode_get_size(&e_fs->sb, e_iref.inode);
+	ip->i_rdev = ext4_inode_get_dev(e_iref.inode);
+	ip->i_atime.tv_sec = ext4_inode_get_access_time(e_iref.inode);
+	ip->i_atime.tv_nsec = 0;
+	ip->i_mtime.tv_sec = ext4_inode_get_modif_time(e_iref.inode);
+	ip->i_mtime.tv_nsec = 0;
+	ip->i_ctime.tv_sec = 0;
+	ip->i_ctime.tv_nsec = 0;
+	efs_ip->i_dir_size = ip->i_size;
+
+	ext4_fs_put_inode_ref(&e_iref);
+
+	return 0;
+}
 
 static int ext4fs_create(struct dentry *dir, struct dentry *new_dentry,
 			 mode_t mode)
@@ -239,80 +276,24 @@ out0:
 	return ret;
 }
 
-int ext4fs_dir_find_entry(struct dentry *dir, struct dentry *dentry)
+static int ext4fs_rename(struct dentry *old_dir, struct dentry *old_dp,
+			 struct dentry *new_dir, struct dentry *new_dp)
 {
-	struct ext4fs_inode_info *dir_inode_info;
-	struct ext4fs_sb_info *sb_info;
-	struct ext4_fs *fs;
-	struct ext4_inode_ref dir_inode_ref = { 0 };
-	struct ext4_dir_search_result result = { 0 };
-	int ret = 0;
-	struct inode *dir_inode = dir->d_inode;
-
-	assert(sleeplock_holding(&dir_inode->i_lock));
-
-	dir_inode_info = dir_inode->i_private;
-	sb_info = dir_inode->i_sb->s_private;
-	fs = sb_info->s_blkdev.fs;
-
-	if (!dir_inode_info->i_is_dir) {
-		ret = -ENOTDIR;
-		goto out0;
-	}
-
-	ret = ext4_fs_get_inode_ref(fs, dir_inode->i_num, &dir_inode_ref);
-	if (ret != 0)
-		goto out0;
-
-	ret = ext4_dir_find_entry(&result, &dir_inode_ref, dentry->d_name,
-				  strlen(dentry->d_name));
-	if (ret != 0)
-		goto out1;
-
-	ret = ext4fs_open_direntry(dir, result.dentry, dentry);
-
-	ext4_dir_destroy_result(&dir_inode_ref, &result);
-out1:
-	ext4_fs_put_inode_ref(&dir_inode_ref);
-out0:
-	return ret;
-}
-
-int ext4fs_read_inode(struct inode *inode)
-{
-	struct ext4fs_sb_info *sb_info;
-	struct ext4_fs *fs;
-	struct ext4_inode_ref inode_ref = { 0 };
-	struct ext4fs_inode_info *inode_info;
-
-	int err = 0;
-
-	assert(sleeplock_holding(&inode->i_lock));
-
-	inode_info = inode->i_private;
-	sb_info = inode->i_sb->s_private;
-	fs = sb_info->s_blkdev.fs;
-
-	err = ext4_fs_get_inode_ref(fs, inode->i_num, &inode_ref);
-	if (err)
-		return err;
-
-	inode->i_flags = ext4_inode_get_flags(inode_ref.inode);
-	inode->i_mode = ext4_inode_get_mode(&fs->sb, inode_ref.inode);
-	inode->i_links = ext4_inode_get_links_cnt(inode_ref.inode);
-	inode->i_size = ext4_inode_get_size(&fs->sb, inode_ref.inode);
-	inode->i_rdev = ext4_inode_get_dev(inode_ref.inode);
-	inode->i_atime = ext4_inode_get_access_time(inode_ref.inode);
-	inode->i_mtime = ext4_inode_get_modif_time(inode_ref.inode);
-	inode->i_ctime = ext4_inode_get_change_inode_time(inode_ref.inode);
-	inode_info->i_dir_size = inode->i_size;
-
-	ext4_fs_put_inode_ref(&inode_ref);
-
 	return 0;
 }
 
-struct inode_operations ext4_iops = {
+static int ext4fs_symlink(struct dentry *dir_dp, struct dentry *dp,
+			  const char *target)
+{
+	return 0;
+}
+
+static int ext4fs_readlink(struct dentry *dp, char *buf, size_t len)
+{
+	return 0;
+}
+
+const struct inode_operations ext4_iops = {
 	.create = ext4fs_create,
 	.link = ext4fs_link,
 	.unlink = ext4fs_unlink,
@@ -320,4 +301,7 @@ struct inode_operations ext4_iops = {
 	.rmdir = ext4fs_rmdir,
 	.lookup = ext4fs_lookup,
 	.mknod = ext4fs_mknod,
+	.rename = ext4fs_rename,
+	.symlink = ext4fs_symlink,
+	.readlink = ext4fs_readlink,
 };

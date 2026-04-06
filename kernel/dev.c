@@ -299,9 +299,9 @@ static int chrdev_fstat(struct file *file, struct stat *st)
 
 	sleeplock_acquire(&file->f_inode->i_lock);
 	st->st_dev = file->f_inode->i_sb->s_dev;
-	st->st_ino = file->f_inode->i_num;
+	st->st_ino = file->f_inode->i_no;
 	st->st_mode = file->f_inode->i_mode;
-	st->st_nlink = file->f_inode->i_links;
+	st->st_nlink = file->f_inode->i_nlink;
 	st->st_rdev = file->f_inode->i_rdev;
 	st->st_size = file->f_inode->i_size;
 	st->st_blksize = file->f_inode->i_sb->s_block_size;
@@ -319,7 +319,6 @@ static int chrdev_fopen(struct file *file, struct dentry *dentry, int flags)
 		sleeplock_release(&inode->i_lock);
 		return -EOPNOTSUPP;
 	}
-	file->f_dev = inode->i_rdev;
 	file->f_ops = &chrdev_fops;
 	file->f_inode = inode_dup(inode);
 	file->f_dentry = dentry_dup(dentry);
@@ -364,20 +363,22 @@ static int blkdev_ftruncate(struct file *file, off_t len)
 	return -EOPNOTSUPP;
 }
 
-struct file_operations chrdev_fops = {
+const struct file_operations chrdev_fops = {
 	.read = chrdev_fread,
 	.write = chrdev_fwrite,
 	.seek = chrdev_fseek,
 	.stat = chrdev_fstat,
 	.open = chrdev_fopen,
 	.truncate = chrdev_ftruncate,
+	.close = NULL,
 };
 
-struct file_operations blkdev_fops = {
+const struct file_operations blkdev_fops = {
 	.read = blkdev_fread,
 	.write = blkdev_fwrite,
 	.seek = blkdev_fseek,
 	.stat = blkdev_fstat,
 	.open = blkdev_fopen,
 	.truncate = blkdev_ftruncate,
+	.close = NULL,
 };

@@ -5,78 +5,86 @@
 #include <aosd/lock.h>
 #include <aosd/path.h>
 #include <aosd/slab.h>
+#include <aosd/types.h>
 #include <ext4.h>
 #include <ext4_super.h>
 #include <ext4_types.h>
 #include <uapi/aosd/stat.h>
 
-static struct dentry *ext4fs_alloc_root_dentry(const char *mount_point)
-{
-	const char *name = NULL;
-	size_t len = 0;
+static SLEEPLOCK_DEFINE(__ext4fs_fs_lock);
+static struct ext4_lock ext4fs_fs_lock;
 
-	path_get_last(mount_point, &name, &len);
-	return dentry_alloc(name, len);
+static void ext4fs_fs_lock_acquire(void)
+{
+	sleeplock_acquire(&__ext4fs_fs_lock);
 }
 
-static int ext4fs_mount(struct file_system_type *fs_type, const char *dev_name,
-			const char *mount_point, unsigned long flags,
-			struct dentry **mount_root)
+static void ext4fs_fs_lock_release(void)
 {
-	struct dentry *mnt_dentry;
-	struct inode *mnt_inode;
-	struct blkdev *blkdev;
-	struct ext4fs_inode_info *inode_info;
-	struct ext4fs_sb_info *sb_info;
-	struct ext4_sblock *sb;
-	struct dentry *dev_dentry;
-	struct super_block *mnt_sb;
-	int err = 0;
+	sleeplock_release(&__ext4fs_fs_lock);
+}
 
-	mnt_sb = sblock_alloc();
-	if (!mnt_sb)
+static int ext4fs_mount(const struct file_system_type *fs_type,
+			const char *dev_name, const char *mount_point,
+			unsigned long flags, struct dentry **mount_root)
+{
+	struct dentry *dp;
+	struct inode *ip;
+	struct super_block *sb;
+	struct blkdev *bdev;
+	struct ext4fs_inode *efs_ip;
+	struct ext4fs_super_block *efs_sb;
+	struct ext4_sblock *e_sb;
+	struct dentry *dev_dp;
+	int err = 0;
+	size_t dname_len = 0;
+	const char *dname = NULL;
+
+	sb = sblock_alloc();
+	if (!sb)
 		return -ENOMEM;
 
-	mnt_sb->s_fs_type = &ext4_fs_type;
-	mnt_sb->s_ops = &ext4_sops;
+	sb->s_fs_type = &ext4_fs_type;
+	sb->s_ops = &ext4_sops;
 
-	dev_dentry = path_lookup(dev_name);
-	if (!dev_dentry) {
+	dev_dp = path_lookup(dev_name);
+	if (!dev_dp) {
 		err = -ENODEV;
 		goto err0;
 	}
-	if (!(inode_mode(dev_dentry->d_inode) & S_IFBLK)) {
-		dentry_put(dev_dentry);
+	if (!(inode_mode(dev_dp->d_inode) & S_IFBLK)) {
+		dentry_put(dev_dp);
 		err = -EINVAL;
 		goto err0;
 	}
-	mnt_sb->s_dev = dev_dentry->d_inode->i_rdev;
-	dentry_put(dev_dentry);
-	blkdev = blkdev_get(mnt_sb->s_dev);
-	if (!blkdev) {
+	sb->s_dev = dev_dp->d_inode->i_rdev;
+	dentry_put(dev_dp);
+	bdev = blkdev_get(sb->s_dev);
+	if (!bdev) {
 		err = -ENODEV;
 		goto err0;
 	}
 
-	sb_info = ext4fs_sbi_create(blkdev);
-	if (!sb_info) {
+	efs_sb = ext4fs_alloc_sb(bdev);
+	if (!efs_sb) {
 		err = -ENOMEM;
 		goto err0;
 	}
 
-	mnt_dentry = ext4fs_alloc_root_dentry(mount_point);
-	if (!mnt_dentry) {
+	path_get_last(mount_point, &dname, &dname_len);
+	dp = dentry_alloc(dname, dname_len);
+	if (!dp) {
 		err = -ENOMEM;
 		goto err1;
 	}
 
-	mnt_inode = inode_alloc();
-	if (!mnt_inode) {
+	ip = inode_alloc();
+	if (!ip) {
 		err = -ENOMEM;
 		goto err2;
 	}
 
-	err = ext4_device_register(&sb_info->s_blkdev, dev_name);
+	err = ext4_device_register(&efs_sb->s_blkdev, dev_name);
 	if (err)
 		goto err3;
 
@@ -84,67 +92,69 @@ static int ext4fs_mount(struct file_system_type *fs_type, const char *dev_name,
 	if (err)
 		goto err4;
 
-	err = ext4_get_sblock(mount_point, &sb);
+	err = ext4_get_sblock(mount_point, &e_sb);
 	if (err)
 		goto err5;
 
-	sb_info->s_sb = sb;
+	efs_sb->s_sb = e_sb;
 
-	mnt_sb->s_block_size = ext4_sb_get_block_size(sb);
-	mnt_sb->s_magic = sb->magic;
-	mnt_sb->s_private = sb_info;
+	sb->s_block_size = ext4_sb_get_block_size(e_sb);
+	sb->s_magic = e_sb->magic;
+	sb->s_private = efs_sb;
 
-	mnt_sb->s_root = mnt_dentry;
-	mnt_dentry->d_parent = NULL;
-	mnt_dentry->d_ops = &ext4_dops;
-	mnt_dentry->d_flags |= DENTRY_MOUNTED;
+	sb->s_root = dp;
+	dp->d_parent = NULL;
+	dp->d_ops = &ext4_dops;
+	dp->d_flags |= DENTRY_MOUNTED;
 
-	mnt_dentry->d_inode = mnt_inode;
+	dp->d_inode = ip;
 
-	inode_info = kzalloc(sizeof(*inode_info));
-	if (!inode_info) {
+	efs_ip = kzalloc(sizeof(*efs_ip));
+	if (!efs_ip) {
 		err = -ENOMEM;
 		goto err5;
 	}
 
-	err = ext4_dir_open(&inode_info->i_dir, mount_point);
+	err = ext4_dir_open(&efs_ip->i_dir, mount_point);
 	if (err)
 		goto err6;
 
-	inode_info->i_is_dir = true;
-	mnt_inode->i_private = inode_info;
-	mnt_inode->i_num = inode_info->i_dir.f.inode;
-	mnt_inode->i_sb = mnt_sb;
-	mnt_inode->i_ops = &ext4_iops;
-	mnt_inode->i_fops = &ext4_fops;
-	sleeplock_acquire(&mnt_inode->i_lock);
-	err = ext4fs_read_inode(mnt_inode);
-	sleeplock_release(&mnt_inode->i_lock);
+	efs_ip->i_is_dir = true;
+	ip->i_private = efs_ip;
+	ip->i_no = efs_ip->i_dir.f.inode;
+	ip->i_sb = sb;
+	ip->i_ops = &ext4_iops;
+	ip->i_fops = &ext4_fops;
+	sleeplock_acquire(&ip->i_lock);
+	err = ext4fs_read_inode_metadata(ip);
+	sleeplock_release(&ip->i_lock);
 	if (err)
 		goto err7;
 
-	sblock_add(mnt_sb);
-	inode_add(mnt_inode);
+	sblock_add(sb);
+	inode_add(ip);
 
-	*mount_root = mnt_dentry;
+	ext4_mount_setup_locks(mount_point, &ext4fs_fs_lock);
+
+	*mount_root = dp;
 	return 0;
 
 err7:
-	ext4_dir_close(&inode_info->i_dir);
+	ext4_dir_close(&efs_ip->i_dir);
 err6:
-	kfree(inode_info);
+	kfree(efs_ip);
 err5:
 	ext4_umount(mount_point);
 err4:
 	ext4_device_unregister(dev_name);
 err3:
-	inode_free(mnt_inode);
+	inode_free(ip);
 err2:
-	dentry_free(mnt_dentry);
+	dentry_free(dp);
 err1:
-	ext4fs_sbi_destroy(sb_info);
+	ext4fs_free_sb(efs_sb);
 err0:
-	sblock_free(mnt_sb);
+	sblock_free(sb);
 	return err;
 }
 
@@ -154,11 +164,16 @@ static void ext4fs_umount(const char *mount_point)
 
 static void ext4fs_deinit_sb(struct super_block *sb)
 {
-	struct ext4fs_sb_info *sbi = sb->s_private;
-	ext4fs_sbi_destroy(sbi);
+	struct ext4fs_super_block *sbi = sb->s_private;
+	ext4fs_free_sb(sbi);
 }
 
-struct file_system_type ext4_fs_type = {
+static struct ext4_lock ext4fs_fs_lock = {
+	.lock = ext4fs_fs_lock_acquire,
+	.unlock = ext4fs_fs_lock_release,
+};
+
+const struct file_system_type ext4_fs_type = {
 	.name = "ext4",
 	.deinit_sb = ext4fs_deinit_sb,
 	.mount = ext4fs_mount,

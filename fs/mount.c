@@ -37,8 +37,9 @@ void mount_add(struct vfsmount *mount)
 	spinlock_release(&mnt_list_lock);
 }
 
-static int __do_mount(struct file_system_type *fs_type, const char *dev_name,
-		      const char *mount_point, int flags, struct dentry *parent)
+static int __do_mount(const struct file_system_type *fs_type,
+		      const char *dev_name, const char *mount_point, int flags,
+		      struct dentry *parent)
 {
 	struct vfsmount *mnt = mount_alloc(mount_point);
 	if (!mnt)
@@ -69,7 +70,7 @@ static int __do_mount(struct file_system_type *fs_type, const char *dev_name,
 int do_mount(const char *fs_name, const char *dev_name, const char *mount_point,
 	     int flags)
 {
-	struct file_system_type *fs_type = get_fs_type(fs_name);
+	const struct file_system_type *fs_type = get_fs_type(fs_name);
 	if (!fs_type)
 		return -EINVAL;
 
@@ -113,7 +114,7 @@ int do_umount(const char *mount_point, int flags)
 	dentry_put(mnt_root);
 
 	struct vfsmount *mnt;
-	struct file_system_type *fs_type;
+	const struct file_system_type *fs_type;
 
 	spinlock_acquire(&mnt_list_lock);
 	list_for_each_entry(mnt, &mnt_list, mnt_list) {

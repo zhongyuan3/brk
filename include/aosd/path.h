@@ -1,6 +1,7 @@
 #ifndef AOSD_PATH_H
 #define AOSD_PATH_H
 
+#include <aosd/limits.h>
 #include <aosd/types.h>
 
 struct dentry;

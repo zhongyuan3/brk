@@ -22,7 +22,7 @@ int inode_cache_init(void)
 			       alignof(struct inode), "icache");
 }
 
-static inline uint32_t inode_hash(struct super_block *sb, uint32_t inum)
+static inline uint32_t inode_hash(struct super_block *sb, uint32_t ino)
 {
 	const uint8_t *k = (uint8_t *)&sb;
 	uint32_t h = 0x811c9dc5;
@@ -30,22 +30,22 @@ static inline uint32_t inode_hash(struct super_block *sb, uint32_t inum)
 		h ^= k[i];
 		h *= 0x01000193;
 	}
-	k = (uint8_t *)&inum;
-	for (size_t i = 0; i < sizeof(inum); ++i) {
+	k = (uint8_t *)&ino;
+	for (size_t i = 0; i < sizeof(ino); ++i) {
 		h ^= k[i];
 		h *= 0x01000193;
 	}
 	return h;
 }
 
-static struct inode *__inode_get(struct super_block *sb, uint32_t inum)
+static struct inode *__inode_get(struct super_block *sb, uint32_t ino)
 {
 	struct inode *ip;
-	uint32_t idx = inode_hash(sb, inum) % NR_ITABLE_BUCKETS;
+	uint32_t idx = inode_hash(sb, ino) % NR_ITABLE_BUCKETS;
 	struct list_head *bkt = &itable[idx];
 
 	list_for_each_entry(ip, bkt, i_list)
-		if (ip->i_num == inum && ip->i_sb == sb) {
+		if (ip->i_no == ino && ip->i_sb == sb) {
 			++ip->i_rc;
 			return ip;
 		}
@@ -70,7 +70,7 @@ static void __inode_free(struct inode *ip)
 
 static void __inode_add(struct inode *ip)
 {
-	uint32_t idx = inode_hash(ip->i_sb, ip->i_num) % NR_ITABLE_BUCKETS;
+	uint32_t idx = inode_hash(ip->i_sb, ip->i_no) % NR_ITABLE_BUCKETS;
 	list_add(&ip->i_list, &itable[idx]);
 }
 
@@ -139,21 +139,21 @@ mode_t inode_mode(struct inode *ip)
 	return mode;
 }
 
-int inode_rc(struct inode *ip)
+refcnt_t inode_rc(struct inode *ip)
 {
-	int rc;
+	refcnt_t rc;
 	spinlock_acquire(&itable_lock);
 	rc = ip->i_rc;
 	spinlock_release(&itable_lock);
 	return rc;
 }
 
-struct inode *inode_get(struct super_block *sb, uint32_t inum)
+struct inode *inode_get(struct super_block *sb, uint32_t ino)
 {
 	struct inode *ip;
 
 	spinlock_acquire(&itable_lock);
-	ip = __inode_get(sb, inum);
+	ip = __inode_get(sb, ino);
 	spinlock_release(&itable_lock);
 	return ip;
 }

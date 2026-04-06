@@ -5,15 +5,16 @@
 #include <aosd/errno.h>
 #include <aosd/fs.h>
 #include <aosd/lock.h>
-#include <aosd/printk.h>
+#include <aosd/path.h>
 #include <aosd/string.h>
 #include <aosd/types.h>
 #include <ext4.h>
 #include <ext4_oflags.h>
+#include <ext4_types.h>
 #include <uapi/aosd/dirent.h>
 #include <uapi/aosd/stat.h>
 
-static unsigned char ext4fs_get_de_type(const struct ext4_direntry *de)
+static unsigned char ext4fs_get_dir_ent_type(const struct ext4_direntry *de)
 {
 	switch (de->inode_type) {
 	case EXT4_DE_REG_FILE:
@@ -35,15 +36,15 @@ static unsigned char ext4fs_get_de_type(const struct ext4_direntry *de)
 	}
 }
 
-static int ext4fs_readdir(struct inode *ip, struct ext4_dir *dir, void *buf,
-			  size_t size, off_t *offset, size_t *rcnt)
+static int ext4fs_read_dir(struct inode *ip, struct ext4_dir *dir, void *buf,
+			   size_t size, off_t *offset, size_t *rcnt)
 {
 	const struct ext4_direntry *de = NULL;
 	uint16_t reclen = 0;
 	struct dirent64 *de64 = NULL;
 	size_t r = 0;
 	uint64_t p = (uint64_t)buf;
-	struct ext4fs_inode_info *inode_info = ip->i_private;
+	struct ext4fs_inode *inode_info = ip->i_private;
 
 	if ((uint64_t)*offset >= inode_info->i_dir_size)
 		dir->next_off = (uint64_t)-1;
@@ -62,7 +63,7 @@ static int ext4fs_readdir(struct inode *ip, struct ext4_dir *dir, void *buf,
 		de64->d_ino = de->inode;
 		de64->d_off = *offset;
 		de64->d_reclen = reclen;
-		de64->d_type = ext4fs_get_de_type(de);
+		de64->d_type = ext4fs_get_dir_ent_type(de);
 		memcpy(de64->d_name, de->name, de->name_length);
 		de64->d_name[de->name_length] = '\0';
 		p += reclen;
@@ -78,10 +79,25 @@ static int ext4fs_readdir(struct inode *ip, struct ext4_dir *dir, void *buf,
 	return 0;
 }
 
-static int ext4fs_fread(struct file *file, void *buf, size_t size,
-			off_t *offset, size_t *rcnt)
+static int ext4fs_read_file(struct ext4_file *fp, void *buf, size_t buf_size,
+			    off_t *offset, size_t *rcnt)
 {
-	struct ext4fs_inode_info *info;
+	int err;
+
+	err = ext4_fseek(fp, *offset, SEEK_SET);
+	if (err)
+		return err;
+	err = ext4_fread(fp, buf, buf_size, rcnt);
+	if (err)
+		return err;
+	*offset = ext4_ftell(fp);
+	return 0;
+}
+
+static int ext4fs_read(struct file *file, void *buf, size_t size, off_t *offset,
+		       size_t *rcnt)
+{
+	struct ext4fs_inode *info;
 	int ret = 0;
 	struct inode *ip = file->f_inode;
 
@@ -91,26 +107,20 @@ static int ext4fs_fread(struct file *file, void *buf, size_t size,
 
 	info = ip->i_private;
 	if (info->i_is_dir) {
-		ret = ext4fs_readdir(ip, &info->i_dir, buf, size, offset, rcnt);
+		ret = ext4fs_read_dir(ip, &info->i_dir, buf, size, offset,
+				      rcnt);
 	} else {
-		ret = ext4_fseek(&info->i_file, *offset, SEEK_SET);
-		if (ret != 0)
-			goto unlock_and_out;
-		ret = ext4_fread(&info->i_file, buf, size, rcnt);
-		if (ret != 0)
-			goto unlock_and_out;
-		*offset = ext4_ftell(&info->i_file);
+		ret = ext4fs_read_file(&info->i_file, buf, size, offset, rcnt);
 	}
 
-unlock_and_out:
 	sleeplock_release(&ip->i_lock);
 	return ret;
 }
 
-static int ext4fs_fwrite(struct file *file, const void *buf, size_t size,
-			 off_t *offset, size_t *wcnt)
+static int ext4fs_write(struct file *file, const void *buf, size_t size,
+			off_t *offset, size_t *wcnt)
 {
-	struct ext4fs_inode_info *info;
+	struct ext4fs_inode *info;
 	int ret = 0;
 
 	sleeplock_acquire(&file->f_inode->i_lock);
@@ -127,7 +137,7 @@ static int ext4fs_fwrite(struct file *file, const void *buf, size_t size,
 	ret = ext4_fwrite(&info->i_file, buf, size, wcnt);
 	if (ret != 0)
 		goto unlock_and_out;
-	ret = ext4fs_read_inode(file->f_inode);
+	ret = ext4fs_read_inode_metadata(file->f_inode);
 	if (ret != 0)
 		goto unlock_and_out;
 	*offset = ext4_ftell(&info->i_file);
@@ -137,9 +147,9 @@ unlock_and_out:
 	return ret;
 }
 
-static off_t ext4fs_fseek(struct file *file, off_t offset, int whence)
+static off_t ext4fs_seek(struct file *file, off_t offset, int whence)
 {
-	struct ext4fs_inode_info *info;
+	struct ext4fs_inode *info;
 	off_t ret = 0;
 
 	assert(file->f_inode);
@@ -161,7 +171,7 @@ unlock_and_out:
 	return ret;
 }
 
-static int ext4fs_fstat(struct file *file, struct stat *st)
+static int ext4fs_stat(struct file *file, struct stat *st)
 {
 	if (!file->f_inode)
 		return -EBADF;
@@ -170,9 +180,9 @@ static int ext4fs_fstat(struct file *file, struct stat *st)
 
 	sleeplock_acquire(&file->f_inode->i_lock);
 	st->st_dev = file->f_inode->i_sb->s_dev;
-	st->st_ino = file->f_inode->i_num;
+	st->st_ino = file->f_inode->i_no;
 	st->st_mode = file->f_inode->i_mode;
-	st->st_nlink = file->f_inode->i_links;
+	st->st_nlink = file->f_inode->i_nlink;
 	st->st_rdev = file->f_inode->i_rdev;
 	st->st_size = file->f_inode->i_size;
 	st->st_blksize = file->f_inode->i_sb->s_block_size;
@@ -182,9 +192,9 @@ static int ext4fs_fstat(struct file *file, struct stat *st)
 	return 0;
 }
 
-static int ext4fs_fopen(struct file *file, struct dentry *dentry, int flags)
+static int ext4fs_open(struct file *file, struct dentry *dentry, int flags)
 {
-	struct ext4fs_inode_info *info;
+	struct ext4fs_inode *info;
 	int ret = 0;
 	struct inode *inode = dentry->d_inode;
 
@@ -205,9 +215,9 @@ unlock_and_out:
 	return ret;
 }
 
-static int ext4fs_ftruncate(struct file *file, off_t len)
+static int ext4fs_truncate(struct file *file, off_t len)
 {
-	struct ext4fs_inode_info *info;
+	struct ext4fs_inode *info;
 	int ret = 0;
 
 	sleeplock_acquire(&file->f_inode->i_lock);
@@ -225,11 +235,17 @@ unlock_and_out:
 	return ret;
 }
 
-struct file_operations ext4_fops = {
-	.read = ext4fs_fread,
-	.write = ext4fs_fwrite,
-	.seek = ext4fs_fseek,
-	.stat = ext4fs_fstat,
-	.open = ext4fs_fopen,
-	.truncate = ext4fs_ftruncate,
+static int ext4fs_close(struct file *fp)
+{
+	return 0;
+}
+
+const struct file_operations ext4_fops = {
+	.read = ext4fs_read,
+	.write = ext4fs_write,
+	.seek = ext4fs_seek,
+	.stat = ext4fs_stat,
+	.open = ext4fs_open,
+	.truncate = ext4fs_truncate,
+	.close = ext4fs_close,
 };

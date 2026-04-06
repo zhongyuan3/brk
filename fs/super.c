@@ -32,9 +32,9 @@ int sblock_add(struct super_block *sb)
 	return 0;
 }
 
-int sblock_rc(struct super_block *sb)
+refcnt_t sblock_rc(struct super_block *sb)
 {
-	int rc;
+	refcnt_t rc;
 	spinlock_acquire(&sblist_lock);
 	rc = sb->s_rc;
 	spinlock_release(&sblist_lock);
