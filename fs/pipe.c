@@ -153,11 +153,12 @@ static int pipe_ftruncate(struct file *fp, off_t offset)
 	return -EOPNOTSUPP;
 }
 
-struct file_operations pipe_fops = {
+const struct file_operations pipe_fops = {
 	.open = pipe_fopen,
 	.read = pipe_fread,
 	.write = pipe_fwrite,
 	.stat = pipe_fstat,
 	.seek = pipe_fseek,
 	.truncate = pipe_ftruncate,
+	.close = NULL,
 };

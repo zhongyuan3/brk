@@ -19,6 +19,7 @@
 
 void page_alloc_init(void);
 struct page *page_alloc(unsigned int order);
+struct page *page_zalloc(unsigned int order);
 void page_free(struct page *pg, unsigned int order);
 
 static inline size_t phys_to_pfn(uint64_t paddr)

@@ -19,4 +19,9 @@ typedef int cpuid_t;
 typedef long clock_t;
 typedef long suseconds_t;
 
+typedef unsigned int uid_t;
+typedef unsigned int gid_t;
+
+typedef long refcnt_t;
+
 #endif

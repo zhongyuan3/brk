@@ -34,6 +34,10 @@ struct page {
 			size_t free_count;
 			size_t object_count;
 		};
+
+		struct { /* tmpfs */
+			struct page *tmpfs_next;
+		};
 	};
 };
 

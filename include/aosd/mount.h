@@ -17,7 +17,7 @@ struct vfsmount *mount_alloc(const char *mount_point);
 void mount_free(struct vfsmount *mount);
 void mount_add(struct vfsmount *mount);
 
-struct file_system_type *get_fs_type(const char *fs_name);
+const struct file_system_type *get_fs_type(const char *fs_name);
 
 int do_mount(const char *fs_name, const char *dev_name, const char *mount_point,
 	     int flags);

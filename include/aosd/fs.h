@@ -3,58 +3,54 @@
 
 #include <aosd/dcache.h>
 #include <aosd/dev.h>
+#include <aosd/fs_types.h>
 #include <aosd/lock.h>
 #include <aosd/types.h>
 #include <uapi/aosd/stat.h>
-
-struct super_block;
-struct super_operations;
-struct inode;
-struct inode_operations;
-struct file;
-struct file_operations;
-struct file_system_type;
-struct dentry;
-struct pipe;
+#include <uapi/aosd/time.h>
 
 struct file_system_type {
 	const char *name;
 	void (*deinit_sb)(struct super_block *);
-	int (*mount)(struct file_system_type *, const char *, const char *,
-		     unsigned long, struct dentry **);
+	int (*mount)(const struct file_system_type *, const char *,
+		     const char *, unsigned long, struct dentry **);
 	void (*umount)(const char *);
 };
 
 struct super_block {
 	struct list_head s_list;
-	int s_rc;
+	refcnt_t s_rc;
 	dev_t s_dev;
-	uint16_t s_magic;
+	uint64_t s_magic;
 	uint64_t s_block_size;
+	unsigned long s_mount_flags;
 	struct dentry *s_root;
 	void *s_private;
-	struct file_system_type *s_fs_type;
+	const struct file_system_type *s_fs_type;
 	const struct super_operations *s_ops;
 };
 
 struct super_operations {
 	void (*deinit_inode)(struct inode *);
+	int (*read_inode)(struct inode *, void *);
 };
 
 struct inode {
 	struct list_head i_list;
-	int i_rc;
+	refcnt_t i_rc;
 	sleeplock_t i_lock;
 	struct super_block *i_sb;
-	uint32_t i_num;
+	uint32_t i_no;
 	dev_t i_rdev;
 	uint32_t i_flags;
 	mode_t i_mode;
-	uint32_t i_links;
+	uint32_t i_nlink;
 	uint64_t i_size;
-	long i_atime;
-	long i_mtime;
-	long i_ctime;
+	uid_t i_uid;
+	gid_t i_gid;
+	struct timespec i_atime;
+	struct timespec i_mtime;
+	struct timespec i_ctime;
 	void *i_private;
 	const struct inode_operations *i_ops;
 	const struct file_operations *i_fops;
@@ -68,6 +64,10 @@ struct inode_operations {
 	int (*rmdir)(struct dentry *, struct dentry *);
 	int (*lookup)(struct dentry *, struct dentry *);
 	int (*mknod)(struct dentry *, struct dentry *, mode_t, dev_t);
+	int (*rename)(struct dentry *, struct dentry *, struct dentry *,
+		      struct dentry *);
+	int (*symlink)(struct dentry *, struct dentry *, const char *);
+	int (*readlink)(struct dentry *, char *, size_t);
 };
 
 #define FMODE_READ 1
@@ -76,10 +76,9 @@ struct inode_operations {
 
 struct file {
 	struct list_head f_list;
-	int f_rc;
+	refcnt_t f_rc;
 	fmode_t f_mode;
 	int f_flags;
-	dev_t f_dev;
 	off_t f_off;
 	struct inode *f_inode;
 	struct pipe *f_pipe;
@@ -89,6 +88,7 @@ struct file {
 
 struct file_operations {
 	int (*open)(struct file *, struct dentry *, int);
+	int (*close)(struct file *);
 	int (*read)(struct file *, void *, size_t, off_t *, size_t *);
 	int (*write)(struct file *, const void *, size_t, off_t *, size_t *);
 	int (*stat)(struct file *, struct stat *);
@@ -105,19 +105,19 @@ void sblock_put(struct super_block *sb);
 struct super_block *sblock_alloc(void);
 void sblock_free(struct super_block *sb);
 int sblock_add(struct super_block *sb);
-int sblock_rc(struct super_block *sb);
+refcnt_t sblock_rc(struct super_block *sb);
 
 #define NR_ITABLE_BUCKETS 64
 
 int inode_cache_init(void);
-struct inode *inode_get(struct super_block *sb, uint32_t inum);
+struct inode *inode_get(struct super_block *sb, uint32_t ino);
 struct inode *inode_dup(struct inode *ip);
 void inode_put(struct inode *ip);
 struct inode *inode_alloc(void);
 void inode_free(struct inode *ip);
 int inode_add(struct inode *ip);
 mode_t inode_mode(struct inode *ip);
-int inode_rc(struct inode *ip);
+refcnt_t inode_rc(struct inode *ip);
 
 int file_cache_init(void);
 struct file *file_alloc(void);
@@ -129,22 +129,22 @@ off_t file_seek(struct file *fp, off_t offset, int whence);
 int file_stat(struct file *fp, struct stat *buf);
 int file_truncate(struct file *fp, off_t len);
 
-extern struct file_system_type ext4_fs_type;
-extern struct dentry_operations ext4_dops;
-extern struct super_operations ext4_sops;
-extern struct inode_operations ext4_iops;
-extern struct file_operations ext4_fops;
+extern const struct file_system_type ext4_fs_type;
+extern const struct dentry_operations ext4_dops;
+extern const struct super_operations ext4_sops;
+extern const struct inode_operations ext4_iops;
+extern const struct file_operations ext4_fops;
 
-extern struct file_system_type tmpfs_fs_type;
-extern struct dentry_operations tmpfs_dops;
-extern struct super_operations tmpfs_sops;
-extern struct inode_operations tmpfs_iops;
-extern struct file_operations tmpfs_fops;
+extern const struct file_system_type tmpfs_fs_type;
+extern const struct dentry_operations tmpfs_dops;
+extern const struct super_operations tmpfs_sops;
+extern const struct inode_operations tmpfs_iops;
+extern const struct file_operations tmpfs_fops;
 
-extern struct file_operations chrdev_fops;
-extern struct file_operations blkdev_fops;
+extern const struct file_operations chrdev_fops;
+extern const struct file_operations blkdev_fops;
 
-extern struct file_operations pipe_fops;
+extern const struct file_operations pipe_fops;
 
 void fs_init(void);
 int do_openat(int dirfd, const char *path, int flags, mode_t mode,

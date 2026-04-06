@@ -1,8 +1,11 @@
+#include <aosd/asm.h>
 #include <aosd/assert.h>
 #include <aosd/list.h>
 #include <aosd/lock.h>
+#include <aosd/mm_types.h>
 #include <aosd/panic.h>
 #include <aosd/pgalloc.h>
+#include <aosd/string.h>
 
 static struct free_area areas[PAGE_ORDER_MAX + 1];
 static SPINLOCK_DEFINE(areas_lock);
@@ -40,6 +43,19 @@ found:
 	curr->flags &= ~PAGE_FLAGS_FREE;
 	spinlock_release(&areas_lock);
 	return curr;
+}
+
+struct page *page_zalloc(unsigned int order)
+{
+	struct page *pg;
+	uint64_t virt;
+
+	pg = page_alloc(order);
+	if (!pg)
+		return NULL;
+	virt = page_to_virt(pg);
+	memset((void *)virt, 0, PAGE_SIZE * (1 << order));
+	return pg;
 }
 
 static bool page_is_buddy(struct page *pg, struct page *buddy,

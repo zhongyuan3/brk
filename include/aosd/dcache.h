@@ -18,7 +18,7 @@ struct dentry {
 	struct list_head d_hash;
 	struct dentry *d_parent;
 	struct inode *d_inode;
-	struct dentry_operations *d_ops;
+	const struct dentry_operations *d_ops;
 };
 
 struct dentry_operations {
