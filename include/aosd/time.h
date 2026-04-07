@@ -1,5 +1,5 @@
-#ifndef UAPI_AOSD_TIME_H
-#define UAPI_AOSD_TIME_H
+#ifndef AOSD_TIME_H
+#define AOSD_TIME_H
 
 #include <aosd/types.h>
 

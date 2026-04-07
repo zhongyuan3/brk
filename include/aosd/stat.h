@@ -1,5 +1,5 @@
-#ifndef UAPI_AOSD_STAT_H
-#define UAPI_AOSD_STAT_H
+#ifndef AOSD_STAT_H
+#define AOSD_STAT_H
 
 #include <aosd/types.h>
 

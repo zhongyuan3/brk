@@ -5,11 +5,11 @@
 #include <aosd/lock.h>
 #include <aosd/path.h>
 #include <aosd/slab.h>
+#include <aosd/stat.h>
 #include <aosd/types.h>
 #include <ext4.h>
 #include <ext4_super.h>
 #include <ext4_types.h>
-#include <uapi/aosd/stat.h>
 
 static SLEEPLOCK_DEFINE(__ext4fs_fs_lock);
 static struct ext4_lock ext4fs_fs_lock;

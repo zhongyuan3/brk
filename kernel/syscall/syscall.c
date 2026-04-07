@@ -5,7 +5,6 @@
 #include <aosd/printk.h>
 #include <aosd/process.h>
 #include <aosd/syscall.h>
-#include <uapi/aosd/syscall.h>
 
 static uint64_t (*systable[])(void) = {
 	[SYS_read] = sys_read,

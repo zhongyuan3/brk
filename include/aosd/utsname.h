@@ -1,5 +1,5 @@
-#ifndef UAPI_AOSD_UTSNAME_H
-#define UAPI_AOSD_UTSNAME_H
+#ifndef AOSD_UTSNAME_H
+#define AOSD_UTSNAME_H
 
 struct utsname {
 	char sysname[65];

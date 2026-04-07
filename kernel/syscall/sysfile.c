@@ -1,5 +1,6 @@
 #include <aosd/dcache.h>
 #include <aosd/errno.h>
+#include <aosd/fcntl.h>
 #include <aosd/fs.h>
 #include <aosd/limits.h>
 #include <aosd/path.h>
@@ -7,12 +8,11 @@
 #include <aosd/printk.h>
 #include <aosd/process.h>
 #include <aosd/slab.h>
+#include <aosd/stat.h>
 #include <aosd/string.h>
 #include <aosd/syscall.h>
 #include <aosd/types.h>
-#include <uapi/aosd/fcntl.h>
-#include <uapi/aosd/stat.h>
-#include <uapi/aosd/utsname.h>
+#include <aosd/utsname.h>
 
 uint64_t sys_read(void)
 {

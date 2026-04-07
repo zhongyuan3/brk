@@ -6,6 +6,7 @@
 #include <aosd/lock.h>
 #include <aosd/path.h>
 #include <aosd/slab.h>
+#include <aosd/stat.h>
 #include <aosd/string.h>
 #include <aosd/types.h>
 #include <ext4.h>
@@ -15,7 +16,6 @@
 #include <ext4_inode.h>
 #include <ext4_oflags.h>
 #include <ext4_types.h>
-#include <uapi/aosd/stat.h>
 
 int ext4fs_read_inode_metadata(struct inode *ip)
 {

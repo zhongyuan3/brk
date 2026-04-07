@@ -6,8 +6,8 @@
 #include <aosd/lock.h>
 #include <aosd/mm_types.h>
 #include <aosd/types.h>
-#include <uapi/aosd/resource.h>
-#include <uapi/aosd/time.h>
+#include <aosd/resource.h>
+#include <aosd/time.h>
 
 #define KSTACK_PAGE_ORDER 1
 #define KSTACK_SIZE (PAGE_SIZE * (1 << KSTACK_PAGE_ORDER))
