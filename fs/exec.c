@@ -3,6 +3,7 @@
 #include <aosd/assert.h>
 #include <aosd/elf.h>
 #include <aosd/errno.h>
+#include <aosd/fcntl.h>
 #include <aosd/fs.h>
 #include <aosd/limits.h>
 #include <aosd/list.h>
@@ -17,7 +18,6 @@
 #include <aosd/string.h>
 #include <aosd/timer.h>
 #include <aosd/vmalloc.h>
-#include <uapi/aosd/fcntl.h>
 
 struct execve_args {
 	char **argv;

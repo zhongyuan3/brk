@@ -2,6 +2,7 @@
 #include <aosd/dcache.h>
 #include <aosd/dev.h>
 #include <aosd/errno.h>
+#include <aosd/fcntl.h>
 #include <aosd/fs.h>
 #include <aosd/list.h>
 #include <aosd/lock.h>
@@ -12,10 +13,9 @@
 #include <aosd/printk.h>
 #include <aosd/process.h>
 #include <aosd/slab.h>
+#include <aosd/stat.h>
 #include <aosd/string.h>
 #include <aosd/types.h>
-#include <uapi/aosd/fcntl.h>
-#include <uapi/aosd/stat.h>
 
 static LIST_DEFINE(mnt_list);
 static SPINLOCK_DEFINE(mnt_list_lock);

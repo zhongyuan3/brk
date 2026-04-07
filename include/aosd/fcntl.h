@@ -1,5 +1,5 @@
-#ifndef UAPI_AOSD_FCNTL_H
-#define UAPI_AOSD_FCNTL_H
+#ifndef AOSD_FCNTL_H
+#define AOSD_FCNTL_H
 
 #define O_ACCMODE 00000003
 #define O_RDONLY 00000000

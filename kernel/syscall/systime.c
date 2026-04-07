@@ -6,13 +6,13 @@
 #include <aosd/pgtable.h>
 #include <aosd/printk.h>
 #include <aosd/process.h>
+#include <aosd/resource.h>
 #include <aosd/slab.h>
 #include <aosd/string.h>
 #include <aosd/syscall.h>
+#include <aosd/time.h>
 #include <aosd/timer.h>
 #include <aosd/vmalloc.h>
-#include <uapi/aosd/resource.h>
-#include <uapi/aosd/time.h>
 
 uint64_t sys_gettimeofday(void)
 {

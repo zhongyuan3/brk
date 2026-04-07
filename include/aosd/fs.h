@@ -5,9 +5,9 @@
 #include <aosd/dev.h>
 #include <aosd/fs_types.h>
 #include <aosd/lock.h>
+#include <aosd/stat.h>
+#include <aosd/time.h>
 #include <aosd/types.h>
-#include <uapi/aosd/stat.h>
-#include <uapi/aosd/time.h>
 
 struct file_system_type {
 	const char *name;

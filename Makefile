@@ -20,6 +20,10 @@ $(error unknown build type $(BUILD))
 endif
 endif
 
+CPU ?= 3
+
+RAM ?= 128M
+
 CFLAGS := -O$(OPT) -ggdb -gdwarf-2 -Wall -Wextra -Werror
 CFLAGS += -Wno-unused-parameter -Wno-unknown-attributes -Wno-main
 CFLAGS += -march=rv64gc
@@ -96,8 +100,8 @@ ROOTFS_IMG := rootfs.img
 
 QEMU := qemu-system-riscv64
 QEMU_COMMON := -machine virt -nographic
-QEMU_COMMON += -m 128M
-QEMU_COMMON += -smp 3
+QEMU_COMMON += -m $(RAM)
+QEMU_COMMON += -smp $(CPU)
 QEMU_COMMON += -bios default
 QEMU_COMMON += -drive file=$(ROOTFS_IMG),if=none,format=raw,id=x0
 QEMU_COMMON += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
@@ -113,7 +117,7 @@ DTS := virt.dts
 
 .PHONY: all aosd clean gdb-server gdb-client dis dts rootfs run
 
-all: aosd user
+all: aosd
 
 aosd: $(AOSD_ELF)
 
@@ -149,123 +153,15 @@ $(ROOTFS_IMG):
 	dd if=/dev/zero of=$@ bs=1M count=64 status=progress
 	mkfs.ext4 -F -L AOSD_ROOT -m 0 $@
 
--include $(DEPS)
-
-boot/%.o: boot/%.c
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-boot/%.o: boot/%.S
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-drivers/%.o: drivers/%.c
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-drivers/%.o: drivers/%.S
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-fs/%.o: fs/%.c
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-fs/%.o: fs/%.S
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-kernel/%.o: kernel/%.c
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-kernel/%.o: kernel/%.S
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-lib/%.o: lib/%.c
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-lib/%.o: lib/%.S
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-mm/%.o: mm/%.c
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-mm/%.o: mm/%.S
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-USER_CFLAGS := -O0 -ggdb -gdwarf-2 -Wall -Wextra -Werror
-USER_CFLAGS += -Wno-unused-parameter -Wno-unknown-attributes -Wno-main
-USER_CFLAGS += -march=rv64gc
-USER_CFLAGS += -mabi=lp64d
-USER_CFLAGS += -mcmodel=medlow
-USER_CFLAGS += -ffreestanding -nostdlib -fno-common
-USER_CFLAGS += -fno-omit-frame-pointer
-USER_CFLAGS += -fno-stack-protector
-USER_CFLAGS += -fno-pie -no-pie
-USER_CFLAGS += -MMD
-USER_CFLAGS += -I./include
-
-USER_LD_S := user/user.ld.S
-
-USER_PROG_OBJS := \
-user/cat.o \
-user/echo.o \
-user/grep.o \
-user/init.o \
-user/link.o \
-user/ls.o \
-user/mkdir.o \
-user/rm.o \
-user/sh.o \
-user/unlink.o \
-user/wc.o
-
-USER_LIB_OBJS := \
-user/printf.o \
-user/string.o \
-user/qsort.o \
-user/ulib.o \
-user/umalloc.o \
-user/uprintf.o \
-user/usyscall.o
-
-USER_PROG := $(patsubst user/%.o,user/bin/%,$(USER_PROG_OBJS))
-
-USER_PROG_DEPS := $(USER_PROG_OBJS:.o=.d)
-USER_LIB_DEPS := $(USER_LIB_OBJS:.o=.d)
-
-USER_LD := user/user.ld
-USER_LIB := user/libulib.a
-
 clean:
 	$(RM) $(AOSD_ELF) $(AOSD_LD) $(AOSD_DIS) $(DTB) $(DTS)
-	$(RM) $(USER_LIB) $(USER_PROG) $(USER_LD)
 	find . -name "*.d" -delete
 	find . -name "*.o" -delete
 
-.PHONY: user
-user: $(USER_LIB) $(USER_PROG) $(USER_PROG_OBJS)
+-include $(DEPS)
 
-.PHONY: clean_user
-clean_user:
-	$(RM) $(USER_LIB) $(USER_PROG) $(USER_LD)
-	find ./user -name "*.d" -delete
-	find ./user -name "*.o" -delete
+%.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
 
-user/bin/%: user/%.o $(USER_LIB) $(USER_LD)
-	if [ ! -d user/bin ]; then mkdir user/bin; fi
-	$(LD) -z max-page-size=4096 -T $(USER_LD) -static -o $@ $< -L./user -lulib
-
--include $(USER_PROG_DEPS) $(USER_LIB_DEPS)
-
-$(USER_LIB): $(USER_LIB_OBJS)
-	$(AR) rcs $@ $^
-
-user/%.o: user/%.c
-	$(CC) $(USER_CFLAGS) -c -o $@ $<
-
-$(USER_LD): $(USER_LD_S)
-	$(CPP) $(USER_CFLAGS) -o $@ $<
-
-user/printf.o: lib/printf.c
-	$(CC) $(USER_CFLAGS) -c -o $@ $<
-
-user/qsort.o: lib/qsort.c
-	$(CC) $(USER_CFLAGS) -c -o $@ $<
-
-user/string.o: lib/string.c
-	$(CC) $(USER_CFLAGS) -c -o $@ $<
+%.o: %.S
+	$(CC) $(CFLAGS) -c -o $@ $<

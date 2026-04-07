@@ -2,6 +2,7 @@
 #include <aosd/align.h>
 #include <aosd/asm.h>
 #include <aosd/dcache.h>
+#include <aosd/dirent.h>
 #include <aosd/errno.h>
 #include <aosd/fs.h>
 #include <aosd/lock.h>
@@ -9,10 +10,9 @@
 #include <aosd/path.h>
 #include <aosd/pgalloc.h>
 #include <aosd/slab.h>
+#include <aosd/stat.h>
 #include <aosd/string.h>
 #include <aosd/types.h>
-#include <uapi/aosd/dirent.h>
-#include <uapi/aosd/stat.h>
 
 static struct page *tmpfs_inode_data_page_unlock(struct tmpfs_inode *ip,
 						 off_t off)

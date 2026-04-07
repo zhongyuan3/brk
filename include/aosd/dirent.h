@@ -1,5 +1,5 @@
-#ifndef UAPI_AOSD_DIRENT_H
-#define UAPI_AOSD_DIRENT_H
+#ifndef AOSD_DIRENT_H
+#define AOSD_DIRENT_H
 
 #include <aosd/types.h>
 

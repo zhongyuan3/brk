@@ -1,7 +1,7 @@
-#ifndef UAPI_AOSD_RESOURCE_H
-#define UAPI_AOSD_RESOURCE_H
+#ifndef AOSD_RESOURCE_H
+#define AOSD_RESOURCE_H
 
-#include <uapi/aosd/time.h>
+#include <aosd/time.h>
 
 struct rusage {
 	struct timeval ru_utime; /* user time used */

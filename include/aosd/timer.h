@@ -2,7 +2,7 @@
 #define AOSD_TIMER_H
 
 #include <aosd/types.h>
-#include <uapi/aosd/time.h>
+#include <aosd/time.h>
 
 void timer_init(void);
 uint64_t timer_get_time(void);

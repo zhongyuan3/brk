@@ -2,17 +2,17 @@
 #include <aosd/align.h>
 #include <aosd/assert.h>
 #include <aosd/dcache.h>
+#include <aosd/dirent.h>
 #include <aosd/errno.h>
 #include <aosd/fs.h>
 #include <aosd/lock.h>
 #include <aosd/path.h>
+#include <aosd/stat.h>
 #include <aosd/string.h>
 #include <aosd/types.h>
 #include <ext4.h>
 #include <ext4_oflags.h>
 #include <ext4_types.h>
-#include <uapi/aosd/dirent.h>
-#include <uapi/aosd/stat.h>
 
 static unsigned char ext4fs_get_dir_ent_type(const struct ext4_direntry *de)
 {
