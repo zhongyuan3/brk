@@ -1,18 +1,18 @@
-#include <aosd/dcache.h>
-#include <aosd/errno.h>
-#include <aosd/fcntl.h>
-#include <aosd/fs.h>
-#include <aosd/limits.h>
-#include <aosd/path.h>
-#include <aosd/pipe.h>
-#include <aosd/printk.h>
-#include <aosd/process.h>
-#include <aosd/slab.h>
-#include <aosd/stat.h>
-#include <aosd/string.h>
-#include <aosd/syscall.h>
-#include <aosd/types.h>
-#include <aosd/utsname.h>
+#include <brk/dcache.h>
+#include <brk/errno.h>
+#include <brk/fcntl.h>
+#include <brk/fs.h>
+#include <brk/limits.h>
+#include <brk/path.h>
+#include <brk/pipe.h>
+#include <brk/printk.h>
+#include <brk/process.h>
+#include <brk/slab.h>
+#include <brk/stat.h>
+#include <brk/string.h>
+#include <brk/syscall.h>
+#include <brk/types.h>
+#include <brk/utsname.h>
 
 uint64_t sys_read(void)
 {
@@ -244,7 +244,7 @@ uint64_t sys_rmdir(void)
 uint64_t sys_uname(void)
 {
 	struct utsname name = {
-		.sysname = "aosd",
+		.sysname = "BRK",
 		.nodename = "none",
 		.release = "0.0.1",
 		.version = "0.0.1",

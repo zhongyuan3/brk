@@ -1,6 +1,6 @@
-#include <aosd/lock.h>
-#include <aosd/panic.h>
-#include <aosd/process.h>
+#include <brk/lock.h>
+#include <brk/panic.h>
+#include <brk/process.h>
 
 void spinlock_init(spinlock_t *lock, const char *name)
 {

@@ -95,7 +95,7 @@ lib/libfdt/fdt_addresses.c \
 lib/libfdt/fdt_rw.c \
 $(wildcard lib/lwext4/src/*.c)
 
-AOSD_LD_S := kernel/aosd.ld.S
+BRK_LD_S := kernel/brk.ld.S
 ROOTFS_IMG := rootfs.img
 
 QEMU := qemu-system-riscv64
@@ -109,52 +109,38 @@ QEMU_COMMON += -global virtio-mmio.force-legacy=false
 
 OBJS := $(patsubst %.c,%.o,$(patsubst %.S,%.o,$(SRCS)))
 DEPS := $(OBJS:.o=.d)
-AOSD_LD := kernel/aosd.ld
-AOSD_ELF := aosd.elf
-AOSD_DIS := aosd.dis
-DTB := virt.dtb
-DTS := virt.dts
+BRK_LD := kernel/brk.ld
+BRK_ELF := brk.elf
 
-.PHONY: all aosd clean gdb-server gdb-client dis dts rootfs run
+.PHONY: all brk clean gdb-server gdb-client rootfs run
 
-all: aosd
+all: brk
 
-aosd: $(AOSD_ELF)
+brk: $(BRK_ELF)
 
-gdb-server: $(AOSD_ELF) $(ROOTFS_IMG)
-	$(QEMU) $(QEMU_COMMON) -S -s -kernel $(AOSD_ELF)
+gdb-server: $(BRK_ELF) $(ROOTFS_IMG)
+	$(QEMU) $(QEMU_COMMON) -S -s -kernel $(BRK_ELF)
 
-gdb-client: $(AOSD_ELF)
-	$(GDB) --tui -quiet -ex "target remote :1234" $(AOSD_ELF)
-
-dis: $(AOSD_ELF)
-	$(OBJDUMP) -d -S -l $< > $(AOSD_DIS)
-
-dts: $(DTS)
+gdb-client: $(BRK_ELF)
+	$(GDB) --tui -quiet -ex "target remote :1234" $(BRK_ELF)
 
 rootfs: $(ROOTFS_IMG)
 
-run: $(AOSD_ELF) $(ROOTFS_IMG)
-	$(QEMU) $(QEMU_COMMON) -kernel $(AOSD_ELF)
+run: $(BRK_ELF) $(ROOTFS_IMG)
+	$(QEMU) $(QEMU_COMMON) -kernel $(BRK_ELF)
 
-$(AOSD_LD): $(AOSD_LD_S)
+$(BRK_LD): $(BRK_LD_S)
 	$(CPP) $(CFLAGS) -o $@ $<
 
-$(AOSD_ELF): $(OBJS) $(AOSD_LD)
-	$(LD) -z max-page-size=4096 -T $(AOSD_LD) -static -o $@ $(OBJS)
-
-$(DTB):
-	$(QEMU) $(QEMU_COMMON) -M dumpdtb=$@
-
-$(DTS): $(DTB)
-	dtc -I dtb -O dts $< > $@
+$(BRK_ELF): $(OBJS) $(BRK_LD)
+	$(LD) -z max-page-size=4096 -T $(BRK_LD) -static -o $@ $(OBJS)
 
 $(ROOTFS_IMG):
 	dd if=/dev/zero of=$@ bs=1M count=64 status=progress
-	mkfs.ext4 -F -L AOSD_ROOT -m 0 $@
+	mkfs.ext4 -F -L BRK_ROOT -m 0 $@
 
 clean:
-	$(RM) $(AOSD_ELF) $(AOSD_LD) $(AOSD_DIS) $(DTB) $(DTS)
+	$(RM) $(BRK_ELF) $(BRK_LD) $(BRK_DIS) $(DTB) $(DTS)
 	find . -name "*.d" -delete
 	find . -name "*.o" -delete
 

@@ -1,9 +1,9 @@
-#include <aosd/cpu.h>
-#include <aosd/lock.h>
-#include <aosd/process.h>
-#include <aosd/riscv.h>
-#include <aosd/sbi.h>
-#include <aosd/timer.h>
+#include <brk/cpu.h>
+#include <brk/lock.h>
+#include <brk/process.h>
+#include <brk/riscv.h>
+#include <brk/sbi.h>
+#include <brk/timer.h>
 
 static uint64_t timer_interval;
 static uint64_t jiffies;

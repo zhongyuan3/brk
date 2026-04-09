@@ -1,8 +1,8 @@
 #include "internal.h"
-#include <aosd/dcache.h>
-#include <aosd/fs.h>
-#include <aosd/slab.h>
-#include <aosd/types.h>
+#include <brk/dcache.h>
+#include <brk/fs.h>
+#include <brk/slab.h>
+#include <brk/types.h>
 #include <ext4.h>
 #include <ext4_blockdev.h>
 #include <ext4_dir.h>

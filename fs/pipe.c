@@ -1,9 +1,9 @@
-#include <aosd/errno.h>
-#include <aosd/fs.h>
-#include <aosd/lock.h>
-#include <aosd/pipe.h>
-#include <aosd/process.h>
-#include <aosd/slab.h>
+#include <brk/errno.h>
+#include <brk/fs.h>
+#include <brk/lock.h>
+#include <brk/pipe.h>
+#include <brk/process.h>
+#include <brk/slab.h>
 
 int pipe_alloc(struct file **rf, struct file **wf)
 {

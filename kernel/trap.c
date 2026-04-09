@@ -1,17 +1,17 @@
-#include <aosd/assert.h>
-#include <aosd/cpu.h>
-#include <aosd/irq.h>
-#include <aosd/macros.h>
-#include <aosd/panic.h>
-#include <aosd/plic.h>
-#include <aosd/printk.h>
-#include <aosd/process.h>
-#include <aosd/riscv.h>
-#include <aosd/sbi.h>
-#include <aosd/syscall.h>
-#include <aosd/timer.h>
-#include <aosd/trap.h>
-#include <aosd/types.h>
+#include <brk/assert.h>
+#include <brk/cpu.h>
+#include <brk/irq.h>
+#include <brk/macros.h>
+#include <brk/panic.h>
+#include <brk/plic.h>
+#include <brk/printk.h>
+#include <brk/process.h>
+#include <brk/riscv.h>
+#include <brk/sbi.h>
+#include <brk/syscall.h>
+#include <brk/timer.h>
+#include <brk/trap.h>
+#include <brk/types.h>
 
 static const char *const exception_strs[] = {
 	[0] = "Instruction address misaligned",

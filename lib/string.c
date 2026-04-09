@@ -1,6 +1,6 @@
-#include <aosd/errno.h>
-#include <aosd/macros.h>
-#include <aosd/string.h>
+#include <brk/errno.h>
+#include <brk/macros.h>
+#include <brk/string.h>
 
 void *memcpy(void *dst, const void *src, size_t n)
 {

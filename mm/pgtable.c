@@ -1,13 +1,13 @@
-#include <aosd/align.h>
-#include <aosd/asm.h>
-#include <aosd/errno.h>
-#include <aosd/lock.h>
-#include <aosd/mm.h>
-#include <aosd/mm_types.h>
-#include <aosd/panic.h>
-#include <aosd/pgalloc.h>
-#include <aosd/pgtable.h>
-#include <aosd/string.h>
+#include <brk/align.h>
+#include <brk/asm.h>
+#include <brk/errno.h>
+#include <brk/lock.h>
+#include <brk/mm.h>
+#include <brk/mm_types.h>
+#include <brk/panic.h>
+#include <brk/pgalloc.h>
+#include <brk/pgtable.h>
+#include <brk/string.h>
 
 SPINLOCK_DEFINE(kernel_pgdir_lock);
 

@@ -1,11 +1,11 @@
-#include <aosd/asm.h>
-#include <aosd/assert.h>
-#include <aosd/list.h>
-#include <aosd/lock.h>
-#include <aosd/mm_types.h>
-#include <aosd/panic.h>
-#include <aosd/pgalloc.h>
-#include <aosd/string.h>
+#include <brk/asm.h>
+#include <brk/assert.h>
+#include <brk/list.h>
+#include <brk/lock.h>
+#include <brk/mm_types.h>
+#include <brk/panic.h>
+#include <brk/pgalloc.h>
+#include <brk/string.h>
 
 static struct free_area areas[PAGE_ORDER_MAX + 1];
 static SPINLOCK_DEFINE(areas_lock);

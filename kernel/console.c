@@ -1,7 +1,7 @@
-#include <aosd/console.h>
-#include <aosd/lock.h>
-#include <aosd/process.h>
-#include <aosd/uart.h>
+#include <brk/console.h>
+#include <brk/lock.h>
+#include <brk/process.h>
+#include <brk/uart.h>
 
 #define BACKSPACE 0x100
 #define CTRL(x) ((x) - '@')

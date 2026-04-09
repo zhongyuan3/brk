@@ -1,4 +1,4 @@
-#include <aosd/cpu.h>
+#include <brk/cpu.h>
 
 static uint32_t timebase_freq;
 

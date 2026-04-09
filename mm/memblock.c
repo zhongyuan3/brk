@@ -1,11 +1,11 @@
-#include <aosd/align.h>
-#include <aosd/assert.h>
-#include <aosd/macros.h>
-#include <aosd/memblock.h>
-#include <aosd/panic.h>
-#include <aosd/pgalloc.h>
-#include <aosd/printk.h>
-#include <aosd/string.h>
+#include <brk/align.h>
+#include <brk/assert.h>
+#include <brk/macros.h>
+#include <brk/memblock.h>
+#include <brk/panic.h>
+#include <brk/pgalloc.h>
+#include <brk/printk.h>
+#include <brk/string.h>
 
 static struct memblock_region memory[INIT_MEMBLOCK_REGIONS];
 static struct memblock_region reserved[INIT_MEMBLOCK_RESERVED_REGIONS];

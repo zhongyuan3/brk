@@ -1,13 +1,13 @@
-#include <aosd/align.h>
-#include <aosd/dtb.h>
-#include <aosd/errno.h>
-#include <aosd/ioremap.h>
-#include <aosd/mm.h>
-#include <aosd/panic.h>
-#include <aosd/pgtable.h>
-#include <aosd/plic.h>
-#include <aosd/string.h>
-#include <aosd/types.h>
+#include <brk/align.h>
+#include <brk/dtb.h>
+#include <brk/errno.h>
+#include <brk/ioremap.h>
+#include <brk/mm.h>
+#include <brk/panic.h>
+#include <brk/pgtable.h>
+#include <brk/plic.h>
+#include <brk/string.h>
+#include <brk/types.h>
 
 static struct plic_device plic;
 static uint64_t mem_base;

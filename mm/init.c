@@ -1,13 +1,13 @@
-#include <aosd/align.h>
-#include <aosd/dtb.h>
-#include <aosd/memblock.h>
-#include <aosd/mm.h>
-#include <aosd/mm_types.h>
-#include <aosd/panic.h>
-#include <aosd/pgalloc.h>
-#include <aosd/pgtable.h>
-#include <aosd/riscv.h>
-#include <aosd/vmalloc.h>
+#include <brk/align.h>
+#include <brk/dtb.h>
+#include <brk/memblock.h>
+#include <brk/mm.h>
+#include <brk/mm_types.h>
+#include <brk/panic.h>
+#include <brk/pgalloc.h>
+#include <brk/pgtable.h>
+#include <brk/riscv.h>
+#include <brk/vmalloc.h>
 #include <libfdt.h>
 
 size_t kernel_load_offset;

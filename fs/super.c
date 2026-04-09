@@ -1,9 +1,9 @@
-#include <aosd/assert.h>
-#include <aosd/dcache.h>
-#include <aosd/fs.h>
-#include <aosd/list.h>
-#include <aosd/lock.h>
-#include <aosd/slab.h>
+#include <brk/assert.h>
+#include <brk/dcache.h>
+#include <brk/fs.h>
+#include <brk/list.h>
+#include <brk/lock.h>
+#include <brk/slab.h>
 
 static LIST_DEFINE(sblist);
 static SPINLOCK_DEFINE(sblist_lock);

@@ -1,18 +1,18 @@
-#include <aosd/align.h>
-#include <aosd/asm.h>
-#include <aosd/errno.h>
-#include <aosd/mm_types.h>
-#include <aosd/pgalloc.h>
-#include <aosd/pgtable.h>
-#include <aosd/printk.h>
-#include <aosd/process.h>
-#include <aosd/resource.h>
-#include <aosd/slab.h>
-#include <aosd/string.h>
-#include <aosd/syscall.h>
-#include <aosd/time.h>
-#include <aosd/timer.h>
-#include <aosd/vmalloc.h>
+#include <brk/align.h>
+#include <brk/asm.h>
+#include <brk/errno.h>
+#include <brk/mm_types.h>
+#include <brk/pgalloc.h>
+#include <brk/pgtable.h>
+#include <brk/printk.h>
+#include <brk/process.h>
+#include <brk/resource.h>
+#include <brk/slab.h>
+#include <brk/string.h>
+#include <brk/syscall.h>
+#include <brk/time.h>
+#include <brk/timer.h>
+#include <brk/vmalloc.h>
 
 uint64_t sys_brk(void)
 {

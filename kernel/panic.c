@@ -1,7 +1,7 @@
-#include <aosd/assert.h>
-#include <aosd/panic.h>
-#include <aosd/printk.h>
-#include <aosd/riscv.h>
+#include <brk/assert.h>
+#include <brk/panic.h>
+#include <brk/printk.h>
+#include <brk/riscv.h>
 
 volatile bool panicked;
 

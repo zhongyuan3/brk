@@ -1,16 +1,16 @@
-#include <aosd/align.h>
-#include <aosd/assert.h>
-#include <aosd/dcache.h>
-#include <aosd/dev.h>
-#include <aosd/errno.h>
-#include <aosd/fs.h>
-#include <aosd/list.h>
-#include <aosd/lock.h>
-#include <aosd/mm.h>
-#include <aosd/panic.h>
-#include <aosd/pipe.h>
-#include <aosd/slab.h>
-#include <aosd/string.h>
+#include <brk/align.h>
+#include <brk/assert.h>
+#include <brk/dcache.h>
+#include <brk/dev.h>
+#include <brk/errno.h>
+#include <brk/fs.h>
+#include <brk/list.h>
+#include <brk/lock.h>
+#include <brk/mm.h>
+#include <brk/panic.h>
+#include <brk/pipe.h>
+#include <brk/slab.h>
+#include <brk/string.h>
 
 static struct kmem_cache fcache;
 static LIST_DEFINE(flist);

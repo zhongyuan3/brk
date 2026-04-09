@@ -1,9 +1,9 @@
-#include <aosd/errno.h>
-#include <aosd/irq.h>
-#include <aosd/lock.h>
-#include <aosd/panic.h>
-#include <aosd/plic.h>
-#include <aosd/slab.h>
+#include <brk/errno.h>
+#include <brk/irq.h>
+#include <brk/lock.h>
+#include <brk/panic.h>
+#include <brk/plic.h>
+#include <brk/slab.h>
 
 static irq_handler_t *irq_handlers;
 static uint32_t irq_handlers_num;

@@ -1,9 +1,9 @@
-#include <aosd/console.h>
-#include <aosd/errno.h>
-#include <aosd/lock.h>
-#include <aosd/macros.h>
-#include <aosd/printf.h>
-#include <aosd/printk.h>
+#include <brk/console.h>
+#include <brk/errno.h>
+#include <brk/lock.h>
+#include <brk/macros.h>
+#include <brk/printf.h>
+#include <brk/printk.h>
 
 static SPINLOCK_DEFINE(printk_lock);
 
