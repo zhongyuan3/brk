@@ -1,10 +1,10 @@
-#include <aosd/cpu.h>
-#include <aosd/errno.h>
-#include <aosd/macros.h>
-#include <aosd/panic.h>
-#include <aosd/printk.h>
-#include <aosd/process.h>
-#include <aosd/syscall.h>
+#include <brk/cpu.h>
+#include <brk/errno.h>
+#include <brk/macros.h>
+#include <brk/panic.h>
+#include <brk/printk.h>
+#include <brk/process.h>
+#include <brk/syscall.h>
 
 static uint64_t (*systable[])(void) = {
 	[SYS_read] = sys_read,

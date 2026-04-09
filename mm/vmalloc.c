@@ -1,16 +1,16 @@
-#include "aosd/memblock.h"
-#include <aosd/align.h>
-#include <aosd/asm.h>
-#include <aosd/assert.h>
-#include <aosd/errno.h>
-#include <aosd/list.h>
-#include <aosd/lock.h>
-#include <aosd/panic.h>
-#include <aosd/pgalloc.h>
-#include <aosd/pgtable.h>
-#include <aosd/slab.h>
-#include <aosd/string.h>
-#include <aosd/vmalloc.h>
+#include <brk/align.h>
+#include <brk/asm.h>
+#include <brk/assert.h>
+#include <brk/errno.h>
+#include <brk/list.h>
+#include <brk/lock.h>
+#include <brk/memblock.h>
+#include <brk/panic.h>
+#include <brk/pgalloc.h>
+#include <brk/pgtable.h>
+#include <brk/slab.h>
+#include <brk/string.h>
+#include <brk/vmalloc.h>
 
 static struct kmem_cache vma_cache;
 static struct list_head vma;

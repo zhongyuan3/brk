@@ -1,9 +1,9 @@
-#include <aosd/dcache.h>
-#include <aosd/errno.h>
-#include <aosd/limits.h>
-#include <aosd/process.h>
-#include <aosd/slab.h>
-#include <aosd/string.h>
+#include <brk/dcache.h>
+#include <brk/errno.h>
+#include <brk/limits.h>
+#include <brk/process.h>
+#include <brk/slab.h>
+#include <brk/string.h>
 
 char *path_get_full(struct dentry *dp)
 {

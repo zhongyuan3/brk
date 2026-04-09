@@ -1,10 +1,10 @@
-#include <aosd/ioremap.h>
-#include <aosd/list.h>
-#include <aosd/lock.h>
-#include <aosd/mmio.h>
-#include <aosd/pgtable.h>
-#include <aosd/slab.h>
-#include <aosd/virtio.h>
+#include <brk/ioremap.h>
+#include <brk/list.h>
+#include <brk/lock.h>
+#include <brk/mmio.h>
+#include <brk/pgtable.h>
+#include <brk/slab.h>
+#include <brk/virtio.h>
 
 static LIST_DEFINE(vdevs);
 static SPINLOCK_DEFINE(vdevs_lock);

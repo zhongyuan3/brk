@@ -1,16 +1,16 @@
-#include <aosd/align.h>
-#include <aosd/assert.h>
-#include <aosd/errno.h>
-#include <aosd/list.h>
-#include <aosd/lock.h>
-#include <aosd/macros.h>
-#include <aosd/memblock.h>
-#include <aosd/mm.h>
-#include <aosd/panic.h>
-#include <aosd/pgalloc.h>
-#include <aosd/printk.h>
-#include <aosd/slab.h>
-#include <aosd/string.h>
+#include <brk/align.h>
+#include <brk/assert.h>
+#include <brk/errno.h>
+#include <brk/list.h>
+#include <brk/lock.h>
+#include <brk/macros.h>
+#include <brk/memblock.h>
+#include <brk/mm.h>
+#include <brk/panic.h>
+#include <brk/pgalloc.h>
+#include <brk/printk.h>
+#include <brk/slab.h>
+#include <brk/string.h>
 
 static struct kmem_cache kmalloc_caches[NR_KMALLOC_CACHES];
 

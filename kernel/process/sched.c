@@ -1,15 +1,15 @@
-#include <aosd/errno.h>
-#include <aosd/fs.h>
-#include <aosd/limits.h>
-#include <aosd/list.h>
-#include <aosd/lock.h>
-#include <aosd/mm.h>
-#include <aosd/panic.h>
-#include <aosd/pgtable.h>
-#include <aosd/process.h>
-#include <aosd/riscv.h>
-#include <aosd/timer.h>
-#include <aosd/types.h>
+#include <brk/errno.h>
+#include <brk/fs.h>
+#include <brk/limits.h>
+#include <brk/list.h>
+#include <brk/lock.h>
+#include <brk/mm.h>
+#include <brk/panic.h>
+#include <brk/pgtable.h>
+#include <brk/process.h>
+#include <brk/riscv.h>
+#include <brk/timer.h>
+#include <brk/types.h>
 #include <assert.h>
 
 SPINLOCK_DEFINE(wait_lock);

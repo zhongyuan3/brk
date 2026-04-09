@@ -1,7 +1,7 @@
 #ifndef STDLIB_H
 #define STDLIB_H
 
-#include <aosd/slab.h>
+#include <brk/slab.h>
 
 #define malloc(size) kmalloc(size)
 #define calloc(nmemb, size) kcalloc(nmemb, size)

@@ -1,9 +1,9 @@
-#include <aosd/align.h>
-#include <aosd/asm.h>
-#include <aosd/ioremap.h>
-#include <aosd/list.h>
-#include <aosd/slab.h>
-#include <aosd/vmalloc.h>
+#include <brk/align.h>
+#include <brk/asm.h>
+#include <brk/ioremap.h>
+#include <brk/list.h>
+#include <brk/slab.h>
+#include <brk/vmalloc.h>
 
 void *ioremap(uint64_t paddr, size_t size, unsigned int flags)
 {

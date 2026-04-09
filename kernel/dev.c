@@ -1,20 +1,20 @@
-#include <aosd/asm.h>
-#include <aosd/assert.h>
-#include <aosd/console.h>
-#include <aosd/dcache.h>
-#include <aosd/dev.h>
-#include <aosd/errno.h>
-#include <aosd/fs.h>
-#include <aosd/limits.h>
-#include <aosd/list.h>
-#include <aosd/lock.h>
-#include <aosd/macros.h>
-#include <aosd/mm.h>
-#include <aosd/panic.h>
-#include <aosd/slab.h>
-#include <aosd/string.h>
-#include <aosd/types.h>
-#include <aosd/virtio_blk.h>
+#include <brk/asm.h>
+#include <brk/assert.h>
+#include <brk/console.h>
+#include <brk/dcache.h>
+#include <brk/dev.h>
+#include <brk/errno.h>
+#include <brk/fs.h>
+#include <brk/limits.h>
+#include <brk/list.h>
+#include <brk/lock.h>
+#include <brk/macros.h>
+#include <brk/mm.h>
+#include <brk/panic.h>
+#include <brk/slab.h>
+#include <brk/string.h>
+#include <brk/types.h>
+#include <brk/virtio_blk.h>
 
 struct list_head cdev_list[NR_DEVICES];
 static SPINLOCK_DEFINE(cdev_list_lock);

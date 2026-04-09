@@ -1,6 +1,6 @@
 #ifndef STRING_H
 #define STRING_H
 
-#include <aosd/string.h>
+#include <brk/string.h>
 
 #endif

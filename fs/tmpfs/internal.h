@@ -1,10 +1,10 @@
 #ifndef FS_TMPFS_INTERNAL_H
 #define FS_TMPFS_INTERNAL_H
 
-#include <aosd/asm.h>
-#include <aosd/lock.h>
-#include <aosd/mm_types.h>
-#include <aosd/types.h>
+#include <brk/asm.h>
+#include <brk/lock.h>
+#include <brk/mm_types.h>
+#include <brk/types.h>
 
 #define TMPFS_MAGIC 0x706d74
 

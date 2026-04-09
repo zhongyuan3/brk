@@ -1,14 +1,14 @@
-#include <aosd/align.h>
-#include <aosd/assert.h>
-#include <aosd/dcache.h>
-#include <aosd/fs.h>
-#include <aosd/limits.h>
-#include <aosd/list.h>
-#include <aosd/lock.h>
-#include <aosd/panic.h>
-#include <aosd/slab.h>
-#include <aosd/string.h>
-#include <aosd/types.h>
+#include <brk/align.h>
+#include <brk/assert.h>
+#include <brk/dcache.h>
+#include <brk/fs.h>
+#include <brk/limits.h>
+#include <brk/list.h>
+#include <brk/lock.h>
+#include <brk/panic.h>
+#include <brk/slab.h>
+#include <brk/string.h>
+#include <brk/types.h>
 
 static struct list_head itable[NR_ITABLE_BUCKETS];
 static SPINLOCK_DEFINE(itable_lock);

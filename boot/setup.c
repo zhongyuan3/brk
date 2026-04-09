@@ -1,11 +1,11 @@
-#include <aosd/align.h>
-#include <aosd/asm.h>
-#include <aosd/macros.h>
-#include <aosd/mm.h>
-#include <aosd/pgtable.h>
-#include <aosd/riscv.h>
-#include <aosd/sbi.h>
-#include <aosd/types.h>
+#include <brk/align.h>
+#include <brk/asm.h>
+#include <brk/macros.h>
+#include <brk/mm.h>
+#include <brk/pgtable.h>
+#include <brk/riscv.h>
+#include <brk/sbi.h>
+#include <brk/types.h>
 #include <libfdt.h>
 
 static uint64_t alloc_pmd_early(uint64_t)

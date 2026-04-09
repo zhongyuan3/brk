@@ -1,12 +1,12 @@
-#include <aosd/cpu.h>
-#include <aosd/dtb.h>
-#include <aosd/errno.h>
-#include <aosd/memblock.h>
-#include <aosd/mm.h>
-#include <aosd/panic.h>
-#include <aosd/printk.h>
-#include <aosd/slab.h>
-#include <aosd/virtio.h>
+#include <brk/cpu.h>
+#include <brk/dtb.h>
+#include <brk/errno.h>
+#include <brk/memblock.h>
+#include <brk/mm.h>
+#include <brk/panic.h>
+#include <brk/printk.h>
+#include <brk/slab.h>
+#include <brk/virtio.h>
 #include <libfdt.h>
 
 uint64_t dtb_phys;

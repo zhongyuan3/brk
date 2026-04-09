@@ -1,15 +1,15 @@
-#include <aosd/asm.h>
-#include <aosd/errno.h>
-#include <aosd/list.h>
-#include <aosd/mm.h>
-#include <aosd/mm_types.h>
-#include <aosd/pgalloc.h>
-#include <aosd/pgtable.h>
-#include <aosd/process.h>
-#include <aosd/slab.h>
-#include <aosd/string.h>
-#include <aosd/types.h>
-#include <aosd/vmalloc.h>
+#include <brk/asm.h>
+#include <brk/errno.h>
+#include <brk/list.h>
+#include <brk/mm.h>
+#include <brk/mm_types.h>
+#include <brk/pgalloc.h>
+#include <brk/pgtable.h>
+#include <brk/process.h>
+#include <brk/slab.h>
+#include <brk/string.h>
+#include <brk/types.h>
+#include <brk/vmalloc.h>
 
 static struct kmem_cache mm_cache;
 

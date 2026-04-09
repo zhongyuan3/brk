@@ -1,18 +1,18 @@
 #include "internal.h"
-#include <aosd/align.h>
-#include <aosd/asm.h>
-#include <aosd/dcache.h>
-#include <aosd/dirent.h>
-#include <aosd/errno.h>
-#include <aosd/fs.h>
-#include <aosd/lock.h>
-#include <aosd/mm_types.h>
-#include <aosd/path.h>
-#include <aosd/pgalloc.h>
-#include <aosd/slab.h>
-#include <aosd/stat.h>
-#include <aosd/string.h>
-#include <aosd/types.h>
+#include <brk/align.h>
+#include <brk/asm.h>
+#include <brk/dcache.h>
+#include <brk/dirent.h>
+#include <brk/errno.h>
+#include <brk/fs.h>
+#include <brk/lock.h>
+#include <brk/mm_types.h>
+#include <brk/path.h>
+#include <brk/pgalloc.h>
+#include <brk/slab.h>
+#include <brk/stat.h>
+#include <brk/string.h>
+#include <brk/types.h>
 
 static struct page *tmpfs_inode_data_page_unlock(struct tmpfs_inode *ip,
 						 off_t off)

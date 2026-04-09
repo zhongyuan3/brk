@@ -1,17 +1,17 @@
-#include <aosd/align.h>
-#include <aosd/console.h>
-#include <aosd/cpu.h>
-#include <aosd/dtb.h>
-#include <aosd/ioremap.h>
-#include <aosd/irq.h>
-#include <aosd/lock.h>
-#include <aosd/mm.h>
-#include <aosd/mmio.h>
-#include <aosd/panic.h>
-#include <aosd/pgtable.h>
-#include <aosd/plic.h>
-#include <aosd/printk.h>
-#include <aosd/uart.h>
+#include <brk/align.h>
+#include <brk/console.h>
+#include <brk/cpu.h>
+#include <brk/dtb.h>
+#include <brk/ioremap.h>
+#include <brk/irq.h>
+#include <brk/lock.h>
+#include <brk/mm.h>
+#include <brk/mmio.h>
+#include <brk/panic.h>
+#include <brk/pgtable.h>
+#include <brk/plic.h>
+#include <brk/printk.h>
+#include <brk/uart.h>
 
 #define RHR 0 /* Receiver Holding Register */
 #define THR 0 /* Transmitter Holding Register */
