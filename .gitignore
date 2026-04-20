@@ -20,3 +20,5 @@ aosd.elf
 *.ld
 
 user/bin/*
+
+build/
