@@ -11,4 +11,8 @@ struct display {
 
 int printf_core(struct display *dis, char const *format, va_list ap);
 
+int snprintf(char *buf, size_t size, char const *format, ...)
+	__attribute__((format(printf, 3, 4)));
+int vsnprintf(char *buf, size_t size, char const *format, va_list ap);
+
 #endif
