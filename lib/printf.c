@@ -1,3 +1,4 @@
+#include <brk/errno.h>
 #include <brk/macros.h>
 #include <brk/printf.h>
 #include <brk/string.h>
@@ -418,4 +419,49 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 
 invalid:
 	return -1;
+}
+
+int snprintf(char *buf, size_t size, char const *format, ...)
+{
+	va_list ap;
+	va_start(ap, format);
+	int ret = vsnprintf(buf, size, format, ap);
+	va_end(ap);
+	return ret;
+}
+
+struct string_display {
+	char *buf;
+	size_t size;
+	size_t pos;
+};
+
+static int string_display_write(struct display *dis, char const *buf,
+				size_t len, size_t *wlen)
+{
+	struct string_display *sd = dis->priv;
+	size_t n = min(len, sd->size - sd->pos);
+	if (n > 0) {
+		memcpy(sd->buf + sd->pos, buf, n);
+		sd->pos += n;
+	}
+
+	if (wlen)
+		*wlen = len;
+
+	return 0;
+}
+
+int vsnprintf(char *buf, size_t size, char const *format, va_list ap)
+{
+	struct string_display sd = {
+		.buf = buf,
+		.size = size,
+		.pos = 0,
+	};
+	struct display dis = {
+		.write = string_display_write,
+		.priv = &sd,
+	};
+	return printf_core(&dis, format, ap);
 }
