@@ -17,7 +17,8 @@
 
 struct mount {
 	/* Parent mount in namespace tree; reference held while mounted. */
-	struct mount *mnt_parent; /* hold reference count, self if root (no ref) */
+	struct mount
+		*mnt_parent; /* hold reference count, self if root (no ref) */
 	struct list_head mnt_child; /* protected by parent's mnt_lock */
 	struct list_head mnt_mounts; /* protected by mnt_lock */
 
@@ -62,42 +63,13 @@ struct mount {
  *    teardown callbacks while holding global mount locks.
  */
 
-/**
- * do_mount() - Top-level function for mounting file systems
- * @dev_name: Device path or special name
- * @dir_name: Mount point path (user space string)
- * @type_name: File system type name
- * @flags: MS_* mount flags
- * @data: File system private mount options
- *
- * Return: %0 on success, negative errno on failure.
- */
 int do_mount(const char *dev_name, const char *dir_name, const char *type,
 	     unsigned long flags, void *data);
-
-/**
- * do_umount() - Top-level function for unmounting file systems
- * @mnt: Mount to unmount
- * @flags: Unmount flags
- *
- * Return: %0 on success, negative errno on failure.
- */
 int do_umount(struct mount *mnt, int flags);
-
-/**
- * lookup_mount() - Resolve child mount mounted on @path
- * @path: Current path (mnt + dentry)
- *
- * Return: mount with reference held, or %NULL if no child mount exists.
- */
 struct mount *lookup_mount(const struct path *path);
-/* Returns @mnt with refcount incremented. */
 struct mount *mount_dup(struct mount *mnt);
-/* Drops one reference and may tear down mount at zero. */
 void mount_put(struct mount *mnt);
-
 int init_mount_tree(struct path *root_path);
-
 struct mount *kernel_mount(struct file_system_type *fs_type,
 			   unsigned long flags, const char *dev_name,
 			   void *data);

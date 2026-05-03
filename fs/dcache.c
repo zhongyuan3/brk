@@ -87,6 +87,14 @@ static struct dentry *alloc_dentry(struct dentry *parent,
 	return d;
 }
 
+/**
+  * dentry_make_root() - Make a root dentry
+  * @root_inode: root inode
+  *
+  * Only used for file system mounting operations.
+  *
+  * Return: The root dentry or %NULL.
+  */
 struct dentry *dentry_make_root(struct inode *root_inode)
 {
 	struct dentry *d;
@@ -103,6 +111,13 @@ struct dentry *dentry_make_root(struct inode *root_inode)
 	return d;
 }
 
+/**
+ * dentry_alloc_anon() - Allocate an unhashed positive dentry for a given inode
+ * @inode: inode to attach (caller holds inode lifetime)
+ * @name: dentry name (for debugging / generic compare)
+ *
+ * Used for kernel objects such as pipes that are not reachable by path lookup.
+ */
 struct dentry *dentry_alloc_anon(struct inode *inode, const struct qstr *name)
 {
 	struct dentry *d;
@@ -115,6 +130,11 @@ struct dentry *dentry_alloc_anon(struct inode *inode, const struct qstr *name)
 	return d;
 }
 
+/**
+ * dentry_instantiate() - Attach @inode to @dentry
+ * @dentry: dentry to attach
+ * @inode: inode to attach to this dentry
+ */
 void dentry_instantiate(struct dentry *dentry, struct inode *inode)
 {
 	dentry->d_inode = inode;
@@ -127,6 +147,7 @@ void dentry_instantiate(struct dentry *dentry, struct inode *inode)
 	spinlock_release(&dentry->d_lock);
 }
 
+/* Increment the reference count of @dentry */
 struct dentry *dentry_dup(struct dentry *dentry)
 {
 	log_trace("%s(): Duplicating dentry: name=%.*s, inode=%ld, refcnt=%d\n",
@@ -136,6 +157,7 @@ struct dentry *dentry_dup(struct dentry *dentry)
 	return dentry;
 }
 
+/* Decrement the reference count of @dentry */
 void dentry_put(struct dentry *dentry)
 {
 	const struct dentry_operations *op;
@@ -212,6 +234,17 @@ static struct dentry *dentry_lookup_locked(struct hlist_head *head,
 	return NULL;
 }
 
+/**
+ * dentry_lookup() - Resolve one path component under @parent
+ * @parent: parent dentry
+ * @name: component name with hash prepared by caller
+ *
+ * Lookup first checks the dcache hash. On miss, it allocates a child dentry and
+ * invokes parent inode ->lookup(). The returned dentry may be positive (existing)
+ * or negative (DCACHE_NEGATIVE set, indicating not found).
+ *
+ * Return: The dentry on success or ERR_PTR(-errno) on failure.
+ */
 struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name)
 {
 	struct inode *inode;
@@ -276,6 +309,13 @@ struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name)
 	return dentry;
 }
 
+/**
+ * dentry_splice_alias() - Attach @inode to @dentry or reuse existing alias
+ * @inode: inode to splice the dentry into
+ * @dentry: dentry to splice
+ *
+ * Return: The alias dentry on success or ERR_PTR(-errno) on failure.
+ */
 struct dentry *dentry_splice_alias(struct inode *inode, struct dentry *dentry)
 {
 	struct list_head *dentries;
