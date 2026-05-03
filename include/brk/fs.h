@@ -554,6 +554,10 @@ int do_unlinkat(int dirfd, const char *path, int flags);
 
 int fs_init(void);
 
+void pipe_fs_init(void);
+int anon_pipe_create(struct file **read_file, struct file **write_file,
+		     unsigned int flags);
+
 extern struct file_system_type tmpfs_fs_type;
 extern struct file_system_type brkfs_fs_type;
 

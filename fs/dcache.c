@@ -103,6 +103,18 @@ struct dentry *dentry_make_root(struct inode *root_inode)
 	return d;
 }
 
+struct dentry *dentry_alloc_anon(struct inode *inode, const struct qstr *name)
+{
+	struct dentry *d;
+
+	d = __alloc_dentry(inode->i_sb, name);
+	if (!d)
+		return NULL;
+
+	dentry_instantiate(d, inode);
+	return d;
+}
+
 void dentry_instantiate(struct dentry *dentry, struct inode *inode)
 {
 	dentry->d_inode = inode;

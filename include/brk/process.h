@@ -134,6 +134,7 @@ void proc_dump(void);
 void proc_yield(void);
 void proc_sleep(void *chan, spinlock_t *lock);
 void proc_wake_up(void *chan);
+void proc_wake_all(void *chan);
 void proc_exit(int status);
 pid_t proc_wait(pid_t cpid, int *status, int options, struct rusage *rus);
 void proc_sched(void);
