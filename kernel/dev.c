@@ -1,7 +1,6 @@
 #include <brk/asm.h>
 #include <brk/assert.h>
 #include <brk/console.h>
-#include <brk/dcache.h>
 #include <brk/dev.h>
 #include <brk/errno.h>
 #include <brk/fs.h>
@@ -11,6 +10,7 @@
 #include <brk/macros.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
+#include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/types.h>
@@ -171,6 +171,21 @@ static int disk0_read(struct blkdev *bd, uint64_t blk_id, void *buf,
 	uint64_t buf_phys = virt_to_phys((uint64_t)priv->buf);
 	int err = 0;
 
+	if (blk_id >= bd->phy_bcnt) {
+		log_warn("%s(): Invalid blk_id: %lu, phy_bcnt: %lu\n", __func__,
+			 blk_id, bd->phy_bcnt);
+		return -ENXIO;
+	}
+
+	if (bd->phy_bcnt - blk_id < blk_cnt) {
+		log_warn("%s(): Invalid blk_cnt: %u, phy_bcnt: %lu\n", __func__,
+			 blk_cnt, bd->phy_bcnt);
+		return -ENXIO;
+	}
+
+	if (blk_cnt == 0)
+		return 0;
+
 	sleeplock_acquire(&priv->lock);
 	for (uint32_t i = 0; i < blk_cnt; ++i) {
 		err = virtio_blk_read(blk_id, buf_phys, 1);
@@ -241,144 +256,150 @@ void dev_init(void)
 	blkdev_register(bd, DEV_DISK0);
 }
 
-static int chrdev_fread(struct file *file, void *buf, size_t n, off_t *offset,
-			size_t *rcnt)
+static int chrdev_open(struct inode *inode, struct file *file)
 {
-	struct inode *ip = file->f_inode;
-	int ret = 0;
-	struct chrdev *cd;
-
-	sleeplock_acquire(&ip->i_lock);
-
-	cd = chrdev_get(ip->i_rdev);
-	if (!cd) {
-		ret = -ENODEV;
-		goto unlock_and_out;
-	}
-
-	ret = cd->ops->read(buf, n, rcnt);
-
-unlock_and_out:
-	sleeplock_release(&ip->i_lock);
-	return ret;
-}
-
-static int chrdev_fwrite(struct file *file, const void *buf, size_t n,
-			 off_t *offset, size_t *wcnt)
-{
-	struct inode *ip = file->f_inode;
-	int ret = 0;
-	struct chrdev *cd;
-
-	sleeplock_acquire(&ip->i_lock);
-
-	cd = chrdev_get(ip->i_rdev);
-	if (!cd) {
-		ret = -ENODEV;
-		goto unlock_and_out;
-	}
-
-	ret = cd->ops->write(buf, n, wcnt);
-
-unlock_and_out:
-	sleeplock_release(&ip->i_lock);
-	return ret;
-}
-
-static off_t chrdev_fseek(struct file *file, off_t offset, int whence)
-{
-	return -EOPNOTSUPP;
-}
-
-static int chrdev_fstat(struct file *file, struct stat *st)
-{
-	if (!file->f_inode)
-		return -EINVAL;
-
-	memset(st, 0, sizeof(*st));
-
-	sleeplock_acquire(&file->f_inode->i_lock);
-	st->st_dev = file->f_inode->i_sb->s_dev;
-	st->st_ino = file->f_inode->i_no;
-	st->st_mode = file->f_inode->i_mode;
-	st->st_nlink = file->f_inode->i_nlink;
-	st->st_rdev = file->f_inode->i_rdev;
-	st->st_size = file->f_inode->i_size;
-	st->st_blksize = file->f_inode->i_sb->s_block_size;
-	st->st_blocks = file->f_inode->i_size / st->st_blksize;
-	sleeplock_release(&file->f_inode->i_lock);
-
+	file->f_op = &chrdev_fops;
 	return 0;
 }
 
-static int chrdev_fopen(struct file *file, struct dentry *dentry, int flags)
+static ssize_t chrdev_read(struct file *file, char *buf, size_t size,
+			   loff_t *pos)
 {
-	struct inode *inode = dentry->d_inode;
-	sleeplock_acquire(&inode->i_lock);
-	if (!(inode->i_mode & S_IFCHR) && !(inode->i_mode & S_IFBLK)) {
-		sleeplock_release(&inode->i_lock);
-		return -EOPNOTSUPP;
+	struct inode *ip = file->f_inode;
+	int err = 0;
+	struct chrdev *cd;
+	size_t rcnt = 0;
+
+	sleeplock_acquire(&ip->i_rwsem);
+
+	cd = chrdev_get(ip->i_rdev);
+	if (!cd) {
+		err = -ENODEV;
+		goto unlock_and_out;
 	}
-	file->f_ops = &chrdev_fops;
-	file->f_inode = inode_dup(inode);
-	file->f_dentry = dentry_dup(dentry);
-	sleeplock_release(&inode->i_lock);
+
+	err = cd->ops->read(buf, size, &rcnt);
+
+unlock_and_out:
+	sleeplock_release(&ip->i_rwsem);
+	if (err)
+		return err;
+	return rcnt;
+}
+
+static ssize_t chrdev_write(struct file *file, const char *buf, size_t size,
+			    loff_t *pos)
+{
+	struct inode *ip = file->f_inode;
+	int err = 0;
+	struct chrdev *cd;
+	size_t wcnt = 0;
+
+	sleeplock_acquire(&ip->i_rwsem);
+
+	cd = chrdev_get(ip->i_rdev);
+	if (!cd) {
+		err = -ENODEV;
+		goto unlock_and_out;
+	}
+
+	err = cd->ops->write(buf, size, &wcnt);
+
+unlock_and_out:
+	sleeplock_release(&ip->i_rwsem);
+	if (err)
+		return err;
+	return wcnt;
+}
+
+static loff_t chrdev_llseek(struct file *file, loff_t offset, int whence)
+{
 	return 0;
 }
 
-static int chrdev_ftruncate(struct file *file, off_t len)
+static int chrdev_iterate_shared(struct file *file, struct dir_context *ctx)
 {
-	return -EOPNOTSUPP;
+	return 0;
 }
 
-static int blkdev_fread(struct file *file, void *buf, size_t n, off_t *offset,
-			size_t *rcnt)
+static int chrdev_fsync(struct file *file, loff_t start, loff_t end,
+			int datasync)
 {
-	return -EOPNOTSUPP;
+	return 0;
 }
 
-static int blkdev_fwrite(struct file *file, const void *buf, size_t n,
-			 off_t *offset, size_t *wcnt)
+static int chrdev_flush(struct file *file)
 {
-	return -EOPNOTSUPP;
+	return 0;
 }
 
-static off_t blkdev_fseek(struct file *file, off_t offset, int whence)
+static long chrdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	return -EOPNOTSUPP;
+	return 0;
 }
 
-static int blkdev_fstat(struct file *file, struct stat *st)
+static int blkdev_open(struct inode *inode, struct file *file)
 {
-	return -EOPNOTSUPP;
+	file->f_op = &blkdev_fops;
+	return 0;
 }
 
-static int blkdev_fopen(struct file *file, struct dentry *dentry, int flags)
+static ssize_t blkdev_read(struct file *file, char *buf, size_t size,
+			   loff_t *pos)
 {
-	return -EOPNOTSUPP;
+	return 0;
 }
 
-static int blkdev_ftruncate(struct file *file, off_t len)
+static ssize_t blkdev_write(struct file *file, const char *buf, size_t size,
+			    loff_t *pos)
 {
-	return -EOPNOTSUPP;
+	return 0;
+}
+
+static loff_t blkdev_llseek(struct file *file, loff_t offset, int whence)
+{
+	return 0;
+}
+
+static int blkdev_iterate_shared(struct file *file, struct dir_context *ctx)
+{
+	return 0;
+}
+
+static int blkdev_fsync(struct file *file, loff_t start, loff_t end,
+			int datasync)
+{
+	return 0;
+}
+
+static int blkdev_flush(struct file *file)
+{
+	return 0;
+}
+
+static long blkdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	return 0;
 }
 
 const struct file_operations chrdev_fops = {
-	.read = chrdev_fread,
-	.write = chrdev_fwrite,
-	.seek = chrdev_fseek,
-	.stat = chrdev_fstat,
-	.open = chrdev_fopen,
-	.truncate = chrdev_ftruncate,
-	.close = NULL,
+	.open = chrdev_open,
+	.read = chrdev_read,
+	.write = chrdev_write,
+	.llseek = chrdev_llseek,
+	.iterate_shared = chrdev_iterate_shared,
+	.fsync = chrdev_fsync,
+	.flush = chrdev_flush,
+	.ioctl = chrdev_ioctl,
 };
 
 const struct file_operations blkdev_fops = {
-	.read = blkdev_fread,
-	.write = blkdev_fwrite,
-	.seek = blkdev_fseek,
-	.stat = blkdev_fstat,
-	.open = blkdev_fopen,
-	.truncate = blkdev_ftruncate,
-	.close = NULL,
+	.open = blkdev_open,
+	.read = blkdev_read,
+	.write = blkdev_write,
+	.llseek = blkdev_llseek,
+	.iterate_shared = blkdev_iterate_shared,
+	.fsync = blkdev_fsync,
+	.flush = blkdev_flush,
+	.ioctl = blkdev_ioctl,
 };

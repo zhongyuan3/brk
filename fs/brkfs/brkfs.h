@@ -1,0 +1,100 @@
+#ifndef BRKFS_H
+#define BRKFS_H
+
+#include <brk/dev.h>
+#include <brk/fs_types.h>
+#include <brk/types.h>
+
+#define BRKFS_DIRECT_BLOCKS 7 /* Total number of direct block pointers */
+#define BRKFS_INDIRECT_BLOCK \
+	BRKFS_DIRECT_BLOCKS /* Single indirect block pointer index */
+#define BRKFS_DOUBLE_INDIRECT_BLOCK \
+	(BRKFS_INDIRECT_BLOCK + 1) /* Double indirect block pointer index */
+#define BRKFS_TRIPLE_INDIRECT_BLOCK    \
+	(BRKFS_DOUBLE_INDIRECT_BLOCK + \
+	 1) /* Triple indirect block pointer index */
+#define BRKFS_BLOCKS \
+	(BRKFS_TRIPLE_INDIRECT_BLOCK + 1) /* Total number of block pointers */
+#define BRKFS_ROOT_INO 1
+#define BRKFS_MAGIC 0x6b7262
+
+#define BRKFS_SUPER_BLOCK_OFFSET 1024
+#define BRKFS_SUPER_BLOCK_SIZE 1024
+
+#define BRKFS_DIR_ENTRY_MIN_LEN 12
+
+#define BRKFS_NAME_LEN 255
+
+struct brkfs_super_block {
+	uint32_t s_blocksize; /* Block size */
+	uint32_t s_inode_bitmap; /* Inode bitmap start block number */
+	uint32_t s_inodes_count; /* Total number of inodes */
+	uint32_t s_data_block_bitmap; /* Data block bitmap start block number */
+	uint32_t s_data_blocks_count; /* Total number of data blocks */
+	uint32_t s_inode_table; /* Inode table start block number */
+	uint32_t s_first_data_block; /* First data block number */
+	uint32_t s_magic; /* File system magic number */
+	uint32_t s_inode_size; /* Size of an inode */
+	uint32_t s_blocks_count; /* Total number of blocks */
+};
+
+struct brkfs_inode {
+	uint32_t i_ino;
+	uint32_t i_mode;
+	uint32_t i_rdev;
+	uint32_t i_flags;
+	uint32_t i_nlink;
+	uint32_t i_size;
+	uint32_t i_block[BRKFS_BLOCKS];
+};
+
+struct brkfs_dir_entry {
+	uint32_t inode;
+	uint16_t entry_len;
+	uint8_t name_len;
+	uint8_t file_type;
+	char name[];
+};
+
+struct brkfs_sb_info {
+	struct blkdev *s_bdev;
+	struct brkfs_super_block s_sb;
+	uint32_t s_inodes_per_block;
+	uint32_t s_bits_per_block;
+};
+
+struct brkfs_inode_info {
+	uint32_t i_block[BRKFS_BLOCKS];
+};
+
+struct brkfs_sb_info *brkfs_sb_info_alloc(struct blkdev *bdev,
+					  struct brkfs_super_block *sb);
+void brkfs_sb_info_free(struct brkfs_sb_info *sbi);
+int brkfs_inode_read(struct brkfs_sb_info *sbi, struct inode *inode);
+void brkfs_inode_setup_ops(struct inode *inode);
+int brkfs_inode_write(struct brkfs_sb_info *sbi, struct inode *inode);
+int brkfs_inode_alloc(struct brkfs_sb_info *sbi, uint32_t *out_ino);
+int brkfs_inode_free(struct brkfs_sb_info *sbi, uint32_t ino);
+int brkfs_block_alloc(struct brkfs_sb_info *sbi, uint32_t *bno);
+int brkfs_block_free(struct brkfs_sb_info *sbi, uint32_t bno);
+int brkfs_block_read(struct brkfs_sb_info *sb, uint32_t bno, void *buf);
+int brkfs_block_write(struct brkfs_sb_info *sb, uint32_t bno, const void *buf);
+
+int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, uint32_t ino, umode_t mode,
+			  unsigned int nlink, dev_t rdev);
+
+int brkfs_dir_lookup(struct inode *dir, const char *name, unsigned int name_len,
+		     uint32_t *ino_out, uint8_t *type_out);
+int brkfs_dir_add(struct inode *dir, uint32_t child_ino, const char *name,
+		  unsigned int name_len, umode_t child_mode);
+int brkfs_dir_remove(struct inode *dir, const char *name,
+		     unsigned int name_len);
+int brkfs_new_dir_body(struct inode *inode, uint32_t parent_ino);
+
+int brkfs_file_read_at(struct inode *inode, loff_t *pos, void *buf, size_t size,
+		       size_t *read_out);
+int brkfs_file_write_at(struct inode *inode, loff_t *pos, const void *buf,
+			size_t size, size_t *written_out);
+int brkfs_truncate_inode_blocks(struct inode *inode, loff_t new_size);
+
+#endif

@@ -35,7 +35,7 @@ struct page {
 			size_t object_count;
 		};
 
-		struct { /* tmpfs */
+		struct { /* ramfs */
 			struct page *tmpfs_next;
 		};
 	};

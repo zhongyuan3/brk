@@ -1,122 +1,105 @@
 #include <brk/align.h>
-#include <brk/assert.h>
 #include <brk/dcache.h>
-#include <brk/dev.h>
 #include <brk/errno.h>
+#include <brk/error.h>
 #include <brk/fs.h>
-#include <brk/list.h>
 #include <brk/lock.h>
-#include <brk/mm.h>
-#include <brk/panic.h>
-#include <brk/pipe.h>
+#include <brk/path.h>
 #include <brk/slab.h>
-#include <brk/string.h>
+#include <brk/types.h>
 
-static struct kmem_cache fcache;
-static LIST_DEFINE(flist);
-static SPINLOCK_DEFINE(flist_lock);
+static struct kmem_cache file_cache;
 
-int file_cache_init(void)
+void file_cache_init(void)
 {
-	return kmem_cache_init(&fcache, sizeof(struct file),
-			       alignof(struct file), "fcache");
+	kmem_cache_init(&file_cache, sizeof(struct file), alignof(struct file),
+			"file_cache");
 }
 
-static struct file *__file_alloc(void)
+struct file *file_alloc(struct path *path, fmode_t mode)
 {
-	struct file *fp;
+	struct file *file;
 
-	fp = kmem_cache_alloc(&fcache);
-	if (fp)
-		memset(fp, 0, sizeof(*fp));
-	return fp;
-}
+	file = kmem_cache_alloc(&file_cache);
+	if (!file)
+		return ERR_PTR(-ENOMEM);
 
-static void __file_free(struct file *fp)
-{
-	kmem_cache_free(&fcache, fp);
-}
+	arc_init(&file->f_count, 1);
+	path_dup(path);
+	file->f_path = *path;
+	file->f_inode = path->dentry->d_inode;
+	file->f_op = file->f_inode->i_fop;
 
-struct file *file_alloc(void)
-{
-	struct file *fp;
+	spinlock_init(&file->f_lock, "file.f_lock");
+	file->f_mode = mode;
+	sleeplock_init(&file->f_pos_lock, "file.f_pos_lock");
+	file->f_pos = 0;
 
-	fp = __file_alloc();
-	if (!fp)
-		return NULL;
-
-	list_init(&fp->f_list);
-	fp->f_rc = 1;
-
-	spinlock_acquire(&flist_lock);
-	list_add(&fp->f_list, &flist);
-	spinlock_release(&flist_lock);
-
-	return fp;
-}
-
-void file_put(struct file *fp)
-{
-	assert(fp);
-	assert(fp->f_rc > 0);
-
-	spinlock_acquire(&flist_lock);
-	--fp->f_rc;
-	if (fp->f_rc <= 0) {
-		list_del(&fp->f_list);
-		spinlock_release(&flist_lock);
-		if (fp->f_pipe)
-			pipe_close(fp->f_pipe, fp->f_mode & FMODE_WRITE);
-		if (fp->f_inode)
-			inode_put(fp->f_inode);
-		if (fp->f_dentry)
-			dentry_put(fp->f_dentry);
-		__file_free(fp);
-	} else {
-		spinlock_release(&flist_lock);
+	int err = file->f_op->open(file->f_inode, file);
+	if (err) {
+		path_put(&file->f_path);
+		kmem_cache_free(&file_cache, file);
+		return ERR_PTR(err);
 	}
+
+	return file;
 }
 
-struct file *file_dup(struct file *fp)
+struct file *file_dup(struct file *file)
 {
-	assert(fp);
-	assert(fp->f_rc > 0);
-	spinlock_acquire(&flist_lock);
-	++fp->f_rc;
-	spinlock_release(&flist_lock);
-	return fp;
+	arc_inc(&file->f_count);
+	return file;
 }
 
-int file_read(struct file *fp, void *buf, size_t cnt, size_t *rcnt)
+void file_put(struct file *file)
 {
-	if (!(fp->f_mode & FMODE_READ))
-		return -EBADF;
+	const struct file_operations *fop;
 
-	return fp->f_ops->read(fp, buf, cnt, &fp->f_off, rcnt);
+	if (arc_dec_fetch(&file->f_count) > 0)
+		return;
+
+	fop = file->f_op;
+	if (fop->release)
+		fop->release(file->f_inode, file);
+
+	path_put(&file->f_path);
+
+	kmem_cache_free(&file_cache, file);
 }
 
-int file_write(struct file *fp, const void *buf, size_t cnt, size_t *wcnt)
+loff_t file_lseek(struct file *file, loff_t len, int whence)
 {
-	if (!(fp->f_mode & FMODE_WRITE))
-		return -EBADF;
-
-	return fp->f_ops->write(fp, buf, cnt, &fp->f_off, wcnt);
-}
-
-off_t file_seek(struct file *fp, off_t offset, int whence)
-{
-	off_t ret = fp->f_ops->seek(fp, offset, whence);
+	loff_t ret = file->f_op->llseek(file, len, whence);
 	if (ret >= 0)
-		fp->f_off = ret;
+		file->f_pos = ret;
 	return ret;
 }
 
-int file_stat(struct file *fp, struct stat *buf)
+ssize_t file_read(struct file *file, void *buf, size_t size)
 {
-	return fp->f_ops->stat(fp, buf);
+	loff_t *pos = &file->f_pos;
+	sleeplock_acquire(&file->f_pos_lock);
+	ssize_t ret = file->f_op->read(file, buf, size, pos);
+	sleeplock_release(&file->f_pos_lock);
+	return ret;
 }
 
-int file_truncate(struct file *fp, off_t len)
+ssize_t file_write(struct file *file, const void *buf, size_t size)
 {
-	return fp->f_ops->truncate(fp, len);
+	loff_t *pos = &file->f_pos;
+	sleeplock_acquire(&file->f_pos_lock);
+	ssize_t ret = file->f_op->write(file, buf, size, pos);
+	sleeplock_release(&file->f_pos_lock);
+	return ret;
+}
+
+int file_stat(struct file *file, struct stat *buf)
+{
+	const struct inode_operations *i_op = file->f_inode->i_op;
+	return i_op->getattr(&file->f_path, buf, 0, 0);
+}
+
+int file_truncate(struct file *file, loff_t size)
+{
+	return 0;
 }

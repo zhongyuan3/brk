@@ -407,6 +407,7 @@ uint64_t sys_pipe(void);
 uint64_t sys_pipe2(void);
 uint64_t sys_uname(void);
 uint64_t sys_brk(void);
+uint64_t sys_getdents(void);
 uint64_t sys_getdents64(void);
 uint64_t sys_wait4(void);
 uint64_t sys_fork(void);

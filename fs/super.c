@@ -1,69 +1,59 @@
-#include <brk/assert.h>
-#include <brk/dcache.h>
 #include <brk/fs.h>
 #include <brk/list.h>
 #include <brk/lock.h>
+#include <brk/refcnt.h>
 #include <brk/slab.h>
 
-static LIST_DEFINE(sblist);
-static SPINLOCK_DEFINE(sblist_lock);
+static LIST_DEFINE(super_blocks);
+static SPINLOCK_DEFINE(sb_lock);
 
-struct super_block *sblock_alloc(void)
+struct super_block *alloc_super(struct file_system_type *type)
 {
 	struct super_block *sb;
 
 	sb = kzalloc(sizeof(*sb));
 	if (!sb)
 		return NULL;
-	sb->s_rc = 1;
+
+	list_init(&sb->s_list);
+	sb->s_type = type;
+	list_init(&sb->s_instances);
+	arc_init(&sb->s_count, 1);
+
+	sleeplock_init(&sb->s_lock, "super_block.s_lock");
+	spinlock_init(&sb->s_inode_lock, "super_block.s_inode_lock");
+	list_init(&sb->s_inodes);
+	list_init(&sb->s_dirty);
+	spinlock_init(&sb->s_mount_lock, "super_block.s_mount_lock");
+	list_init(&sb->s_mounts);
+
+	spinlock_acquire(&sb_lock);
+	list_add_tail(&sb->s_list, &super_blocks);
+	spinlock_release(&sb_lock);
+
 	return sb;
 }
 
-void sblock_free(struct super_block *sb)
+void free_super(struct super_block *sb)
 {
+	spinlock_acquire(&sb_lock);
+	list_del_init(&sb->s_list);
+	spinlock_release(&sb_lock);
+
 	kfree(sb);
 }
 
-int sblock_add(struct super_block *sb)
+void super_dup(struct super_block *sb)
 {
-	spinlock_acquire(&sblist_lock);
-	list_add_tail(&sb->s_list, &sblist);
-	spinlock_release(&sblist_lock);
-	return 0;
+	arc_inc(&sb->s_count);
 }
 
-refcnt_t sblock_rc(struct super_block *sb)
+void super_put(struct super_block *sb)
 {
-	refcnt_t rc;
-	spinlock_acquire(&sblist_lock);
-	rc = sb->s_rc;
-	spinlock_release(&sblist_lock);
-	return rc;
-}
+	if (arc_dec_fetch(&sb->s_count) > 0)
+		return;
 
-struct super_block *sblock_dup(struct super_block *sb)
-{
-	assert(sb->s_rc > 0);
-	spinlock_acquire(&sblist_lock);
-	++sb->s_rc;
-	spinlock_release(&sblist_lock);
-	return sb;
-}
-
-void sblock_put(struct super_block *sb)
-{
-	assert(sb->s_rc > 0);
-	spinlock_acquire(&sblist_lock);
-	--sb->s_rc;
-	if (sb->s_rc == 1) {
-		spinlock_release(&sblist_lock);
-		dentry_put(sb->s_root);
-	} else if (sb->s_rc == 0) {
-		list_del(&sb->s_list);
-		spinlock_release(&sblist_lock);
-		sb->s_fs_type->deinit_sb(sb);
-		sblock_free(sb);
-	} else {
-		spinlock_release(&sblist_lock);
-	}
+	if (sb->s_op->put_super)
+		sb->s_op->put_super(sb);
+	free_super(sb);
 }

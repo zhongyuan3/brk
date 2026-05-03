@@ -1,4 +1,5 @@
 #include <brk/asm.h>
+#include <brk/dcache.h>
 #include <brk/errno.h>
 #include <brk/fs.h>
 #include <brk/limits.h>
@@ -118,13 +119,18 @@ static void user_init_proc_return(void)
 	proc_sched_resume();
 	struct process *proc = current_process();
 	spinlock_release(&proc->lock);
-	fs_init();
-	char *argv[] = { "/bin/init", 0 };
+
+	int err = fs_init();
+	if (err)
+		panic("failed to initialize filesystem: %s\n", strerror(err));
+
+	char *argv[] = { "/init", 0 };
 	char *envp[] = { 0 };
-	int ret = do_execve(argv[0], argv, envp);
-	if (ret < 0)
-		panic("execve %s failed: %s\n", argv[0], strerror(ret));
-	proc->tf.a0 = ret;
+	err = do_execve(argv[0], argv, envp);
+	if (err < 0)
+		panic("execve %s failed: %s\n", argv[0], strerror(err));
+
+	proc->tf.a0 = err;
 	prepare_to_return();
 	user_trap_return(&proc->tf);
 }
@@ -285,7 +291,10 @@ int proc_fork(void)
 		if (parent->ofiles[i])
 			child->ofiles[i] = file_dup(parent->ofiles[i]);
 	}
-	child->cwd = dentry_dup(parent->cwd);
+	path_dup(&parent->cwd);
+	child->cwd = parent->cwd;
+	path_dup(&parent->root);
+	child->root = parent->root;
 
 	child->tf.a0 = 0;
 
