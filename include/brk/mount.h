@@ -1,26 +1,105 @@
 #ifndef BRK_MOUNT_H
 #define BRK_MOUNT_H
 
+#include <brk/fs_types.h>
+#include <brk/lock.h>
+#include <brk/refcnt.h>
 #include <brk/types.h>
 
-struct dentry;
-struct super_block;
-struct file_system_type;
+#define MOUNT_HTABLE_BITS 5
+#define MOUNT_HTABLE_SIZE (1 << MOUNT_HTABLE_BITS)
 
-struct vfsmount {
+#define MNT_READONLY 0x01
+#define MNT_NOSUID 0x02
+#define MNT_NODEV 0x04
+#define MNT_NOEXEC 0x08
+#define MNT_NOATIME 0x10
+
+struct mount {
+	/* Parent mount in namespace tree; reference held while mounted. */
+	struct mount *mnt_parent; /* hold reference count, self if root (no ref) */
+	struct list_head mnt_child; /* protected by parent's mnt_lock */
+	struct list_head mnt_mounts; /* protected by mnt_lock */
+
+	struct hlist_node mnt_hash; /* protected by mount_hashtable_lock */
+
+	struct list_head mnt_instance; /* protected by mnt_sb->s_mount_lock */
+
+	/* Mountpoint dentry in parent mount; reference held while mounted. */
+	struct dentry *mnt_mountpoint;
+	/* Root dentry of mounted filesystem; reference held while mounted. */
+	struct dentry *mnt_root;
+	/* Superblock backing this mount; lifetime managed by mount lifecycle. */
 	struct super_block *mnt_sb;
-	struct list_head mnt_list;
-	int mnt_flags;
+
+	arc_t mnt_count;
+	spinlock_t mnt_lock;
+
+	unsigned int mnt_flags;
 };
 
-struct vfsmount *mount_alloc(const char *mount_point);
-void mount_free(struct vfsmount *mount);
-void mount_add(struct vfsmount *mount);
+/*
+ * Mount API contract notes
+ * ------------------------
+ * 1) Ownership and lifetime:
+ *    - mnt_parent/mnt_mountpoint/mnt_root are owned references of struct mount.
+ *    - mnt_sb is owned by the mount and is torn down during final mount_put()
+ *      via fs_type->kill_sb().
+ *    - Implementations must keep mount_dup/mount_put and path_get/path_put
+ *      symmetric across all success/error paths.
+ *
+ * 2) lookup_mount() return semantics are intentionally simple:
+ *      - returns mount with ref held
+ *      - returns NULL when no mount exists at @path
+ *    It should not mix "not found" with ERR_PTR() unless this header is
+ *    updated to document that behavior explicitly.
+ *
+ * 3) Lock ordering guideline:
+ *      super_block.s_mount_lock -> mount.mnt_lock
+ *    and for parent/child mount topology updates:
+ *      parent->mnt_lock -> child->mnt_lock (if both are needed).
+ *    Keep mount_hashtable_lock critical sections short and avoid calling
+ *    teardown callbacks while holding global mount locks.
+ */
 
-const struct file_system_type *get_fs_type(const char *fs_name);
+/**
+ * do_mount() - Top-level function for mounting file systems
+ * @dev_name: Device path or special name
+ * @dir_name: Mount point path (user space string)
+ * @type_name: File system type name
+ * @flags: MS_* mount flags
+ * @data: File system private mount options
+ *
+ * Return: %0 on success, negative errno on failure.
+ */
+int do_mount(const char *dev_name, const char *dir_name, const char *type,
+	     unsigned long flags, void *data);
 
-int do_mount(const char *fs_name, const char *dev_name, const char *mount_point,
-	     int flags);
-int do_umount(const char *mount_point, int flags);
+/**
+ * do_umount() - Top-level function for unmounting file systems
+ * @mnt: Mount to unmount
+ * @flags: Unmount flags
+ *
+ * Return: %0 on success, negative errno on failure.
+ */
+int do_umount(struct mount *mnt, int flags);
+
+/**
+ * lookup_mount() - Resolve child mount mounted on @path
+ * @path: Current path (mnt + dentry)
+ *
+ * Return: mount with reference held, or %NULL if no child mount exists.
+ */
+struct mount *lookup_mount(const struct path *path);
+/* Returns @mnt with refcount incremented. */
+struct mount *mount_dup(struct mount *mnt);
+/* Drops one reference and may tear down mount at zero. */
+void mount_put(struct mount *mnt);
+
+int init_mount_tree(struct path *root_path);
+
+struct mount *kernel_mount(struct file_system_type *fs_type,
+			   unsigned long flags, const char *dev_name,
+			   void *data);
 
 #endif

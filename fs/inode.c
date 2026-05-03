@@ -1,28 +1,68 @@
 #include <brk/align.h>
 #include <brk/assert.h>
-#include <brk/dcache.h>
 #include <brk/fs.h>
-#include <brk/limits.h>
 #include <brk/list.h>
 #include <brk/lock.h>
-#include <brk/panic.h>
+#include <brk/process.h>
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/types.h>
 
-static struct list_head itable[NR_ITABLE_BUCKETS];
-static SPINLOCK_DEFINE(itable_lock);
-static struct kmem_cache icache;
+static struct hlist_head inode_hash_table[INODE_HTABLE_SIZE];
+static SPINLOCK_DEFINE(inode_hash_lock);
+static struct kmem_cache inode_cache;
 
-int inode_cache_init(void)
+void inode_cache_init(void)
 {
-	for (int i = 0; i < NR_ITABLE_BUCKETS; ++i)
-		list_init(&itable[i]);
-	return kmem_cache_init(&icache, sizeof(struct inode),
-			       alignof(struct inode), "icache");
+	kmem_cache_init(&inode_cache, sizeof(struct inode),
+			alignof(struct inode), "inode_cache");
 }
 
-static inline uint32_t inode_hash(struct super_block *sb, uint32_t ino)
+static struct inode *alloc_inode(struct super_block *sb, unsigned long ino)
+{
+	struct inode *inode;
+
+	if (sb->s_op->alloc_inode) {
+		inode = sb->s_op->alloc_inode(sb);
+	} else {
+		inode = kmem_cache_alloc(&inode_cache);
+		inode->i_private = NULL;
+	}
+
+	if (!inode)
+		return NULL;
+
+	inode->i_sb = sb;
+	inode->i_op = NULL;
+	inode->i_fop = NULL;
+	arc_init(&inode->i_count, 1);
+	spinlock_init(&inode->i_lock, "inode.i_lock");
+	sleeplock_init(&inode->i_rwsem, "inode.i_rwsem");
+	inode->i_state = 0;
+	list_init(&inode->i_sb_list);
+	list_init(&inode->i_list);
+	hlist_node_init(&inode->i_hash);
+	list_init(&inode->i_dentry);
+	inode->i_ino = ino;
+	inode->i_mode = 0;
+	inode->i_nlink = 0;
+	inode->i_size = 0;
+	inode->i_rdev = 0;
+
+	return inode;
+}
+
+static void free_inode(struct inode *inode)
+{
+	const struct super_operations *op = inode->i_sb->s_op;
+
+	if (op->free_inode)
+		op->free_inode(inode);
+	else
+		kmem_cache_free(&inode_cache, inode);
+}
+
+static uint32_t hash(const struct super_block *sb, unsigned long ino)
 {
 	const uint8_t *k = (uint8_t *)&sb;
 	uint32_t h = 0x811c9dc5;
@@ -35,125 +75,149 @@ static inline uint32_t inode_hash(struct super_block *sb, uint32_t ino)
 		h ^= k[i];
 		h *= 0x01000193;
 	}
-	return h;
+	return h & (INODE_HTABLE_SIZE - 1);
 }
 
-static struct inode *__inode_get(struct super_block *sb, uint32_t ino)
+static struct inode *lookup_inode(struct hlist_head *bucket,
+				  const struct super_block *sb,
+				  unsigned long ino)
 {
-	struct inode *ip;
-	uint32_t idx = inode_hash(sb, ino) % NR_ITABLE_BUCKETS;
-	struct list_head *bkt = &itable[idx];
+	struct inode *inode;
 
-	list_for_each_entry(ip, bkt, i_list)
-		if (ip->i_no == ino && ip->i_sb == sb) {
-			++ip->i_rc;
-			return ip;
+	assert(spinlock_holding(&inode_hash_lock));
+
+retry:
+	/* Look up in hash table */
+	hlist_for_each_entry(inode, bucket, i_hash) {
+		if (inode->i_ino == ino && inode->i_sb == sb) {
+			spinlock_acquire(&inode->i_lock);
+
+			/* Check if being freed */
+			if (inode->i_state & (I_FREEING | I_WILL_FREE)) {
+				spinlock_release(&inode->i_lock);
+				/* Wait for release to complete and retry */
+				proc_sleep(&inode->i_state, &inode_hash_lock);
+				goto retry;
+			}
+
+			spinlock_release(&inode->i_lock);
+
+			inode_dup(inode);
+			return inode; /* Cache hit, return directly */
 		}
+	}
 
 	return NULL;
 }
 
-static struct inode *__inode_alloc(void)
+struct inode *inode_get_locked(struct super_block *sb, unsigned long ino)
 {
-	struct inode *ip;
+	struct inode *inode, *old;
+	struct hlist_head *head = inode_hash_table + hash(sb, ino);
 
-	ip = kmem_cache_alloc(&icache);
-	if (ip)
-		memset(ip, 0, sizeof(*ip));
-	return ip;
-}
+	spinlock_acquire(&inode_hash_lock);
+	inode = lookup_inode(head, sb, ino);
+	spinlock_release(&inode_hash_lock);
+	if (inode)
+		return inode;
 
-static void __inode_free(struct inode *ip)
-{
-	kmem_cache_free(&icache, ip);
-}
-
-static void __inode_add(struct inode *ip)
-{
-	uint32_t idx = inode_hash(ip->i_sb, ip->i_no) % NR_ITABLE_BUCKETS;
-	list_add(&ip->i_list, &itable[idx]);
-}
-
-static void __inode_del(struct inode *ip)
-{
-	list_del(&ip->i_list);
-}
-
-struct inode *inode_alloc(void)
-{
-	struct inode *ip;
-
-	ip = __inode_alloc();
-	if (!ip)
+	inode = alloc_inode(sb, ino);
+	if (!inode)
 		return NULL;
-	ip->i_rc = 1;
-	list_init(&ip->i_list);
-	sleeplock_init(&ip->i_lock, "inode");
-	return ip;
-}
 
-void inode_free(struct inode *ip)
-{
-	__inode_free(ip);
-}
+	spinlock_acquire(&inode_hash_lock);
+	old = lookup_inode(head, sb, ino);
+	if (!old) {
+		/*
+		 * Currently, the inode has not been added to the hash table,
+		 * so it will not be found by other processes. We can set I_NEW
+		 * directly without locking i_lock.
+		 */
+		inode->i_state |= I_NEW;
 
-int inode_add(struct inode *ip)
-{
-	spinlock_acquire(&itable_lock);
-	__inode_add(ip);
-	spinlock_release(&itable_lock);
-	return 0;
-}
+		hlist_add_head(&inode->i_hash, head);
+		spinlock_release(&inode_hash_lock);
 
-struct inode *inode_dup(struct inode *ip)
-{
-	assert(ip->i_rc > 0);
-	spinlock_acquire(&itable_lock);
-	++ip->i_rc;
-	spinlock_release(&itable_lock);
-	return ip;
-}
+		spinlock_acquire(&sb->s_inode_lock);
+		list_add(&inode->i_sb_list, &sb->s_inodes);
+		spinlock_release(&sb->s_inode_lock);
 
-void inode_put(struct inode *ip)
-{
-	assert(ip->i_rc > 0);
-	spinlock_acquire(&itable_lock);
-	--ip->i_rc;
-	if (ip->i_rc == 0) {
-		__inode_del(ip);
-		spinlock_release(&itable_lock);
-		ip->i_sb->s_ops->deinit_inode(ip);
-		sblock_put(ip->i_sb);
-		inode_free(ip);
-	} else {
-		spinlock_release(&itable_lock);
+		return inode;
 	}
+	spinlock_release(&inode_hash_lock);
+
+	free_inode(inode);
+
+	inode = old;
+
+	while (1) {
+		spinlock_acquire(&inode->i_lock);
+		if (!(inode->i_state & I_NEW)) {
+			spinlock_release(&inode->i_lock);
+			break;
+		}
+		proc_sleep(&inode->i_state, &inode->i_lock);
+	}
+
+	return inode;
 }
 
-mode_t inode_mode(struct inode *ip)
+void inode_unlock_new(struct inode *inode)
 {
-	mode_t mode;
-	sleeplock_acquire(&ip->i_lock);
-	mode = ip->i_mode;
-	sleeplock_release(&ip->i_lock);
-	return mode;
+	spinlock_acquire(&inode->i_lock);
+	inode->i_state &= ~I_NEW;
+	spinlock_release(&inode->i_lock);
+	proc_wake_up(&inode->i_state);
 }
 
-refcnt_t inode_rc(struct inode *ip)
+struct inode *inode_dup(struct inode *inode)
 {
-	refcnt_t rc;
-	spinlock_acquire(&itable_lock);
-	rc = ip->i_rc;
-	spinlock_release(&itable_lock);
-	return rc;
+	arc_inc(&inode->i_count);
+	return inode;
 }
 
-struct inode *inode_get(struct super_block *sb, uint32_t ino)
+void inode_put(struct inode *inode)
 {
-	struct inode *ip;
+	const struct super_operations *s_op;
 
-	spinlock_acquire(&itable_lock);
-	ip = __inode_get(sb, ino);
-	spinlock_release(&itable_lock);
-	return ip;
+	if (arc_dec_fetch(&inode->i_count) > 0)
+		return;
+
+	spinlock_acquire(&inode->i_lock);
+	inode->i_state |= I_FREEING;
+	spinlock_release(&inode->i_lock);
+
+	s_op = inode->i_sb->s_op;
+	if (s_op->evict_inode)
+		s_op->evict_inode(inode);
+
+	spinlock_acquire(&inode_hash_lock);
+	hlist_del_init(&inode->i_hash);
+	spinlock_release(&inode_hash_lock);
+
+	spinlock_acquire(&inode->i_sb->s_inode_lock);
+	list_del(&inode->i_sb_list);
+	spinlock_release(&inode->i_sb->s_inode_lock);
+
+	free_inode(inode);
+}
+
+void inode_mark_dirty(struct inode *inode)
+{
+	struct super_block *sb = inode->i_sb;
+
+	spinlock_acquire(&inode->i_lock);
+	inode->i_state |= I_DIRTY;
+	spinlock_release(&inode->i_lock);
+
+	spinlock_acquire(&sb->s_inode_lock);
+	list_add(&inode->i_list, &sb->s_dirty);
+	spinlock_release(&sb->s_inode_lock);
+}
+
+void inode_clear(struct inode *inode)
+{
+	spinlock_acquire(&inode->i_lock);
+	inode->i_state |= I_CLEAR;
+	spinlock_release(&inode->i_lock);
 }

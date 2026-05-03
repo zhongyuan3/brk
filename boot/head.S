@@ -48,6 +48,7 @@ _start:
 	wfi
 	j .Lspin
 
+#if ENABLE_SMP
 	.global hart_entry
 hart_entry:
 	mv s2, a0
@@ -82,3 +83,4 @@ hart_entry:
 .Lhart_spin:
 	wfi
 	j .Lhart_spin
+#endif

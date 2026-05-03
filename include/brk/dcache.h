@@ -1,38 +1,170 @@
 #ifndef BRK_DCACHE_H
 #define BRK_DCACHE_H
 
+#include <brk/hash.h>
+#include <brk/lock.h>
+#include <brk/macros.h>
+#include <brk/refcnt.h>
 #include <brk/types.h>
 
-#define NR_DTABLE_BUCKETS 64
+#define DENTRY_HTABLE_BITS 8
+#define DENTRY_HTABLE_SIZE (1 << DENTRY_HTABLE_BITS)
 
-#define DENTRY_MOUNTED (1 << 0)
+#define DCACHE_NEGATIVE BIT(0)
+#define DCACHE_MOUNTED BIT(1)
+#define DCACHE_UNHASHED BIT(2)
 
-struct inode;
-struct dentry;
-struct dentry_operations;
+#define DENTRY_SHORT_NAME_SIZE 32
+
+struct qstr {
+	const char *name;
+	uint32_t hash;
+	uint32_t len;
+};
+
+#define QSTR_MAKE(n, l)                                     \
+	(struct qstr)                                       \
+	{                                                   \
+		.name = n, .hash = fnv1a_32(n, l), .len = l \
+	}
 
 struct dentry {
-	const char *d_name;
-	int d_rc;
-	unsigned int d_flags;
-	struct list_head d_hash;
-	struct dentry *d_parent;
+	arc_t d_count;
+
+	unsigned int d_flags; /* protected by d_lock */
+	spinlock_t d_lock;
+
+	/* Positive dentry: points to inode; negative dentry: NULL. */
 	struct inode *d_inode;
-	const struct dentry_operations *d_ops;
+	struct list_head d_alias; /* protected by d_inode->i_lock */
+
+	struct dentry *d_parent; /* hold reference count, self if root (no ref) */
+	struct list_head d_child; /* protected by d_parent->d_lock */
+	struct list_head d_subdirs; /* protected by d_lock */
+
+	struct hlist_node d_hash; /* protected by dentry_htable_lock */
+
+	struct qstr d_name;
+	union {
+		char d_short_name[DENTRY_SHORT_NAME_SIZE];
+		char *d_long_name;
+	};
+
+	struct super_block *d_sb; /* no reference count */
+
+	/*
+	 * Dentry operation table.
+	 * Recommended invariant: newly allocated dentries always have a valid
+	 * d_op (at least &generic_dop) before they are visible in lookup paths.
+	 */
+	const struct dentry_operations *d_op;
+
+	void *d_fsdata;
 };
 
 struct dentry_operations {
-	int (*compare)(struct dentry *, const char *, size_t);
+	/**
+	 * compare() - compare a candidate name with a dentry name
+	 * @dentry: cached candidate dentry being tested
+	 * @len: length of the name to compare
+	 * @str: name bytes to compare
+	 * @name: full struct qstr for the cached name
+	 *
+	 * If %NULL, byte comparison is used. Case-insensitive filesystems
+	 * override this (e.g. FAT32).
+	 *
+	 * Return: %0 if equal, non-zero if different.
+	 */
+	int (*compare)(const struct dentry *dentry, unsigned int len,
+		       const char *str, const struct qstr *name);
+
+	/**
+	 * release() - dentry memory will be freed
+	 * @dentry: dentry being destroyed
+	 *
+	 * Release @d_fsdata and similar.
+	 */
+	void (*release)(struct dentry *dentry);
+
+	/**
+	 * iput() - dentry is dropping its inode reference
+	 * @dentry: the dentry that is dropping its inode reference
+	 * @inode: the inode that is about to be inode_put()
+	 *
+	 * If %NULL, the VFS calls inode_put() directly.
+	 */
+	void (*iput)(struct dentry *dentry, struct inode *inode);
 };
 
-int dentry_cache_init(void);
-struct dentry *dentry_get(struct dentry *parent, const char *name);
-struct dentry *dentry_dup(struct dentry *dp);
-void dentry_put(struct dentry *dp);
-struct dentry *dentry_alloc(const char *name, size_t len);
-void dentry_free(struct dentry *dp);
-int dentry_add(struct dentry *dp);
-int dentry_rc(struct dentry *dp);
-unsigned int dentry_flags(struct dentry *dp);
+/*
+ * Dcache locking guideline:
+ *   dentry_htable_lock -> dentry.d_lock -> inode.i_lock
+ *
+ * Notes:
+ * - dentry lookup should be lockless outside the hash critical section as much
+ *   as possible; do not call filesystem lookup callbacks while holding
+ *   dentry_htable_lock.
+ * - Parent/child list updates should hold parent->d_lock.
+ * - Alias list updates should hold inode->i_lock.
+ */
+
+/**
+  * dentry_make_root() - Make a root dentry
+  * @root_inode: root inode
+  *
+  * Only used for file system mounting operations.
+  *
+  * Return: The root dentry or %NULL.
+  */
+struct dentry *dentry_make_root(struct inode *root_inode);
+
+/**
+ * dentry_instantiate() - Attach @inode to @dentry
+ * @dentry: dentry to attach
+ * @inode: inode to attach to this dentry
+ */
+void dentry_instantiate(struct dentry *dentry, struct inode *inode);
+
+/* Increment the reference count of @dentry */
+struct dentry *dentry_dup(struct dentry *dentry);
+
+/* Decrement the reference count of @dentry */
+void dentry_put(struct dentry *dentry);
+
+/**
+ * dentry_lookup() - Resolve one path component under @parent
+ * @parent: parent dentry
+ * @name: component name with hash prepared by caller
+ *
+ * Lookup first checks the dcache hash. On miss, it allocates a child dentry and
+ * invokes parent inode ->lookup(). The returned dentry may be positive (existing)
+ * or negative (DCACHE_NEGATIVE set, indicating not found).
+ *
+ * Return: The dentry on success or ERR_PTR(-errno) on failure.
+ */
+struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name);
+
+/**
+ * dentry_splice_alias() - Attach @inode to @dentry or reuse existing alias
+ * @inode: inode to splice the dentry into
+ * @dentry: dentry to splice
+ *
+ * Return: The alias dentry on success or ERR_PTR(-errno) on failure.
+ */
+struct dentry *dentry_splice_alias(struct inode *inode, struct dentry *dentry);
+
+void dentry_cache_init(void);
+
+extern const struct qstr slash_name;
+extern const struct qstr dot_name;
+extern const struct qstr dotdot_name;
+
+#define SLASH_NAME_HASH 0x2a0c975e
+#define DOT_NAME_HASH 0x2b0c98f1
+#define DOTDOT_NAME_HASH 0xa3d4a70d
+
+extern const struct dentry_operations generic_dop;
+
+void dcache_dump(void);
 
 #endif

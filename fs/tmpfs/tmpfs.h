@@ -1,12 +1,10 @@
-#ifndef FS_TMPFS_INTERNAL_H
-#define FS_TMPFS_INTERNAL_H
+#ifndef TMPFS_H
+#define TMPFS_H
 
 #include <brk/asm.h>
 #include <brk/lock.h>
 #include <brk/mm_types.h>
 #include <brk/types.h>
-
-#define TMPFS_MAGIC 0x706d74
 
 struct tmpfs_dir_entry {
 	uint32_t d_ino;
@@ -28,19 +26,14 @@ struct tmpfs_inode {
 
 struct tmpfs_super_block {
 	struct page *s_imap;
-	spinlock_t s_lock;
+	sleeplock_t s_lock;
 	uint32_t s_icnt;
 };
 
-struct tmpfs_dir_iter {
-	struct page *pg;
-	off_t in_pg_off;
-};
+#define TMPFS_MAGIC 0x706d74
 
 #define TMPFS_ROOT_INO 1
-
 #define TMPFS_INODE_PER_PAGE (PAGE_SIZE / sizeof(struct tmpfs_inode))
-
 #define TMPFS_DIR_ENT_MIN_LEN 24
 
 #endif
