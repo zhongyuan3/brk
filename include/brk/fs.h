@@ -514,18 +514,6 @@ void free_super(struct super_block *sb);
 void super_dup(struct super_block *sb);
 void super_put(struct super_block *sb);
 
-/**
- * inode_get_locked - Look up inode from cache, allocate new if not exists
- * @sb:  Super block
- * @ino: inode number
- *
- * The returned inode is in one of two states:
- *   A. Exists (cache hit): I_NEW not set, reference count increased, ready to use
- *   B. Newly allocated: I_NEW set, caller must read data from disk and call inode_unlock_new()
- *
- * Guarantee: For the same (sb, ino), only one caller of concurrent inode_get_locked()
- *       will receive an inode in I_NEW state (other callers will wait for inode_unlock_new()).
- */
 struct inode *inode_get_locked(struct super_block *sb, unsigned long ino);
 void inode_unlock_new(struct inode *inode);
 struct inode *inode_dup(struct inode *inode);
