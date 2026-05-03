@@ -30,6 +30,8 @@ enum {
 	STATE_HPRE,
 	STATE_HHPRE,
 	STATE_ZPRE,
+	STATE_JPRE,
+	STATE_TPRE,
 	STATE_STOP,
 	STATE_CHAR,
 	STATE_UCHAR,
@@ -44,18 +46,31 @@ enum {
 	STATE_PTR,
 	STATE_SIZE_T,
 	STATE_PTRDIFF_T,
+	STATE_INTMAX,
+	STATE_UINTMAX,
+	STATE_T_UINT,
+	STATE_N_INT,
+	STATE_N_CHAR,
+	STATE_N_SHORT,
+	STATE_N_LONG,
+	STATE_N_LLONG,
+	STATE_N_INTMAX,
+	STATE_N_SIZE,
+	STATE_N_PTRDIFF,
 };
 
 #define S(x) [x - 'A']
 #define OOB(x) ((unsigned)(x) - 'A' > 'z' - 'A')
 
-static uint8_t const states[]['z' - 'A' + 1] = {
+static uint8_t const states[STATE_STOP + 1]['z' - 'A' + 1] = {
 	{ STATE_INVALID },
 	{
 		/* STATE_START */
 		S('l') = STATE_LPRE,
 		S('h') = STATE_HPRE,
 		S('z') = STATE_ZPRE,
+		S('j') = STATE_JPRE,
+		S('t') = STATE_TPRE,
 		S('d') = STATE_INT,
 		S('i') = STATE_INT,
 		S('u') = STATE_UINT,
@@ -65,6 +80,7 @@ static uint8_t const states[]['z' - 'A' + 1] = {
 		S('s') = STATE_PTR,
 		S('c') = STATE_INT,
 		S('p') = STATE_PTR,
+		S('n') = STATE_N_INT,
 	},
 	{
 		/* STATE_LPRE */
@@ -75,6 +91,7 @@ static uint8_t const states[]['z' - 'A' + 1] = {
 		S('x') = STATE_ULONG,
 		S('X') = STATE_ULONG,
 		S('o') = STATE_ULONG,
+		S('n') = STATE_N_LONG,
 	},
 	{
 		/* STATE_LLPRE */
@@ -84,6 +101,7 @@ static uint8_t const states[]['z' - 'A' + 1] = {
 		S('x') = STATE_ULLONG,
 		S('X') = STATE_ULLONG,
 		S('o') = STATE_ULLONG,
+		S('n') = STATE_N_LLONG,
 	},
 	{
 		/* STATE_HPRE */
@@ -94,6 +112,7 @@ static uint8_t const states[]['z' - 'A' + 1] = {
 		S('x') = STATE_USHORT,
 		S('X') = STATE_USHORT,
 		S('o') = STATE_USHORT,
+		S('n') = STATE_N_SHORT,
 	},
 	{
 		/* STATE_HHPRE */
@@ -103,6 +122,7 @@ static uint8_t const states[]['z' - 'A' + 1] = {
 		S('x') = STATE_UCHAR,
 		S('X') = STATE_UCHAR,
 		S('o') = STATE_UCHAR,
+		S('n') = STATE_N_CHAR,
 	},
 	{
 		/* STATE_ZPRE */
@@ -112,7 +132,29 @@ static uint8_t const states[]['z' - 'A' + 1] = {
 		S('x') = STATE_SIZE_T,
 		S('X') = STATE_SIZE_T,
 		S('o') = STATE_SIZE_T,
+		S('n') = STATE_N_SIZE,
 	},
+	{
+		/* STATE_JPRE */
+		S('d') = STATE_INTMAX,
+		S('i') = STATE_INTMAX,
+		S('u') = STATE_UINTMAX,
+		S('x') = STATE_UINTMAX,
+		S('X') = STATE_UINTMAX,
+		S('o') = STATE_UINTMAX,
+		S('n') = STATE_N_INTMAX,
+	},
+	{
+		/* STATE_TPRE */
+		S('d') = STATE_PTRDIFF_T,
+		S('i') = STATE_PTRDIFF_T,
+		S('u') = STATE_T_UINT,
+		S('x') = STATE_T_UINT,
+		S('X') = STATE_T_UINT,
+		S('o') = STATE_T_UINT,
+		S('n') = STATE_N_PTRDIFF,
+	},
+	{ STATE_INVALID },
 };
 
 static char *fmt_u(uintmax_t x, char *s, char const *d)
@@ -155,6 +197,38 @@ static void pad(struct internal_display *dis, size_t pad_len, char pad_ch)
 		out(dis, &pad_ch, 1);
 }
 
+static void pop_n(va_list *ap, unsigned int st, size_t cnt)
+{
+	switch (st) {
+	case STATE_N_INT:
+		*va_arg(*ap, int *) = (int)cnt;
+		break;
+	case STATE_N_CHAR:
+		*va_arg(*ap, signed char *) = (signed char)cnt;
+		break;
+	case STATE_N_SHORT:
+		*va_arg(*ap, short *) = (short)cnt;
+		break;
+	case STATE_N_LONG:
+		*va_arg(*ap, long *) = (long)cnt;
+		break;
+	case STATE_N_LLONG:
+		*va_arg(*ap, long long *) = (long long)cnt;
+		break;
+	case STATE_N_INTMAX:
+		*va_arg(*ap, intmax_t *) = (intmax_t)cnt;
+		break;
+	case STATE_N_SIZE:
+		*va_arg(*ap, size_t *) = cnt;
+		break;
+	case STATE_N_PTRDIFF:
+		*va_arg(*ap, ptrdiff_t *) = (ptrdiff_t)cnt;
+		break;
+	default:
+		break;
+	}
+}
+
 static void pop_arg(va_list *ap, unsigned int st, union fmt_arg *arg)
 {
 	signed char c;
@@ -163,6 +237,7 @@ static void pop_arg(va_list *ap, unsigned int st, union fmt_arg *arg)
 	signed long li;
 	signed long long lli;
 	ptrdiff_t pd;
+	intmax_t im;
 	arg->lt0 = false;
 	switch (st) {
 	case STATE_CHAR:
@@ -234,6 +309,22 @@ static void pop_arg(va_list *ap, unsigned int st, union fmt_arg *arg)
 	case STATE_PTR:
 		arg->p = va_arg(*ap, void *);
 		break;
+	case STATE_INTMAX:
+		im = va_arg(*ap, intmax_t);
+		if (im < 0) {
+			arg->lt0 = true;
+			arg->i = (uintmax_t)(-(uintmax_t)im);
+		} else {
+			arg->i = (uintmax_t)im;
+		}
+		break;
+	case STATE_UINTMAX:
+		arg->i = va_arg(*ap, uintmax_t);
+		break;
+	case STATE_T_UINT:
+		pd = va_arg(*ap, ptrdiff_t);
+		arg->i = (uintmax_t)pd;
+		break;
 	}
 }
 
@@ -277,7 +368,17 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 			++s;
 		}
 
-		if (*s >= '0' && *s <= '9') {
+		if (*s == '*') {
+			++s;
+			has_width = true;
+			int fw = va_arg(ap, int);
+			if (fw < 0) {
+				flags |= LEFT_ALIGN;
+				width = (size_t)(-(unsigned)fw);
+			} else {
+				width = (size_t)fw;
+			}
+		} else if (*s >= '0' && *s <= '9') {
 			has_width = true;
 			width = *s++ - '0';
 			while (*s >= '0' && *s <= '9')
@@ -286,9 +387,25 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 
 		if (*s == '.') {
 			++s;
-			has_prec = true;
-			while (*s >= '0' && *s <= '9')
-				prec = prec * 10 + (*s++ - '0');
+			if (*s == '*') {
+				++s;
+				int pr = va_arg(ap, int);
+				if (pr >= 0) {
+					has_prec = true;
+					prec = (size_t)pr;
+				}
+			} else {
+				has_prec = true;
+				while (*s >= '0' && *s <= '9')
+					prec = prec * 10 + (*s++ - '0');
+			}
+		}
+
+		if (*s == '%') {
+			++s;
+			char pct = '%';
+			out(&idis, &pct, 1);
+			continue;
 		}
 
 		unsigned int st = STATE_START;
@@ -302,6 +419,11 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 
 		if (st == STATE_INVALID)
 			goto invalid;
+
+		if (st >= STATE_N_INT && st <= STATE_N_PTRDIFF) {
+			pop_n(&ap, st, idis.cnt);
+			continue;
+		}
 
 		pop_arg(&ap, st, &arg);
 
