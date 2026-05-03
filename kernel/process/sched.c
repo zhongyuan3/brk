@@ -165,6 +165,32 @@ void proc_wake_up(void *chan)
 	spinlock_release(&sleep_queue_lock);
 }
 
+void proc_wake_all(void *chan)
+{
+	for (;;) {
+		struct process *p, *wakee = NULL;
+
+		spinlock_acquire(&sleep_queue_lock);
+		list_for_each_entry(p, &sleep_queue, queue) {
+			spinlock_acquire(&p->lock);
+			if (p->state == PROCESS_STATE_SLEEPING &&
+			    p->chan == chan) {
+				p->state = PROCESS_STATE_RUNNING;
+				p->chan = NULL;
+				list_del_init(&p->queue);
+				spinlock_release(&p->lock);
+				wakee = p;
+				break;
+			}
+			spinlock_release(&p->lock);
+		}
+		spinlock_release(&sleep_queue_lock);
+		if (!wakee)
+			return;
+		proc_join(wakee);
+	}
+}
+
 void proc_exit(int status)
 {
 	struct process *child;

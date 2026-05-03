@@ -144,6 +144,12 @@ static int graft_tree(struct mount *new_mnt, struct path *mountpoint)
 	return 0;
 }
 
+/**
+ * lookup_mount() - Resolve child mount mounted on @path
+ * @path: Current path (mnt + dentry)
+ *
+ * Return: mount with reference held, or %NULL if no child mount exists.
+ */
 struct mount *lookup_mount(const struct path *path)
 {
 	struct mount *mnt = NULL;
@@ -163,6 +169,16 @@ struct mount *lookup_mount(const struct path *path)
 	return NULL;
 }
 
+/**
+ * do_mount() - Top-level function for mounting file systems
+ * @dev_name: Device path or special name
+ * @dir_name: Mount point path (user space string)
+ * @type_name: File system type name
+ * @flags: MS_* mount flags
+ * @data: File system private mount options
+ *
+ * Return: %0 on success, negative errno on failure.
+ */
 int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
 	     unsigned long flags, void *data)
 {
@@ -222,18 +238,27 @@ int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
 	return 0;
 }
 
+/**
+ * do_umount() - Top-level function for unmounting file systems
+ * @mnt: Mount to unmount
+ * @flags: Unmount flags
+ *
+ * Return: %0 on success, negative errno on failure.
+ */
 int do_umount(struct mount *mnt, int flags)
 {
 	mount_put(mnt);
 	return 0;
 }
 
+/* Returns @mnt with refcount incremented. */
 struct mount *mount_dup(struct mount *mnt)
 {
 	arc_inc(&mnt->mnt_count);
 	return mnt;
 }
 
+/* Drops one reference and may tear down mount at zero. */
 void mount_put(struct mount *mnt)
 {
 	struct mount *parent;
@@ -304,6 +329,7 @@ struct mount *kernel_mount(struct file_system_type *fs_type,
 		return ERR_CAST(root_dentry);
 	}
 
+	new_mnt->mnt_mountpoint = root_dentry;
 	new_mnt->mnt_root = root_dentry;
 	new_mnt->mnt_sb = root_dentry->d_sb;
 

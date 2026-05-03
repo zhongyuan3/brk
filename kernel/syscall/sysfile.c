@@ -20,6 +20,39 @@
 #include <brk/types.h>
 #include <brk/utsname.h>
 
+static int do_pipe2(int *pipefd, int flags)
+{
+	struct file *rf, *wf;
+	struct process *proc = current_process();
+	int fd0, fd1, err;
+
+	if (flags & ~(O_CLOEXEC | O_NONBLOCK))
+		return -EINVAL;
+
+	err = anon_pipe_create(&rf, &wf, (unsigned int)flags);
+	if (err)
+		return err;
+
+	fd0 = proc_alloc_fd(proc, rf);
+	if (fd0 < 0) {
+		file_put(wf);
+		file_put(rf);
+		return -EMFILE;
+	}
+
+	fd1 = proc_alloc_fd(proc, wf);
+	if (fd1 < 0) {
+		proc->ofiles[fd0] = NULL;
+		file_put(wf);
+		file_put(rf);
+		return -EMFILE;
+	}
+
+	pipefd[0] = fd0;
+	pipefd[1] = fd1;
+	return 0;
+}
+
 uint64_t sys_read(void)
 {
 	int fd;
@@ -363,12 +396,25 @@ uint64_t sys_mknodat(void)
 
 uint64_t sys_pipe(void)
 {
-	return -ENOSYS;
+	int *pipefd = syscall_arg_ptr(0);
+	int err;
+
+	if (!pipefd)
+		return -EFAULT;
+
+	err = do_pipe2(pipefd, 0);
+	return err < 0 ? (uint64_t)(long)err : 0;
 }
 
 uint64_t sys_pipe2(void)
 {
-	return -ENOSYS;
+	int *pipefd = syscall_arg_ptr(0);
+	int flags = syscall_arg_int(1);
+
+	if (!pipefd)
+		return -EFAULT;
+
+	return (uint64_t)(long)do_pipe2(pipefd, flags);
 }
 
 uint64_t sys_dup(void)
