@@ -1,0 +1,119 @@
+#include <brk/dcache.h>
+#include <brk/dev.h>
+#include <brk/errno.h>
+#include <brk/error.h>
+#include <brk/fcntl.h>
+#include <brk/fs.h>
+#include <brk/mount.h>
+#include <brk/path.h>
+#include <brk/printk.h>
+#include <brk/process.h>
+#include <brk/stat.h>
+#include <brk/string.h>
+
+static void register_builtin_filesystems(void)
+{
+	register_filesystem(&tmpfs_fs_type);
+	register_filesystem(&brkfs_fs_type);
+}
+
+int fs_init(void)
+{
+	register_builtin_filesystems();
+
+	struct process *proc = current_process();
+
+	int err = init_mount_tree(&proc->root);
+	if (err) {
+		log_error("%s(): Failed to initialize mount tree: %s\n",
+			  __func__, strerror(err));
+		return err;
+	}
+	log_info("%s(): Mount tree initialized successfully\n", __func__);
+
+	path_dup(&proc->root);
+	proc->cwd = proc->root;
+
+	err = do_mknodat(AT_FDCWD, "/disk0", S_IFBLK, DEV_DISK0);
+	if (err) {
+		log_error("%s(): Failed to create /disk0: %s\n", __func__,
+			  strerror(err));
+		return err;
+	}
+	log_info("%s(): /disk0 created successfully\n", __func__);
+
+	err = do_mount("/disk0", "/", "brkfs", 0, NULL);
+	if (err) {
+		log_error("%s(): Failed to mount /disk0: %s\n", __func__,
+			  strerror(err));
+		return err;
+	}
+	log_info("%s(): / mounted successfully\n", __func__);
+
+	struct mount *root_mnt = lookup_mount(&proc->root);
+	if (!root_mnt) {
+		log_error("%s(): Failed to lookup root mount: %s\n", __func__,
+			  strerror(err));
+		return -EINVAL;
+	}
+
+	struct path root_path = {
+		.mnt = root_mnt,
+		.dentry = dentry_dup(root_mnt->mnt_root),
+	};
+
+	path_put(&proc->root);
+	proc->root = root_path;
+	path_put(&proc->cwd);
+	path_dup(&root_path);
+	proc->cwd = root_path;
+
+	log_info("%s(): Change root path to /\n", __func__);
+
+	err = do_mkdirat(AT_FDCWD, "/dev", 0);
+	if (err && err != -EEXIST) {
+		log_error("%s(): Failed to create /dev: %s\n", __func__,
+			  strerror(err));
+		return err;
+	}
+	if (err == -EEXIST) {
+		log_info("%s(): /dev already exists\n", __func__);
+		err = 0;
+	} else {
+		log_info("%s(): /dev created successfully\n", __func__);
+	}
+
+	err = do_mount(NULL, "/dev", "tmpfs", 0, NULL);
+	if (err) {
+		log_error("%s(): Failed to mount /dev: %s\n", __func__,
+			  strerror(err));
+		return err;
+	}
+	log_info("%s(): /dev mounted successfully\n", __func__);
+
+	log_info("%s(): Creating /dev/console\n", __func__);
+	err = do_mknodat(AT_FDCWD, "/dev/console", S_IFCHR, DEV_CONSOLE0);
+	if (err) {
+		log_error("%s(): Failed to create /dev/console: %s\n", __func__,
+			  strerror(err));
+		return err;
+	}
+	log_info("%s(): /dev/console created successfully\n", __func__);
+
+	struct file *f = do_openat(AT_FDCWD, "/dev/console", O_RDWR, 0);
+	if (IS_ERR(f)) {
+		err = PTR_ERR(f);
+		log_error("%s(): Failed to open /dev/console: %s\n", __func__,
+			  strerror(err));
+		return err;
+	}
+	log_info("%s(): /dev/console opened successfully\n", __func__);
+
+	proc->ofiles[0] = f;
+	proc->ofiles[1] = file_dup(f);
+	proc->ofiles[2] = file_dup(f);
+
+	log_info("%s(): /dev/console duplicated successfully\n", __func__);
+
+	return 0;
+}

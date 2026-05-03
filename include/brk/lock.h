@@ -13,6 +13,7 @@ typedef struct spinlock {
 
 #define SPINLOCK_INITIALIZER(name) { 0, -1, name }
 #define SPINLOCK_DEFINE(name) spinlock_t name = SPINLOCK_INITIALIZER(#name)
+#define SPINLOCK_DECLARE(name) spinlock_t name
 
 void spinlock_init(spinlock_t *lock, const char *name);
 void spinlock_acquire(spinlock_t *lock);
@@ -31,6 +32,7 @@ typedef struct sleeplock {
 #define SLEEPLOCK_INITIALIZER(name) \
 	{ 0, SPINLOCK_INITIALIZER("sleeplock"), -1, name }
 #define SLEEPLOCK_DEFINE(name) sleeplock_t name = SLEEPLOCK_INITIALIZER(#name)
+#define SLEEPLOCK_DECLARE(name) sleeplock_t name
 
 void sleeplock_init(sleeplock_t *lock, const char *name);
 void sleeplock_acquire(sleeplock_t *lock);

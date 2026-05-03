@@ -1,190 +1,322 @@
-#include <brk/assert.h>
+/*
+ * mount.c - Mount mechanism core: graft_tree
+ *
+ * "Graft" the directory tree of a new file system onto a mount point in the original directory tree.
+ *
+ * State before mounting:
+ *
+ *   root_mnt (rootfs)
+ *     mnt_root  ──▶  root_dentry "/"
+ *                        └── dentry "/mnt"  (DCACHE_MOUNTED not set)
+ *
+ * State after mounting:
+ *
+ *   root_mnt (rootfs)
+ *     mnt_root  ──▶  root_dentry "/"
+ *                        └── dentry "/mnt"  (DCACHE_MOUNTED set)
+ *                                │
+ *                    ┌───────────┘ lookup_mount() finds via global hash table ──▶
+ *                    │
+ *                    ▼
+ *              new_mnt (ext4)
+ *                mnt_mountpoint ──▶ dentry "/mnt"  (mount point in original tree)
+ *                mnt_root       ──▶ dentry "/"     (ext4's own root)
+ *                mnt_parent     ──▶ root_mnt
+ */
 #include <brk/dcache.h>
-#include <brk/dev.h>
 #include <brk/errno.h>
-#include <brk/fcntl.h>
+#include <brk/error.h>
 #include <brk/fs.h>
+#include <brk/hash.h>
 #include <brk/list.h>
 #include <brk/lock.h>
-#include <brk/macros.h>
 #include <brk/mount.h>
-#include <brk/panic.h>
 #include <brk/path.h>
-#include <brk/printk.h>
-#include <brk/process.h>
+#include <brk/refcnt.h>
 #include <brk/slab.h>
 #include <brk/stat.h>
 #include <brk/string.h>
 #include <brk/types.h>
 
-static LIST_DEFINE(mnt_list);
-static SPINLOCK_DEFINE(mnt_list_lock);
+static struct hlist_head mount_hashtable[MOUNT_HTABLE_SIZE];
+static SPINLOCK_DEFINE(mount_hashtable_lock);
+static SLEEPLOCK_DEFINE(mount_lock);
+static struct mount *root_mnt;
 
-struct vfsmount *mount_alloc(const char *mount_point)
+static uint32_t hash(struct mount *mnt, struct dentry *dentry)
 {
-	return kzalloc(sizeof(struct vfsmount));
+	uint32_t h1 = fnv1a_32(&mnt, sizeof(struct mount *));
+	uint32_t h2 = fnv1a_32(&dentry, sizeof(struct dentry *));
+	return hash_combine32(h1, h2) & (MOUNT_HTABLE_SIZE - 1);
 }
 
-void mount_free(struct vfsmount *mount)
+static struct mount *alloc_mount(unsigned long flags)
 {
-	kfree(mount);
-}
+	struct mount *mnt;
 
-void mount_add(struct vfsmount *mount)
-{
-	spinlock_acquire(&mnt_list_lock);
-	list_add(&mount->mnt_list, &mnt_list);
-	spinlock_release(&mnt_list_lock);
-}
-
-static int __do_mount(const struct file_system_type *fs_type,
-		      const char *dev_name, const char *mount_point, int flags,
-		      struct dentry *parent)
-{
-	struct vfsmount *mnt = mount_alloc(mount_point);
+	mnt = kzalloc(sizeof(struct mount));
 	if (!mnt)
-		return -ENOMEM;
+		return NULL;
 
-	struct dentry *mnt_root = NULL;
-	int err = fs_type->mount(fs_type, dev_name, mount_point, flags,
-				 &mnt_root);
-	if (err) {
-		mount_free(mnt);
-		return err;
-	}
-
-	mnt_root->d_parent = parent;
-	dentry_add(mnt_root);
-
-	mnt->mnt_sb = sblock_dup(mnt_root->d_inode->i_sb);
+	mnt->mnt_parent = mnt;
+	list_init(&mnt->mnt_child);
+	list_init(&mnt->mnt_mounts);
+	arc_init(&mnt->mnt_count, 1);
+	spinlock_init(&mnt->mnt_lock, "mount.mnt_lock");
+	hlist_node_init(&mnt->mnt_hash);
+	list_init(&mnt->mnt_instance);
 	mnt->mnt_flags = flags;
-	mount_add(mnt);
 
-	assert(sblock_rc(mnt->mnt_sb) == 2);
-	assert(dentry_rc(mnt->mnt_sb->s_root) == 1);
-	assert(inode_rc(mnt->mnt_sb->s_root->d_inode) == 1);
+	return mnt;
+}
+
+static void free_mount(struct mount *mnt)
+{
+	kfree(mnt);
+}
+
+static bool mountpoint_busy(struct mount *mp_mnt, struct dentry *mp_dentry)
+{
+	struct mount *mnt;
+	uint32_t h = hash(mp_mnt, mp_dentry);
+
+	hlist_for_each_entry(mnt, &mount_hashtable[h], mnt_hash) {
+		if (mnt->mnt_parent == mp_mnt &&
+		    mnt->mnt_mountpoint == mp_dentry)
+			return true;
+	}
+
+	return false;
+}
+
+static int graft_tree(struct mount *new_mnt, struct path *mountpoint)
+{
+	struct dentry *mp_dentry = mountpoint->dentry;
+	struct mount *mp_mnt = mountpoint->mnt;
+	uint32_t h = hash(mp_mnt, mp_dentry);
+
+	sleeplock_acquire(&mount_lock);
+
+	/*
+	 * Stage 1 (validation):
+	 * Check mountpoint occupancy while serializing mount topology updates.
+	 */
+	spinlock_acquire(&mount_hashtable_lock);
+	if (mountpoint_busy(mp_mnt, mp_dentry)) {
+		spinlock_release(&mount_hashtable_lock);
+		sleeplock_release(&mount_lock);
+		return -EBUSY;
+	}
+	spinlock_release(&mount_hashtable_lock);
+
+	/*
+	 * Stage 2 (ownership transfer):
+	 * new_mnt starts owning references to parent mount and mountpoint dentry.
+	 */
+	new_mnt->mnt_parent = mount_dup(mp_mnt);
+	new_mnt->mnt_mountpoint = dentry_dup(mp_dentry);
+
+	/* Stage 3 (topology linkage): parent child list + global mount hash. */
+	spinlock_acquire(&mp_mnt->mnt_lock);
+	list_add_tail(&new_mnt->mnt_child, &mp_mnt->mnt_mounts);
+	spinlock_release(&mp_mnt->mnt_lock);
+
+	/*
+	 * Publish order for follow_mount():
+	 * set DCACHE_MOUNTED first, then publish into mount hash.
+	 * This avoids false-negative windows (mounted but bit not set).
+	 */
+	spinlock_acquire(&mp_dentry->d_lock);
+	mp_dentry->d_flags |= DCACHE_MOUNTED;
+	spinlock_release(&mp_dentry->d_lock);
+
+	spinlock_acquire(&mount_hashtable_lock);
+	hlist_add_head(&new_mnt->mnt_hash, &mount_hashtable[h]);
+	spinlock_release(&mount_hashtable_lock);
+
+	/* Stage 4 (superblock mount list bookkeeping). */
+	spinlock_acquire(&new_mnt->mnt_sb->s_mount_lock);
+	list_add(&new_mnt->mnt_instance, &new_mnt->mnt_sb->s_mounts);
+	spinlock_release(&new_mnt->mnt_sb->s_mount_lock);
+
+	sleeplock_release(&mount_lock);
 
 	return 0;
 }
 
-int do_mount(const char *fs_name, const char *dev_name, const char *mount_point,
-	     int flags)
+struct mount *lookup_mount(const struct path *path)
 {
-	const struct file_system_type *fs_type = get_fs_type(fs_name);
-	if (!fs_type)
-		return -EINVAL;
-
-	struct dentry *mnt_root = path_lookup(mount_point);
-	if (!mnt_root)
-		return -ENOENT;
-
-	if (dentry_rc(mnt_root) > 1 ||
-	    (dentry_flags(mnt_root) & DENTRY_MOUNTED)) {
-		dentry_put(mnt_root);
-		return -EBUSY;
-	}
-	struct dentry *mnt_parent = dentry_dup(mnt_root->d_parent);
-	dentry_put(mnt_root);
-	mnt_root = NULL;
-
-	int err = __do_mount(fs_type, dev_name, mount_point, flags, mnt_parent);
-	if (err) {
-		dentry_put(mnt_parent);
-		return err;
-	}
-	return 0;
-}
-
-int do_umount(const char *mount_point, int flags)
-{
-	struct dentry *mnt_root = path_lookup(mount_point);
-	if (!mnt_root)
-		return -ENOENT;
-
-	if (!(dentry_flags(mnt_root) & DENTRY_MOUNTED)) {
-		dentry_put(mnt_root);
-		return -EINVAL;
-	}
-
-	if (dentry_rc(mnt_root) > 2) {
-		dentry_put(mnt_root);
-		return -EBUSY;
-	}
-	assert(dentry_rc(mnt_root) == 2);
-	dentry_put(mnt_root);
-
-	struct vfsmount *mnt;
-	const struct file_system_type *fs_type;
-
-	spinlock_acquire(&mnt_list_lock);
-	list_for_each_entry(mnt, &mnt_list, mnt_list) {
-		if (mnt->mnt_sb->s_root == mnt_root) {
-			if (sblock_rc(mnt->mnt_sb) > 2) {
-				spinlock_release(&mnt_list_lock);
-				return -EBUSY;
-			}
-			list_del(&mnt->mnt_list);
-			spinlock_release(&mnt_list_lock);
-			fs_type = mnt->mnt_sb->s_fs_type;
-			fs_type->umount(mount_point);
-			sblock_put(mnt->mnt_sb);
-			mount_free(mnt);
-			return 0;
+	struct mount *mnt = NULL;
+	struct mount *mp_mnt = path->mnt;
+	struct dentry *mp_dentry = path->dentry;
+	uint32_t h = hash(mp_mnt, mp_dentry);
+	struct hlist_head *head = &mount_hashtable[h];
+	spinlock_acquire(&mount_hashtable_lock);
+	hlist_for_each_entry(mnt, head, mnt_hash) {
+		if (mnt->mnt_parent == mp_mnt &&
+		    mnt->mnt_mountpoint == mp_dentry) {
+			spinlock_release(&mount_hashtable_lock);
+			return mount_dup(mnt);
 		}
 	}
-	spinlock_release(&mnt_list_lock);
-
-	return -EINVAL;
+	spinlock_release(&mount_hashtable_lock);
+	return NULL;
 }
 
-void fs_init(void)
+int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
+	     unsigned long flags, void *data)
 {
+	struct file_system_type *type;
+	struct mount *new_mnt;
+	struct path mp_path;
+	struct dentry *root_dentry;
 	int err;
 
-	err = __do_mount(&tmpfs_fs_type, NULL, "/", 0, NULL);
-	assert(!err);
+	type = get_filesystem(type_name);
+	if (!type)
+		return -ENODEV;
 
-	err = do_mknodat(AT_FDCWD, "/disk0", S_IFBLK, DEV_DISK0);
-	assert(!err);
+	err = path_lookup(dir_name, 0, &mp_path);
+	if (err)
+		return err;
 
-	struct dentry *mnt_root = NULL;
-	err = ext4_fs_type.mount(&ext4_fs_type, "/disk0", "/", 0, &mnt_root);
-	assert(!err);
+	if (!S_ISDIR(mp_path.dentry->d_inode->i_mode)) {
+		path_put(&mp_path);
+		return -ENOTDIR;
+	}
 
-	err = do_umount("/", 0);
-	assert(!err);
+	new_mnt = alloc_mount(flags);
+	if (!new_mnt) {
+		path_put(&mp_path);
+		return -ENOMEM;
+	}
 
-	mnt_root->d_parent = NULL;
-	dentry_add(mnt_root);
+	root_dentry = type->mount(type, flags, dev_name, data);
+	if (IS_ERR(root_dentry)) {
+		err = PTR_ERR(root_dentry);
+		free_mount(new_mnt);
+		path_put(&mp_path);
+		return err;
+	}
 
-	struct vfsmount *mnt = mount_alloc("/");
-	assert(mnt);
-	mnt->mnt_sb = sblock_dup(mnt_root->d_inode->i_sb);
-	mnt->mnt_flags = 0;
-	mount_add(mnt);
+	new_mnt->mnt_root = root_dentry;
+	new_mnt->mnt_sb = root_dentry->d_sb;
 
-	assert(sblock_rc(mnt->mnt_sb) == 2);
-	assert(dentry_rc(mnt->mnt_sb->s_root) == 1);
-	assert(inode_rc(mnt->mnt_sb->s_root->d_inode) == 1);
+	/* Stage 3: graft vfsmount into namespace topology. */
+	err = graft_tree(new_mnt, &mp_path);
+	if (err) {
+		/*
+		 * type->mount() returns the root dentry by move semantics.
+		 * graft failure means mount not published, so drop mnt_root ref
+		 * explicitly before tearing down the superblock.
+		 */
+		dentry_put(new_mnt->mnt_root);
+		type->kill_sb(new_mnt->mnt_sb);
+		free_mount(new_mnt);
+		path_put(&mp_path);
+		return err;
+	}
 
-	err = do_mkdirat(AT_FDCWD, "/dev", 0);
-	assert(!err);
+	path_put(&mp_path);
 
-	err = do_mount("tmpfs", NULL, "/dev", 0);
-	assert(!err);
+	return 0;
+}
 
-	err = do_mknodat(AT_FDCWD, "/dev/console", S_IFCHR, DEV_CONSOLE0);
-	assert(!err);
+int do_umount(struct mount *mnt, int flags)
+{
+	mount_put(mnt);
+	return 0;
+}
 
-	struct file *f = NULL;
-	err = do_openat(AT_FDCWD, "/dev/console", O_RDWR, 0, &f);
-	assert(!err);
+struct mount *mount_dup(struct mount *mnt)
+{
+	arc_inc(&mnt->mnt_count);
+	return mnt;
+}
 
-	struct process *proc = current_process();
-	proc->ofiles[0] = f;
-	proc->ofiles[1] = file_dup(f);
-	proc->ofiles[2] = file_dup(f);
+void mount_put(struct mount *mnt)
+{
+	struct mount *parent;
+	struct dentry *mountpoint;
+	struct dentry *root;
+	struct super_block *sb;
 
-	proc->cwd = path_lookup("/");
-	assert(proc->cwd != NULL);
+	if (arc_dec_fetch(&mnt->mnt_count) > 0)
+		return;
+
+	/*
+	 * Unmount stage 1: detach from global topology while serialized by
+	 * mount_lock; keep heavy put/kill callbacks out of the lock.
+	 */
+	sleeplock_acquire(&mount_lock);
+
+	parent = mnt->mnt_parent;
+	mountpoint = mnt->mnt_mountpoint;
+	root = mnt->mnt_root;
+	sb = mnt->mnt_sb;
+
+	/*
+	 * Unpublish order for follow_mount():
+	 * remove from mount hash first, then clear DCACHE_MOUNTED.
+	 * This avoids false-negative windows during teardown.
+	 */
+	spinlock_acquire(&mount_hashtable_lock);
+	hlist_del_init(&mnt->mnt_hash);
+	spinlock_release(&mount_hashtable_lock);
+
+	spinlock_acquire(&mnt->mnt_mountpoint->d_lock);
+	mnt->mnt_mountpoint->d_flags &= ~DCACHE_MOUNTED;
+	spinlock_release(&mnt->mnt_mountpoint->d_lock);
+
+	spinlock_acquire(&mnt->mnt_parent->mnt_lock);
+	list_del(&mnt->mnt_child);
+	spinlock_release(&mnt->mnt_parent->mnt_lock);
+
+	spinlock_acquire(&mnt->mnt_sb->s_mount_lock);
+	list_del(&mnt->mnt_instance);
+	spinlock_release(&mnt->mnt_sb->s_mount_lock);
+
+	sleeplock_release(&mount_lock);
+
+	/* Unmount stage 2: release owned references and tear down sb. */
+	mount_put(parent);
+	dentry_put(mountpoint);
+	dentry_put(root);
+	sb->s_type->kill_sb(sb);
+
+	free_mount(mnt);
+}
+
+struct mount *kernel_mount(struct file_system_type *fs_type,
+			   unsigned long flags, const char *dev_name,
+			   void *data)
+{
+	struct mount *new_mnt;
+	struct dentry *root_dentry;
+
+	new_mnt = alloc_mount(0);
+	if (!new_mnt)
+		return ERR_PTR(-ENOMEM);
+
+	root_dentry = fs_type->mount(fs_type, flags, dev_name, data);
+	if (IS_ERR(root_dentry)) {
+		free_mount(new_mnt);
+		return ERR_CAST(root_dentry);
+	}
+
+	new_mnt->mnt_root = root_dentry;
+	new_mnt->mnt_sb = root_dentry->d_sb;
+
+	return new_mnt;
+}
+
+int init_mount_tree(struct path *root_path)
+{
+	struct mount *mnt = kernel_mount(&tmpfs_fs_type, 0, "", NULL);
+	if (IS_ERR(mnt))
+		return PTR_ERR(mnt);
+	root_mnt = mnt;
+	root_path->mnt = mount_dup(root_mnt);
+	root_path->dentry = dentry_dup(root_mnt->mnt_root);
+	return 0;
 }
