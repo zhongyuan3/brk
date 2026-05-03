@@ -141,6 +141,7 @@ fs/brkfs/inode.c \
 fs/brkfs/mount.c \
 fs/brkfs/super.c \
 fs/init.c \
+fs/pipe.c \
 fs/dcache.c \
 fs/file.c \
 fs/inode.c \
