@@ -304,6 +304,7 @@ struct mount *kernel_mount(struct file_system_type *fs_type,
 		return ERR_CAST(root_dentry);
 	}
 
+	new_mnt->mnt_mountpoint = root_dentry;
 	new_mnt->mnt_root = root_dentry;
 	new_mnt->mnt_sb = root_dentry->d_sb;
 

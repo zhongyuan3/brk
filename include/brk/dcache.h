@@ -119,6 +119,15 @@ struct dentry_operations {
 struct dentry *dentry_make_root(struct inode *root_inode);
 
 /**
+ * dentry_alloc_anon() - Allocate an unhashed positive dentry for a given inode
+ * @inode: inode to attach (caller holds inode lifetime)
+ * @name: dentry name (for debugging / generic compare)
+ *
+ * Used for kernel objects such as pipes that are not reachable by path lookup.
+ */
+struct dentry *dentry_alloc_anon(struct inode *inode, const struct qstr *name);
+
+/**
  * dentry_instantiate() - Attach @inode to @dentry
  * @dentry: dentry to attach
  * @inode: inode to attach to this dentry

@@ -15,6 +15,7 @@ static void register_builtin_filesystems(void)
 {
 	register_filesystem(&tmpfs_fs_type);
 	register_filesystem(&brkfs_fs_type);
+	pipe_fs_init();
 }
 
 int fs_init(void)
