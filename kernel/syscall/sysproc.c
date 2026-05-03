@@ -24,7 +24,7 @@ uint64_t sys_brk(void)
 
 uint64_t sys_clone(void)
 {
-	return -EOPNOTSUPP;
+	return -ENOSYS;
 }
 
 uint64_t sys_wait4(void)
@@ -60,7 +60,7 @@ uint64_t sys_nanosleep(void)
 
 uint64_t sys_kill(void)
 {
-	return -1;
+	return -ENOSYS;
 }
 
 uint64_t sys_sched_yield(void)

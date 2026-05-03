@@ -1,17 +1,36 @@
 #include <brk/fs.h>
-#include <brk/macros.h>
+#include <brk/list.h>
 #include <brk/string.h>
 
-static const struct file_system_type *file_systems[5] = {
-	&ext4_fs_type,
-	&tmpfs_fs_type,
-};
+static LIST_DEFINE(filesystems);
+static SPINLOCK_DEFINE(filesystems_lock);
 
-const struct file_system_type *get_fs_type(const char *fs_name)
+int register_filesystem(struct file_system_type *fs)
 {
-	for (size_t i = 0; i < countof(file_systems); ++i)
-		if (!strcmp(fs_name, file_systems[i]->name))
-			return file_systems[i];
+	spinlock_acquire(&filesystems_lock);
+	list_add_tail(&fs->fs_list, &filesystems);
+	spinlock_release(&filesystems_lock);
+	return 0;
+}
 
+int unregister_filesystem(struct file_system_type *fs)
+{
+	spinlock_acquire(&filesystems_lock);
+	list_del_init(&fs->fs_list);
+	spinlock_release(&filesystems_lock);
+	return 0;
+}
+
+struct file_system_type *get_filesystem(const char *name)
+{
+	struct file_system_type *fs;
+	spinlock_acquire(&filesystems_lock);
+	list_for_each_entry(fs, &filesystems, fs_list) {
+		if (!strcmp(fs->name, name)) {
+			spinlock_release(&filesystems_lock);
+			return fs;
+		}
+	}
+	spinlock_release(&filesystems_lock);
 	return NULL;
 }

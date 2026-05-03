@@ -1,13 +1,15 @@
 #ifndef BRK_PROCESS_H
 #define BRK_PROCESS_H
 
+#include <brk/path.h>
 #include <brk/asm.h>
+#include <brk/fs_types.h>
 #include <brk/limits.h>
 #include <brk/lock.h>
 #include <brk/mm_types.h>
-#include <brk/types.h>
 #include <brk/resource.h>
 #include <brk/time.h>
+#include <brk/types.h>
 
 #define KSTACK_PAGE_ORDER 1
 #define KSTACK_SIZE (PAGE_SIZE * (1 << KSTACK_PAGE_ORDER))
@@ -16,9 +18,6 @@
 
 #define TIME_SLICE_MAX 5
 #define PROCESS_NAME_MAX 32
-
-struct file;
-struct dentry;
 
 struct trapframe {
 	/* 0   */ uint64_t kernel_sp;
@@ -100,7 +99,8 @@ struct process {
 
 	struct mm_struct *mm;
 	struct file *ofiles[OPEN_MAX];
-	struct dentry *cwd;
+	struct path cwd;
+	struct path root;
 	struct tms ptms;
 	struct trapframe tf;
 	uint64_t kstack;

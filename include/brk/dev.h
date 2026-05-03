@@ -20,7 +20,7 @@
 #define DEV_CONSOLE0 MKDEV(CHRDEV, 1, 0)
 #define DEV_DISK0 MKDEV(BLKDEV, 1, 0)
 
-#define DISK0_SIZE (64 * 1024 * 1024)
+#define DISK0_SIZE (4096 * 1024)
 
 struct chrdev;
 struct chrdev_operations;

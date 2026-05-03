@@ -31,4 +31,7 @@
 		(type *)((char *)__mptr - offsetof(type, member));   \
 	})
 
+#define BIT(nr) (1UL << (nr))
+#define BIT_MASK(nr) ((1UL << (nr)) - 1)
+
 #endif

@@ -1,8 +1,8 @@
 #include <brk/align.h>
 #include <brk/asm.h>
-#include <brk/assert.h>
 #include <brk/elf.h>
 #include <brk/errno.h>
+#include <brk/error.h>
 #include <brk/fcntl.h>
 #include <brk/fs.h>
 #include <brk/limits.h>
@@ -11,12 +11,11 @@
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>
-#include <brk/printk.h>
 #include <brk/process.h>
-#include <brk/riscv.h>
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/timer.h>
+#include <brk/types.h>
 #include <brk/vmalloc.h>
 
 struct execve_args {
@@ -134,23 +133,24 @@ static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 		void *va = (void *)phys_to_virt(pa);
 		if (filesz > 0) {
 			size_t rsz = filesz > PAGE_SIZE ? PAGE_SIZE : filesz;
-			size_t rcnt = 0;
-			off_t ret = file_seek(fp, off, SEEK_SET);
+			loff_t ret = file_lseek(fp, off, SEEK_SET);
 			if (ret < 0) {
 				assert(pg);
 				page_free(pg, 0);
-				goto failed;
-			}
-			err = file_read(fp, va, rsz, &rcnt);
-			if (err) {
-				assert(pg);
-				page_free(pg, 0);
-				goto failed;
-			}
-			if (rcnt != rsz) {
 				err = -EIO;
+				goto failed;
+			}
+			ssize_t rcnt = file_read(fp, va, rsz);
+			if (rcnt < 0) {
 				assert(pg);
 				page_free(pg, 0);
+				err = -EIO;
+				goto failed;
+			}
+			if ((size_t)rcnt != (size_t)rsz) {
+				assert(pg);
+				page_free(pg, 0);
+				err = -EIO;
 				goto failed;
 			}
 			filesz -= rsz;
@@ -267,14 +267,17 @@ static int __do_execve(const char *path, struct execve_args *args)
 	struct mm_struct *new_mm = NULL;
 	int err = 0;
 
-	err = do_openat(AT_FDCWD, path, O_RDONLY, 0, &f);
-	if (err)
+	f = do_openat(AT_FDCWD, path, O_RDONLY, 0);
+	if (IS_ERR(f)) {
+		err = PTR_ERR(f);
 		goto err;
+	}
 
-	size_t r = 0;
-	err = file_read(f, &elf_hdr, sizeof(elf_hdr), &r);
-	if (err)
+	ssize_t r = file_read(f, &elf_hdr, sizeof(elf_hdr));
+	if (r < 0) {
+		err = -EIO;
 		goto err;
+	}
 
 	if (r != sizeof(struct elf64_hdr)) {
 		err = -ENOEXEC;
@@ -300,13 +303,13 @@ static int __do_execve(const char *path, struct execve_args *args)
 	uint16_t i = 0;
 	uint64_t off = elf_hdr.e_phoff;
 	for (; i < elf_hdr.e_phnum; ++i, off += sizeof(phdr)) {
-		off_t ret = file_seek(f, off, SEEK_SET);
+		loff_t ret = file_lseek(f, off, SEEK_SET);
 		if (ret < 0)
 			goto err;
-		err = file_read(f, &phdr, sizeof(phdr), &r);
-		if (err)
+		r = file_read(f, &phdr, sizeof(phdr));
+		if (r < 0)
 			goto err;
-		if (r != sizeof(phdr))
+		if ((size_t)r != sizeof(phdr))
 			goto err;
 		if (phdr.p_type != PT_LOAD)
 			continue;
@@ -348,12 +351,12 @@ static int __do_execve(const char *path, struct execve_args *args)
 err:
 	if (new_mm)
 		mm_free(new_mm);
-	if (f)
+	if (!IS_ERR(f) && f)
 		file_put(f);
 	return err;
 }
 
-int do_execve(char *path, char **argv, char **envp)
+int do_execve(const char *path, char **argv, char **envp)
 {
 	struct execve_args args;
 	int cnt;

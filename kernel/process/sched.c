@@ -10,7 +10,6 @@
 #include <brk/riscv.h>
 #include <brk/timer.h>
 #include <brk/types.h>
-#include <assert.h>
 
 SPINLOCK_DEFINE(wait_lock);
 
@@ -180,7 +179,8 @@ void proc_exit(int status)
 			parent->ofiles[i] = NULL;
 		}
 	}
-	dentry_put(parent->cwd);
+	path_put(&parent->cwd);
+	path_put(&parent->root);
 
 	spinlock_acquire(&wait_lock);
 	list_for_each_entry(child, &parent->children, child) {

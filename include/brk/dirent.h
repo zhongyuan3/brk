@@ -29,6 +29,4 @@ struct dirent64 {
 	char d_name[];
 };
 
-#define DIRENT64_NAME_OFFSET offsetof(struct dirent64, d_name)
-
 #endif

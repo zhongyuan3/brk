@@ -33,6 +33,7 @@ static uint64_t (*systable[])(void) = {
 	[SYS_pipe2] = sys_pipe2,
 	[SYS_uname] = sys_uname,
 	[SYS_brk] = sys_brk,
+	[SYS_getdents] = sys_getdents,
 	[SYS_getdents64] = sys_getdents64,
 	[SYS_wait4] = sys_wait4,
 	[SYS_fork] = sys_fork,

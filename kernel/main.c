@@ -27,7 +27,9 @@
 #include <brk/vmalloc.h>
 #include <libfdt.h>
 
-void start_other_harts(uint64_t init_hart_id)
+#if ENABLE_SMP
+
+static void wake_up_other_harts(uint64_t init_hart_id)
 {
 	uint64_t start_addr;
 
@@ -39,6 +41,25 @@ void start_other_harts(uint64_t init_hart_id)
 		sbi_hart_start(id, start_addr, 0);
 	}
 }
+
+void start_hart(uint64_t hart_id)
+{
+	write_tp(hart_id);
+
+	write_satp(make_satp_sv39(symbol_phys(kernel_pgdir)));
+	sfence_vma();
+
+	irq_init_hart(hart_id);
+	uart_init_hart(hart_id);
+	virtio_blk_init_hart(hart_id);
+	trap_init_hart(hart_id);
+
+	log_info("hart %lu starting\n", hart_id);
+
+	proc_scheduler();
+}
+
+#endif
 
 void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 {
@@ -86,31 +107,16 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 	virtio_blk_init_hart(hart_id);
 
 	dev_init();
-	dentry_cache_init();
-	file_cache_init();
-	inode_cache_init();
 
+	dentry_cache_init();
+	inode_cache_init();
+	file_cache_init();
 	proc_cache_init();
 	proc_init_user();
 
-	// start_other_harts(hart_id);
-
-	proc_scheduler();
-}
-
-void start_hart(uint64_t hart_id)
-{
-	write_tp(hart_id);
-
-	write_satp(make_satp_sv39(symbol_phys(kernel_pgdir)));
-	sfence_vma();
-
-	irq_init_hart(hart_id);
-	uart_init_hart(hart_id);
-	virtio_blk_init_hart(hart_id);
-	trap_init_hart(hart_id);
-
-	printk("hart %lu starting\n", hart_id);
+#if ENABLE_SMP
+	wake_up_other_harts(hart_id);
+#endif
 
 	proc_scheduler();
 }
