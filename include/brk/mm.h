@@ -1,9 +1,9 @@
 #ifndef BRK_MM_H
 #define BRK_MM_H
 
-#include <brk/align.h>
 #include <brk/asm.h>
 #include <brk/assert.h>
+#include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/printk.h>
 #include <brk/types.h>
@@ -33,22 +33,22 @@ static inline uint64_t symbol_phys(void *vaddr)
 
 #define _STEXT_PHYS symbol_phys(_stext)
 #define _ETEXT_PHYS symbol_phys(_etext)
-#define _ETEXT_ALIGNED_PHYS align_up(_ETEXT_PHYS, PAGE_SIZE)
+#define _ETEXT_ALIGNED_PHYS round_up(_ETEXT_PHYS, PAGE_SIZE)
 #define _TEXT_SIZE ((uint64_t)_etext - (uint64_t)_stext)
 
 #define _SRODATA_PHYS symbol_phys(_srodata)
 #define _ERODATA_PHYS symbol_phys(_erodata)
-#define _ERODATA_ALIGNED_PHYS align_up(_ERODATA_PHYS, PAGE_SIZE)
+#define _ERODATA_ALIGNED_PHYS round_up(_ERODATA_PHYS, PAGE_SIZE)
 #define _RODATA_SIZE ((uint64_t)_erodata - (uint64_t)_srodata)
 
 #define _SDATA_PHYS symbol_phys(_sdata)
 #define _EDATA_PHYS symbol_phys(_edata)
-#define _EDATA_ALIGNED_PHYS align_up(_EDATA_PHYS, PAGE_SIZE)
+#define _EDATA_ALIGNED_PHYS round_up(_EDATA_PHYS, PAGE_SIZE)
 #define _DATA_SIZE ((uint64_t)_edata - (uint64_t)_sdata)
 
 #define _SBSS_PHYS symbol_phys(_sbss)
 #define _EBSS_PHYS symbol_phys(_ebss)
-#define _EBSS_ALIGNED_PHYS align_up(_EBSS_PHYS, PAGE_SIZE)
+#define _EBSS_ALIGNED_PHYS round_up(_EBSS_PHYS, PAGE_SIZE)
 #define _BSS_SIZE ((uint64_t)_ebss - (uint64_t)_sbss)
 
 static inline uint64_t phys_to_virt(uint64_t paddr)

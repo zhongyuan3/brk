@@ -1,7 +1,7 @@
 #include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/irq.h>
-#include <brk/macros.h>
+#include <brk/kernel.h>
 #include <brk/panic.h>
 #include <brk/plic.h>
 #include <brk/printk.h>

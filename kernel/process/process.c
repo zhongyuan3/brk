@@ -2,10 +2,10 @@
 #include <brk/dcache.h>
 #include <brk/errno.h>
 #include <brk/fs.h>
+#include <brk/kernel.h>
 #include <brk/limits.h>
 #include <brk/list.h>
 #include <brk/lock.h>
-#include <brk/macros.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
 #include <brk/panic.h>
@@ -185,7 +185,7 @@ int proc_set_brk(uint64_t addr)
 		return 0;
 	}
 
-	new_heap_end = align_up(addr, PAGE_SIZE);
+	new_heap_end = round_up(addr, PAGE_SIZE);
 	incr = new_heap_end - curr_heap_end;
 	size_t old_npgs = heap->nr_pages;
 	size_t new_npgs = old_npgs + (incr >> PAGE_SHIFT);

@@ -1,9 +1,9 @@
 #ifndef BRK_DCACHE_H
 #define BRK_DCACHE_H
 
+#include <brk/bits.h>
 #include <brk/hash.h>
 #include <brk/lock.h>
-#include <brk/macros.h>
 #include <brk/refcnt.h>
 #include <brk/types.h>
 

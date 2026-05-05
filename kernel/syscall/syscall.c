@@ -1,6 +1,6 @@
 #include <brk/cpu.h>
 #include <brk/errno.h>
-#include <brk/macros.h>
+#include <brk/kernel.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/process.h>

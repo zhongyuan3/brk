@@ -1,7 +1,7 @@
 #ifndef BRK_LIST_H
 #define BRK_LIST_H
 
-#include <brk/macros.h>
+#include <brk/kernel.h>
 #include <brk/types.h>
 
 #define LIST_INITIALIZER(name) { &name, &name }

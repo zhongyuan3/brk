@@ -1,6 +1,5 @@
-#include <brk/align.h>
 #include <brk/assert.h>
-#include <brk/macros.h>
+#include <brk/kernel.h>
 #include <brk/memblock.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
@@ -141,13 +140,13 @@ uint64_t memblock_alloc(size_t size, uint64_t min_addr, size_t align)
 	uint64_t start, end;
 	uint64_t idx;
 
-	assert(is_pow2(align));
+	assert(is_power_of_two(align));
 
 	for_each_mem_range(idx, start, end) {
 		if (start < min_addr)
 			continue;
 
-		uint64_t aligned_start = align_up(max(start, min_addr), align);
+		uint64_t aligned_start = round_up(max(start, min_addr), align);
 		if (aligned_start + size > end)
 			continue;
 
@@ -310,8 +309,8 @@ void __next_mem_pfn_range(uint32_t *pidx, uint64_t *pstart, uint64_t *pend)
 		return;
 	}
 	struct memblock_region *rgn = &mem->regions[*pidx];
-	*pstart = phys_to_pfn(align_up(rgn->base, PAGE_SIZE));
-	*pend = phys_to_pfn(align_down(rgn->base + rgn->size, PAGE_SIZE));
+	*pstart = phys_to_pfn(round_up(rgn->base, PAGE_SIZE));
+	*pend = phys_to_pfn(round_down(rgn->base + rgn->size, PAGE_SIZE));
 	*pidx += 1;
 }
 
