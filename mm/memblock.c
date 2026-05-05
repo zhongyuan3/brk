@@ -140,7 +140,7 @@ uint64_t memblock_alloc(size_t size, uint64_t min_addr, size_t align)
 	uint64_t start, end;
 	uint64_t idx;
 
-	assert(is_power_of_two(align));
+	ASSERT(is_power_of_two(align));
 
 	for_each_mem_range(idx, start, end) {
 		if (start < min_addr)
@@ -165,7 +165,7 @@ static int memblock_remove_region(struct memblock_type *type, size_t rgn_idx,
 	uint64_t rbase = rgn->base;
 	uint64_t rend = rbase + rgn->size;
 
-	assert(base >= rbase && end <= rend);
+	ASSERT(base >= rbase && end <= rend);
 
 	if (base == rbase) {
 		if (end == rend) {
@@ -330,7 +330,7 @@ static void memblock_free_range(uint64_t start, uint64_t end)
 
 		struct page *pg = pfn_to_page(phys_to_pfn(start));
 		pg->flags = PAGE_FLAGS_NEW_PAGE;
-		assert(pg);
+		ASSERT(pg);
 		page_free(pg, order);
 
 		start += (npgs << PAGE_SHIFT);

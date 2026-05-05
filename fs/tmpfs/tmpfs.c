@@ -62,7 +62,7 @@ static struct tmpfs_inode *tmpfs_inode_get(struct tmpfs_super_block *sb,
 	struct page *pg;
 	struct tmpfs_inode *ip;
 
-	assert(ino > 0);
+	ASSERT(ino > 0);
 
 	--ino;
 

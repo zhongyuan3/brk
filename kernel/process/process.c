@@ -46,7 +46,7 @@ static uint64_t kstack_alloc(void)
 static void kstack_free(uint64_t stack)
 {
 	struct page *pg = virt_to_page(stack);
-	assert(pg);
+	ASSERT(pg);
 	page_free(pg, KSTACK_PAGE_ORDER);
 }
 
@@ -205,7 +205,7 @@ int proc_set_brk(uint64_t addr)
 		uint64_t pa = page_to_phys(pg);
 		err = uvmap(mm->pgd, addr, PAGE_SIZE, pa, PTE_R | PTE_W);
 		if (err) {
-			assert(pg);
+			ASSERT(pg);
 			page_free(pg, 0);
 			goto failed;
 		}
@@ -228,7 +228,7 @@ failed:
 	for (uint64_t a = curr_heap_end; a < addr; a += PAGE_SIZE)
 		uvunmap(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = old_npgs; j < i; ++j) {
-		assert(new_pgs[j]);
+		ASSERT(new_pgs[j]);
 		page_free(new_pgs[j], 0);
 	}
 	kfree(new_pgs);

@@ -66,7 +66,7 @@ static void mm_free_seg(struct mm_struct *mm)
 		list_del(&curr->list);
 		uvunmap(mm->pgd, curr->addr, curr->size);
 		for (size_t i = 0; i < curr->nr_pages; ++i) {
-			assert(curr->pages[i]);
+			ASSERT(curr->pages[i]);
 			page_free(curr->pages[i], 0);
 		}
 		kfree(curr->pages);
@@ -78,7 +78,7 @@ static void mm_free_stack(struct mm_struct *mm)
 {
 	if (mm->stack->size > 0) {
 		uvunmap(mm->pgd, mm->stack->addr, mm->stack->size);
-		assert(mm->stack->pages[0]);
+		ASSERT(mm->stack->pages[0]);
 		page_free(mm->stack->pages[0], USTACK_PAGE_ORDER);
 	}
 	vm_area_free(mm->stack);
@@ -89,7 +89,7 @@ static void mm_free_heap(struct mm_struct *mm)
 	if (mm->heap->size > 0) {
 		uvunmap(mm->pgd, mm->heap->addr, mm->heap->size);
 		for (size_t i = 0; i < mm->heap->nr_pages; ++i) {
-			assert(mm->heap->pages[i]);
+			ASSERT(mm->heap->pages[i]);
 			page_free(mm->heap->pages[i], 0);
 		}
 		kfree(mm->heap->pages);
@@ -131,7 +131,7 @@ static int mm_copy_area(struct vm_area *dst, struct vm_area *src,
 		uint64_t dst_pa = page_to_phys(pg);
 		err = uvmap(mm->pgd, addr, PAGE_SIZE, dst_pa, flags);
 		if (err) {
-			assert(pg);
+			ASSERT(pg);
 			page_free(pg, 0);
 			goto failed;
 		}
@@ -156,7 +156,7 @@ failed:
 	for (uint64_t a = src->addr; a < addr; a += PAGE_SIZE)
 		uvunmap(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = 0; j < i; ++j) {
-		assert(pgs[j]);
+		ASSERT(pgs[j]);
 		page_free(pgs[j], 0);
 	}
 	kfree(pgs);
@@ -200,7 +200,7 @@ failed:
 			npgs = curr->nr_pages;
 			pgs = curr->pages;
 			for (size_t i = 0; i < npgs; ++i) {
-				assert(pgs[i]);
+				ASSERT(pgs[i]);
 				page_free(pgs[i], 0);
 			}
 			kfree(curr->pages);
@@ -221,7 +221,7 @@ static int mm_copy_stack(struct mm_struct *dst, struct mm_struct *src)
 
 	struct page **pgs = kcalloc(1, sizeof(struct page *));
 	if (!pgs) {
-		assert(pg);
+		ASSERT(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
 		return -ENOMEM;
 	}
@@ -230,7 +230,7 @@ static int mm_copy_stack(struct mm_struct *dst, struct mm_struct *src)
 	int err = uvmap(dst->pgd, src->stack->addr, src->stack->size, pa,
 			src->stack->flags);
 	if (err) {
-		assert(pg);
+		ASSERT(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
 		kfree(pgs);
 		return err;

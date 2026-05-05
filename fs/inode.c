@@ -84,7 +84,7 @@ static struct inode *lookup_inode(struct hlist_head *bucket,
 {
 	struct inode *inode;
 
-	assert(spinlock_holding(&inode_hash_lock));
+	ASSERT(spinlock_holding(&inode_hash_lock));
 
 retry:
 	/* Look up in hash table */

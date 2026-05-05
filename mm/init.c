@@ -106,7 +106,7 @@ void vmemmap_init(void)
 	for_each_mem_pfn_range(idx, start, end) {
 		sz = round_up((end - start) * sizeof(struct page), PAGE_SIZE);
 		paddr = memblock_alloc(sz, 0, PAGE_SIZE);
-		assert(paddr);
+		ASSERT(paddr);
 		memset((void *)phys_to_virt(paddr), 0, sz);
 		kvmap_with_mode((uint64_t)pfn_to_page(start), sz, paddr,
 				PTE_R | PTE_W, VMAP_MODE_INTERIM);
