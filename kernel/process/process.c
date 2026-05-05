@@ -124,7 +124,7 @@ static void user_init_proc_return(void)
 	if (err)
 		panic("failed to initialize filesystem: %s\n", strerror(err));
 
-	char *argv[] = { "/init", 0 };
+	char *argv[] = { "/bin/init", 0 };
 	char *envp[] = { 0 };
 	err = do_execve(argv[0], argv, envp);
 	if (err < 0)
