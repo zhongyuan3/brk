@@ -1,7 +1,7 @@
-#include <brk/align.h>
 #include <brk/asm.h>
 #include <brk/assert.h>
 #include <brk/errno.h>
+#include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/lock.h>
 #include <brk/memblock.h>
@@ -189,15 +189,15 @@ int vmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 		    is_aligned(paddr, PAGE_SIZE_1G) &&
 		    rem_size >= PAGE_SIZE_1G) {
 			page_size = PAGE_SIZE_1G;
-			rem_size = align_down(rem_size, PAGE_SIZE_1G);
+			rem_size = round_down(rem_size, PAGE_SIZE_1G);
 		} else if (is_aligned(addr, PAGE_SIZE_2M) &&
 			   is_aligned(paddr, PAGE_SIZE_2M) &&
 			   rem_size >= PAGE_SIZE_2M) {
 			page_size = PAGE_SIZE_2M;
-			rem_size = align_down(rem_size, PAGE_SIZE_2M);
+			rem_size = round_down(rem_size, PAGE_SIZE_2M);
 		} else {
 			page_size = PAGE_SIZE;
-			rem_size = align_down(rem_size, PAGE_SIZE);
+			rem_size = round_down(rem_size, PAGE_SIZE);
 		}
 
 		err = vmap_range(pgd, addr, addr + rem_size, paddr, page_size,
@@ -228,7 +228,7 @@ int kvmap_with_mode(uint64_t addr, size_t size, uint64_t paddr,
 		    unsigned int flags, enum vmap_mode mode)
 {
 	int ret;
-	size = align_up(size, PAGE_SIZE);
+	size = round_up(size, PAGE_SIZE);
 	spinlock_acquire(&kernel_pgdir_lock);
 	ret = vmap(kernel_pgdir, addr, size, paddr, flags, mode);
 	spinlock_release(&kernel_pgdir_lock);
@@ -284,7 +284,7 @@ static struct vm_area *find_free_vm_area(size_t size)
 	struct vm_area *area;
 	struct vm_area *new_area;
 
-	size = align_up(size, PAGE_SIZE);
+	size = round_up(size, PAGE_SIZE);
 
 	list_for_each_entry(area, &vma, list) {
 		if (!area->is_free)
@@ -333,7 +333,7 @@ void *vmalloc(size_t size)
 {
 	spinlock_acquire(&vma_lock);
 
-	size = align_up(size, PAGE_SIZE);
+	size = round_up(size, PAGE_SIZE);
 
 	struct vm_area *area = find_free_vm_area(size);
 	if (!area) {
@@ -406,7 +406,7 @@ void *vmalloc_nomap(size_t size)
 	struct vm_area *area;
 
 	spinlock_acquire(&vma_lock);
-	area = find_free_vm_area(align_up(size, PAGE_SIZE));
+	area = find_free_vm_area(round_up(size, PAGE_SIZE));
 	spinlock_release(&vma_lock);
 	if (!area)
 		return NULL;

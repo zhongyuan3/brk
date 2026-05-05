@@ -1,7 +1,7 @@
 #include <brk/console.h>
 #include <brk/errno.h>
+#include <brk/kernel.h>
 #include <brk/lock.h>
-#include <brk/macros.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
 

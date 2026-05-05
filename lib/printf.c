@@ -1,5 +1,5 @@
 #include <brk/errno.h>
-#include <brk/macros.h>
+#include <brk/kernel.h>
 #include <brk/printf.h>
 #include <brk/string.h>
 

@@ -1,10 +1,10 @@
 #include "brkfs.h"
-#include <brk/align.h>
 #include <brk/bitmap.h>
 #include <brk/dev.h>
 #include <brk/dirent.h>
 #include <brk/errno.h>
 #include <brk/fs.h>
+#include <brk/kernel.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/stat.h>
@@ -394,7 +394,7 @@ static uint8_t brkfs_mode_to_dt(umode_t mode)
 
 static size_t brkfs_dirent_reclen(unsigned int name_len)
 {
-	return align_up(offsetof(struct brkfs_dir_entry, name) + name_len, 4u);
+	return round_up(offsetof(struct brkfs_dir_entry, name) + name_len, 4u);
 }
 
 static int brkfs_dir_ensure_first_block(struct inode *dir)

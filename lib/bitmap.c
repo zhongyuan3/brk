@@ -1,5 +1,6 @@
 #include <brk/bitmap.h>
-#include <brk/macros.h>
+#include <brk/bits.h>
+#include <brk/kernel.h>
 #include <brk/string.h>
 
 static unsigned long bitmap_last_word_mask(size_t nbits)

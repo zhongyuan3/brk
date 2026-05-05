@@ -1,10 +1,10 @@
-#include <brk/align.h>
 #include <brk/asm.h>
 #include <brk/elf.h>
 #include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fcntl.h>
 #include <brk/fs.h>
+#include <brk/kernel.h>
 #include <brk/limits.h>
 #include <brk/list.h>
 #include <brk/mm.h>
@@ -56,17 +56,17 @@ static void push_args(struct execve_args *args, uint64_t *psp,
 
 	n = (args->envc + 1) * sizeof(char *);
 	ksp -= n;
-	ksp = align_down(ksp, sizeof(char *));
+	ksp = round_down(ksp, sizeof(char *));
 	sp -= n;
-	sp = align_down(sp, sizeof(char *));
+	sp = round_down(sp, sizeof(char *));
 	proc->tf.a2 = sp;
 	char **envp_kstart = (char **)ksp;
 
 	n = (args->argc + 1) * sizeof(uint64_t);
 	ksp -= n;
-	ksp = align_down(ksp, sizeof(char *));
+	ksp = round_down(ksp, sizeof(char *));
 	sp -= n;
-	sp = align_down(sp, sizeof(char *));
+	sp = round_down(sp, sizeof(char *));
 	proc->tf.a1 = sp;
 	char **argv_kstart = (char **)ksp;
 
@@ -90,8 +90,8 @@ static void push_args(struct execve_args *args, uint64_t *psp,
 	sp -= sizeof(int);
 	*(int *)ksp = args->argc;
 
-	ksp = align_down(ksp, 16);
-	sp = align_down(sp, 16);
+	ksp = round_down(ksp, 16);
+	sp = round_down(sp, 16);
 
 	*psp = sp;
 }
@@ -135,7 +135,8 @@ static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 			size_t rsz = filesz > PAGE_SIZE ? PAGE_SIZE : filesz;
 			loff_t ret = file_lseek(fp, off, SEEK_SET);
 			if (ret < 0) {
-				log_error("%s(): Failed to lseek file: %s\n", __func__, strerror(ret));
+				log_error("%s(): Failed to lseek file: %s\n",
+					  __func__, strerror(ret));
 				assert(pg);
 				page_free(pg, 0);
 				err = -EIO;
@@ -143,14 +144,16 @@ static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 			}
 			ssize_t rcnt = file_read(fp, va, rsz);
 			if (rcnt < 0) {
-				log_error("%s(): Failed to read file: %s\n", __func__, strerror(rcnt));
+				log_error("%s(): Failed to read file: %s\n",
+					  __func__, strerror(rcnt));
 				assert(pg);
 				page_free(pg, 0);
 				err = -EIO;
 				goto failed;
 			}
 			if ((size_t)rcnt != (size_t)rsz) {
-				log_error("%s(): Failed to read file: %s\n", __func__, strerror(rcnt));
+				log_error("%s(): Failed to read file: %s\n",
+					  __func__, strerror(rcnt));
 				assert(pg);
 				page_free(pg, 0);
 				err = -EIO;
@@ -195,8 +198,8 @@ static int load_seg(struct mm_struct *mm, struct elf64_phdr *ph,
 	struct vm_area *vma;
 	int err;
 
-	start = align_down(ph->p_vaddr, PAGE_SIZE);
-	end = align_up(ph->p_vaddr + ph->p_memsz, PAGE_SIZE);
+	start = round_down(ph->p_vaddr, PAGE_SIZE);
+	end = round_up(ph->p_vaddr + ph->p_memsz, PAGE_SIZE);
 	if (end == start)
 		return 0;
 

@@ -1,9 +1,9 @@
-#include <brk/align.h>
 #include <brk/console.h>
 #include <brk/cpu.h>
 #include <brk/dtb.h>
 #include <brk/ioremap.h>
 #include <brk/irq.h>
+#include <brk/kernel.h>
 #include <brk/lock.h>
 #include <brk/mm.h>
 #include <brk/mmio.h>

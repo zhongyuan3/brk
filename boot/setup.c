@@ -1,6 +1,5 @@
-#include <brk/align.h>
 #include <brk/asm.h>
-#include <brk/macros.h>
+#include <brk/kernel.h>
 #include <brk/mm.h>
 #include <brk/pgtable.h>
 #include <brk/riscv.h>
@@ -57,7 +56,7 @@ static void vmap_early(uint64_t addr, size_t size, uint64_t paddr,
 void make_early_pgtable(uint64_t dtb)
 {
 	uint64_t start = (uint64_t)_skernel;
-	uint64_t end = align_up((uint64_t)_ekernel, PAGE_SIZE_2M);
+	uint64_t end = round_up((uint64_t)_ekernel, PAGE_SIZE_2M);
 	size_t size = end - start;
 	unsigned int flags = PTE_R | PTE_W | PTE_X;
 
@@ -73,8 +72,8 @@ void make_early_pgtable(uint64_t dtb)
 	else
 		dtb = max(dtb, end);
 
-	start = align_down(dtb, PAGE_SIZE_2M);
-	end = align_up(dtb_end, PAGE_SIZE_2M);
+	start = round_down(dtb, PAGE_SIZE_2M);
+	end = round_up(dtb_end, PAGE_SIZE_2M);
 	size = end - start;
 	flags = PTE_R | PTE_W;
 	vmap_early(start, size, start, flags);

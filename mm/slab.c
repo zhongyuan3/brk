@@ -1,9 +1,8 @@
-#include <brk/align.h>
 #include <brk/assert.h>
 #include <brk/errno.h>
+#include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/lock.h>
-#include <brk/macros.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
@@ -109,7 +108,7 @@ static int kmem_cache_add_page(struct kmem_cache *cache)
 	uint64_t addr = page_to_virt(pg);
 	uint64_t end_addr = addr + (1 << (PAGE_SHIFT + cache->page_order));
 	if (!is_aligned(addr, align))
-		addr = align_up(addr, align);
+		addr = round_up(addr, align);
 
 	pg->free_list = (void *)addr;
 
@@ -135,11 +134,11 @@ int kmem_cache_init(struct kmem_cache *cache, size_t size, size_t align,
 	if (size == 0 || align == 0)
 		return -EINVAL;
 
-	if (!is_pow2(align))
-		align = align_up_to_pow2(align);
+	if (!is_power_of_two(align))
+		align = round_up_to_pow_of_two(align);
 
 	if (!is_aligned(size, align))
-		size = align_up(size, align);
+		size = round_up(size, align);
 
 	cache->size = size;
 	cache->align = align;

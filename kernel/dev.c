@@ -4,10 +4,10 @@
 #include <brk/dev.h>
 #include <brk/errno.h>
 #include <brk/fs.h>
+#include <brk/kernel.h>
 #include <brk/limits.h>
 #include <brk/list.h>
 #include <brk/lock.h>
-#include <brk/macros.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
