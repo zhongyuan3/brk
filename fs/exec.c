@@ -135,6 +135,7 @@ static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 			size_t rsz = filesz > PAGE_SIZE ? PAGE_SIZE : filesz;
 			loff_t ret = file_lseek(fp, off, SEEK_SET);
 			if (ret < 0) {
+				log_error("%s(): Failed to lseek file: %s\n", __func__, strerror(ret));
 				assert(pg);
 				page_free(pg, 0);
 				err = -EIO;
@@ -142,12 +143,14 @@ static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 			}
 			ssize_t rcnt = file_read(fp, va, rsz);
 			if (rcnt < 0) {
+				log_error("%s(): Failed to read file: %s\n", __func__, strerror(rcnt));
 				assert(pg);
 				page_free(pg, 0);
 				err = -EIO;
 				goto failed;
 			}
 			if ((size_t)rcnt != (size_t)rsz) {
+				log_error("%s(): Failed to read file: %s\n", __func__, strerror(rcnt));
 				assert(pg);
 				page_free(pg, 0);
 				err = -EIO;
