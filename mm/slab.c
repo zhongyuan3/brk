@@ -88,7 +88,7 @@ void kfree(void *ptr)
 	if (pg->flags & PAGE_FLAGS_SLUB) {
 		kmem_cache_free(pg->cache, ptr);
 	} else {
-		assert(pg);
+		ASSERT(pg);
 		page_free(pg, pg->order);
 	}
 }
@@ -166,9 +166,9 @@ void kmem_cache_deinit(struct kmem_cache *cache)
 		first = list->next;
 		list_del(first);
 		pg = list_entry(first, struct page, slub_list);
-		assert(pg->free_count == pg->object_count);
+		ASSERT(pg->free_count == pg->object_count);
 		pg->flags &= ~PAGE_FLAGS_SLUB;
-		assert(pg);
+		ASSERT(pg);
 		page_free(pg, 0);
 	}
 	spinlock_release(&cache->lock);
@@ -220,7 +220,7 @@ void kmem_cache_free(struct kmem_cache *cache, void *obj)
 
 	spinlock_acquire(&cache->lock);
 
-	assert(is_aligned((uint64_t)obj, cache->align));
+	ASSERT(is_aligned((uint64_t)obj, cache->align));
 
 	list = &cache->slab_list;
 	list_for_each_entry(curr, list, slub_list) {

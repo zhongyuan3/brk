@@ -75,9 +75,9 @@ void proc_sched(void)
 	struct process *curr = current_process();
 	struct cpu *cpu = current_cpu();
 
-	assert(!intr_enabled());
-	assert(spinlock_holding(&curr->lock));
-	assert(current_cpu()->irq_nest == 1);
+	ASSERT(!intr_enabled());
+	ASSERT(spinlock_holding(&curr->lock));
+	ASSERT(current_cpu()->irq_nest == 1);
 
 	curr->irq_enabled = cpu->irq_enabled;
 

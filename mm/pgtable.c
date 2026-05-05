@@ -24,7 +24,7 @@ static uint64_t alloc_pgtable(void)
 static void free_pgtable(uint64_t paddr)
 {
 	struct page *pg = phys_to_page(paddr);
-	assert(pg);
+	ASSERT(pg);
 	page_free(pg, 0);
 }
 

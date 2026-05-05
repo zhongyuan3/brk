@@ -224,8 +224,8 @@ static int alloc_desc(unsigned int *desc_idx)
 
 static void free_desc(unsigned int desc_idx)
 {
-	assert(desc_idx < blk_vq.num);
-	assert(blk_desc_used[desc_idx]);
+	ASSERT(desc_idx < blk_vq.num);
+	ASSERT(blk_desc_used[desc_idx]);
 	blk_desc_used[desc_idx] = false;
 	blk_vq.desc[desc_idx].addr = 0;
 	blk_vq.desc[desc_idx].len = 0;

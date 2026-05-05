@@ -137,7 +137,7 @@ static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 			if (ret < 0) {
 				log_error("%s(): Failed to lseek file: %s\n",
 					  __func__, strerror(ret));
-				assert(pg);
+				ASSERT(pg);
 				page_free(pg, 0);
 				err = -EIO;
 				goto failed;
@@ -146,7 +146,7 @@ static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 			if (rcnt < 0) {
 				log_error("%s(): Failed to read file: %s\n",
 					  __func__, strerror(rcnt));
-				assert(pg);
+				ASSERT(pg);
 				page_free(pg, 0);
 				err = -EIO;
 				goto failed;
@@ -154,7 +154,7 @@ static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 			if ((size_t)rcnt != (size_t)rsz) {
 				log_error("%s(): Failed to read file: %s\n",
 					  __func__, strerror(rcnt));
-				assert(pg);
+				ASSERT(pg);
 				page_free(pg, 0);
 				err = -EIO;
 				goto failed;
@@ -166,7 +166,7 @@ static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 		}
 		err = uvmap(mm->pgd, addr, PAGE_SIZE, pa, flags);
 		if (err) {
-			assert(pg);
+			ASSERT(pg);
 			page_free(pg, 0);
 			goto failed;
 		}
@@ -184,7 +184,7 @@ failed:
 	for (uint64_t a = vma->addr; a < addr; a += PAGE_SIZE)
 		uvunmap(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = 0; j < i; ++j) {
-		assert(pgs[j]);
+		ASSERT(pgs[j]);
 		page_free(pgs[j], 0);
 	}
 	kfree(pgs);
@@ -240,7 +240,7 @@ static int map_stack(struct mm_struct *mm)
 
 	struct page **pgs = kcalloc(1, sizeof(struct page *));
 	if (!pgs) {
-		assert(pg);
+		ASSERT(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
 		return -ENOMEM;
 	}
@@ -250,7 +250,7 @@ static int map_stack(struct mm_struct *mm)
 	int err = uvmap(mm->pgd, base, USTACK_SIZE, pa, PTE_R | PTE_W);
 	if (err) {
 		kfree(pgs);
-		assert(pg);
+		ASSERT(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
 		return err;
 	}

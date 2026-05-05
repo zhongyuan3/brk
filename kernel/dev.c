@@ -236,21 +236,21 @@ void dev_init(void)
 		list_init(&bdev_list[i]);
 
 	cd = chrdev_alloc();
-	assert(cd);
+	ASSERT(cd);
 	cd->ops->read = console_read;
 	cd->ops->write = console_write;
 	chrdev_register(cd, DEV_CONSOLE0);
 
 	bd = blkdev_alloc();
-	assert(bd);
+	ASSERT(bd);
 	bd->ops->read = disk0_read;
 	bd->ops->write = disk0_write;
 	bd->phy_bcnt = DISK0_SIZE / SECTOR_SIZE;
 	bd->phy_bsize = SECTOR_SIZE;
 	struct disk0_priv *priv = kmalloc(sizeof(*priv));
-	assert(priv);
+	ASSERT(priv);
 	priv->buf = kmalloc(SECTOR_SIZE);
-	assert(priv->buf);
+	ASSERT(priv->buf);
 	sleeplock_init(&priv->lock, "disk0_buf");
 	bd->priv = priv;
 	blkdev_register(bd, DEV_DISK0);

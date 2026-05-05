@@ -82,10 +82,10 @@ void page_free(struct page *pg, unsigned int order)
 
 	spinlock_acquire(&areas_lock);
 
-	assert((pg->flags & PAGE_FLAGS_BUDDY));
-	assert(!(pg->flags & PAGE_FLAGS_FREE));
-	assert((pg->flags & PAGE_FLAGS_HEAD));
-	assert(is_aligned(page_to_phys(pg), (1ULL << (PAGE_SHIFT + order))));
+	ASSERT((pg->flags & PAGE_FLAGS_BUDDY));
+	ASSERT(!(pg->flags & PAGE_FLAGS_FREE));
+	ASSERT((pg->flags & PAGE_FLAGS_HEAD));
+	ASSERT(is_aligned(page_to_phys(pg), (1ULL << (PAGE_SHIFT + order))));
 
 	pg->flags = 0;
 

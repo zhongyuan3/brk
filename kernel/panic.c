@@ -22,7 +22,7 @@ void panic(char const *fmt, ...)
 		;
 }
 
-void assert_fail(char const *file, int line, char const *expr)
+void __assert_fail(char const *file, int line, char const *expr)
 {
 	intr_off();
 	printk("Assertion failed: %s:%d: %s\n", file, line, expr);
