@@ -22,20 +22,20 @@ struct page {
 
 	union {
 		struct { /* Buddy */
-			struct list_head lru;
+			struct list_head buddy_lru;
 			/* Only valid when PAGE_FLAGS_HEAD is set */
-			unsigned int order;
+			unsigned int buddy_page_order;
 		};
 
-		struct { /* SLUB */
-			void *free_list;
-			struct kmem_cache *cache;
-			struct list_head slub_list;
-			size_t free_count;
-			size_t object_count;
+		struct { /* SLAB */
+			void *slab_free_objs;
+			struct kmem_cache *slab_cache;
+			struct list_head slab_list;
+			size_t slab_free_count;
+			size_t slab_objs_count;
 		};
 
-		struct { /* ramfs */
+		struct { /* tmpfs */
 			struct page *tmpfs_next;
 		};
 	};
