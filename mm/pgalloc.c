@@ -21,8 +21,8 @@ struct page *page_alloc(unsigned int order)
 	for (; curr_order <= PAGE_ORDER_MAX; ++curr_order) {
 		if (!list_empty(&areas[curr_order].free_list)) {
 			curr = list_last_entry(&areas[curr_order].free_list,
-					       struct page, lru);
-			list_del(&curr->lru);
+					       struct page, buddy_lru);
+			list_del(&curr->buddy_lru);
 			goto found;
 		}
 	}
@@ -32,12 +32,13 @@ struct page *page_alloc(unsigned int order)
 
 found:
 	/* Split the page until the order matches */
-	while (curr->order > order) {
-		buddy = curr + ((1ULL << curr->order) >> 1);
-		curr->order -= 1;
+	while (curr->buddy_page_order > order) {
+		buddy = curr + ((1ULL << curr->buddy_page_order) >> 1);
+		curr->buddy_page_order -= 1;
 		buddy->flags = PAGE_FLAGS_NEW_FREE_PAGE;
-		buddy->order = curr->order;
-		list_add(&buddy->lru, &areas[buddy->order].free_list);
+		buddy->buddy_page_order = curr->buddy_page_order;
+		list_add(&buddy->buddy_lru,
+			 &areas[buddy->buddy_page_order].free_list);
 	}
 
 	curr->flags &= ~PAGE_FLAGS_FREE;
@@ -70,7 +71,7 @@ static bool page_is_buddy(struct page *pg, struct page *buddy,
 	if (!(buddy->flags & PAGE_FLAGS_FREE))
 		return false;
 
-	if (buddy->order != order)
+	if (buddy->buddy_page_order != order)
 		return false;
 
 	return true;
@@ -93,15 +94,15 @@ void page_free(struct page *pg, unsigned int order)
 		buddy = find_buddy_page(pg, order);
 		if (!page_is_buddy(pg, buddy, order))
 			break;
-		list_del(&buddy->lru);
+		list_del(&buddy->buddy_lru);
 		buddy->flags = 0;
 		pg = min(pg, buddy);
 		++order;
 	}
 
 	pg->flags = PAGE_FLAGS_NEW_FREE_PAGE;
-	pg->order = order;
-	list_add(&pg->lru, &areas[order].free_list);
+	pg->buddy_page_order = order;
+	list_add(&pg->buddy_lru, &areas[order].free_list);
 
 	spinlock_release(&areas_lock);
 }
