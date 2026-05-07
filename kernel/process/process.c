@@ -2,10 +2,10 @@
 #include <brk/dcache.h>
 #include <brk/errno.h>
 #include <brk/fs.h>
+#include <brk/kernel.h>
 #include <brk/limits.h>
 #include <brk/list.h>
 #include <brk/lock.h>
-#include <brk/macros.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
 #include <brk/panic.h>
@@ -46,7 +46,7 @@ static uint64_t kstack_alloc(void)
 static void kstack_free(uint64_t stack)
 {
 	struct page *pg = virt_to_page(stack);
-	assert(pg);
+	ASSERT(pg);
 	page_free(pg, KSTACK_PAGE_ORDER);
 }
 
@@ -124,7 +124,7 @@ static void user_init_proc_return(void)
 	if (err)
 		panic("failed to initialize filesystem: %s\n", strerror(err));
 
-	char *argv[] = { "/init", 0 };
+	char *argv[] = { "/bin/init", 0 };
 	char *envp[] = { 0 };
 	err = do_execve(argv[0], argv, envp);
 	if (err < 0)
@@ -185,7 +185,7 @@ int proc_set_brk(uint64_t addr)
 		return 0;
 	}
 
-	new_heap_end = align_up(addr, PAGE_SIZE);
+	new_heap_end = round_up(addr, PAGE_SIZE);
 	incr = new_heap_end - curr_heap_end;
 	size_t old_npgs = heap->nr_pages;
 	size_t new_npgs = old_npgs + (incr >> PAGE_SHIFT);
@@ -205,7 +205,7 @@ int proc_set_brk(uint64_t addr)
 		uint64_t pa = page_to_phys(pg);
 		err = uvmap(mm->pgd, addr, PAGE_SIZE, pa, PTE_R | PTE_W);
 		if (err) {
-			assert(pg);
+			ASSERT(pg);
 			page_free(pg, 0);
 			goto failed;
 		}
@@ -228,7 +228,7 @@ failed:
 	for (uint64_t a = curr_heap_end; a < addr; a += PAGE_SIZE)
 		uvunmap(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = old_npgs; j < i; ++j) {
-		assert(new_pgs[j]);
+		ASSERT(new_pgs[j]);
 		page_free(new_pgs[j], 0);
 	}
 	kfree(new_pgs);

@@ -1,9 +1,9 @@
 #ifndef BRK_PATH_H
 #define BRK_PATH_H
 
+#include <brk/bits.h>
 #include <brk/dcache.h>
 #include <brk/fs_types.h>
-#include <brk/macros.h>
 #include <brk/types.h>
 
 /* pathwalk mode */

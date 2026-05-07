@@ -1,4 +1,3 @@
-#include <brk/align.h>
 #include <brk/dcache.h>
 #include <brk/dirent.h>
 #include <brk/errno.h>
@@ -6,9 +5,9 @@
 #include <brk/fcntl.h>
 #include <brk/fs.h>
 #include <brk/fs_types.h>
+#include <brk/kernel.h>
 #include <brk/limits.h>
 #include <brk/lock.h>
-#include <brk/macros.h>
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
@@ -513,7 +512,7 @@ static bool getdents_filldir(struct dir_context *ctx, const char *name,
 		return false;
 
 	size_t len = offsetof(struct dirent, d_name) + namelen + 1;
-	len = align_up(len, alignof(struct dirent));
+	len = round_up(len, alignof(struct dirent));
 
 	if (len > gctx->size - gctx->pos)
 		return false;
@@ -597,7 +596,7 @@ static bool getdents64_filldir(struct dir_context *ctx, const char *name,
 		return false;
 
 	size_t len = offsetof(struct dirent64, d_name) + namelen + 1;
-	len = align_up(len, alignof(struct dirent64));
+	len = round_up(len, alignof(struct dirent64));
 
 	if (len > gctx->size - gctx->pos)
 		return false;

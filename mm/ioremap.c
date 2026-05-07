@@ -1,13 +1,13 @@
-#include <brk/align.h>
 #include <brk/asm.h>
 #include <brk/ioremap.h>
+#include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/slab.h>
 #include <brk/vmalloc.h>
 
 void *ioremap(uint64_t paddr, size_t size, unsigned int flags)
 {
-	size = align_up(size, PAGE_SIZE);
+	size = round_up(size, PAGE_SIZE);
 	void *virt = vmalloc_nomap(size);
 	if (!virt)
 		return NULL;
@@ -22,7 +22,7 @@ void *ioremap(uint64_t paddr, size_t size, unsigned int flags)
 
 void iounmap(void *addr, size_t size)
 {
-	size = align_up(size, PAGE_SIZE);
+	size = round_up(size, PAGE_SIZE);
 	kvunmap((uint64_t)addr, size);
 	vfree_nomap(addr);
 }

@@ -1,6 +1,6 @@
-#include <brk/align.h>
 #include <brk/asm.h>
 #include <brk/errno.h>
+#include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>

@@ -1,6 +1,6 @@
-#include <brk/align.h>
 #include <brk/assert.h>
 #include <brk/fs.h>
+#include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/lock.h>
 #include <brk/process.h>
@@ -84,7 +84,7 @@ static struct inode *lookup_inode(struct hlist_head *bucket,
 {
 	struct inode *inode;
 
-	assert(spinlock_holding(&inode_hash_lock));
+	ASSERT(spinlock_holding(&inode_hash_lock));
 
 retry:
 	/* Look up in hash table */

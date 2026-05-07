@@ -1,8 +1,8 @@
-#include <brk/align.h>
 #include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/errno.h>
 #include <brk/irq.h>
+#include <brk/kernel.h>
 #include <brk/lock.h>
 #include <brk/mm.h>
 #include <brk/mmio.h>
@@ -224,8 +224,8 @@ static int alloc_desc(unsigned int *desc_idx)
 
 static void free_desc(unsigned int desc_idx)
 {
-	assert(desc_idx < blk_vq.num);
-	assert(blk_desc_used[desc_idx]);
+	ASSERT(desc_idx < blk_vq.num);
+	ASSERT(blk_desc_used[desc_idx]);
 	blk_desc_used[desc_idx] = false;
 	blk_vq.desc[desc_idx].addr = 0;
 	blk_vq.desc[desc_idx].len = 0;

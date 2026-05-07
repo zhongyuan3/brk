@@ -71,7 +71,7 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 
 	memblock_init();
 	memblock_reserve(_SKERNEL_PHYS, _KERNEL_SIZE);
-	size_t dtb_size = align_up(fdt_totalsize(dtb_phys), PAGE_SIZE);
+	size_t dtb_size = round_up(fdt_totalsize(dtb_phys), PAGE_SIZE);
 	memblock_reserve(dtb_phys, dtb_size);
 	dtb_early_init_scan_mem();
 	dtb_early_init_scan_reserved_mem();

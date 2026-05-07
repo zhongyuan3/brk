@@ -1,6 +1,5 @@
-#include <brk/align.h>
 #include <brk/assert.h>
-#include <brk/macros.h>
+#include <brk/kernel.h>
 #include <brk/memblock.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
@@ -141,13 +140,13 @@ uint64_t memblock_alloc(size_t size, uint64_t min_addr, size_t align)
 	uint64_t start, end;
 	uint64_t idx;
 
-	assert(is_pow2(align));
+	ASSERT(is_power_of_two(align));
 
 	for_each_mem_range(idx, start, end) {
 		if (start < min_addr)
 			continue;
 
-		uint64_t aligned_start = align_up(max(start, min_addr), align);
+		uint64_t aligned_start = round_up(max(start, min_addr), align);
 		if (aligned_start + size > end)
 			continue;
 
@@ -166,7 +165,7 @@ static int memblock_remove_region(struct memblock_type *type, size_t rgn_idx,
 	uint64_t rbase = rgn->base;
 	uint64_t rend = rbase + rgn->size;
 
-	assert(base >= rbase && end <= rend);
+	ASSERT(base >= rbase && end <= rend);
 
 	if (base == rbase) {
 		if (end == rend) {
@@ -310,8 +309,8 @@ void __next_mem_pfn_range(uint32_t *pidx, uint64_t *pstart, uint64_t *pend)
 		return;
 	}
 	struct memblock_region *rgn = &mem->regions[*pidx];
-	*pstart = phys_to_pfn(align_up(rgn->base, PAGE_SIZE));
-	*pend = phys_to_pfn(align_down(rgn->base + rgn->size, PAGE_SIZE));
+	*pstart = phys_to_pfn(round_up(rgn->base, PAGE_SIZE));
+	*pend = phys_to_pfn(round_down(rgn->base + rgn->size, PAGE_SIZE));
 	*pidx += 1;
 }
 
@@ -331,7 +330,7 @@ static void memblock_free_range(uint64_t start, uint64_t end)
 
 		struct page *pg = pfn_to_page(phys_to_pfn(start));
 		pg->flags = PAGE_FLAGS_NEW_PAGE;
-		assert(pg);
+		ASSERT(pg);
 		page_free(pg, order);
 
 		start += (npgs << PAGE_SHIFT);
