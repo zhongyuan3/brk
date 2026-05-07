@@ -178,7 +178,7 @@ help:
 	@echo "  run            Boot in QEMU"
 	@echo "  gdb-server     Start QEMU and wait for GDB"
 	@echo "  gdb-client     Connect GDB to :1234"
-	@echo "  rootfs         Create rootfs image"
+	@echo "  rootfs         Create brkfs root disk (scripts/mkrootfs.sh + sibling brk-user / brkfstools)"
 	@echo "  clean          Remove build outputs"
 	@echo "  echo           Print selected build variables"
 	@echo ""
@@ -208,10 +208,8 @@ $(BRK_LD): $(BRK_LD_S)
 $(BRK_ELF): $(OBJS) $(BRK_LD)
 	$(LD) -z max-page-size=4096 -T $(BRK_LD) -static -o $@ $(OBJS)
 
-$(ROOTFS_IMG):
-	@mkdir -p $(dir $@)
-	dd if=/dev/zero of=$@ bs=1M count=64 status=progress
-	mkfs.ext4 -F -L BRK_ROOT -m 0 $@
+$(ROOTFS_IMG): scripts/mkrootfs.sh
+	@./scripts/mkrootfs.sh "$(ROOTFS_IMG)"
 
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)

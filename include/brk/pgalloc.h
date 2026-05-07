@@ -9,8 +9,9 @@
 
 #define PAGE_FLAGS_BUDDY (1 << 0) /* Is this page in the buddy system? */
 #define PAGE_FLAGS_HEAD (1 << 1) /* Is this page the head of a block? */
-#define PAGE_FLAGS_SLUB (1 << 2) /* Is this page in the SLUB system? */
+#define PAGE_FLAGS_SLAB (1 << 2) /* Is this page in the SLAB system? */
 #define PAGE_FLAGS_FREE (1 << 3) /* Is this page free? */
+#define PAGE_FLAGS_KMALLOC (1 << 4) /* Buddy block from kmalloc() > max slab */
 
 #define PAGE_FLAGS_NEW_PAGE (PAGE_FLAGS_BUDDY | PAGE_FLAGS_HEAD)
 

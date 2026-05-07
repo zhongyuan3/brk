@@ -1,16 +1,46 @@
-#ifndef BRK_ALIGN_H
-#define BRK_ALIGN_H
+#ifndef BRK_KERNEL_H
+#define BRK_KERNEL_H
 
 #include <stdalign.h>
 
-#define align_up(x, align)                            \
+#define max(x, y)                      \
+	({                             \
+		__auto_type __x = (x); \
+		__auto_type __y = (y); \
+		__x > __y ? __x : __y; \
+	})
+
+#define min(x, y)                      \
+	({                             \
+		__auto_type __x = (x); \
+		__auto_type __y = (y); \
+		__x < __y ? __x : __y; \
+	})
+
+#ifndef countof
+#define countof(arr) (sizeof(arr) / sizeof((arr)[0]))
+#endif
+
+#define container_of(ptr, type, member)                              \
+	({                                                           \
+		typeof((((type *)0)->member)) const *__mptr = (ptr); \
+		(type *)((char *)__mptr - offsetof(type, member));   \
+	})
+
+#define is_power_of_two(x)                          \
+	({                                          \
+		__auto_type __x = (x);              \
+		__x != 0 && (__x & (__x - 1)) == 0; \
+	})
+
+#define round_up(x, align)                            \
 	({                                            \
 		__auto_type __x = (x);                \
 		__auto_type __align = (align);        \
 		(__x + __align - 1) & ~(__align - 1); \
 	})
 
-#define align_down(x, align)                   \
+#define round_down(x, align)                   \
 	({                                     \
 		__auto_type __x = (x);         \
 		__auto_type __align = (align); \
@@ -24,7 +54,7 @@
 		(__x & (__align - 1)) == 0;    \
 	})
 
-#define align_up_to_pow2(x)                          \
+#define round_up_to_pow_of_two(x)                    \
 	({                                           \
 		__auto_type __x = (x);               \
 		if (__x == 0) {                      \

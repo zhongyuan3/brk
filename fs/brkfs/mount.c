@@ -1,20 +1,22 @@
 #include "brkfs.h"
 #include <brk/dcache.h>
+#include <brk/dev.h>
 #include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/list.h>
 #include <brk/lock.h>
 #include <brk/path.h>
+#include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/stat.h>
 #include <brk/string.h>
 
 static int brkfs_read_super(struct brkfs_super_block *sb, struct blkdev *bdev)
 {
-	size_t bno = BRKFS_SUPER_BLOCK_OFFSET / bdev->phy_bsize;
-	uint32_t cnt = BRKFS_SUPER_BLOCK_SIZE / bdev->phy_bsize;
-	uint8_t *buf = kmalloc(BRKFS_SUPER_BLOCK_SIZE);
+	size_t bno = BRKFS_SUPER_OFFSET / bdev->phy_bsize;
+	uint32_t cnt = BRKFS_SUPER_SIZE / bdev->phy_bsize;
+	uint8_t *buf = kmalloc(sizeof(struct brkfs_super_block));
 	int err;
 
 	if (!buf)
@@ -29,30 +31,31 @@ static int brkfs_read_super(struct brkfs_super_block *sb, struct blkdev *bdev)
 	return 0;
 }
 
-static int brkfs_get_bdev(const char *dev_name, struct blkdev **bdev)
+static struct blkdev *brkfs_get_bdev(const char *dev_name)
 {
 	int err;
 	struct path path = { 0 };
 	struct inode *inode;
+	struct blkdev *bdev;
 
 	err = path_lookup(dev_name, 0, &path);
 	if (err)
-		return err;
+		return ERR_PTR(err);
 
 	inode = path.dentry->d_inode;
 	if (!S_ISBLK(inode->i_mode)) {
 		path_put(&path);
-		return -ENOTBLK;
+		return ERR_PTR(-ENOTBLK);
 	}
 
-	*bdev = blkdev_get(inode->i_rdev);
-	if (!*bdev) {
+	bdev = blkdev_get(inode->i_rdev);
+	if (!bdev) {
 		path_put(&path);
-		return -ENODEV;
+		return ERR_PTR(-ENODEV);
 	}
 
 	path_put(&path);
-	return 0;
+	return bdev;
 }
 
 static int brkfs_validate_super(struct brkfs_super_block *sb)
@@ -62,6 +65,17 @@ static int brkfs_validate_super(struct brkfs_super_block *sb)
 
 	if (sb->s_inode_size != sizeof(struct brkfs_inode))
 		return -EINVAL;
+
+	log_info("block size: %u\n", sb->s_blocksize);
+	log_info("inode size: %u\n", sb->s_inode_size);
+	log_info("inode bitmap: %u\n", sb->s_inode_bitmap);
+	log_info("inodes count: %u\n", sb->s_inodes_count);
+	log_info("data block bitmap: %u\n", sb->s_data_block_bitmap);
+	log_info("data blocks count: %u\n", sb->s_data_blocks_count);
+	log_info("inode table: %u\n", sb->s_inode_table);
+	log_info("first data block: %u\n", sb->s_first_data_block);
+	log_info("magic: %u\n", sb->s_magic);
+	log_info("blocks count: %u\n", sb->s_blocks_count);
 
 	return 0;
 }
@@ -79,9 +93,9 @@ struct dentry *brkfs_mount(struct file_system_type *fs_type, int flags,
 
 	(void)data;
 
-	err = brkfs_get_bdev(dev_name, &bdev);
-	if (err)
-		return ERR_PTR(err);
+	bdev = brkfs_get_bdev(dev_name);
+	if (IS_ERR(bdev))
+		return ERR_CAST(bdev);
 
 	err = brkfs_read_super(&brk_sb, bdev);
 	if (err)

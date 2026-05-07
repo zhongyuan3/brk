@@ -15,11 +15,13 @@
 	 1) /* Triple indirect block pointer index */
 #define BRKFS_BLOCKS \
 	(BRKFS_TRIPLE_INDIRECT_BLOCK + 1) /* Total number of block pointers */
+
 #define BRKFS_ROOT_INO 1
 #define BRKFS_MAGIC 0x6b7262
 
-#define BRKFS_SUPER_BLOCK_OFFSET 1024
-#define BRKFS_SUPER_BLOCK_SIZE 1024
+#define BRKFS_SUPER_OFFSET 1024
+#define BRKFS_SUPER_SIZE 1024
+#define BRKFS_SUPER_END_OFFSET (BRKFS_SUPER_OFFSET + BRKFS_SUPER_SIZE)
 
 #define BRKFS_DIR_ENTRY_MIN_LEN 12
 
@@ -36,6 +38,7 @@ struct brkfs_super_block {
 	uint32_t s_magic; /* File system magic number */
 	uint32_t s_inode_size; /* Size of an inode */
 	uint32_t s_blocks_count; /* Total number of blocks */
+	uint8_t __s_padding[BRKFS_SUPER_SIZE - 40];
 };
 
 struct brkfs_inode {
@@ -56,6 +59,9 @@ struct brkfs_dir_entry {
 	char name[];
 };
 
+#define BRKFS_MIN_INODE_SIZE 64
+#define BRKFS_MAX_INODE_SIZE 256
+
 struct brkfs_sb_info {
 	struct blkdev *s_bdev;
 	struct brkfs_super_block s_sb;
@@ -75,8 +81,8 @@ void brkfs_inode_setup_ops(struct inode *inode);
 int brkfs_inode_write(struct brkfs_sb_info *sbi, struct inode *inode);
 int brkfs_inode_alloc(struct brkfs_sb_info *sbi, uint32_t *out_ino);
 int brkfs_inode_free(struct brkfs_sb_info *sbi, uint32_t ino);
-int brkfs_block_alloc(struct brkfs_sb_info *sbi, uint32_t *bno);
-int brkfs_block_free(struct brkfs_sb_info *sbi, uint32_t bno);
+int brkfs_data_alloc(struct brkfs_sb_info *sbi, uint32_t *bno);
+int brkfs_data_free(struct brkfs_sb_info *sbi, uint32_t bno);
 int brkfs_block_read(struct brkfs_sb_info *sb, uint32_t bno, void *buf);
 int brkfs_block_write(struct brkfs_sb_info *sb, uint32_t bno, const void *buf);
 
@@ -96,5 +102,10 @@ int brkfs_file_read_at(struct inode *inode, loff_t *pos, void *buf, size_t size,
 int brkfs_file_write_at(struct inode *inode, loff_t *pos, const void *buf,
 			size_t size, size_t *written_out);
 int brkfs_truncate_inode_blocks(struct inode *inode, loff_t new_size);
+
+#define BRKFS_GETBLK_CREATE 0x1
+
+int brkfs_inode_getblk(struct inode *inode, loff_t off, uint32_t *bno,
+		       unsigned flags, struct brkfs_sb_info *sbi);
 
 #endif

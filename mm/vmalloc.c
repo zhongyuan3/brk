@@ -1,7 +1,7 @@
-#include <brk/align.h>
 #include <brk/asm.h>
 #include <brk/assert.h>
 #include <brk/errno.h>
+#include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/lock.h>
 #include <brk/memblock.h>
@@ -93,24 +93,24 @@ static void vunmap_range(pgde_t *pgd, uint64_t addr, uint64_t end_addr,
 		rem_size = end_addr - addr;
 		pgdep = pgd + pgde_index(addr);
 		if (pgde_large(*pgdep)) {
-			assert(rem_size >= PAGE_SIZE_1G);
+			ASSERT(rem_size >= PAGE_SIZE_1G);
 			pgde_clear(pgdep);
 			addr += PAGE_SIZE_1G;
 			continue;
 		}
-		assert(pgde_present(*pgdep));
+		ASSERT(pgde_present(*pgdep));
 		pmd = get_pmd_virt(pgde_get_pmd(*pgdep), mode);
 		pmdep = pmd + pmde_index(addr);
 		if (pmde_large(*pmdep)) {
-			assert(rem_size >= PAGE_SIZE_2M);
+			ASSERT(rem_size >= PAGE_SIZE_2M);
 			pmde_clear(pmdep);
 			addr += PAGE_SIZE_2M;
 			continue;
 		}
-		assert(pmde_present(*pmdep));
+		ASSERT(pmde_present(*pmdep));
 		pt = get_pt_virt(pmde_get_pt(*pmdep), mode);
 		ptep = pt + pte_index(addr);
-		assert(pte_present(*ptep));
+		ASSERT(pte_present(*ptep));
 		pte_clear(ptep);
 		addr += PAGE_SIZE;
 	}
@@ -129,7 +129,7 @@ static int vmap_range(pgde_t *pgd, uint64_t addr, uint64_t end_addr,
 	for (; addr < end_addr; addr += page_size, paddr += page_size) {
 		pgdep = pgd + pgde_index(addr);
 		if (page_size == PAGE_SIZE_1G) {
-			assert(!pgde_present(*pgdep));
+			ASSERT(!pgde_present(*pgdep));
 			pgde_set_large(pgdep, paddr, flags);
 			continue;
 		}
@@ -146,7 +146,7 @@ static int vmap_range(pgde_t *pgd, uint64_t addr, uint64_t end_addr,
 		}
 		pmdep = pmd + pmde_index(addr);
 		if (page_size == PAGE_SIZE_2M) {
-			assert(!pmde_present(*pmdep));
+			ASSERT(!pmde_present(*pmdep));
 			pmde_set_large(pmdep, paddr, flags);
 			continue;
 		}
@@ -162,7 +162,7 @@ static int vmap_range(pgde_t *pgd, uint64_t addr, uint64_t end_addr,
 			pt = get_pt_virt(pmde_get_pt(*pmdep), mode);
 		}
 		ptep = pt + pte_index(addr);
-		assert(!pte_present(*ptep));
+		ASSERT(!pte_present(*ptep));
 		pte_set(ptep, paddr, flags);
 	}
 
@@ -177,9 +177,9 @@ int vmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 	size_t page_size;
 	int err;
 
-	assert(is_aligned(addr, PAGE_SIZE));
-	assert(is_aligned(size, PAGE_SIZE));
-	assert(is_aligned(paddr, PAGE_SIZE));
+	ASSERT(is_aligned(addr, PAGE_SIZE));
+	ASSERT(is_aligned(size, PAGE_SIZE));
+	ASSERT(is_aligned(paddr, PAGE_SIZE));
 
 	end_addr = addr + size;
 	while (addr < end_addr) {
@@ -189,15 +189,15 @@ int vmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 		    is_aligned(paddr, PAGE_SIZE_1G) &&
 		    rem_size >= PAGE_SIZE_1G) {
 			page_size = PAGE_SIZE_1G;
-			rem_size = align_down(rem_size, PAGE_SIZE_1G);
+			rem_size = round_down(rem_size, PAGE_SIZE_1G);
 		} else if (is_aligned(addr, PAGE_SIZE_2M) &&
 			   is_aligned(paddr, PAGE_SIZE_2M) &&
 			   rem_size >= PAGE_SIZE_2M) {
 			page_size = PAGE_SIZE_2M;
-			rem_size = align_down(rem_size, PAGE_SIZE_2M);
+			rem_size = round_down(rem_size, PAGE_SIZE_2M);
 		} else {
 			page_size = PAGE_SIZE;
-			rem_size = align_down(rem_size, PAGE_SIZE);
+			rem_size = round_down(rem_size, PAGE_SIZE);
 		}
 
 		err = vmap_range(pgd, addr, addr + rem_size, paddr, page_size,
@@ -214,8 +214,8 @@ int vmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 
 void vunmap(pgde_t *pgd, uint64_t addr, size_t size, enum vmap_mode mode)
 {
-	assert(is_aligned(addr, PAGE_SIZE));
-	assert(is_aligned(size, PAGE_SIZE));
+	ASSERT(is_aligned(addr, PAGE_SIZE));
+	ASSERT(is_aligned(size, PAGE_SIZE));
 	vunmap_range(pgd, addr, addr + size, mode);
 }
 
@@ -228,7 +228,7 @@ int kvmap_with_mode(uint64_t addr, size_t size, uint64_t paddr,
 		    unsigned int flags, enum vmap_mode mode)
 {
 	int ret;
-	size = align_up(size, PAGE_SIZE);
+	size = round_up(size, PAGE_SIZE);
 	spinlock_acquire(&kernel_pgdir_lock);
 	ret = vmap(kernel_pgdir, addr, size, paddr, flags, mode);
 	spinlock_release(&kernel_pgdir_lock);
@@ -284,7 +284,7 @@ static struct vm_area *find_free_vm_area(size_t size)
 	struct vm_area *area;
 	struct vm_area *new_area;
 
-	size = align_up(size, PAGE_SIZE);
+	size = round_up(size, PAGE_SIZE);
 
 	list_for_each_entry(area, &vma, list) {
 		if (!area->is_free)
@@ -333,7 +333,7 @@ void *vmalloc(size_t size)
 {
 	spinlock_acquire(&vma_lock);
 
-	size = align_up(size, PAGE_SIZE);
+	size = round_up(size, PAGE_SIZE);
 
 	struct vm_area *area = find_free_vm_area(size);
 	if (!area) {
@@ -359,7 +359,7 @@ void *vmalloc(size_t size)
 			goto out_cleanup;
 		area->pages[i] = pg;
 		if (kvmap(vaddr, PAGE_SIZE, page_to_phys(pg), PTE_R | PTE_W)) {
-			assert(pg);
+			ASSERT(pg);
 			page_free(pg, 0);
 			goto out_cleanup;
 		}
@@ -371,7 +371,7 @@ void *vmalloc(size_t size)
 
 out_cleanup:
 	for (size_t j = 0; j < i; ++j) {
-		assert(area->pages[j]);
+		ASSERT(area->pages[j]);
 		page_free(area->pages[j], 0);
 	}
 	kfree(area->pages);
@@ -393,7 +393,7 @@ void vfree(void *ptr)
 
 	kvunmap(area->addr, area->size);
 	for (size_t i = 0; i < area->nr_pages; ++i) {
-		assert(area->pages[i]);
+		ASSERT(area->pages[i]);
 		page_free(area->pages[i], 0);
 	}
 	kfree(area->pages);
@@ -406,7 +406,7 @@ void *vmalloc_nomap(size_t size)
 	struct vm_area *area;
 
 	spinlock_acquire(&vma_lock);
-	area = find_free_vm_area(align_up(size, PAGE_SIZE));
+	area = find_free_vm_area(round_up(size, PAGE_SIZE));
 	spinlock_release(&vma_lock);
 	if (!area)
 		return NULL;

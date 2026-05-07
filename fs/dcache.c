@@ -1,9 +1,9 @@
-#include <brk/align.h>
 #include <brk/assert.h>
 #include <brk/dcache.h>
 #include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
+#include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/lock.h>
 #include <brk/printk.h>
@@ -187,7 +187,7 @@ void dentry_put(struct dentry *dentry)
 			__func__, dentry->d_name.len, dentry->d_name.name,
 			dentry->d_inode->i_ino);
 		spinlock_acquire(&dentry_htable_lock);
-		assert(!hlist_unhashed(&dentry->d_hash));
+		ASSERT(!hlist_unhashed(&dentry->d_hash));
 		hlist_del_init(&dentry->d_hash);
 		spinlock_release(&dentry_htable_lock);
 	}
@@ -218,7 +218,7 @@ static struct dentry *dentry_lookup_locked(struct hlist_head *head,
 {
 	struct dentry *dentry;
 
-	assert(spinlock_holding(&dentry_htable_lock));
+	ASSERT(spinlock_holding(&dentry_htable_lock));
 
 	hlist_for_each_entry(dentry, head, d_hash) {
 		if (dentry->d_parent == parent &&

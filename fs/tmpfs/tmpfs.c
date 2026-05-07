@@ -1,11 +1,11 @@
 #include "tmpfs.h"
-#include <brk/align.h>
 #include <brk/asm.h>
 #include <brk/dcache.h>
 #include <brk/dirent.h>
 #include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
+#include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/lock.h>
 #include <brk/mm_types.h>
@@ -62,7 +62,7 @@ static struct tmpfs_inode *tmpfs_inode_get(struct tmpfs_super_block *sb,
 	struct page *pg;
 	struct tmpfs_inode *ip;
 
-	assert(ino > 0);
+	ASSERT(ino > 0);
 
 	--ino;
 
@@ -191,7 +191,7 @@ static int tmpfs_dir_add_entry_to(struct tmpfs_dir_entry *entries, uint32_t ino,
 				  uint8_t type, int32_t *pos)
 {
 	uint16_t n = PAGE_SIZE;
-	uint16_t new_ent_min_len = align_up(20 + name_len, 4);
+	uint16_t new_ent_min_len = round_up(20 + name_len, 4);
 	struct tmpfs_dir_entry *new_ent;
 	struct tmpfs_dir_entry *ent = entries;
 	uint16_t ent_len, ent_min_len;
@@ -209,7 +209,7 @@ static int tmpfs_dir_add_entry_to(struct tmpfs_dir_entry *entries, uint32_t ino,
 			return 0;
 		}
 
-		ent_min_len = align_up(20 + ent->d_name_len, 4);
+		ent_min_len = round_up(20 + ent->d_name_len, 4);
 		if (ent->d_ino > 0 &&
 		    ent_len - ent_min_len >= new_ent_min_len) {
 			ent->d_entry_len = ent_min_len;
