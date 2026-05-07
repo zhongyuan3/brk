@@ -55,12 +55,6 @@ if [[ -z ${BRK_SKIP_USER_BUILD:-} ]]; then
 	make -C "$BRK_USER_ROOT" ${CROSS_COMPILE:+CROSS_COMPILE="$CROSS_COMPILE"}
 fi
 
-USER_SRC=$BRK_USER_ROOT/build/src
-[[ -d $USER_SRC ]] || {
-	echo "${0##*/}: no $USER_SRC; build brk-user first" >&2
-	exit 1
-}
-
 BLK=1024
 if ((BRK_ROOTFS_BYTES % BLK != 0)); then
 	echo "${0##*/}: BRK_ROOTFS_BYTES ($BRK_ROOTFS_BYTES) must be a multiple of $BLK" >&2
@@ -73,17 +67,13 @@ rm -f "$IMG"
 dd if=/dev/zero of="$IMG" bs=$BLK count=$COUNT status=none
 "$MKFS" "$IMG"
 
-mapfile -t bins < <(
-	find "$USER_SRC" -maxdepth 1 -type f -executable \
-		! -name '*.o' ! -name '*.d' ! -name 'user.ld' -printf '%f\n' | sort
-)
-((${#bins[@]} > 0)) || {
-	echo "${0##*/}: no user binaries under $USER_SRC" >&2
-	exit 1
-}
+mapfile -t bins < <(ls $BRK_USER_ROOT/build/bin)
+
+echo "Copying user binaries to $IMG"
+echo "Binaries: ${bins[@]}"
 
 for name in "${bins[@]}"; do
-	src=$USER_SRC/$name
+	src=$BRK_USER_ROOT/build/bin/$name
 	"$CP" -r "$src" "/bin/$name" "$IMG"
 done
 
