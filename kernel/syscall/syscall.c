@@ -59,6 +59,7 @@ static uint64_t (*systable[])(void) = {
 	[SYS_readlink] = sys_readlink,
 	[SYS_mprotect] = sys_mprotect,
 	[SYS_renameat] = sys_renameat,
+	[SYS_renameat2] = sys_renameat2,
 	[SYS_symlinkat] = sys_symlinkat,
 	[SYS_readlinkat] = sys_readlinkat,
 	[SYS_lseek] = sys_lseek,
