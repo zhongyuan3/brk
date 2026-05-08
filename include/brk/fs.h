@@ -528,6 +528,7 @@ void file_put(struct file *file);
 loff_t file_lseek(struct file *file, loff_t len, int whence);
 ssize_t file_read(struct file *file, void *buf, size_t size);
 ssize_t file_write(struct file *file, const void *buf, size_t size);
+long file_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 int file_stat(struct file *file, struct stat *buf);
 int file_truncate(struct file *file, loff_t size);
 void file_cache_init(void);
@@ -539,6 +540,12 @@ int do_mknodat(int dirfd, const char *path, mode_t mode, dev_t dev);
 int do_linkat(int olddirfd, const char *oldpath, int newdirfd,
 	      const char *newpath, int flags);
 int do_unlinkat(int dirfd, const char *path, int flags);
+int do_symlinkat(int dirfd, const char *pathname, const char *target);
+int do_readlinkat(int dirfd, const char *path, char *buf, size_t bufsiz);
+int do_creat(const char *pathname, mode_t mode);
+int do_renameat(int olddirfd, const char *oldpath, int newdirfd,
+		const char *newpath, unsigned int flags);
+int do_rmdir(const char *pathname);
 
 int fs_init(void);
 

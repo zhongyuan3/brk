@@ -1,4 +1,3 @@
-#include <brk/console.h>
 #include <brk/cpu.h>
 #include <brk/dtb.h>
 #include <brk/ioremap.h>
@@ -11,6 +10,7 @@
 #include <brk/pgtable.h>
 #include <brk/plic.h>
 #include <brk/printk.h>
+#include <brk/tty.h>
 #include <brk/uart.h>
 
 #define RHR 0 /* Receiver Holding Register */
@@ -58,7 +58,7 @@ static void uart_handle_irq(void)
 	int c = uart_getc();
 	if (c < 0)
 		return;
-	console_intr(c);
+	tty_receive(tty_boot(), c);
 }
 
 void uart_init(void)

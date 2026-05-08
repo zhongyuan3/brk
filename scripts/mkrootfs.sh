@@ -77,4 +77,10 @@ for name in "${bins[@]}"; do
 	"$CP" -r "$src" "/bin/$name" "$IMG"
 done
 
+echo "Copying README.md to $IMG"
+"$CP" "$BRK_KERNEL_ROOT/README.md" "/README.md" "$IMG"
+
+echo "Copying LICENSE to $IMG"
+"$CP" "$BRK_KERNEL_ROOT/LICENSE" "/LICENSE" "$IMG"
+
 echo "${0##*/}: wrote $IMG (${BRK_ROOTFS_BYTES} bytes, brkfs)"
