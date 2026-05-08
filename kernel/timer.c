@@ -4,6 +4,7 @@
 #include <brk/riscv.h>
 #include <brk/sbi.h>
 #include <brk/timer.h>
+#include <brk/tty.h>
 
 static uint64_t timer_interval;
 static uint64_t jiffies;
@@ -44,14 +45,20 @@ void timer_handle_int(void)
 		spinlock_release(&jiffies_lock);
 	}
 
+	tty_timer_tick();
 	timer_set_next();
+}
+
+static void walltime_get_locked(struct timeval *tv)
+{
+	tv->tv_sec = walltime.tv_sec;
+	tv->tv_usec = walltime.tv_usec;
 }
 
 void walltime_get(struct timeval *tv)
 {
 	spinlock_acquire(&jiffies_lock);
-	tv->tv_sec = walltime.tv_sec;
-	tv->tv_usec = walltime.tv_usec;
+	walltime_get_locked(tv);
 	spinlock_release(&jiffies_lock);
 }
 
@@ -74,7 +81,7 @@ uint64_t do_nanosleep(const struct timeval *dur, struct timeval *rem)
 			spinlock_release(&jiffies_lock);
 			return -1;
 		}
-		walltime_get(&curr);
+		walltime_get_locked(&curr);
 		if ((curr.tv_sec - start.tv_sec >= dur->tv_sec) &&
 		    (curr.tv_usec - start.tv_usec >= dur->tv_usec))
 			break;

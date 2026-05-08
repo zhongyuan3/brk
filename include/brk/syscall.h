@@ -379,6 +379,7 @@ uint64_t sys_write(void);
 uint64_t sys_exit(void);
 uint64_t sys_open(void);
 uint64_t sys_close(void);
+uint64_t sys_ioctl(void);
 uint64_t sys_fstat(void);
 uint64_t sys_lstat(void);
 uint64_t sys_openat(void);
@@ -428,6 +429,7 @@ uint64_t sys_sched_yield(void);
 uint64_t sys_kill(void);
 uint64_t sys_fchdir(void);
 uint64_t sys_renameat(void);
+uint64_t sys_renameat2(void);
 uint64_t sys_symlinkat(void);
 uint64_t sys_readlinkat(void);
 
