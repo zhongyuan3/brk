@@ -93,6 +93,13 @@ ssize_t file_write(struct file *file, const void *buf, size_t size)
 	return ret;
 }
 
+long file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!file->f_op->ioctl)
+		return -ENOTTY;
+	return file->f_op->ioctl(file, cmd, arg);
+}
+
 int file_stat(struct file *file, struct stat *buf)
 {
 	const struct inode_operations *i_op = file->f_inode->i_op;

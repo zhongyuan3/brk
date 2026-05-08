@@ -94,6 +94,7 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 	irq_init();
 	irq_init_hart(hart_id);
 
+	console_init();
 	uart_init();
 	uart_init_hart(hart_id);
 

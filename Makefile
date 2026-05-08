@@ -118,7 +118,8 @@ kernel/syscall/syscall.c \
 kernel/syscall/sysfile.c \
 kernel/syscall/sysproc.c \
 kernel/syscall/systime.c \
-kernel/console.c \
+	kernel/tty.c \
+	kernel/console.c \
 kernel/lock.c \
 kernel/dev.c \
 mm/init.c \

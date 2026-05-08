@@ -1,6 +1,5 @@
 #include <brk/asm.h>
 #include <brk/assert.h>
-#include <brk/console.h>
 #include <brk/dev.h>
 #include <brk/errno.h>
 #include <brk/fs.h>
@@ -13,6 +12,7 @@
 #include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/string.h>
+#include <brk/tty.h>
 #include <brk/types.h>
 #include <brk/virtio_blk.h>
 
@@ -225,6 +225,25 @@ static int disk0_write(struct blkdev *bd, uint64_t blk_id, const void *buf,
 	return 0;
 }
 
+static int dev_console0_read(struct file *file, char *buf, size_t n,
+			     size_t *read)
+{
+	return tty_read(tty_boot(), file, buf, n, read);
+}
+
+static int dev_console0_write(struct file *file, const char *buf, size_t n,
+			      size_t *written)
+{
+	(void)file;
+	return tty_write(tty_boot(), buf, n, written);
+}
+
+static long dev_console0_ioctl(struct file *file, unsigned int cmd,
+			       unsigned long arg)
+{
+	return tty_ioctl(tty_boot(), file, cmd, arg);
+}
+
 void dev_init(void)
 {
 	struct chrdev *cd;
@@ -237,8 +256,9 @@ void dev_init(void)
 
 	cd = chrdev_alloc();
 	ASSERT(cd);
-	cd->ops->read = console_read;
-	cd->ops->write = console_write;
+	cd->ops->read = dev_console0_read;
+	cd->ops->write = dev_console0_write;
+	cd->ops->ioctl = dev_console0_ioctl;
 	chrdev_register(cd, DEV_CONSOLE0);
 
 	bd = blkdev_alloc();
@@ -259,6 +279,23 @@ void dev_init(void)
 static int chrdev_open(struct inode *inode, struct file *file)
 {
 	file->f_op = &chrdev_fops;
+	if (inode->i_rdev == DEV_CONSOLE0) {
+		struct tty_file_priv *priv;
+
+		priv = tty_file_priv_create();
+		if (!priv)
+			return -ENOMEM;
+		file->private_data = priv;
+	}
+	return 0;
+}
+
+static int chrdev_release(struct inode *inode, struct file *file)
+{
+	if (inode->i_rdev == DEV_CONSOLE0 && file->private_data) {
+		tty_file_priv_destroy(file->private_data);
+		file->private_data = NULL;
+	}
 	return 0;
 }
 
@@ -278,7 +315,7 @@ static ssize_t chrdev_read(struct file *file, char *buf, size_t size,
 		goto unlock_and_out;
 	}
 
-	err = cd->ops->read(buf, size, &rcnt);
+	err = cd->ops->read(file, buf, size, &rcnt);
 
 unlock_and_out:
 	sleeplock_release(&ip->i_rwsem);
@@ -303,7 +340,7 @@ static ssize_t chrdev_write(struct file *file, const char *buf, size_t size,
 		goto unlock_and_out;
 	}
 
-	err = cd->ops->write(buf, size, &wcnt);
+	err = cd->ops->write(file, buf, size, &wcnt);
 
 unlock_and_out:
 	sleeplock_release(&ip->i_rwsem);
@@ -335,7 +372,20 @@ static int chrdev_flush(struct file *file)
 
 static long chrdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	return 0;
+	struct inode *ip = file->f_inode;
+	struct chrdev *cd;
+	long ret = -ENODEV;
+
+	sleeplock_acquire(&ip->i_rwsem);
+	cd = chrdev_get(ip->i_rdev);
+	if (cd) {
+		if (cd->ops->ioctl)
+			ret = cd->ops->ioctl(file, cmd, arg);
+		else
+			ret = -ENOTTY;
+	}
+	sleeplock_release(&ip->i_rwsem);
+	return ret;
 }
 
 static int blkdev_open(struct inode *inode, struct file *file)
@@ -384,6 +434,7 @@ static long blkdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 const struct file_operations chrdev_fops = {
 	.open = chrdev_open,
+	.release = chrdev_release,
 	.read = chrdev_read,
 	.write = chrdev_write,
 	.llseek = chrdev_llseek,
