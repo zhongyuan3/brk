@@ -252,27 +252,37 @@ uint64_t sys_unlinkat(void)
 
 uint64_t sys_symlink(void)
 {
-	return -ENOSYS;
+	const char *target = syscall_arg_ptr(0);
+	char *linkpath = syscall_arg_ptr(1);
+	return do_symlinkat(AT_FDCWD, linkpath, target);
 }
 
 uint64_t sys_readlink(void)
 {
-	return -ENOSYS;
+	const char *pathname = syscall_arg_ptr(0);
+	char *buf = syscall_arg_ptr(1);
+	size_t bufsiz = syscall_arg_raw(2);
+	return do_readlinkat(AT_FDCWD, pathname, buf, bufsiz);
 }
 
 uint64_t sys_rename(void)
 {
-	return -ENOSYS;
+	const char *oldpathname = syscall_arg_ptr(0);
+	const char *newpathname = syscall_arg_ptr(1);
+	return do_renameat(AT_FDCWD, oldpathname, AT_FDCWD, newpathname, 0);
 }
 
 uint64_t sys_creat(void)
 {
-	return -ENOSYS;
+	const char *pathname = syscall_arg_ptr(0);
+	mode_t mode = syscall_arg_raw(1);
+	return do_creat(pathname, mode);
 }
 
 uint64_t sys_rmdir(void)
 {
-	return -ENOSYS;
+	const char *pathname = syscall_arg_ptr(0);
+	return do_rmdir(pathname);
 }
 
 uint64_t sys_uname(void)
@@ -350,17 +360,53 @@ uint64_t sys_fchdir(void)
 
 uint64_t sys_renameat(void)
 {
-	return -ENOSYS;
+	int olddirfd = syscall_arg_int(0);
+	const char *oldpathname = syscall_arg_ptr(1);
+	int newdirfd = syscall_arg_int(2);
+	const char *newpathname = syscall_arg_ptr(3);
+	return do_renameat(olddirfd, oldpathname, newdirfd, newpathname, 0);
+}
+
+uint64_t sys_renameat2(void)
+{
+	int olddirfd = syscall_arg_int(0);
+	const char *oldpathname = syscall_arg_ptr(1);
+	int newdirfd = syscall_arg_int(2);
+	const char *newpathname = syscall_arg_ptr(3);
+	int flags = syscall_arg_raw(4);
+	return do_renameat(olddirfd, oldpathname, newdirfd, newpathname, flags);
 }
 
 uint64_t sys_symlinkat(void)
 {
-	return -ENOSYS;
+	const char *target;
+	int newdirfd;
+	const char *linkpath;
+	int err;
+
+	err = syscall_arg_fd(1, &newdirfd, NULL);
+	if (err)
+		return err;
+	target = syscall_arg_ptr(0);
+	linkpath = syscall_arg_ptr(2);
+	return do_symlinkat(newdirfd, linkpath, target);
 }
 
 uint64_t sys_readlinkat(void)
 {
-	return -ENOSYS;
+	int dirfd;
+	const char *pathname;
+	char *buf;
+	size_t bufsiz;
+	int err;
+
+	err = syscall_arg_fd(0, &dirfd, NULL);
+	if (err)
+		return err;
+	pathname = syscall_arg_ptr(1);
+	buf = syscall_arg_ptr(2);
+	bufsiz = syscall_arg_raw(3);
+	return do_readlinkat(dirfd, pathname, buf, bufsiz);
 }
 
 uint64_t sys_mkdir(void)
@@ -468,12 +514,48 @@ uint64_t sys_dup2(void)
 
 uint64_t sys_mount(void)
 {
-	return -ENOSYS;
+	const char *source = syscall_arg_ptr(0);
+	const char *target = syscall_arg_ptr(1);
+	const char *type = syscall_arg_ptr(2);
+	unsigned long flags = syscall_arg_raw(3);
+	void *data = syscall_arg_ptr(4);
+	return do_mount(source, target, type, flags, data);
 }
 
 uint64_t sys_umount2(void)
 {
-	return -ENOSYS;
+	const char *target = syscall_arg_ptr(0);
+	int flags = syscall_arg_int(1);
+	struct path path;
+	int err;
+
+	err = path_lookup(target, 0, &path);
+	if (err)
+		return err;
+
+	spinlock_acquire(&path.dentry->d_lock);
+	if (path.dentry->d_flags & DCACHE_NEGATIVE) {
+		spinlock_release(&path.dentry->d_lock);
+		path_put(&path);
+		return -ENOENT;
+	}
+	spinlock_release(&path.dentry->d_lock);
+
+	struct mount *mnt = lookup_mount(&path);
+	if (!mnt) {
+		path_put(&path);
+		return -ENOENT;
+	}
+
+	err = do_umount(mnt, flags);
+	if (err) {
+		mount_put(mnt);
+		path_put(&path);
+		return err;
+	}
+
+	path_put(&path);
+	return 0;
 }
 
 uint64_t sys_lseek(void)
@@ -943,4 +1025,154 @@ uint64_t sys_ioctl(void)
 	unsigned long arg = (unsigned long)syscall_arg_raw(2);
 	long ret = file_ioctl(fp, cmd, arg);
 	return (uint64_t)(long)ret;
+}
+
+int do_readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz)
+{
+	int err;
+	struct path path;
+
+	err = path_lookupat(dirfd, pathname, 0, &path);
+	if (err)
+		return err;
+
+	spinlock_acquire(&path.dentry->d_lock);
+	if (path.dentry->d_flags & DCACHE_NEGATIVE) {
+		spinlock_release(&path.dentry->d_lock);
+		path_put(&path);
+		return -ENOENT;
+	}
+	spinlock_release(&path.dentry->d_lock);
+
+	struct inode *inode = path.dentry->d_inode;
+	if (!S_ISLNK(inode->i_mode)) {
+		path_put(&path);
+		return -EINVAL;
+	}
+
+	if (!inode->i_op->readlink) {
+		path_put(&path);
+		return -EOPNOTSUPP;
+	}
+
+	sleeplock_acquire(&inode->i_rwsem);
+	err = inode->i_op->readlink(path.dentry, buf, bufsiz);
+	sleeplock_release(&inode->i_rwsem);
+
+	path_put(&path);
+
+	return err;
+}
+
+int do_creat(const char *pathname, mode_t mode)
+{
+	int err;
+	struct path path;
+
+	err = path_lookup(pathname, 0, &path);
+	if (err)
+		return err;
+
+	spinlock_acquire(&path.dentry->d_lock);
+	if (!(path.dentry->d_flags & DCACHE_NEGATIVE)) {
+		spinlock_release(&path.dentry->d_lock);
+		path_put(&path);
+		return -EEXIST;
+	}
+	spinlock_release(&path.dentry->d_lock);
+
+	struct path parent_path;
+	err = path_dot_dot(&path, &parent_path);
+	if (err) {
+		path_put(&path);
+		return err;
+	}
+	struct inode *inode = parent_path.dentry->d_inode;
+	sleeplock_acquire(&inode->i_rwsem);
+	err = inode->i_op->create(inode, path.dentry, mode, true);
+	sleeplock_release(&inode->i_rwsem);
+
+	path_put(&parent_path);
+	path_put(&path);
+	return err;
+}
+
+int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
+		const char *newpathname, unsigned int flags)
+{
+	int err;
+	struct path oldpath, newpath;
+
+	err = path_lookupat(olddirfd, oldpathname, 0, &oldpath);
+	if (err)
+		return err;
+
+	err = path_lookupat(newdirfd, newpathname, 0, &newpath);
+	if (err) {
+		path_put(&oldpath);
+		return err;
+	}
+
+	spinlock_acquire(&newpath.dentry->d_lock);
+	if (!(newpath.dentry->d_flags & DCACHE_NEGATIVE)) {
+		spinlock_release(&newpath.dentry->d_lock);
+		path_put(&oldpath);
+		path_put(&newpath);
+		return -EEXIST;
+	}
+	spinlock_release(&newpath.dentry->d_lock);
+
+	struct path parent_path;
+	err = path_dot_dot(&newpath, &parent_path);
+	if (err) {
+		path_put(&oldpath);
+		path_put(&newpath);
+		return err;
+	}
+	struct inode *parent_inode = parent_path.dentry->d_inode;
+	struct inode *old_inode = oldpath.dentry->d_inode;
+	sleeplock_acquire(&parent_inode->i_rwsem);
+	sleeplock_acquire(&old_inode->i_rwsem);
+	err = parent_inode->i_op->rename(old_inode, oldpath.dentry,
+					 parent_inode, newpath.dentry, flags);
+	sleeplock_release(&old_inode->i_rwsem);
+	sleeplock_release(&parent_inode->i_rwsem);
+
+	path_put(&parent_path);
+	path_put(&oldpath);
+	path_put(&newpath);
+	return err;
+}
+
+int do_rmdir(const char *pathname)
+{
+	int err;
+	struct path path;
+
+	err = path_lookupat(AT_FDCWD, pathname, 0, &path);
+	if (err)
+		return err;
+
+	spinlock_acquire(&path.dentry->d_lock);
+	if (path.dentry->d_flags & DCACHE_NEGATIVE) {
+		spinlock_release(&path.dentry->d_lock);
+		path_put(&path);
+		return -ENOENT;
+	}
+	spinlock_release(&path.dentry->d_lock);
+
+	struct path parent_path;
+	err = path_dot_dot(&path, &parent_path);
+	if (err) {
+		path_put(&path);
+		return err;
+	}
+	struct inode *inode = parent_path.dentry->d_inode;
+	sleeplock_acquire(&inode->i_rwsem);
+	err = inode->i_op->rmdir(inode, path.dentry);
+	sleeplock_release(&inode->i_rwsem);
+
+	path_put(&parent_path);
+	path_put(&path);
+	return err;
 }
