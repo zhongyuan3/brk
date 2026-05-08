@@ -33,9 +33,13 @@ struct chrdev {
 	struct list_head list;
 };
 
+struct file;
+
 struct chrdev_operations {
-	int (*read)(char *buf, size_t n, size_t *read);
-	int (*write)(const char *buf, size_t n, size_t *written);
+	int (*read)(struct file *file, char *buf, size_t n, size_t *read);
+	int (*write)(struct file *file, const char *buf, size_t n,
+		     size_t *written);
+	long (*ioctl)(struct file *file, unsigned int cmd, unsigned long arg);
 };
 
 struct blkdev {

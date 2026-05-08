@@ -12,6 +12,7 @@ static uint64_t (*systable[])(void) = {
 	[SYS_exit] = sys_exit,
 	[SYS_open] = sys_open,
 	[SYS_close] = sys_close,
+	[SYS_ioctl] = sys_ioctl,
 	[SYS_lstat] = sys_lstat,
 	[SYS_openat] = sys_openat,
 	[SYS_dup] = sys_dup,

@@ -528,6 +528,7 @@ void file_put(struct file *file);
 loff_t file_lseek(struct file *file, loff_t len, int whence);
 ssize_t file_read(struct file *file, void *buf, size_t size);
 ssize_t file_write(struct file *file, const void *buf, size_t size);
+long file_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 int file_stat(struct file *file, struct stat *buf);
 int file_truncate(struct file *file, loff_t size);
 void file_cache_init(void);

@@ -929,3 +929,18 @@ int do_symlinkat(int dirfd, const char *pathname, const char *target)
 	path_put(&path);
 	return err;
 }
+
+uint64_t sys_ioctl(void)
+{
+	struct file *fp;
+	int err;
+
+	err = syscall_arg_fd(0, NULL, &fp);
+	if (err)
+		return (uint64_t)(long)err;
+
+	unsigned int cmd = (unsigned int)syscall_arg_raw(1);
+	unsigned long arg = (unsigned long)syscall_arg_raw(2);
+	long ret = file_ioctl(fp, cmd, arg);
+	return (uint64_t)(long)ret;
+}
