@@ -3,6 +3,7 @@
 #include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
+#include <brk/kernel.h>
 #include <brk/lock.h>
 #include <brk/stat.h>
 #include <brk/string.h>
@@ -421,6 +422,7 @@ static int brkfs_getattr(const struct path *path, struct stat *stat,
 	stat->st_rdev = inode->i_rdev;
 	stat->st_size = inode->i_size;
 	stat->st_blksize = (int)inode->i_sb->s_blocksize;
+	stat->st_blocks = div_ceil(inode->i_size, inode->i_sb->s_blocksize);
 	return 0;
 }
 
