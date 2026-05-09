@@ -33,11 +33,6 @@ void brkfs_sb_info_free(struct brkfs_sb_info *sbi)
 	kfree(sbi);
 }
 
-static uint32_t div_ceil_u32(uint32_t num, uint32_t div)
-{
-	return (num + div - 1) / div;
-}
-
 int brkfs_block_read(struct brkfs_sb_info *sb, uint32_t bno, void *buf)
 {
 	if (bno >= sb->s_sb.s_blocks_count) {
@@ -68,7 +63,7 @@ static int brkfs_bitmap_alloc(struct brkfs_sb_info *sbi, uint32_t start_bno,
 			      uint32_t nbits, uint32_t *out_bit)
 {
 	uint32_t bits_per_blk = sbi->s_bits_per_block;
-	uint32_t bmap_blks = div_ceil_u32(nbits, bits_per_blk);
+	uint32_t bmap_blks = div_ceil(nbits, bits_per_blk);
 	uint32_t bno = start_bno;
 	uint32_t end_bno = start_bno + bmap_blks;
 	size_t bs = sbi->s_sb.s_blocksize;

@@ -2,6 +2,7 @@
 #define BRK_KERNEL_H
 
 #include <stdalign.h>
+#include <stdint.h>
 
 #define max(x, y)                      \
 	({                             \
@@ -72,6 +73,13 @@
 			++__x;                       \
 		}                                    \
 		__x;                                 \
+	})
+
+#define div_ceil(num, div)                   \
+	({                                   \
+		__auto_type __num = (num);   \
+		__auto_type __div = (div);   \
+		(__num + __div - 1) / __div; \
 	})
 
 #endif
