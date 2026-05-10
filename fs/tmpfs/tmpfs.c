@@ -532,6 +532,8 @@ static int tmpfs_init_new_inode(struct tmpfs_super_block *sb,
 static struct dentry *tmpfs_mount(struct file_system_type *fs_type, int flags,
 				  const char *dev_name, void *data)
 {
+	(void)dev_name;
+	(void)data;
 	struct super_block *sb;
 	struct tmpfs_super_block *t_sb;
 	struct inode *root_inode;
@@ -597,10 +599,14 @@ static void tmpfs_kill_sb(struct super_block *sb)
 
 static void tmpfs_dirty_inode(struct inode *inode, int flags)
 {
+	(void)inode;
+	(void)flags;
 }
 
 static int tmpfs_write_inode(struct inode *inode, int sync)
 {
+	(void)sync;
+
 	struct tmpfs_inode *t_inode = inode->i_private;
 	struct tmpfs_super_block *t_sb = inode->i_sb->s_fs_info;
 
@@ -638,12 +644,17 @@ static void tmpfs_put_super(struct super_block *sb)
 
 static int tmpfs_sync_fs(struct super_block *sb, int wait)
 {
+	(void)sb;
+	(void)wait;
+
 	return 0;
 }
 
 static struct dentry *tmpfs_lookup(struct inode *dir, struct dentry *dentry,
 				   unsigned int flags)
 {
+	(void)flags;
+
 	struct inode *inode;
 	struct tmpfs_inode *t_dir, *t_inode;
 	struct tmpfs_super_block *t_sb;
@@ -682,6 +693,8 @@ static struct dentry *tmpfs_lookup(struct inode *dir, struct dentry *dentry,
 static int tmpfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 			bool excl)
 {
+	(void)excl;
+
 	struct inode *inode;
 	struct tmpfs_inode *t_new_inode, *t_dir;
 	struct tmpfs_super_block *t_sb;
@@ -1010,6 +1023,11 @@ static int tmpfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			struct inode *new_dir, struct dentry *new_dentry,
 			unsigned int flags)
 {
+	(void)old_dir;
+	(void)old_dentry;
+	(void)new_dir;
+	(void)new_dentry;
+	(void)flags;
 	return -EOPNOTSUPP;
 }
 
@@ -1066,6 +1084,9 @@ static int tmpfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 static int tmpfs_getattr(const struct path *path, struct stat *stat,
 			 uint32_t mask, unsigned int flags)
 {
+	(void)flags;
+	(void)mask;
+
 	struct inode *inode = path->dentry->d_inode;
 
 	memset(stat, 0, sizeof(*stat));
@@ -1081,6 +1102,8 @@ static int tmpfs_getattr(const struct path *path, struct stat *stat,
 
 static int tmpfs_setattr(struct dentry *dentry, struct iattr *attr)
 {
+	(void)dentry;
+	(void)attr;
 	return -EOPNOTSUPP;
 }
 
@@ -1185,28 +1208,40 @@ static loff_t tmpfs_file_llseek(struct file *file, loff_t offset, int whence)
 
 static int tmpfs_file_iterate_shared(struct file *file, struct dir_context *ctx)
 {
+	(void)file;
+	(void)ctx;
 	return -ENOTDIR;
 }
 
 static int tmpfs_file_fsync(struct file *file, loff_t start, loff_t end,
 			    int datasync)
 {
+	(void)file;
+	(void)start;
+	(void)end;
+	(void)datasync;
 	return 0;
 }
 
 static int tmpfs_file_flush(struct file *file)
 {
+	(void)file;
 	return 0;
 }
 
 static long tmpfs_file_ioctl(struct file *file, unsigned int cmd,
 			     unsigned long arg)
 {
+	(void)file;
+	(void)cmd;
+	(void)arg;
 	return 0;
 }
 
 static int tmpfs_dir_open(struct inode *inode, struct file *file)
 {
+	(void)inode;
+	(void)file;
 	log_trace("%s(): Called\n", __func__);
 	return 0;
 }
@@ -1214,12 +1249,20 @@ static int tmpfs_dir_open(struct inode *inode, struct file *file)
 static ssize_t tmpfs_dir_read(struct file *file, char *buf, size_t size,
 			      loff_t *pos)
 {
+	(void)file;
+	(void)buf;
+	(void)size;
+	(void)pos;
 	return -EISDIR;
 }
 
 static ssize_t tmpfs_dir_write(struct file *file, const char *buf, size_t size,
 			       loff_t *pos)
 {
+	(void)file;
+	(void)buf;
+	(void)size;
+	(void)pos;
 	return -EISDIR;
 }
 
@@ -1288,17 +1331,25 @@ static int tmpfs_dir_iterate_shared(struct file *file, struct dir_context *ctx)
 static int tmpfs_dir_fsync(struct file *file, loff_t start, loff_t end,
 			   int datasync)
 {
+	(void)file;
+	(void)start;
+	(void)end;
+	(void)datasync;
 	return 0;
 }
 
 static int tmpfs_dir_flush(struct file *file)
 {
+	(void)file;
 	return 0;
 }
 
 static long tmpfs_dir_ioctl(struct file *file, unsigned int cmd,
 			    unsigned long arg)
 {
+	(void)file;
+	(void)cmd;
+	(void)arg;
 	return 0;
 }
 

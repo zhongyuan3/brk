@@ -26,9 +26,6 @@ else
 CPU ?= 1
 endif
 
-LOG_LEVEL ?= info
-LOG_COLOR_ENABLE ?= 1
-
 CC := $(CROSS_COMPILE)gcc
 CPP := $(CC) -E
 LD := $(CROSS_COMPILE)ld
@@ -52,42 +49,26 @@ else
 $(error unknown BUILD value '$(BUILD)', expected debug or release)
 endif
 
-COMMON_WARNINGS := -Wall -Wextra -Werror
-DISABLED_WARNINGS := -Wno-unused-parameter -Wno-unknown-attributes -Wno-main
-ARCH_FLAGS := -march=rv64gc -mcmodel=medany
-RUNTIME_FLAGS := -ffreestanding -fno-common -nostdlib
-DEBUG_FLAGS := -ggdb -gdwarf-2 -fno-omit-frame-pointer
-SAFETY_FLAGS := -fno-stack-protector -fno-pie -no-pie
-INCLUDE_FLAGS := -Iinclude -Ilib/libfdt
-
 CFLAGS := -O$(OPT)
-CFLAGS += $(COMMON_WARNINGS) $(DISABLED_WARNINGS)
-CFLAGS += $(ARCH_FLAGS) $(RUNTIME_FLAGS)
-CFLAGS += $(DEBUG_FLAGS) $(SAFETY_FLAGS)
-CFLAGS += $(INCLUDE_FLAGS)
+CFLAGS += -Wall
+CFLAGS += -Wextra
+CFLAGS += -Werror
+CFLAGS += -ggdb
+CFLAGS += -gdwarf-2
+CFLAGS += -fno-omit-frame-pointer
+CFLAGS += -march=rv64gc
+CFLAGS += -mcmodel=medany
+CFLAGS += -ffreestanding
+CFLAGS += -fno-common
+CFLAGS += -nostdlib
+CFLAGS += -fno-stack-protector
+CFLAGS += -fno-pie
+CFLAGS += -no-pie
+CFLAGS += -Iinclude
+CFLAGS += -Ilib/libfdt
 CFLAGS += -MMD -MP
 ifeq ($(ENABLE_SMP),1)
 CFLAGS += -DENABLE_SMP=1
-endif
-
-ifeq ($(LOG_LEVEL),trace)
-CFLAGS += -DLOG_LEVEL=LOG_LEVEL_TRACE
-else ifeq ($(LOG_LEVEL),debug)
-CFLAGS += -DLOG_LEVEL=LOG_LEVEL_DEBUG
-else ifeq ($(LOG_LEVEL),info)
-CFLAGS += -DLOG_LEVEL=LOG_LEVEL_INFO
-else ifeq ($(LOG_LEVEL),warn)
-CFLAGS += -DLOG_LEVEL=LOG_LEVEL_WARN
-else ifeq ($(LOG_LEVEL),error)
-CFLAGS += -DLOG_LEVEL=LOG_LEVEL_ERROR
-else
-$(error unknown LOG_LEVEL value '$(LOG_LEVEL)', expected trace, debug, info, warn, error)
-endif
-
-ifeq ($(LOG_COLOR_ENABLE),1)
-CFLAGS += -DLOG_COLOR_ENABLE=1
-else
-CFLAGS += -DLOG_COLOR_ENABLE=0
 endif
 
 QEMU_COMMON := -machine virt -nographic
@@ -98,78 +79,75 @@ QEMU_COMMON += -drive file=$(ROOTFS_IMG),if=none,format=raw,id=x0
 QEMU_COMMON += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 QEMU_COMMON += -global virtio-mmio.force-legacy=false
 
-SRCS := \
-boot/head.S \
-boot/setup.c \
-kernel/dtb.c \
-kernel/main.c \
-kernel/panic.c \
-kernel/printk.c \
-kernel/trap.c \
-kernel/cpu.c \
-kernel/timer.c \
-kernel/irq.c \
-kernel/entry.S \
-kernel/process/process.c \
-kernel/process/sched.c \
-kernel/process/switch.S \
-kernel/process/pid.c \
-kernel/syscall/syscall.c \
-kernel/syscall/sysfile.c \
-kernel/syscall/sysproc.c \
-kernel/syscall/systime.c \
-	kernel/tty.c \
-	kernel/console.c \
-kernel/lock.c \
-kernel/dev.c \
-mm/init.c \
-mm/mm.c \
-mm/memblock.c \
-mm/pgalloc.c \
-mm/pgtable.c \
-mm/slab.c \
-mm/vmalloc.c \
-mm/ioremap.c \
-drivers/plic.c \
-drivers/uart.c \
-drivers/virtio/virtio.c \
-drivers/virtio/virtio_blk.c \
-fs/tmpfs/tmpfs.c \
-fs/brkfs/brkfs.c \
-fs/brkfs/dir.c \
-fs/brkfs/file.c \
-fs/brkfs/inode.c \
-fs/brkfs/mount.c \
-fs/brkfs/super.c \
-fs/init.c \
-fs/pipe.c \
-fs/dcache.c \
-fs/file.c \
-fs/inode.c \
-fs/mount.c \
-fs/super.c \
-fs/exec.c \
-fs/path.c \
-fs/filesystem.c \
-lib/string.c \
-lib/printf.c \
-lib/qsort.c \
-lib/hash.c \
-lib/bitmap.c \
-lib/libfdt/fdt.c \
-lib/libfdt/fdt_ro.c \
-lib/libfdt/fdt_wip.c \
-lib/libfdt/fdt_addresses.c \
-lib/libfdt/fdt_rw.c
+SRCS := boot/head.S
+SRCS += boot/setup.c
+SRCS += kernel/dtb.c
+SRCS += kernel/main.c
+SRCS += kernel/panic.c
+SRCS += kernel/printk.c
+SRCS += kernel/trap.c
+SRCS += kernel/cpu.c
+SRCS += kernel/timer.c
+SRCS += kernel/irq.c
+SRCS += kernel/entry.S
+SRCS += kernel/process/process.c
+SRCS += kernel/process/sched.c
+SRCS += kernel/process/switch.S
+SRCS += kernel/process/pid.c
+SRCS += kernel/syscall/syscall.c
+SRCS += kernel/syscall/sysfile.c
+SRCS += kernel/syscall/sysproc.c
+SRCS += kernel/syscall/systime.c
+SRCS += kernel/tty.c
+SRCS += kernel/console.c
+SRCS += kernel/lock.c
+SRCS += kernel/dev.c
+SRCS += mm/init.c
+SRCS += mm/mm.c
+SRCS += mm/memblock.c
+SRCS += mm/pgalloc.c
+SRCS += mm/pgtable.c
+SRCS += mm/slab.c
+SRCS += mm/vmalloc.c
+SRCS += mm/ioremap.c
+SRCS += drivers/plic.c
+SRCS += drivers/uart.c
+SRCS += drivers/virtio/virtio.c
+SRCS += drivers/virtio/virtio_blk.c
+SRCS += fs/tmpfs/tmpfs.c
+SRCS += fs/brkfs/brkfs.c
+SRCS += fs/brkfs/dir.c
+SRCS += fs/brkfs/file.c
+SRCS += fs/brkfs/inode.c
+SRCS += fs/brkfs/mount.c
+SRCS += fs/brkfs/super.c
+SRCS += fs/init.c
+SRCS += fs/pipe.c
+SRCS += fs/dcache.c
+SRCS += fs/file.c
+SRCS += fs/inode.c
+SRCS += fs/mount.c
+SRCS += fs/super.c
+SRCS += fs/exec.c
+SRCS += fs/path.c
+SRCS += fs/filesystem.c
+SRCS += lib/string.c
+SRCS += lib/printf.c
+SRCS += lib/qsort.c
+SRCS += lib/hash.c
+SRCS += lib/bitmap.c
+SRCS += lib/libfdt/fdt.c
+SRCS += lib/libfdt/fdt_ro.c
+SRCS += lib/libfdt/fdt_wip.c
+SRCS += lib/libfdt/fdt_addresses.c
+SRCS += lib/libfdt/fdt_rw.c
 
 OBJS_S := $(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SRCS)))
 OBJS_C := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SRCS)))
 OBJS := $(OBJS_S) $(OBJS_C)
 DEPS := $(OBJS:.o=.d)
-ECHO_DEFAULT_VARS := BUILD BUILD_DIR CPU RAM CROSS_COMPILE BRK_ELF ROOTFS_IMG QEMU GDB
-ECHO_VARS ?= $(ECHO_DEFAULT_VARS)
 
-.PHONY: all brk run gdb-server gdb-client rootfs clean help echo
+.PHONY: all brk run gdb-server gdb-client rootfs clean help
 
 all: brk
 
@@ -181,13 +159,13 @@ help:
 	@echo "  gdb-client     Connect GDB to :1234"
 	@echo "  rootfs         Create brkfs root disk (scripts/mkrootfs.sh + sibling brk-user / brkfstools)"
 	@echo "  clean          Remove build outputs"
-	@echo "  echo           Print selected build variables"
-	@echo ""
-	@echo "Configurable vars: BUILD={debug|release}, BUILD_DIR=<path>, CPU=<n>, RAM=<size>, CROSS_COMPILE=<prefix> ENABLE_SMP={0|1}"
-	@echo "Echo vars: make echo [ECHO_VARS=\"VAR1 VAR2 ...\"]"
-
-echo:
-	@$(foreach var,$(ECHO_VARS),echo "$(var): $($(var))";)
+	@echo "Configurable vars:"
+	@echo "  BUILD={debug|release}"
+	@echo "  BUILD_DIR=<path>"
+	@echo "  CPU=<n>"
+	@echo "  RAM=<size>"
+	@echo "  CROSS_COMPILE=<prefix>"
+	@echo "  ENABLE_SMP={0|1}"
 
 brk: $(BRK_ELF)
 

@@ -10,6 +10,8 @@ static SPINLOCK_DEFINE(printk_lock);
 static int display_write(struct display *dis, char const *buf, size_t len,
 			 size_t *wlen)
 {
+	(void)dis;
+
 	for (size_t i = 0; i < len; ++i)
 		console_putc(buf[i]);
 

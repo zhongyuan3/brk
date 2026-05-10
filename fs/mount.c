@@ -247,6 +247,7 @@ int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
  */
 int do_umount(struct mount *mnt, int flags)
 {
+	(void)flags;
 	mount_put(mnt);
 	return 0;
 }

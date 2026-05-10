@@ -302,6 +302,7 @@ static int chrdev_release(struct inode *inode, struct file *file)
 static ssize_t chrdev_read(struct file *file, char *buf, size_t size,
 			   loff_t *pos)
 {
+	(void)pos;
 	struct inode *ip = file->f_inode;
 	int err = 0;
 	struct chrdev *cd;
@@ -327,6 +328,7 @@ unlock_and_out:
 static ssize_t chrdev_write(struct file *file, const char *buf, size_t size,
 			    loff_t *pos)
 {
+	(void)pos;
 	struct inode *ip = file->f_inode;
 	int err = 0;
 	struct chrdev *cd;
@@ -351,22 +353,32 @@ unlock_and_out:
 
 static loff_t chrdev_llseek(struct file *file, loff_t offset, int whence)
 {
+	(void)whence;
+	(void)offset;
+	(void)file;
 	return 0;
 }
 
 static int chrdev_iterate_shared(struct file *file, struct dir_context *ctx)
 {
+	(void)file;
+	(void)ctx;
 	return 0;
 }
 
 static int chrdev_fsync(struct file *file, loff_t start, loff_t end,
 			int datasync)
 {
+	(void)file;
+	(void)start;
+	(void)end;
+	(void)datasync;
 	return 0;
 }
 
 static int chrdev_flush(struct file *file)
 {
+	(void)file;
 	return 0;
 }
 
@@ -390,6 +402,7 @@ static long chrdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 static int blkdev_open(struct inode *inode, struct file *file)
 {
+	(void)inode;
 	file->f_op = &blkdev_fops;
 	return 0;
 }
@@ -397,38 +410,59 @@ static int blkdev_open(struct inode *inode, struct file *file)
 static ssize_t blkdev_read(struct file *file, char *buf, size_t size,
 			   loff_t *pos)
 {
+	(void)file;
+	(void)buf;
+	(void)size;
+	(void)pos;
 	return 0;
 }
 
 static ssize_t blkdev_write(struct file *file, const char *buf, size_t size,
 			    loff_t *pos)
 {
+	(void)file;
+	(void)buf;
+	(void)size;
+	(void)pos;
 	return 0;
 }
 
 static loff_t blkdev_llseek(struct file *file, loff_t offset, int whence)
 {
+	(void)file;
+	(void)offset;
+	(void)whence;
 	return 0;
 }
 
 static int blkdev_iterate_shared(struct file *file, struct dir_context *ctx)
 {
+	(void)file;
+	(void)ctx;
 	return 0;
 }
 
 static int blkdev_fsync(struct file *file, loff_t start, loff_t end,
 			int datasync)
 {
+	(void)file;
+	(void)start;
+	(void)end;
+	(void)datasync;
 	return 0;
 }
 
 static int blkdev_flush(struct file *file)
 {
+	(void)file;
 	return 0;
 }
 
 static long blkdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
+	(void)file;
+	(void)cmd;
+	(void)arg;
 	return 0;
 }
 

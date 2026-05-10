@@ -62,6 +62,8 @@ struct page *page_zalloc(unsigned int order)
 static bool page_is_buddy(struct page *pg, struct page *buddy,
 			  unsigned int order)
 {
+	(void)pg;
+
 	if (!(buddy->flags & PAGE_FLAGS_BUDDY))
 		return false;
 
