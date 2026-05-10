@@ -232,6 +232,9 @@ pid_t proc_wait(pid_t pid, int *status, int options, struct rusage *rus)
 	struct process *parent = current_process();
 	bool found;
 
+	(void)options;
+	(void)rus;
+
 	spinlock_acquire(&wait_lock);
 
 	if (list_empty(&parent->children)) {

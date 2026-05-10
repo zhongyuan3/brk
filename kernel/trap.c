@@ -50,6 +50,7 @@ void trap_init(void)
 
 void trap_init_hart(uint32_t hart_id)
 {
+	(void)hart_id;
 	write_stvec((uint64_t)kernel_trap_vector);
 	write_sie(read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
 	timer_set_next();

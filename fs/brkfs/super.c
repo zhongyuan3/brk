@@ -5,6 +5,8 @@
 
 static struct inode *brkfs_alloc_inode(struct super_block *sb)
 {
+	(void)sb;
+
 	struct inode *inode;
 	struct brkfs_inode_info *info;
 
@@ -29,6 +31,8 @@ static void brkfs_free_inode(struct inode *inode)
 
 static void brkfs_dirty_inode(struct inode *inode, int flags)
 {
+	(void)inode;
+	(void)flags;
 }
 
 static int brkfs_write_inode(struct inode *inode, int sync)

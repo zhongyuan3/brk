@@ -902,6 +902,8 @@ int do_mknodat(int dirfd, const char *pathname, mode_t mode, dev_t dev)
 int do_linkat(int olddirfd, const char *oldpathname, int newdirfd,
 	      const char *newpathname, int flags)
 {
+	(void)flags;
+
 	int err;
 	struct path oldpath, newpath;
 
@@ -950,6 +952,8 @@ int do_unlinkat(int dirfd, const char *pathname, int flags)
 {
 	int err;
 	struct path path;
+
+	(void)flags;
 
 	err = path_lookupat(dirfd, pathname, 0, &path);
 	if (err)

@@ -366,6 +366,7 @@ const struct qstr dotdot_name = {
 static int generic_dop_compare(const struct dentry *dentry, unsigned int len,
 			       const char *str, const struct qstr *name)
 {
+	(void)dentry;
 	if (len > name->len)
 		return 1;
 	if (len < name->len)

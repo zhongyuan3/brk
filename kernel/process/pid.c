@@ -15,4 +15,5 @@ pid_t pid_alloc(void)
 
 void pid_free(pid_t pid)
 {
+	(void)pid;
 }

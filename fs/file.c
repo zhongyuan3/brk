@@ -108,5 +108,7 @@ int file_stat(struct file *file, struct stat *buf)
 
 int file_truncate(struct file *file, loff_t size)
 {
+	(void)file;
+	(void)size;
 	return 0;
 }
