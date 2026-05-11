@@ -1,5 +1,6 @@
 #include <brk/asm.h>
 #include <brk/assert.h>
+#include <brk/bitmap.h>
 #include <brk/dev.h>
 #include <brk/errno.h>
 #include <brk/fs.h>
@@ -16,10 +17,17 @@
 #include <brk/types.h>
 #include <brk/virtio_blk.h>
 
-struct list_head cdev_list[NR_DEVICES];
+struct list_head cdev_list[BRK_MAJOR_MAX];
 static SPINLOCK_DEFINE(cdev_list_lock);
-struct list_head bdev_list[NR_DEVICES];
+struct list_head bdev_list[BRK_MAJOR_MAX];
 static SPINLOCK_DEFINE(bdev_list_lock);
+
+/*
+ * Set by chrdev_alloc_major / blkdev_alloc_major; cleared when the last
+ * device on that major unregisters, or by *_free_major on an empty major.
+ */
+static BITMAP_DECLARE(cdev_major_pooled, BRK_MAJOR_MAX);
+static BITMAP_DECLARE(bdev_major_pooled, BRK_MAJOR_MAX);
 
 struct chrdev *chrdev_alloc(void)
 {
@@ -43,11 +51,15 @@ void chrdev_free(struct chrdev *cd)
 static struct chrdev *cdev_get_no_lock(dev_t dev)
 {
 	struct chrdev *cd = NULL;
-	struct list_head *h = &cdev_list[MAJOR(dev)];
-	if (list_empty(h))
+	unsigned major = MAJOR(dev);
+
+	if (major >= BRK_MAJOR_MAX)
 		return NULL;
 
-	list_for_each_entry(cd, h, list) {
+	if (list_empty(&cdev_list[major]))
+		return NULL;
+
+	list_for_each_entry(cd, &cdev_list[major], list) {
 		if (cd->dev == dev)
 			return cd;
 	}
@@ -55,12 +67,26 @@ static struct chrdev *cdev_get_no_lock(dev_t dev)
 	return NULL;
 }
 
+static void cdev_maybe_clear_pool(unsigned major)
+{
+	if (major >= BRK_MAJOR_MAX)
+		return;
+	if (list_empty(&cdev_list[major]))
+		bitmap_clear_bit(cdev_major_pooled, major);
+}
+
 int chrdev_register(struct chrdev *cd, dev_t dev)
 {
-	uint32_t major = MAJOR(dev);
+	unsigned major = MAJOR(dev);
+	unsigned minor = MINOR(dev);
+
+	if (!IS_CHRDEV(dev))
+		return -EINVAL;
+	if (major >= BRK_MAJOR_MAX || minor >= BRK_MINOR_MAX)
+		return -EINVAL;
 
 	spinlock_acquire(&cdev_list_lock);
-	if (major >= NR_DEVICES || cdev_get_no_lock(dev) != NULL) {
+	if (cdev_get_no_lock(dev) != NULL) {
 		spinlock_release(&cdev_list_lock);
 		return -EBUSY;
 	}
@@ -72,22 +98,99 @@ int chrdev_register(struct chrdev *cd, dev_t dev)
 
 void chrdev_unregister(struct chrdev *cd)
 {
-	uint32_t major = MAJOR(cd->dev);
-	if (major >= NR_DEVICES)
+	unsigned major = MAJOR(cd->dev);
+
+	if (major >= BRK_MAJOR_MAX)
 		return;
 	spinlock_acquire(&cdev_list_lock);
 	if (cdev_get_no_lock(cd->dev) != NULL)
 		list_del(&cd->list);
+	cdev_maybe_clear_pool(major);
 	spinlock_release(&cdev_list_lock);
 }
 
 struct chrdev *chrdev_get(dev_t dev)
 {
 	struct chrdev *cd = NULL;
+
 	spinlock_acquire(&cdev_list_lock);
 	cd = cdev_get_no_lock(dev);
 	spinlock_release(&cdev_list_lock);
 	return cd;
+}
+
+int chrdev_alloc_major(unsigned *major_out)
+{
+	unsigned m;
+
+	spinlock_acquire(&cdev_list_lock);
+	for (m = BRK_DEV_FIRST_DYNAMIC_MAJOR; m < BRK_MAJOR_MAX; m++) {
+		if (!bitmap_test_bit(cdev_major_pooled, m) &&
+		    list_empty(&cdev_list[m])) {
+			bitmap_set_bit(cdev_major_pooled, m);
+			*major_out = m;
+			spinlock_release(&cdev_list_lock);
+			return 0;
+		}
+	}
+	spinlock_release(&cdev_list_lock);
+	return -ENOMEM;
+}
+
+void chrdev_free_major(unsigned major)
+{
+	if (major >= BRK_MAJOR_MAX)
+		return;
+	spinlock_acquire(&cdev_list_lock);
+	if (!list_empty(&cdev_list[major])) {
+		spinlock_release(&cdev_list_lock);
+		return;
+	}
+	bitmap_clear_bit(cdev_major_pooled, major);
+	spinlock_release(&cdev_list_lock);
+}
+
+int chrdev_alloc_minor(unsigned major, unsigned *minor_out)
+{
+	unsigned n;
+
+	if (major >= BRK_MAJOR_MAX || !minor_out)
+		return -EINVAL;
+
+	spinlock_acquire(&cdev_list_lock);
+	for (n = 0; n < BRK_DEV_ALLOC_MINOR_SCAN; n++) {
+		dev_t dev = MKDEV(CHRDEV, major, n);
+		if (!cdev_get_no_lock(dev)) {
+			*minor_out = n;
+			spinlock_release(&cdev_list_lock);
+			return 0;
+		}
+	}
+	spinlock_release(&cdev_list_lock);
+	return -ENOMEM;
+}
+
+int chrdev_alloc_devnum(dev_t *dev_out)
+{
+	unsigned major, minor;
+
+	if (!dev_out)
+		return -EINVAL;
+
+	spinlock_acquire(&cdev_list_lock);
+	for (major = BRK_DEV_FIRST_DYNAMIC_MAJOR; major < BRK_MAJOR_MAX;
+	     major++) {
+		for (minor = 0; minor < BRK_DEV_ALLOC_MINOR_SCAN; minor++) {
+			dev_t dev = MKDEV(CHRDEV, major, minor);
+			if (!cdev_get_no_lock(dev)) {
+				*dev_out = dev;
+				spinlock_release(&cdev_list_lock);
+				return 0;
+			}
+		}
+	}
+	spinlock_release(&cdev_list_lock);
+	return -ENOMEM;
 }
 
 struct blkdev *blkdev_alloc(void)
@@ -112,11 +215,15 @@ void blkdev_free(struct blkdev *bd)
 static struct blkdev *bdev_get_no_lock(dev_t dev)
 {
 	struct blkdev *bd = NULL;
-	struct list_head *h = &bdev_list[MAJOR(dev)];
-	if (list_empty(h))
+	unsigned major = MAJOR(dev);
+
+	if (major >= BRK_MAJOR_MAX)
 		return NULL;
 
-	list_for_each_entry(bd, h, list) {
+	if (list_empty(&bdev_list[major]))
+		return NULL;
+
+	list_for_each_entry(bd, &bdev_list[major], list) {
 		if (bd->dev == dev)
 			return bd;
 	}
@@ -124,14 +231,28 @@ static struct blkdev *bdev_get_no_lock(dev_t dev)
 	return NULL;
 }
 
+static void bdev_maybe_clear_pool(unsigned major)
+{
+	if (major >= BRK_MAJOR_MAX)
+		return;
+	if (list_empty(&bdev_list[major]))
+		bitmap_clear_bit(bdev_major_pooled, major);
+}
+
 int blkdev_register(struct blkdev *bd, dev_t dev)
 {
-	uint32_t major = MAJOR(dev);
+	unsigned major = MAJOR(dev);
+	unsigned minor = MINOR(dev);
+
+	if (!IS_BLKDEV(dev))
+		return -EINVAL;
+	if (major >= BRK_MAJOR_MAX || minor >= BRK_MINOR_MAX)
+		return -EINVAL;
 
 	spinlock_acquire(&bdev_list_lock);
-	if (major >= NR_DEVICES || bdev_get_no_lock(dev) != NULL) {
+	if (bdev_get_no_lock(dev) != NULL) {
 		spinlock_release(&bdev_list_lock);
-		return -1;
+		return -EBUSY;
 	}
 	bd->dev = dev;
 	list_add(&bd->list, &bdev_list[major]);
@@ -141,22 +262,99 @@ int blkdev_register(struct blkdev *bd, dev_t dev)
 
 void blkdev_unregister(struct blkdev *bd)
 {
-	uint32_t major = MAJOR(bd->dev);
-	if (major >= NR_DEVICES)
+	unsigned major = MAJOR(bd->dev);
+
+	if (major >= BRK_MAJOR_MAX)
 		return;
 	spinlock_acquire(&bdev_list_lock);
 	if (bdev_get_no_lock(bd->dev) != NULL)
 		list_del(&bd->list);
+	bdev_maybe_clear_pool(major);
 	spinlock_release(&bdev_list_lock);
 }
 
 struct blkdev *blkdev_get(dev_t dev)
 {
 	struct blkdev *bd = NULL;
+
 	spinlock_acquire(&bdev_list_lock);
 	bd = bdev_get_no_lock(dev);
 	spinlock_release(&bdev_list_lock);
 	return bd;
+}
+
+int blkdev_alloc_major(unsigned *major_out)
+{
+	unsigned m;
+
+	spinlock_acquire(&bdev_list_lock);
+	for (m = BRK_DEV_FIRST_DYNAMIC_MAJOR; m < BRK_MAJOR_MAX; m++) {
+		if (!bitmap_test_bit(bdev_major_pooled, m) &&
+		    list_empty(&bdev_list[m])) {
+			bitmap_set_bit(bdev_major_pooled, m);
+			*major_out = m;
+			spinlock_release(&bdev_list_lock);
+			return 0;
+		}
+	}
+	spinlock_release(&bdev_list_lock);
+	return -ENOMEM;
+}
+
+void blkdev_free_major(unsigned major)
+{
+	if (major >= BRK_MAJOR_MAX)
+		return;
+	spinlock_acquire(&bdev_list_lock);
+	if (!list_empty(&bdev_list[major])) {
+		spinlock_release(&bdev_list_lock);
+		return;
+	}
+	bitmap_clear_bit(bdev_major_pooled, major);
+	spinlock_release(&bdev_list_lock);
+}
+
+int blkdev_alloc_minor(unsigned major, unsigned *minor_out)
+{
+	unsigned n;
+
+	if (major >= BRK_MAJOR_MAX || !minor_out)
+		return -EINVAL;
+
+	spinlock_acquire(&bdev_list_lock);
+	for (n = 0; n < BRK_DEV_ALLOC_MINOR_SCAN; n++) {
+		dev_t dev = MKDEV(BLKDEV, major, n);
+		if (!bdev_get_no_lock(dev)) {
+			*minor_out = n;
+			spinlock_release(&bdev_list_lock);
+			return 0;
+		}
+	}
+	spinlock_release(&bdev_list_lock);
+	return -ENOMEM;
+}
+
+int blkdev_alloc_devnum(dev_t *dev_out)
+{
+	unsigned major, minor;
+
+	if (!dev_out)
+		return -EINVAL;
+
+	spinlock_acquire(&bdev_list_lock);
+	for (major = BRK_DEV_FIRST_DYNAMIC_MAJOR; major < BRK_MAJOR_MAX;
+	     major++) {
+		for (minor = 0; minor < BRK_DEV_ALLOC_MINOR_SCAN; minor++) {
+			dev_t dev = MKDEV(BLKDEV, major, minor);
+			if (!bdev_get_no_lock(dev)) {
+				*dev_out = dev;
+				spinlock_release(&bdev_list_lock);
+				return 0;
+			}
+		}
+	}
+	spinlock_release(&bdev_list_lock);
+	return -ENOMEM;
 }
 
 struct disk0_priv {
@@ -248,18 +446,19 @@ void dev_init(void)
 {
 	struct chrdev *cd;
 	struct blkdev *bd;
+	unsigned i;
 
-	for (int i = 0; i < NR_DEVICES; ++i)
+	for (i = 0; i < BRK_MAJOR_MAX; ++i) {
 		list_init(&cdev_list[i]);
-	for (int i = 0; i < NR_DEVICES; ++i)
 		list_init(&bdev_list[i]);
+	}
 
 	cd = chrdev_alloc();
 	ASSERT(cd);
 	cd->ops->read = dev_console0_read;
 	cd->ops->write = dev_console0_write;
 	cd->ops->ioctl = dev_console0_ioctl;
-	chrdev_register(cd, DEV_CONSOLE0);
+	ASSERT(chrdev_register(cd, DEV_CONSOLE0) == 0);
 
 	bd = blkdev_alloc();
 	ASSERT(bd);
@@ -273,7 +472,7 @@ void dev_init(void)
 	ASSERT(priv->buf);
 	sleeplock_init(&priv->lock, "disk0_buf");
 	bd->priv = priv;
-	blkdev_register(bd, DEV_DISK0);
+	ASSERT(blkdev_register(bd, DEV_DISK0) == 0);
 }
 
 static int chrdev_open(struct inode *inode, struct file *file)
