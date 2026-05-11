@@ -14,6 +14,9 @@ uint32_t timer_rand(void);
 void walltime_get(struct timeval *tv);
 void walltime_set(const struct timeval *tv);
 
+void walltime_get_ts(struct timespec *ts);
+void walltime_set_ts(const struct timespec *ts);
+
 uint64_t do_nanosleep(const struct timeval *dur, struct timeval *rem);
 
 uint64_t jiffies_get(void);

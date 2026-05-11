@@ -1,6 +1,7 @@
 #include <brk/assert.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
+#include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/lock.h>
 #include <brk/process.h>
@@ -48,6 +49,10 @@ static struct inode *alloc_inode(struct super_block *sb, unsigned long ino)
 	inode->i_nlink = 0;
 	inode->i_size = 0;
 	inode->i_rdev = 0;
+	inode->i_atime.tv_sec = 0;
+	inode->i_atime.tv_nsec = 0;
+	inode->i_mtime = inode->i_atime;
+	inode->i_ctime = inode->i_atime;
 
 	return inode;
 }

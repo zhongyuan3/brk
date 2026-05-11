@@ -16,6 +16,7 @@
 #include <brk/printk.h>
 #include <brk/process.h>
 #include <brk/riscv.h>
+#include <brk/rtc.h>
 #include <brk/sbi.h>
 #include <brk/slab.h>
 #include <brk/string.h>
@@ -97,6 +98,8 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 	console_init();
 	uart_init();
 	uart_init_hart(hart_id);
+
+	rtc_init();
 
 	trap_init();
 	trap_init_hart(hart_id);
