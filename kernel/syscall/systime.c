@@ -7,6 +7,7 @@
 #include <brk/printk.h>
 #include <brk/process.h>
 #include <brk/resource.h>
+#include <brk/rtc.h>
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
@@ -29,6 +30,8 @@ uint64_t sys_settimeofday(void)
 
 	tv = (const struct timeval *)syscall_arg_raw(0);
 	walltime_set(tv);
+	if (rtc_is_available())
+		rtc_set_timeval(tv);
 	return 0;
 }
 

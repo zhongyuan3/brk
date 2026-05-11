@@ -1,8 +1,10 @@
 #include <brk/cpu.h>
+#include <brk/ktime.h>
 #include <brk/lock.h>
 #include <brk/process.h>
 #include <brk/riscv.h>
 #include <brk/sbi.h>
+#include <brk/time.h>
 #include <brk/timer.h>
 #include <brk/tty.h>
 
@@ -10,14 +12,14 @@ static uint64_t timer_interval;
 static uint64_t jiffies;
 static SPINLOCK_DEFINE(jiffies_lock);
 static uint64_t xorshift_state;
-static struct timeval walltime;
+static struct timespec walltime;
 
 void timer_init(void)
 {
 	uint32_t timebase_freq = cpu_get_timebase_freq();
 	timer_interval = timebase_freq / 1000;
 	walltime.tv_sec = 0;
-	walltime.tv_usec = 0;
+	walltime.tv_nsec = 0;
 }
 
 uint64_t timer_get_time(void)
@@ -35,12 +37,10 @@ void timer_handle_int(void)
 	if (current_cpuid() == init_cpuid) {
 		spinlock_acquire(&jiffies_lock);
 		++jiffies;
-		/* 1 ms = 1000 us */
-		walltime.tv_usec += 1000;
-		/* 1 s = 1000000 us */
-		if (walltime.tv_usec >= 1000000) {
+		walltime.tv_nsec += NS_PER_MS;
+		if (walltime.tv_nsec >= NS_PER_SEC) {
 			walltime.tv_sec += 1;
-			walltime.tv_usec = 0;
+			walltime.tv_nsec = 0;
 		}
 		spinlock_release(&jiffies_lock);
 	}
@@ -52,7 +52,7 @@ void timer_handle_int(void)
 static void walltime_get_locked(struct timeval *tv)
 {
 	tv->tv_sec = walltime.tv_sec;
-	tv->tv_usec = walltime.tv_usec;
+	tv->tv_usec = walltime.tv_nsec / NS_PER_US;
 }
 
 void walltime_get(struct timeval *tv)
@@ -66,7 +66,23 @@ void walltime_set(const struct timeval *tv)
 {
 	spinlock_acquire(&jiffies_lock);
 	walltime.tv_sec = tv->tv_sec;
-	walltime.tv_usec = tv->tv_usec;
+	walltime.tv_nsec = tv->tv_usec * NS_PER_US;
+	spinlock_release(&jiffies_lock);
+}
+
+void walltime_get_ts(struct timespec *ts)
+{
+	spinlock_acquire(&jiffies_lock);
+	ts->tv_sec = walltime.tv_sec;
+	ts->tv_nsec = walltime.tv_nsec;
+	spinlock_release(&jiffies_lock);
+}
+
+void walltime_set_ts(const struct timespec *ts)
+{
+	spinlock_acquire(&jiffies_lock);
+	walltime.tv_sec = ts->tv_sec;
+	walltime.tv_nsec = ts->tv_nsec;
 	spinlock_release(&jiffies_lock);
 }
 

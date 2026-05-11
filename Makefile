@@ -82,6 +82,7 @@ QEMU_COMMON += -global virtio-mmio.force-legacy=false
 SRCS := boot/head.S
 SRCS += boot/setup.c
 SRCS += kernel/dtb.c
+SRCS += kernel/ktime.c
 SRCS += kernel/main.c
 SRCS += kernel/panic.c
 SRCS += kernel/printk.c
@@ -111,6 +112,7 @@ SRCS += mm/slab.c
 SRCS += mm/vmalloc.c
 SRCS += mm/ioremap.c
 SRCS += drivers/plic.c
+SRCS += drivers/rtc.c
 SRCS += drivers/uart.c
 SRCS += drivers/virtio/virtio.c
 SRCS += drivers/virtio/virtio_blk.c

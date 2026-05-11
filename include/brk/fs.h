@@ -244,6 +244,10 @@ struct inode {
 	loff_t i_size;
 	dev_t i_rdev;
 
+	struct timespec i_atime;
+	struct timespec i_mtime;
+	struct timespec i_ctime;
+
 	void *i_private;
 };
 

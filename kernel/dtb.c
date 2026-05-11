@@ -246,6 +246,32 @@ int dtb_parse_uart(struct uart_device *uart)
 	return 0;
 }
 
+int dtb_parse_rtc(struct rtc_device *rtc)
+{
+	int node;
+	uint64_t addr = 0;
+	uint64_t size = 0;
+	uint32_t irq = 0;
+	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
+
+	node = fdt_node_offset_by_compatible(dtb_virt, -1,
+					     "google,goldfish-rtc");
+	if (node < 0)
+		return node;
+
+	if (dtb_get_one_reg(node, &addr, &size))
+		return -EINVAL;
+
+	if (dtb_get_irq(node, &irq))
+		return -EINVAL;
+
+	rtc->phys_base = addr;
+	rtc->size = size;
+	rtc->irq = irq;
+
+	return 0;
+}
+
 int dtb_init_scan_virtio_dev(void)
 {
 	int node;
