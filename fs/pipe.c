@@ -4,6 +4,7 @@
 #include <brk/error.h>
 #include <brk/fcntl.h>
 #include <brk/fs.h>
+#include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/lock.h>
 #include <brk/mount.h>
@@ -60,6 +61,7 @@ static int pipefs_dir_getattr(const struct path *path, struct stat *st,
 	st->st_mode = inode->i_mode;
 	st->st_nlink = inode->i_nlink;
 	st->st_blksize = PIPE_BUF;
+	inode_times_to_stat(inode, st);
 	return 0;
 }
 
@@ -210,6 +212,7 @@ static struct dentry *pipefs_mount(struct file_system_type *fs_type, int flags,
 		root_inode->i_op = &pipefs_dir_iops;
 		root_inode->i_fop = &pipefs_dir_fops;
 		root_inode->i_nlink = 1;
+		inode_times_set_all_now(root_inode);
 		inode_unlock_new(root_inode);
 	}
 
@@ -242,6 +245,7 @@ static int pipe_getattr(const struct path *path, struct stat *st, uint32_t mask,
 	st->st_nlink = inode->i_nlink;
 	st->st_size = 0;
 	st->st_blksize = PIPE_BUF;
+	inode_times_to_stat(inode, st);
 	return 0;
 }
 
@@ -462,6 +466,7 @@ int anon_pipe_create(struct file **read_file, struct file **write_file,
 	inode->i_fop = &pipe_fifo_fops;
 	inode->i_nlink = 1;
 	inode->i_private = pipe;
+	inode_times_set_all_now(inode);
 	inode_unlock_new(inode);
 
 	d = dentry_alloc_anon(inode, &pipe_d_name);

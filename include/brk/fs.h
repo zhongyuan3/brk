@@ -248,6 +248,9 @@ struct inode {
 	struct timespec i_mtime;
 	struct timespec i_ctime;
 
+	gid_t i_gid;
+	uid_t i_uid;
+
 	void *i_private;
 };
 

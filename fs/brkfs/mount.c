@@ -63,19 +63,8 @@ static int brkfs_validate_super(struct brkfs_super_block *sb)
 	if (sb->s_magic != BRKFS_MAGIC)
 		return -EINVAL;
 
-	if (sb->s_inode_size != sizeof(struct brkfs_inode))
+	if (sb->s_inode_size < sizeof(struct brkfs_inode))
 		return -EINVAL;
-
-	log_info("block size: %u\n", sb->s_blocksize);
-	log_info("inode size: %u\n", sb->s_inode_size);
-	log_info("inode bitmap: %u\n", sb->s_inode_bitmap);
-	log_info("inodes count: %u\n", sb->s_inodes_count);
-	log_info("data block bitmap: %u\n", sb->s_data_block_bitmap);
-	log_info("data blocks count: %u\n", sb->s_data_blocks_count);
-	log_info("inode table: %u\n", sb->s_inode_table);
-	log_info("first data block: %u\n", sb->s_first_data_block);
-	log_info("magic: %u\n", sb->s_magic);
-	log_info("blocks count: %u\n", sb->s_blocks_count);
 
 	return 0;
 }

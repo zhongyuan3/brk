@@ -22,6 +22,14 @@ struct tmpfs_inode {
 	mode_t i_mode;
 	uint32_t i_nlink;
 	uint32_t i_rdev;
+	uint32_t i_atime;
+	uint32_t i_atime_nsec;
+	uint32_t i_mtime;
+	uint32_t i_mtime_nsec;
+	uint32_t i_ctime;
+	uint32_t i_ctime_nsec;
+	uint32_t i_uid;
+	uint32_t i_gid;
 };
 
 struct tmpfs_super_block {

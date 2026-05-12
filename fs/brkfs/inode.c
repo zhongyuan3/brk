@@ -4,6 +4,7 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
+#include <brk/ktime.h>
 #include <brk/lock.h>
 #include <brk/stat.h>
 #include <brk/string.h>
@@ -127,6 +128,7 @@ static int brkfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	}
 
 	dentry_instantiate(dentry, inode);
+	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
 		goto out;
@@ -153,6 +155,7 @@ static int brkfs_link(struct dentry *old_dentry, struct inode *dir,
 		goto out;
 	inode_dup(old_inode);
 	old_inode->i_nlink++;
+	inode_touch_ctime(old_inode);
 	err = brkfs_inode_write(sbi, old_inode);
 	if (err) {
 		old_inode->i_nlink--;
@@ -160,6 +163,7 @@ static int brkfs_link(struct dentry *old_dentry, struct inode *dir,
 		goto out;
 	}
 	dentry_instantiate(new_dentry, old_inode);
+	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 out:
 	return err;
@@ -175,6 +179,8 @@ static int brkfs_unlink(struct inode *dir, struct dentry *dentry)
 	if (err)
 		goto out;
 	inode->i_nlink--;
+	inode_touch_ctime(inode);
+	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
 		goto out;
@@ -233,6 +239,7 @@ static int brkfs_symlink(struct inode *dir, struct dentry *dentry,
 	err = brkfs_inode_write(sbi, inode);
 	if (err)
 		goto out;
+	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	goto out;
 
@@ -305,6 +312,7 @@ static int brkfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	}
 
 	dir->i_nlink++;
+	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err) {
 		dir->i_nlink--;
@@ -337,10 +345,12 @@ static int brkfs_rmdir(struct inode *dir, struct dentry *dentry)
 	if (err)
 		goto out;
 	dir->i_nlink--;
+	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
 		goto out;
 	inode->i_nlink = 0;
+	inode_touch_ctime(inode);
 	err = brkfs_inode_write(sbi, inode);
 out:
 	if (!err)
@@ -395,6 +405,7 @@ static int brkfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	}
 
 	dentry_instantiate(dentry, inode);
+	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
 		goto out;
@@ -423,6 +434,7 @@ static int brkfs_getattr(const struct path *path, struct stat *stat,
 	stat->st_size = inode->i_size;
 	stat->st_blksize = (int)inode->i_sb->s_blocksize;
 	stat->st_blocks = div_ceil(inode->i_size, inode->i_sb->s_blocksize);
+	inode_times_to_stat(inode, stat);
 	return 0;
 }
 
@@ -432,12 +444,15 @@ static int brkfs_setattr(struct dentry *dentry, struct iattr *attr)
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
 	int err = 0;
 
-	if (attr->ia_valid & ATTR_MODE)
+	if (attr->ia_valid & ATTR_MODE) {
 		inode->i_mode = attr->ia_mode;
+		inode_touch_ctime(inode);
+	}
 	if (attr->ia_valid & ATTR_SIZE) {
 		err = brkfs_truncate_inode_blocks(inode, attr->ia_size);
 		if (err)
 			goto out;
+		inode_touch_mtime_ctime(inode);
 	}
 	err = brkfs_inode_write(sbi, inode);
 out:
