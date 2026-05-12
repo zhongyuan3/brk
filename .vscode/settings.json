@@ -1,0 +1,10 @@
+{
+    "editor.tabSize": 8,
+    "editor.insertSpaces": false,
+    "files.associations": {
+        "*.h": "c",
+        ".clang-format": "yaml",
+        ".clangd": "yaml"
+    },
+    "prettier.tabWidth": 4
+}
