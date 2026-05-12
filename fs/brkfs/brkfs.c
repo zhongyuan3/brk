@@ -5,6 +5,7 @@
 #include <brk/errno.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
+#include <brk/ktime.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/stat.h>
@@ -149,13 +150,14 @@ int brkfs_data_free(struct brkfs_sb_info *sbi, uint32_t bno)
 
 int brkfs_inode_read(struct brkfs_sb_info *sbi, struct inode *inode)
 {
-	struct brkfs_inode *inodes, *disk_i;
+	struct brkfs_inode *disk_i;
 	struct brkfs_inode_info *info;
 	uint32_t bno;
 	size_t bs = sbi->s_sb.s_blocksize;
-	void *blk;
+	uint8_t *blk;
 	int err;
 	uint32_t ino = inode->i_ino;
+	uint32_t isize = sbi->s_sb.s_inode_size;
 
 	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
 		log_warn("%s(): Invalid ino: %u\n", __func__, ino);
@@ -171,8 +173,8 @@ int brkfs_inode_read(struct brkfs_sb_info *sbi, struct inode *inode)
 	if (err)
 		goto out;
 
-	inodes = blk;
-	disk_i = &inodes[(ino - 1) % sbi->s_inodes_per_block];
+	uint32_t idx = (ino - 1) % sbi->s_inodes_per_block;
+	disk_i = (struct brkfs_inode *)(blk + idx * isize);
 
 	info = inode->i_private;
 
@@ -181,6 +183,14 @@ int brkfs_inode_read(struct brkfs_sb_info *sbi, struct inode *inode)
 	inode->i_nlink = disk_i->i_nlink;
 	inode->i_size = disk_i->i_size;
 	memcpy(info->i_block, disk_i->i_block, sizeof(disk_i->i_block));
+	inode->i_atime.tv_sec = disk_i->i_atime;
+	inode->i_atime.tv_nsec = disk_i->i_atime_nsec;
+	inode->i_mtime.tv_sec = disk_i->i_mtime;
+	inode->i_mtime.tv_nsec = disk_i->i_mtime_nsec;
+	inode->i_ctime.tv_sec = disk_i->i_ctime;
+	inode->i_ctime.tv_nsec = disk_i->i_ctime_nsec;
+	inode->i_uid = disk_i->i_uid;
+	inode->i_gid = disk_i->i_gid;
 
 out:
 	kfree(blk);
@@ -192,10 +202,11 @@ int brkfs_inode_write(struct brkfs_sb_info *sbi, struct inode *inode)
 	uint32_t bno;
 	uint32_t ino = inode->i_ino;
 	size_t bs = sbi->s_sb.s_blocksize;
-	void *blk;
+	uint8_t *blk;
 	int err;
-	struct brkfs_inode *inodes, *disk_i;
+	struct brkfs_inode *disk_i;
 	struct brkfs_inode_info *info;
+	uint32_t isize = sbi->s_sb.s_inode_size;
 
 	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
 		log_warn("%s(): Invalid ino: %u\n", __func__, ino);
@@ -211,8 +222,8 @@ int brkfs_inode_write(struct brkfs_sb_info *sbi, struct inode *inode)
 	if (err)
 		goto out;
 
-	inodes = blk;
-	disk_i = &inodes[(ino - 1) % sbi->s_inodes_per_block];
+	uint32_t idx = (ino - 1) % sbi->s_inodes_per_block;
+	disk_i = (struct brkfs_inode *)(blk + idx * isize);
 
 	info = inode->i_private;
 
@@ -221,6 +232,14 @@ int brkfs_inode_write(struct brkfs_sb_info *sbi, struct inode *inode)
 	disk_i->i_nlink = inode->i_nlink;
 	disk_i->i_size = inode->i_size;
 	memcpy(disk_i->i_block, info->i_block, sizeof(disk_i->i_block));
+	disk_i->i_atime = inode->i_atime.tv_sec;
+	disk_i->i_atime_nsec = inode->i_atime.tv_nsec;
+	disk_i->i_mtime = inode->i_mtime.tv_sec;
+	disk_i->i_mtime_nsec = inode->i_mtime.tv_nsec;
+	disk_i->i_ctime = inode->i_ctime.tv_sec;
+	disk_i->i_ctime_nsec = inode->i_ctime.tv_nsec;
+	disk_i->i_uid = inode->i_uid;
+	disk_i->i_gid = inode->i_gid;
 
 	err = brkfs_block_write(sbi, bno, blk);
 out:
@@ -263,6 +282,7 @@ int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, uint32_t ino, umode_t mode,
 	stub.i_size = 0;
 	stub.i_rdev = rdev;
 	stub.i_private = &info;
+	inode_times_set_all_now(&stub);
 	return brkfs_inode_write(sbi, &stub);
 }
 
@@ -861,6 +881,8 @@ int brkfs_file_write_at(struct inode *inode, loff_t *pos, const void *buf,
 
 	*written_out = p - (const uint8_t *)buf;
 	*pos = off;
+	if (!err && *written_out > 0)
+		inode_touch_mtime(inode);
 	kfree(blk);
 	return err;
 }
