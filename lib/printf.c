@@ -523,10 +523,13 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 
 		size_t total_len = sign_len + radix_len + lzero_pad + raw_len;
 		if (has_width && width > total_len) {
+			size_t pad_extra = width - total_len;
 			if (flags & LEFT_ALIGN)
-				rspace_pad = width - total_len;
-			if (flags & ZERO_PAD)
-				lzero_pad = width - total_len;
+				rspace_pad = pad_extra;
+			else if (flags & ZERO_PAD)
+				lzero_pad = pad_extra;
+			else
+				lspace_pad = pad_extra;
 		}
 
 		pad(&idis, lspace_pad, ' ');
