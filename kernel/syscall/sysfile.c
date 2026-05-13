@@ -307,7 +307,7 @@ uint64_t sys_getcwd(void)
 	size_t size = syscall_arg_raw(1);
 	int err = path_to_absolute(&proc->cwd, buf, size);
 	if (err) {
-		log_warn("%s(): %s\n", __func__, strerror(err));
+		klog_warn("%s(): %s\n", __func__, strerror(err));
 		return err;
 	}
 	return 0;
@@ -708,7 +708,7 @@ uint64_t sys_getdents64(void)
 		return err;
 
 	if (!(fp->f_mode & FMODE_DIR)) {
-		log_info("%s(): Not a directory\n", __func__);
+		klog_info("%s(): Not a directory\n", __func__);
 		return -ENOTDIR;
 	}
 

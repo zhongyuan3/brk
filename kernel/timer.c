@@ -13,13 +13,12 @@ static uint64_t jiffies;
 static SPINLOCK_DEFINE(jiffies_lock);
 static uint64_t xorshift_state;
 static struct timespec walltime;
+static struct timespec boot_time;
 
 void timer_init(void)
 {
 	uint32_t timebase_freq = cpu_get_timebase_freq();
 	timer_interval = timebase_freq / 1000;
-	walltime.tv_sec = 0;
-	walltime.tv_nsec = 0;
 }
 
 uint64_t timer_get_time(void)
@@ -41,6 +40,11 @@ void timer_handle_int(void)
 		if (walltime.tv_nsec >= NS_PER_SEC) {
 			walltime.tv_sec += 1;
 			walltime.tv_nsec = 0;
+		}
+		boot_time.tv_nsec += NS_PER_MS;
+		if (boot_time.tv_nsec >= NS_PER_SEC) {
+			boot_time.tv_sec += 1;
+			boot_time.tv_nsec = 0;
 		}
 		spinlock_release(&jiffies_lock);
 	}
@@ -140,4 +144,12 @@ uint64_t jiffies_get(void)
 	j = jiffies;
 	spinlock_release(&jiffies_lock);
 	return j;
+}
+
+void boot_time_get_ts(struct timespec *ts)
+{
+	spinlock_acquire(&jiffies_lock);
+	ts->tv_sec = boot_time.tv_sec;
+	ts->tv_nsec = boot_time.tv_nsec;
+	spinlock_release(&jiffies_lock);
 }

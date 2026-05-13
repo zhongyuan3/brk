@@ -21,4 +21,6 @@ uint64_t do_nanosleep(const struct timeval *dur, struct timeval *rem);
 
 uint64_t jiffies_get(void);
 
+void boot_time_get_ts(struct timespec *ts);
+
 #endif

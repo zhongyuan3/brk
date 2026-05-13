@@ -171,12 +171,12 @@ static int __path_lookup(int dirfd, const char *name, unsigned int flags,
 		struct path component_path;
 		if (component_name->len == 1 &&
 		    component_name->name[0] == '.') {
-			log_trace("%s(): Dot\n", __func__);
+			klog_debug("%s(): Dot\n", __func__);
 			err = path_dot(path, &component_path);
 		} else if (component_name->len == 2 &&
 			   component_name->name[0] == '.' &&
 			   component_name->name[1] == '.') {
-			log_trace("%s(): Dot dot\n", __func__);
+			klog_debug("%s(): Dot dot\n", __func__);
 			err = path_dot_dot(path, &component_path);
 		} else {
 			err = dir_lookup_entry(path, component_name,
