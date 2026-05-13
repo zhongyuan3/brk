@@ -55,7 +55,7 @@ void start_hart(uint64_t hart_id)
 	virtio_blk_init_hart(hart_id);
 	trap_init_hart(hart_id);
 
-	log_info("hart %lu starting\n", hart_id);
+	klog_info("hart %lu starting\n", hart_id);
 
 	proc_scheduler();
 }

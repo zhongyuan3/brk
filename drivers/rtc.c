@@ -111,23 +111,18 @@ void rtc_init(void)
 
 	err = dtb_parse_rtc(&dev);
 	if (err) {
-		log_warn("rtc: no goldfish RTC in device tree (%d)\n", err);
+		klog_warn("rtc: no goldfish RTC in device tree (%d)\n", err);
 		return;
 	}
 
 	rtc_mmio = (uint8_t volatile *)ioremap(dev.phys_base, dev.size,
 					       PTE_R | PTE_W);
 	if (!rtc_mmio) {
-		log_warn("rtc: ioremap failed for phys %#lx\n", dev.phys_base);
+		klog_warn("rtc: ioremap failed for phys %#lx\n", dev.phys_base);
 		return;
 	}
 
 	rtc_ok = true;
 	rtc_read_timespec(&ts);
 	walltime_set_ts(&ts);
-
-	log_info("rtc: goldfish at phys %#lx size %#zx irq %u\n", dev.phys_base,
-		 dev.size, dev.irq);
-
-	log_info("rtc: initialized at %ld.%09ld\n", ts.tv_sec, ts.tv_nsec);
 }

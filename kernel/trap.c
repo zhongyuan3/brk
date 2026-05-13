@@ -135,7 +135,7 @@ struct trapframe *user_trap_handler(void)
 		} else if (code == 9) {
 			irq_handle_external(current_cpuid());
 		} else {
-			log_warn("%s: scause=%#lx,sepc=%#lx,stval=%#lx\n",
+			klog_warn("%s: scause=%#lx,sepc=%#lx,stval=%#lx\n",
 				 cause_to_str(scause), scause, sepc, stval);
 			proc_set_killed(proc);
 		}
@@ -147,7 +147,7 @@ struct trapframe *user_trap_handler(void)
 			intr_on();
 			syscall();
 		} else {
-			log_warn("%s: scause=%#lx,sepc=%#lx,stval=%#lx\n",
+			klog_warn("%s: scause=%#lx,sepc=%#lx,stval=%#lx\n",
 				 cause_to_str(scause), scause, sepc, stval);
 			proc_set_killed(proc);
 		}

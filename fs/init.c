@@ -27,6 +27,7 @@ int fs_init(void)
 	int err = init_mount_tree(&proc->root);
 	if (err)
 		return err;
+	klog_info("mount tree initialized\n");
 
 	path_dup(&proc->root);
 	proc->cwd = proc->root;
@@ -38,6 +39,7 @@ int fs_init(void)
 	err = do_mount("/disk0", "/", "brkfs", 0, NULL);
 	if (err)
 		return err;
+	klog_info("/ mounted successfully\n");
 
 	struct mount *root_mnt = lookup_mount(&proc->root);
 	if (!root_mnt)
@@ -63,16 +65,19 @@ int fs_init(void)
 	err = do_mount(NULL, "/dev", "tmpfs", 0, NULL);
 	if (err)
 		return err;
+	klog_info("/dev mounted successfully\n");
 
 	err = do_mknodat(AT_FDCWD, "/dev/console", S_IFCHR, DEV_CONSOLE0);
 	if (err)
 		return err;
+	klog_info("/dev/console created successfully\n");
 
 	struct file *f = do_openat(AT_FDCWD, "/dev/console", O_RDWR, 0);
 	if (IS_ERR(f)) {
 		err = PTR_ERR(f);
 		return err;
 	}
+	klog_info("/dev/console opened successfully\n");
 
 	proc->ofiles[0] = f;
 	proc->ofiles[1] = file_dup(f);

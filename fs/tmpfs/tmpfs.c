@@ -1302,7 +1302,7 @@ static int tmpfs_dir_open(struct inode *inode, struct file *file)
 {
 	(void)inode;
 	(void)file;
-	log_trace("%s(): Called\n", __func__);
+	klog_debug("%s(): Called\n", __func__);
 	return 0;
 }
 

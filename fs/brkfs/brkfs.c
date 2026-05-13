@@ -37,7 +37,7 @@ void brkfs_sb_info_free(struct brkfs_sb_info *sbi)
 int brkfs_block_read(struct brkfs_sb_info *sb, uint32_t bno, void *buf)
 {
 	if (bno >= sb->s_sb.s_blocks_count) {
-		log_warn("%s(): Invalid bno: %u, blocks count: %u\n", __func__,
+		klog_warn("%s(): Invalid bno: %u, blocks count: %u\n", __func__,
 			 bno, sb->s_sb.s_blocks_count);
 		return -EINVAL;
 	}
@@ -50,7 +50,7 @@ int brkfs_block_read(struct brkfs_sb_info *sb, uint32_t bno, void *buf)
 int brkfs_block_write(struct brkfs_sb_info *sb, uint32_t bno, const void *buf)
 {
 	if (bno >= sb->s_sb.s_blocks_count) {
-		log_warn("%s(): Invalid bno: %u, blocks count: %u\n", __func__,
+		klog_warn("%s(): Invalid bno: %u, blocks count: %u\n", __func__,
 			 bno, sb->s_sb.s_blocks_count);
 		return -EINVAL;
 	}
@@ -98,7 +98,7 @@ static int brkfs_bitmap_free(struct brkfs_sb_info *sbi, uint32_t start_bno,
 			     uint32_t nbits, uint32_t bit)
 {
 	if (bit >= nbits) {
-		log_warn("%s(): Invalid bit: %u, nbits: %u\n", __func__, bit,
+		klog_warn("%s(): Invalid bit: %u, nbits: %u\n", __func__, bit,
 			 nbits);
 		return -EINVAL;
 	}
@@ -139,7 +139,7 @@ int brkfs_data_alloc(struct brkfs_sb_info *sbi, uint32_t *bno)
 int brkfs_data_free(struct brkfs_sb_info *sbi, uint32_t bno)
 {
 	if (bno < sbi->s_sb.s_first_data_block) {
-		log_warn("%s(): Invalid bno: %u, first data block: %u\n",
+		klog_warn("%s(): Invalid bno: %u, first data block: %u\n",
 			 __func__, bno, sbi->s_sb.s_first_data_block);
 		return -EINVAL;
 	}
@@ -160,7 +160,7 @@ int brkfs_inode_read(struct brkfs_sb_info *sbi, struct inode *inode)
 	uint32_t isize = sbi->s_sb.s_inode_size;
 
 	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
-		log_warn("%s(): Invalid ino: %u\n", __func__, ino);
+		klog_warn("%s(): Invalid ino: %u\n", __func__, ino);
 		return -EINVAL;
 	}
 
@@ -209,7 +209,7 @@ int brkfs_inode_write(struct brkfs_sb_info *sbi, struct inode *inode)
 	uint32_t isize = sbi->s_sb.s_inode_size;
 
 	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
-		log_warn("%s(): Invalid ino: %u\n", __func__, ino);
+		klog_warn("%s(): Invalid ino: %u\n", __func__, ino);
 		return -EINVAL;
 	}
 
@@ -261,7 +261,7 @@ int brkfs_inode_alloc(struct brkfs_sb_info *sbi, uint32_t *ino)
 int brkfs_inode_free(struct brkfs_sb_info *sbi, uint32_t ino)
 {
 	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
-		log_warn("%s(): Invalid ino: %u\n", __func__, ino);
+		klog_warn("%s(): Invalid ino: %u\n", __func__, ino);
 		return -EINVAL;
 	}
 	ino -= 1;
@@ -383,7 +383,7 @@ int brkfs_inode_getblk(struct inode *inode, loff_t off, uint32_t *bno,
 		return 0;
 	}
 
-	log_warn("%s(): Double indirect block not implemented\n", __func__);
+	klog_warn("%s(): Double indirect block not implemented\n", __func__);
 
 	return -ENOSPC;
 }

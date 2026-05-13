@@ -4,6 +4,8 @@
 #include <brk/lock.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
+#include <brk/time.h>
+#include <brk/timer.h>
 
 static SPINLOCK_DEFINE(printk_lock);
 
@@ -29,13 +31,41 @@ void printk(char const *fmt, ...)
 	va_end(ap);
 }
 
-void vprintk(char const *fmt, va_list ap)
+static void vprintk_locked(const char *fmt, va_list ap)
 {
 	struct display dis = {
 		.write = display_write,
 		.priv = NULL,
 	};
-	spinlock_acquire(&printk_lock);
 	printf_core(&dis, fmt, ap);
+}
+
+static void printk_locked(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	vprintk_locked(fmt, ap);
+	va_end(ap);
+}
+
+void vprintk(char const *fmt, va_list ap)
+{
+	spinlock_acquire(&printk_lock);
+	vprintk_locked(fmt, ap);
 	spinlock_release(&printk_lock);
+}
+
+void klog(int level, const char *fmt, ...)
+{
+	va_list ap;
+	struct timespec ts = { 0 };
+
+	boot_time_get_ts(&ts);
+
+	va_start(ap, fmt);
+	spinlock_acquire(&printk_lock);
+	printk_locked("<%d>[%9ld.%09ld] ", level, ts.tv_sec, ts.tv_nsec);
+	vprintk_locked(fmt, ap);
+	spinlock_release(&printk_lock);
+	va_end(ap);
 }
