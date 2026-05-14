@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DEFAULT_DIRS=("boot" "drivers" "fs" "include" "kernel" "lib" "mm")
+DEFAULT_DIRS=("boot" "drivers" "fs" "include" "kernel" "lib" "mm" "vendor")
 
 if [ $# -gt 0 ]; then
     target_dirs=("$@")
