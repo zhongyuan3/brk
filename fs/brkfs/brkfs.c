@@ -289,10 +289,8 @@ int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, uint32_t ino, umode_t mode,
 int brkfs_inode_getblk(struct inode *inode, loff_t off, uint32_t *bno,
 		       unsigned flags, struct brkfs_sb_info *sbi)
 {
-	loff_t size = inode->i_size;
 	struct brkfs_inode_info *inf = inode->i_private;
 	uint32_t *blk_ptrs = inf->i_block;
-	bool out_of_space = off >= size;
 	bool create = (flags & BRKFS_GETBLK_CREATE) != 0;
 	int err = 0;
 	uint32_t bs = sbi->s_sb.s_blocksize;
@@ -301,19 +299,14 @@ int brkfs_inode_getblk(struct inode *inode, loff_t off, uint32_t *bno,
 	if (off < 0)
 		return -EINVAL;
 
-	if (out_of_space && !create)
-		return -ENOSPC;
-
 	uint32_t bi = off / sbi->s_sb.s_blocksize;
 
 	if (bi < BRKFS_DIRECT_BLOCKS) {
 		if (blk_ptrs[bi] == 0) {
-			if (!out_of_space) { /* hole */
+			if (!create) { /* read of a hole or sparse region */
 				*bno = 0;
 				return 0;
 			}
-			if (!create)
-				return -ENOSPC;
 			uint32_t new_bno = 0;
 			err = brkfs_data_alloc(sbi, &new_bno);
 			if (err)
@@ -333,15 +326,16 @@ int brkfs_inode_getblk(struct inode *inode, loff_t off, uint32_t *bno,
 		if (!idb_ptrs)
 			return -ENOMEM;
 		if (idb == 0) {
-			if (!out_of_space) { /* hole */
+			if (!create) {
 				*bno = 0;
+				kfree(idb_ptrs);
 				return 0;
 			}
-			if (!create)
-				return -ENOSPC;
 			err = brkfs_data_alloc(sbi, &idb);
-			if (err)
+			if (err) {
+				kfree(idb_ptrs);
 				return err;
+			}
 			blk_ptrs[BRKFS_INDIRECT_BLOCK] = idb;
 			memset(idb_ptrs, 0, bs);
 		} else {
@@ -352,14 +346,10 @@ int brkfs_inode_getblk(struct inode *inode, loff_t off, uint32_t *bno,
 			}
 		}
 		if (idb_ptrs[bi] == 0) {
-			if (!out_of_space) { /* hole */
+			if (!create) {
 				*bno = 0;
 				kfree(idb_ptrs);
 				return 0;
-			}
-			if (!create) {
-				kfree(idb_ptrs);
-				return -ENOSPC;
 			}
 			uint32_t new_bno = 0;
 			err = brkfs_data_alloc(sbi, &new_bno);

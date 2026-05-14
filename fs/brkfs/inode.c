@@ -37,6 +37,16 @@ static int brkfs_init_loaded_inode(struct brkfs_sb_info *sbi,
 	if (err)
 		return err;
 	brkfs_inode_attach_ops(inode);
+	/*
+	 * Regular files are read/written through the page cache. Other inode
+	 * types use bespoke paths (directory entries / symlink targets are
+	 * handled directly via brkfs_block_read|write).
+	 */
+	if (S_ISREG(inode->i_mode)) {
+		err = inode_attach_pagecache(inode, &brkfs_aops);
+		if (err)
+			return err;
+	}
 	inode_unlock_new(inode);
 	return 0;
 }
@@ -177,18 +187,19 @@ static int brkfs_unlink(struct inode *dir, struct dentry *dentry)
 
 	err = brkfs_dir_remove(dir, dentry->d_name.name, dentry->d_name.len);
 	if (err)
-		goto out;
+		return err;
 	inode->i_nlink--;
 	inode_touch_ctime(inode);
 	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
-		goto out;
-	err = brkfs_inode_write(sbi, inode);
-out:
-	if (!err)
-		inode_put(inode);
-	return err;
+		return err;
+	return brkfs_inode_write(sbi, inode);
+	/*
+	 * Do NOT inode_put(inode) here: the inode reference belongs to the
+	 * dentry. The eventual dentry_put() will drop it and trigger
+	 * eviction (which now also runs the page cache teardown).
+	 */
 }
 
 static int brkfs_symlink(struct inode *dir, struct dentry *dentry,
@@ -343,19 +354,19 @@ static int brkfs_rmdir(struct inode *dir, struct dentry *dentry)
 
 	err = brkfs_dir_remove(dir, dentry->d_name.name, dentry->d_name.len);
 	if (err)
-		goto out;
+		return err;
 	dir->i_nlink--;
 	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
-		goto out;
+		return err;
 	inode->i_nlink = 0;
 	inode_touch_ctime(inode);
-	err = brkfs_inode_write(sbi, inode);
-out:
-	if (!err)
-		inode_put(inode);
-	return err;
+	return brkfs_inode_write(sbi, inode);
+	/*
+	 * Do NOT inode_put(inode) here. The inode reference belongs to the
+	 * dentry; dentry_put() will trigger the final eviction.
+	 */
 }
 
 static int brkfs_rename(struct inode *old_dir, struct dentry *old_dentry,
@@ -449,6 +460,10 @@ static int brkfs_setattr(struct dentry *dentry, struct iattr *attr)
 		inode_touch_ctime(inode);
 	}
 	if (attr->ia_valid & ATTR_SIZE) {
+		/* Drop cached pages that are beyond the new size before freeing
+		 * the on-disk blocks, otherwise stale data would be visible to
+		 * concurrent readers. */
+		truncate_inode_pages(inode->i_mapping, attr->ia_size);
 		err = brkfs_truncate_inode_blocks(inode, attr->ia_size);
 		if (err)
 			goto out;

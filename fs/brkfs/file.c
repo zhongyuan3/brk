@@ -1,6 +1,94 @@
 #include "brkfs.h"
 #include <brk/errno.h>
 #include <brk/fs.h>
+#include <brk/kernel.h>
+#include <brk/pagecache.h>
+#include <brk/printk.h>
+#include <brk/string.h>
+
+/*
+ * Page cache backing for brkfs regular files.
+ *
+ * ->readpage and ->writepage talk to the block device a logical disk-block
+ * at a time, transparently handling holes (read as zeroes; write allocates
+ * a fresh data block).
+ */
+
+static int brkfs_readpage(struct address_space *m, struct cached_page *cp)
+{
+	struct inode *inode = m->host;
+	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
+	uint32_t bs = sbi->s_sb.s_blocksize;
+	loff_t off = (loff_t)cp->index << PAGE_SHIFT;
+	uint8_t *data = cached_page_addr(cp);
+
+	if (bs > PAGE_SIZE || PAGE_SIZE % bs != 0) {
+		klog_warn("%s(): unsupported blocksize %u\n", __func__, bs);
+		return -EIO;
+	}
+
+	for (size_t boff = 0; boff < PAGE_SIZE; boff += bs) {
+		uint32_t bno;
+		int err;
+
+		err = brkfs_inode_getblk(inode, off + (loff_t)boff, &bno, 0,
+					 sbi);
+		if (err)
+			return err;
+		if (bno == 0) {
+			/* hole (or past EOF): zero-fill */
+			memset(data + boff, 0, bs);
+			continue;
+		}
+		err = brkfs_block_read(sbi, bno, data + boff);
+		if (err)
+			return err;
+	}
+	return 0;
+}
+
+static int brkfs_writepage(struct address_space *m, struct cached_page *cp)
+{
+	struct inode *inode = m->host;
+	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
+	uint32_t bs = sbi->s_sb.s_blocksize;
+	loff_t off = (loff_t)cp->index << PAGE_SHIFT;
+	uint8_t *data = cached_page_addr(cp);
+	int ret = 0;
+
+	if (bs > PAGE_SIZE || PAGE_SIZE % bs != 0) {
+		klog_warn("%s(): unsupported blocksize %u\n", __func__, bs);
+		return -EIO;
+	}
+
+	for (size_t boff = 0; boff < PAGE_SIZE; boff += bs) {
+		uint32_t bno;
+		int err;
+
+		err = brkfs_inode_getblk(inode, off + (loff_t)boff, &bno,
+					 BRKFS_GETBLK_CREATE, sbi);
+		if (err)
+			return err;
+		if (bno == 0)
+			return -ENOSPC;
+		err = brkfs_block_write(sbi, bno, data + boff);
+		if (err) {
+			ret = err;
+			break;
+		}
+	}
+
+	/* Persist the (possibly newly-allocated) block pointers in the inode
+	 * so writepage is durable across crashes / unmounts. */
+	if (!ret)
+		ret = brkfs_inode_write(sbi, inode);
+	return ret;
+}
+
+const struct address_space_operations brkfs_aops = {
+	.readpage = brkfs_readpage,
+	.writepage = brkfs_writepage,
+};
 
 static int brkfs_file_open(struct inode *inode, struct file *file)
 {
@@ -35,6 +123,12 @@ static ssize_t brkfs_file_read(struct file *file, char *buf, size_t size,
 			       loff_t *pos)
 {
 	struct inode *inode = file->f_inode;
+
+	if (inode->i_mapping)
+		return generic_file_read(file, buf, size, pos);
+
+	/* Fallback path (no page cache attached, e.g. for symlinks read via
+	 * brkfs_readlink that does not go through the file_operations). */
 	size_t rd = 0;
 	int err;
 
@@ -50,6 +144,10 @@ static ssize_t brkfs_file_write(struct file *file, const char *buf, size_t size,
 				loff_t *pos)
 {
 	struct inode *inode = file->f_inode;
+
+	if (inode->i_mapping)
+		return generic_file_write(file, buf, size, pos);
+
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
 	size_t wr = 0;
 	int err;
@@ -92,11 +190,20 @@ static int brkfs_file_iterate_shared(struct file *file, struct dir_context *ctx)
 static int brkfs_file_fsync(struct file *file, loff_t start, loff_t end,
 			    int datasync)
 {
-	(void)file;
+	struct inode *inode = file->f_inode;
+	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
+	int err;
+
 	(void)start;
 	(void)end;
 	(void)datasync;
-	return 0;
+
+	sleeplock_acquire(&inode->i_rwsem);
+	err = filemap_writeback(inode->i_mapping);
+	if (!err)
+		err = brkfs_inode_write(sbi, inode);
+	sleeplock_release(&inode->i_rwsem);
+	return err;
 }
 
 static int brkfs_file_flush(struct file *file)

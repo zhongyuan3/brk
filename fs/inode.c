@@ -1,9 +1,11 @@
 #include <brk/assert.h>
+#include <brk/errno.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/lock.h>
+#include <brk/pagecache.h>
 #include <brk/process.h>
 #include <brk/slab.h>
 #include <brk/string.h>
@@ -53,6 +55,7 @@ static struct inode *alloc_inode(struct super_block *sb, unsigned long ino)
 	inode->i_atime.tv_nsec = 0;
 	inode->i_mtime = inode->i_atime;
 	inode->i_ctime = inode->i_atime;
+	inode->i_mapping = NULL;
 
 	return inode;
 }
@@ -208,24 +211,55 @@ void inode_put(struct inode *inode)
 	if (s_op->evict_inode)
 		s_op->evict_inode(inode);
 
+	/*
+	 * Drop the page cache after the filesystem has had a chance to flush
+	 * any dirty data in ->evict_inode(). Pages still alive at this point
+	 * are dropped without writeback.
+	 */
+	if (inode->i_mapping) {
+		address_space_free(inode->i_mapping);
+		inode->i_mapping = NULL;
+	}
+
 	spinlock_acquire(&inode_hash_lock);
 	hlist_del_init(&inode->i_hash);
 	spinlock_release(&inode_hash_lock);
 
 	spinlock_acquire(&inode->i_sb->s_inode_lock);
 	list_del(&inode->i_sb_list);
+	if (inode->i_state & I_DIRTY)
+		list_del(&inode->i_list);
 	spinlock_release(&inode->i_sb->s_inode_lock);
 
 	free_inode(inode);
 }
 
+int inode_attach_pagecache(struct inode *inode,
+			   const struct address_space_operations *a_ops)
+{
+	struct address_space *m;
+
+	if (inode->i_mapping)
+		return 0;
+	m = address_space_alloc(inode, a_ops);
+	if (!m)
+		return -ENOMEM;
+	inode->i_mapping = m;
+	return 0;
+}
+
 void inode_mark_dirty(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
+	bool need_link;
 
 	spinlock_acquire(&inode->i_lock);
+	need_link = (inode->i_state & I_DIRTY) == 0;
 	inode->i_state |= I_DIRTY;
 	spinlock_release(&inode->i_lock);
+
+	if (!need_link)
+		return;
 
 	spinlock_acquire(&sb->s_inode_lock);
 	list_add(&inode->i_list, &sb->s_dirty);

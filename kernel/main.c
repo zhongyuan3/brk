@@ -9,6 +9,7 @@
 #include <brk/lock.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
+#include <brk/pagecache.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>
@@ -112,6 +113,7 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 
 	dev_init();
 
+	pagecache_init();
 	dentry_cache_init();
 	inode_cache_init();
 	file_cache_init();

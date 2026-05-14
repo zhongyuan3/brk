@@ -216,6 +216,8 @@ struct super_operations {
 	int (*sync_fs)(struct super_block *sb, int wait);
 };
 
+struct address_space;
+
 struct inode {
 	/*
 	 * No extra refcount is held on i_sb by inode itself.
@@ -250,6 +252,17 @@ struct inode {
 
 	gid_t i_gid;
 	uid_t i_uid;
+
+	/*
+	 * Page cache for regular files (and any inode whose backing store can
+	 * be addressed in PAGE_SIZE units). May be %NULL for inodes that have
+	 * no associated data, e.g. directories, devices, pipes.
+	 *
+	 * Lifetime: allocated by the filesystem (typically via
+	 * inode_attach_pagecache()) once the file type is known; freed by the
+	 * VFS in inode_put() after ->evict_inode() returns.
+	 */
+	struct address_space *i_mapping;
 
 	void *i_private;
 };
@@ -528,6 +541,10 @@ void inode_put(struct inode *inode);
 void inode_mark_dirty(struct inode *inode);
 void inode_clear(struct inode *inode);
 void inode_cache_init(void);
+
+struct address_space_operations;
+int inode_attach_pagecache(struct inode *inode,
+			   const struct address_space_operations *a_ops);
 
 struct file *file_alloc(struct path *path, fmode_t mode);
 struct file *file_dup(struct file *file);
