@@ -468,13 +468,13 @@ static int disk0_read(struct blkdev *bd, uint64_t blk_id, void *buf,
 		      uint32_t blk_cnt)
 {
 	if (blk_id >= bd->phy_bcnt) {
-		klog_warn("%s(): Invalid blk_id: %lu, phy_bcnt: %lu\n", __func__,
-			  blk_id, bd->phy_bcnt);
+		klog_warn("%s(): Invalid blk_id: %lu, phy_bcnt: %lu\n",
+			  __func__, blk_id, bd->phy_bcnt);
 		return -ENXIO;
 	}
 	if (bd->phy_bcnt - blk_id < blk_cnt) {
-		klog_warn("%s(): Invalid blk_cnt: %u, phy_bcnt: %lu\n", __func__,
-			  blk_cnt, bd->phy_bcnt);
+		klog_warn("%s(): Invalid blk_cnt: %u, phy_bcnt: %lu\n",
+			  __func__, blk_cnt, bd->phy_bcnt);
 		return -ENXIO;
 	}
 	if (blk_cnt == 0)
@@ -488,13 +488,13 @@ static int disk0_write(struct blkdev *bd, uint64_t blk_id, const void *buf,
 		       uint32_t blk_cnt)
 {
 	if (blk_id >= bd->phy_bcnt) {
-		klog_warn("%s(): Invalid blk_id: %lu, phy_bcnt: %lu\n", __func__,
-			  blk_id, bd->phy_bcnt);
+		klog_warn("%s(): Invalid blk_id: %lu, phy_bcnt: %lu\n",
+			  __func__, blk_id, bd->phy_bcnt);
 		return -ENXIO;
 	}
 	if (bd->phy_bcnt - blk_id < blk_cnt) {
-		klog_warn("%s(): Invalid blk_cnt: %u, phy_bcnt: %lu\n", __func__,
-			  blk_cnt, bd->phy_bcnt);
+		klog_warn("%s(): Invalid blk_cnt: %u, phy_bcnt: %lu\n",
+			  __func__, blk_cnt, bd->phy_bcnt);
 		return -ENXIO;
 	}
 	if (blk_cnt == 0)
@@ -528,6 +528,7 @@ void dev_init(void)
 	struct chrdev *cd;
 	struct blkdev *bd;
 	unsigned i;
+	int err;
 
 	for (i = 0; i < BRK_MAJOR_MAX; ++i) {
 		list_init(&cdev_list[i]);
@@ -535,20 +536,26 @@ void dev_init(void)
 	}
 
 	cd = chrdev_alloc();
-	ASSERT(cd);
+	if (!cd)
+		panic("Failed to allocate console character device\n");
 	cd->ops->read = dev_console0_read;
 	cd->ops->write = dev_console0_write;
 	cd->ops->ioctl = dev_console0_ioctl;
-	ASSERT(chrdev_register(cd, DEV_CONSOLE0) == 0);
+	err = chrdev_register(cd, DEV_CONSOLE0);
+	if (err)
+		panic("Failed to register console character device: %d\n", err);
 
 	bd = blkdev_alloc();
-	ASSERT(bd);
+	if (!bd)
+		panic("Failed to allocate disk block device\n");
 	bd->ops->read = disk0_read;
 	bd->ops->write = disk0_write;
 	bd->phy_bcnt = DISK0_SIZE / SECTOR_SIZE;
 	bd->phy_bsize = SECTOR_SIZE;
 	bd->priv = NULL;
-	ASSERT(blkdev_register(bd, DEV_DISK0) == 0);
+	err = blkdev_register(bd, DEV_DISK0);
+	if (err)
+		panic("Failed to register disk block device: %d\n", err);
 }
 
 static int chrdev_open(struct inode *inode, struct file *file)
