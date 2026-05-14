@@ -1,6 +1,7 @@
 #include "brkfs.h"
 #include <brk/dcache.h>
 #include <brk/fs.h>
+#include <brk/pagecache.h>
 #include <brk/slab.h>
 
 static struct inode *brkfs_alloc_inode(struct super_block *sb)
@@ -47,8 +48,14 @@ static void brkfs_evict_inode(struct inode *inode)
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
 
 	if (inode->i_nlink > 0) {
+		/* Flush dirty cached data before the VFS releases the mapping.
+		 * filemap_writeback is a no-op when ->i_mapping is NULL. */
+		(void)filemap_writeback(inode->i_mapping);
 		brkfs_inode_write(sbi, inode);
 	} else {
+		/* Drop the cache wholesale: pages would be invalid once the
+		 * underlying disk blocks are freed below. */
+		truncate_inode_pages(inode->i_mapping, 0);
 		brkfs_truncate_inode_blocks(inode, 0);
 		inode->i_size = 0;
 		inode->i_nlink = 0;

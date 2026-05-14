@@ -111,6 +111,7 @@ SRCS += mm/pgtable.c
 SRCS += mm/slab.c
 SRCS += mm/vmalloc.c
 SRCS += mm/ioremap.c
+SRCS += mm/pagecache.c
 SRCS += drivers/plic.c
 SRCS += drivers/rtc.c
 SRCS += drivers/uart.c

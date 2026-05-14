@@ -3,6 +3,7 @@
 
 #include <brk/dev.h>
 #include <brk/fs_types.h>
+#include <brk/pagecache.h>
 #include <brk/types.h>
 
 #define BRKFS_DIRECT_BLOCKS 7 /* Total number of direct block pointers */
@@ -112,5 +113,7 @@ int brkfs_truncate_inode_blocks(struct inode *inode, loff_t new_size);
 
 int brkfs_inode_getblk(struct inode *inode, loff_t off, uint32_t *bno,
 		       unsigned flags, struct brkfs_sb_info *sbi);
+
+extern const struct address_space_operations brkfs_aops;
 
 #endif

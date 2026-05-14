@@ -321,5 +321,6 @@ void kmem_cache_free(struct kmem_cache *cache, void *obj)
 
 	spinlock_release(&cache->lock);
 
-	panic("%s(): invalid obj\n", __func__);
+	panic("%s(): invalid obj %p in cache %s\n", __func__, obj,
+	      cache->name ? cache->name : "(null)");
 }
