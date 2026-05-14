@@ -7,12 +7,11 @@
  * Copyright 2012 Kim Phillips, Freescale Semiconductor.
  */
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-#include <limits.h>
+ #include <stdbool.h>
+ #include <stddef.h>
+ #include <stdint.h>
+ #include <brk/string.h>
+ #include <limits.h>
 
 #ifdef __CHECKER__
 #define FDT_FORCE __attribute__((force))

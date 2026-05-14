@@ -65,7 +65,7 @@ CFLAGS += -fno-stack-protector
 CFLAGS += -fno-pie
 CFLAGS += -no-pie
 CFLAGS += -Iinclude
-CFLAGS += -Ilib/libfdt
+CFLAGS += -Ivendor/libfdt
 CFLAGS += -MMD -MP
 ifeq ($(ENABLE_SMP),1)
 CFLAGS += -DENABLE_SMP=1
@@ -140,11 +140,11 @@ SRCS += lib/printf.c
 SRCS += lib/qsort.c
 SRCS += lib/hash.c
 SRCS += lib/bitmap.c
-SRCS += lib/libfdt/fdt.c
-SRCS += lib/libfdt/fdt_ro.c
-SRCS += lib/libfdt/fdt_wip.c
-SRCS += lib/libfdt/fdt_addresses.c
-SRCS += lib/libfdt/fdt_rw.c
+SRCS += vendor/libfdt/fdt.c
+SRCS += vendor/libfdt/fdt_ro.c
+SRCS += vendor/libfdt/fdt_wip.c
+SRCS += vendor/libfdt/fdt_addresses.c
+SRCS += vendor/libfdt/fdt_rw.c
 
 OBJS_S := $(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SRCS)))
 OBJS_C := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SRCS)))
