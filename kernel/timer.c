@@ -49,6 +49,8 @@ void timer_handle_int(void)
 		spinlock_release(&jiffies_lock);
 	}
 
+	proc_wake_all(&jiffies);
+
 	tty_timer_tick();
 	timer_set_next();
 }
