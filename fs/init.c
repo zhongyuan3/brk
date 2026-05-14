@@ -15,6 +15,7 @@ static void register_builtin_filesystems(void)
 {
 	register_filesystem(&tmpfs_fs_type);
 	register_filesystem(&brkfs_fs_type);
+	register_filesystem(&procfs_fs_type);
 	pipe_fs_init();
 }
 
@@ -71,6 +72,17 @@ int fs_init(void)
 	if (err)
 		return err;
 	klog_info("/dev/console created successfully\n");
+
+	err = do_mkdirat(AT_FDCWD, "/proc", 0);
+	if (err && err != -EEXIST)
+		return err;
+	if (err == -EEXIST)
+		err = 0;
+
+	err = do_mount(NULL, "/proc", "procfs", 0, NULL);
+	if (err)
+		return err;
+	klog_info("/proc mounted successfully\n");
 
 	struct file *f = do_openat(AT_FDCWD, "/dev/console", O_RDWR, 0);
 	if (IS_ERR(f)) {

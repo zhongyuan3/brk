@@ -145,6 +145,38 @@ void proc_join(struct process *proc);
 pid_t pid_alloc(void);
 void pid_free(pid_t pid);
 
+/*
+ * Read-only snapshot of the parts of a process that are safe to look at
+ * from outside the scheduler / proc_lock.
+ */
+struct proc_info {
+	pid_t pid;
+	pid_t ppid;
+	enum process_state state;
+	int exit_status;
+	bool killed;
+	uint64_t utime;
+	uint64_t ktime;
+	uint64_t brk;
+	char name[PROCESS_NAME_MAX];
+};
+
+/*
+ * Copy every live pid into @out (up to @max entries). Returns the number
+ * of pids written. The order is the global creation order maintained by
+ * proc_alloc().
+ */
+int proc_snapshot_pids(pid_t *out, int max);
+
+/*
+ * Snapshot a single process's fields into @info. Returns true on
+ * success, false if no such pid exists.
+ */
+bool proc_get_info(pid_t pid, struct proc_info *info);
+
+/* Lightweight existence check. */
+bool proc_pid_exists(pid_t pid);
+
 void push_off(void);
 void pop_off(void);
 

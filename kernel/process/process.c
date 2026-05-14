@@ -235,6 +235,91 @@ failed:
 	return err;
 }
 
+int proc_snapshot_pids(pid_t *out, int max)
+{
+	struct process *p;
+	int n = 0;
+
+	if (!out || max <= 0)
+		return 0;
+
+	spinlock_acquire(&procs_lock);
+	list_for_each_entry(p, &procs, list) {
+		if (n >= max)
+			break;
+		out[n++] = p->pid;
+	}
+	spinlock_release(&procs_lock);
+	return n;
+}
+
+bool proc_pid_exists(pid_t pid)
+{
+	struct process *p;
+	bool found = false;
+
+	spinlock_acquire(&procs_lock);
+	list_for_each_entry(p, &procs, list) {
+		if (p->pid == pid) {
+			found = true;
+			break;
+		}
+	}
+	spinlock_release(&procs_lock);
+	return found;
+}
+
+bool proc_get_info(pid_t pid, struct proc_info *info)
+{
+	struct process *p, *target = NULL;
+
+	if (!info)
+		return false;
+
+	spinlock_acquire(&procs_lock);
+	list_for_each_entry(p, &procs, list) {
+		if (p->pid == pid) {
+			target = p;
+			break;
+		}
+	}
+	if (!target) {
+		spinlock_release(&procs_lock);
+		return false;
+	}
+
+	/*
+	 * procs_lock keeps both @target and its parent on the procs list,
+	 * so neither can be freed underneath us. We take a snapshot of
+	 * parent->pid without taking wait_lock: a concurrent reparent
+	 * (proc_exit re-parenting orphans to init_proc) is a benign race
+	 * here -- we may observe either the old or new parent pid.
+	 */
+	{
+		struct process *par = target->parent;
+		info->ppid = par ? par->pid : 0;
+	}
+
+	spinlock_acquire(&target->lock);
+	info->pid = target->pid;
+	info->state = target->state;
+	info->exit_status = target->exit_status;
+	info->killed = target->killed;
+	info->utime = target->ptms.tms_utime;
+	info->ktime = target->ptms.tms_stime;
+	info->brk = target->mm ? target->mm->brk : 0;
+	for (size_t i = 0; i < PROCESS_NAME_MAX; ++i) {
+		info->name[i] = target->name[i];
+		if (target->name[i] == '\0')
+			break;
+	}
+	info->name[PROCESS_NAME_MAX - 1] = '\0';
+	spinlock_release(&target->lock);
+
+	spinlock_release(&procs_lock);
+	return true;
+}
+
 void proc_dump(void)
 {
 	static char *state_strs[] = {
