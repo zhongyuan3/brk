@@ -3,12 +3,14 @@
 #include <brk/bitmap.h>
 #include <brk/dev.h>
 #include <brk/errno.h>
+#include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
 #include <brk/limits.h>
 #include <brk/list.h>
 #include <brk/lock.h>
 #include <brk/mm.h>
+#include <brk/pagecache.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
@@ -193,6 +195,93 @@ int chrdev_alloc_devnum(dev_t *dev_out)
 	return -ENOMEM;
 }
 
+/*
+ * Block-device page cache backend.
+ *
+ * Each cached page covers one PAGE_SIZE-aligned region of the device.
+ * Reads simply forward to bd->ops->read on a page-aligned buffer;
+ * writes are kept write-through (no dirty list) so metadata callers
+ * see strict ordering and durability without any extra plumbing.
+ */
+static int bdev_readpage(struct address_space *m, struct cached_page *cp)
+{
+	struct blkdev *bd = m->host;
+	uint32_t bs = bd->phy_bsize;
+
+	if (bs == 0 || PAGE_SIZE % bs != 0)
+		return -EIO;
+	if (cp->page == NULL)
+		return -EIO;
+
+	uint32_t nsec = (uint32_t)(PAGE_SIZE / bs);
+	uint64_t sector = (uint64_t)cp->index * nsec;
+
+	if (sector + nsec > bd->phy_bcnt)
+		return -ENXIO;
+
+	return bd->ops->read(bd, sector, (void *)page_to_virt(cp->page), nsec);
+}
+
+static int bdev_writepage(struct address_space *m, struct cached_page *cp)
+{
+	struct blkdev *bd = m->host;
+	uint32_t bs = bd->phy_bsize;
+
+	if (bs == 0 || PAGE_SIZE % bs != 0)
+		return -EIO;
+
+	uint32_t nsec = (uint32_t)(PAGE_SIZE / bs);
+	uint64_t sector = (uint64_t)cp->index * nsec;
+
+	if (sector + nsec > bd->phy_bcnt)
+		return -ENXIO;
+
+	return bd->ops->write(bd, sector, (const void *)page_to_virt(cp->page),
+			      nsec);
+}
+
+static const struct address_space_operations bdev_aops = {
+	.readpage = bdev_readpage,
+	.writepage = bdev_writepage,
+};
+
+int bdev_read_page(struct blkdev *bd, uint64_t index, void *buf)
+{
+	struct cached_page *cp;
+
+	if (!bd->bd_mapping)
+		return -EIO;
+
+	cp = read_mapping_page(bd->bd_mapping, (pgoff_t)index);
+	if (IS_ERR(cp))
+		return PTR_ERR(cp);
+
+	memcpy(buf, cached_page_addr(cp), PAGE_SIZE);
+	cached_page_put(cp);
+	return 0;
+}
+
+int bdev_write_page(struct blkdev *bd, uint64_t index, const void *buf)
+{
+	struct cached_page *cp;
+	int err;
+
+	if (!bd->bd_mapping)
+		return -EIO;
+
+	cp = find_or_create_page(bd->bd_mapping, (pgoff_t)index);
+	if (!cp)
+		return -ENOMEM;
+
+	cached_page_lock(cp);
+	memcpy(cached_page_addr(cp), buf, PAGE_SIZE);
+	cached_page_mark_uptodate(cp);
+	err = bd->bd_mapping->a_ops->writepage(bd->bd_mapping, cp);
+	cached_page_unlock(cp);
+	cached_page_put(cp);
+	return err;
+}
+
 struct blkdev *blkdev_alloc(void)
 {
 	struct blkdev *bd = kzalloc(sizeof(*bd));
@@ -203,11 +292,19 @@ struct blkdev *blkdev_alloc(void)
 		kfree(bd);
 		return NULL;
 	}
+	bd->bd_mapping = address_space_alloc(bd, &bdev_aops);
+	if (!bd->bd_mapping) {
+		kfree(bd->ops);
+		kfree(bd);
+		return NULL;
+	}
 	return bd;
 }
 
 void blkdev_free(struct blkdev *bd)
 {
+	address_space_free(bd->bd_mapping);
+	bd->bd_mapping = NULL;
 	kfree(bd->ops);
 	kfree(bd);
 }
@@ -357,70 +454,54 @@ int blkdev_alloc_devnum(dev_t *dev_out)
 	return -ENOMEM;
 }
 
-struct disk0_priv {
-	void *buf;
-	sleeplock_t lock;
-};
-
+/*
+ * disk0 read/write fast path.
+ *
+ * Callers are required to pass a buffer that lives in the kernel
+ * linear map (i.e. allocated via the buddy allocator or kmalloc), so
+ * that virt_to_phys() yields a usable physical address for
+ * virtio-blk's DMA. The page cache layer (which now sits in front of
+ * every block I/O path) only ever provides such buffers, so the
+ * historic kmalloc'd bounce buffer is no longer needed.
+ */
 static int disk0_read(struct blkdev *bd, uint64_t blk_id, void *buf,
 		      uint32_t blk_cnt)
 {
-	struct disk0_priv *priv = bd->priv;
-	uint64_t buf_phys = virt_to_phys((uint64_t)priv->buf);
-	int err = 0;
-
 	if (blk_id >= bd->phy_bcnt) {
 		klog_warn("%s(): Invalid blk_id: %lu, phy_bcnt: %lu\n", __func__,
-			 blk_id, bd->phy_bcnt);
+			  blk_id, bd->phy_bcnt);
 		return -ENXIO;
 	}
-
 	if (bd->phy_bcnt - blk_id < blk_cnt) {
 		klog_warn("%s(): Invalid blk_cnt: %u, phy_bcnt: %lu\n", __func__,
-			 blk_cnt, bd->phy_bcnt);
+			  blk_cnt, bd->phy_bcnt);
 		return -ENXIO;
 	}
-
 	if (blk_cnt == 0)
 		return 0;
 
-	sleeplock_acquire(&priv->lock);
-	for (uint32_t i = 0; i < blk_cnt; ++i) {
-		err = virtio_blk_read(blk_id, buf_phys, 1);
-		if (err) {
-			sleeplock_release(&priv->lock);
-			return err;
-		}
-		memcpy(buf, priv->buf, SECTOR_SIZE);
-		blk_id += 1;
-		buf = (uint8_t *)buf + SECTOR_SIZE;
-	}
-	sleeplock_release(&priv->lock);
-
-	return 0;
+	uint64_t buf_phys = virt_to_phys((uint64_t)buf);
+	return virtio_blk_read(blk_id, buf_phys, blk_cnt);
 }
 
 static int disk0_write(struct blkdev *bd, uint64_t blk_id, const void *buf,
 		       uint32_t blk_cnt)
 {
-	struct disk0_priv *priv = bd->priv;
-	uint64_t buf_phys = virt_to_phys((uint64_t)priv->buf);
-	int err = 0;
-
-	sleeplock_acquire(&priv->lock);
-	for (uint32_t i = 0; i < blk_cnt; ++i) {
-		memcpy(priv->buf, buf, SECTOR_SIZE);
-		err = virtio_blk_write(blk_id, buf_phys, 1);
-		if (err) {
-			sleeplock_release(&priv->lock);
-			return err;
-		}
-		blk_id += 1;
-		buf = (const uint8_t *)buf + SECTOR_SIZE;
+	if (blk_id >= bd->phy_bcnt) {
+		klog_warn("%s(): Invalid blk_id: %lu, phy_bcnt: %lu\n", __func__,
+			  blk_id, bd->phy_bcnt);
+		return -ENXIO;
 	}
-	sleeplock_release(&priv->lock);
+	if (bd->phy_bcnt - blk_id < blk_cnt) {
+		klog_warn("%s(): Invalid blk_cnt: %u, phy_bcnt: %lu\n", __func__,
+			  blk_cnt, bd->phy_bcnt);
+		return -ENXIO;
+	}
+	if (blk_cnt == 0)
+		return 0;
 
-	return 0;
+	uint64_t buf_phys = virt_to_phys((uint64_t)buf);
+	return virtio_blk_write(blk_id, buf_phys, blk_cnt);
 }
 
 static int dev_console0_read(struct file *file, char *buf, size_t n,
@@ -466,12 +547,7 @@ void dev_init(void)
 	bd->ops->write = disk0_write;
 	bd->phy_bcnt = DISK0_SIZE / SECTOR_SIZE;
 	bd->phy_bsize = SECTOR_SIZE;
-	struct disk0_priv *priv = kmalloc(sizeof(*priv));
-	ASSERT(priv);
-	priv->buf = kmalloc(SECTOR_SIZE);
-	ASSERT(priv->buf);
-	sleeplock_init(&priv->lock, "disk0_buf");
-	bd->priv = priv;
+	bd->priv = NULL;
 	ASSERT(blkdev_register(bd, DEV_DISK0) == 0);
 }
 

@@ -59,8 +59,7 @@ static unsigned int mapping_hash(pgoff_t index)
 }
 
 struct address_space *
-address_space_alloc(struct inode *host,
-		    const struct address_space_operations *a_ops)
+address_space_alloc(void *host, const struct address_space_operations *a_ops)
 {
 	struct address_space *m;
 

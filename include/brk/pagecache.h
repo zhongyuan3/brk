@@ -69,8 +69,13 @@ struct address_space_operations {
 			 struct cached_page *cp);
 };
 
+/*
+ * @host is opaque so a mapping can be backed by either a file inode
+ * (struct inode *) or a block device (struct blkdev *). Callbacks in
+ * a_ops know which one to cast to.
+ */
 struct address_space {
-	struct inode *host;
+	void *host;
 	const struct address_space_operations *a_ops;
 
 	spinlock_t lock;
@@ -82,8 +87,7 @@ struct address_space {
 void pagecache_init(void);
 
 struct address_space *
-address_space_alloc(struct inode *host,
-		    const struct address_space_operations *a_ops);
+address_space_alloc(void *host, const struct address_space_operations *a_ops);
 void address_space_free(struct address_space *mapping);
 
 /* Lookup helpers — each returns the page with @refcnt incremented. */

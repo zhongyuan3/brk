@@ -49,6 +49,7 @@ struct chrdev;
 struct chrdev_operations;
 struct blkdev;
 struct blkdev_operations;
+struct address_space;
 
 struct chrdev {
 	dev_t dev;
@@ -72,6 +73,13 @@ struct blkdev {
 	uint64_t phy_bcnt;
 	struct blkdev_operations *ops;
 	void *priv;
+	/*
+	 * Page cache that backs every read/write made through
+	 * bdev_read_page / bdev_write_page. Sized in PAGE_SIZE units;
+	 * each cached_page maps a contiguous PAGE_SIZE region of the
+	 * device starting at index << PAGE_SHIFT bytes.
+	 */
+	struct address_space *bd_mapping;
 };
 
 struct blkdev_operations {
@@ -80,6 +88,17 @@ struct blkdev_operations {
 	int (*write)(struct blkdev *bd, uint64_t blk_id, const void *buf,
 		     uint32_t blk_cnt);
 };
+
+/*
+ * Page-cached helpers built on top of blkdev_operations. Index is in
+ * PAGE_SIZE units of the device. @buf must be PAGE_SIZE bytes. Writes
+ * are write-through: the page in the bdev mapping is updated and the
+ * data is synchronously pushed to the underlying device before
+ * returning, so metadata consumers (super, bitmap, inode table) get
+ * strict ordering / durability semantics for free.
+ */
+int bdev_read_page(struct blkdev *bd, uint64_t index, void *buf);
+int bdev_write_page(struct blkdev *bd, uint64_t index, const void *buf);
 
 struct chrdev *chrdev_alloc(void);
 void chrdev_free(struct chrdev *cd);

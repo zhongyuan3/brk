@@ -1,4 +1,5 @@
 #include "brkfs.h"
+#include <brk/asm.h>
 #include <brk/bitmap.h>
 #include <brk/dev.h>
 #include <brk/dirent.h>
@@ -34,30 +35,37 @@ void brkfs_sb_info_free(struct brkfs_sb_info *sbi)
 	kfree(sbi);
 }
 
+/*
+ * brkfs metadata I/O goes through the bdev page cache.
+ *
+ * brkfs is set up with s_blocksize == PAGE_SIZE, so every brkfs block
+ * maps to exactly one page in the underlying bdev mapping. Reads can
+ * thus return cached data with no disk traffic on a hit; writes are
+ * write-through (see bdev_write_page) so existing brkfs callers retain
+ * their "write returns => data is durable" expectation.
+ */
 int brkfs_block_read(struct brkfs_sb_info *sb, uint32_t bno, void *buf)
 {
 	if (bno >= sb->s_sb.s_blocks_count) {
 		klog_warn("%s(): Invalid bno: %u, blocks count: %u\n", __func__,
-			 bno, sb->s_sb.s_blocks_count);
+			  bno, sb->s_sb.s_blocks_count);
 		return -EINVAL;
 	}
-	struct blkdev *bdev = sb->s_bdev;
-	uint32_t bdev_bno = bno * sb->s_sb.s_blocksize / bdev->phy_bsize;
-	uint32_t bdev_bcnt = sb->s_sb.s_blocksize / bdev->phy_bsize;
-	return bdev->ops->read(bdev, bdev_bno, buf, bdev_bcnt);
+	if (sb->s_sb.s_blocksize != PAGE_SIZE)
+		return -EIO;
+	return bdev_read_page(sb->s_bdev, bno, buf);
 }
 
 int brkfs_block_write(struct brkfs_sb_info *sb, uint32_t bno, const void *buf)
 {
 	if (bno >= sb->s_sb.s_blocks_count) {
 		klog_warn("%s(): Invalid bno: %u, blocks count: %u\n", __func__,
-			 bno, sb->s_sb.s_blocks_count);
+			  bno, sb->s_sb.s_blocks_count);
 		return -EINVAL;
 	}
-	struct blkdev *bdev = sb->s_bdev;
-	uint32_t bdev_bno = bno * sb->s_sb.s_blocksize / bdev->phy_bsize;
-	uint32_t bdev_bcnt = sb->s_sb.s_blocksize / bdev->phy_bsize;
-	return bdev->ops->write(bdev, bdev_bno, buf, bdev_bcnt);
+	if (sb->s_sb.s_blocksize != PAGE_SIZE)
+		return -EIO;
+	return bdev_write_page(sb->s_bdev, bno, buf);
 }
 
 static int brkfs_bitmap_alloc(struct brkfs_sb_info *sbi, uint32_t start_bno,
