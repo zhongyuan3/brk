@@ -529,6 +529,15 @@ int register_filesystem(struct file_system_type *fs);
 int unregister_filesystem(struct file_system_type *fs);
 struct file_system_type *get_filesystem(const char *name);
 
+/*
+ * Iterate every registered filesystem and invoke @fn with the global
+ * filesystem list lock held. @fn must be non-blocking (no allocation,
+ * no sleeplock acquisition).
+ */
+void for_each_filesystem(void (*fn)(const struct file_system_type *fs,
+				    void *ctx),
+			 void *ctx);
+
 struct super_block *alloc_super(struct file_system_type *type);
 void free_super(struct super_block *sb);
 void super_dup(struct super_block *sb);
@@ -579,6 +588,7 @@ int anon_pipe_create(struct file **read_file, struct file **write_file,
 
 extern struct file_system_type tmpfs_fs_type;
 extern struct file_system_type brkfs_fs_type;
+extern struct file_system_type procfs_fs_type;
 
 extern const struct super_operations tmpfs_sops;
 extern const struct inode_operations tmpfs_iops;

@@ -34,3 +34,16 @@ struct file_system_type *get_filesystem(const char *name)
 	spinlock_release(&filesystems_lock);
 	return NULL;
 }
+
+void for_each_filesystem(void (*fn)(const struct file_system_type *, void *),
+			 void *ctx)
+{
+	struct file_system_type *fs;
+
+	if (!fn)
+		return;
+	spinlock_acquire(&filesystems_lock);
+	list_for_each_entry(fs, &filesystems, fs_list)
+		fn(fs, ctx);
+	spinlock_release(&filesystems_lock);
+}

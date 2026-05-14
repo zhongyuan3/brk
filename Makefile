@@ -118,6 +118,7 @@ SRCS += drivers/uart.c
 SRCS += drivers/virtio/virtio.c
 SRCS += drivers/virtio/virtio_blk.c
 SRCS += fs/tmpfs/tmpfs.c
+SRCS += fs/procfs/procfs.c
 SRCS += fs/brkfs/brkfs.c
 SRCS += fs/brkfs/dir.c
 SRCS += fs/brkfs/file.c
