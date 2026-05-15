@@ -1,4 +1,5 @@
 #include <brk/cpu.h>
+#include <brk/errno.h>
 #include <brk/ktime.h>
 #include <brk/lock.h>
 #include <brk/process.h>
@@ -61,6 +62,12 @@ static void walltime_get_locked(struct timeval *tv)
 	tv->tv_usec = walltime.tv_nsec / NS_PER_US;
 }
 
+static void walltime_get_ts_locked(struct timespec *ts)
+{
+	ts->tv_sec = walltime.tv_sec;
+	ts->tv_nsec = walltime.tv_nsec;
+}
+
 void walltime_get(struct timeval *tv)
 {
 	spinlock_acquire(&jiffies_lock);
@@ -92,27 +99,27 @@ void walltime_set_ts(const struct timespec *ts)
 	spinlock_release(&jiffies_lock);
 }
 
-uint64_t do_nanosleep(const struct timeval *dur, struct timeval *rem)
+uint64_t do_nanosleep(const struct timespec *dur, struct timespec *rem)
 {
-	struct timeval start, curr;
+	struct timespec start, curr;
 
-	walltime_get(&start);
+	walltime_get_ts(&start);
 	spinlock_acquire(&jiffies_lock);
 	for (;;) {
 		if (proc_is_killed(current_process())) {
 			spinlock_release(&jiffies_lock);
-			return -1;
+			return -EINTR;
 		}
-		walltime_get_locked(&curr);
+		walltime_get_ts_locked(&curr);
 		if ((curr.tv_sec - start.tv_sec >= dur->tv_sec) &&
-		    (curr.tv_usec - start.tv_usec >= dur->tv_usec))
+		    (curr.tv_nsec - start.tv_nsec >= dur->tv_nsec))
 			break;
 		proc_sleep(&jiffies, &jiffies_lock);
 	}
 	spinlock_release(&jiffies_lock);
 
-	rem->tv_sec = 0;
-	rem->tv_usec = 0;
+	rem->tv_sec = curr.tv_sec - start.tv_sec;
+	rem->tv_nsec = curr.tv_nsec - start.tv_nsec;
 	return 0;
 }
 

@@ -43,3 +43,15 @@ uint64_t sys_times(void)
 	*buf = current_process()->ptms;
 	return 0;
 }
+
+uint64_t sys_nanosleep(void)
+{
+	struct timespec *dur, *rem;
+
+	dur = syscall_arg_ptr(0);
+	rem = syscall_arg_ptr(1);
+	if (!dur || !rem)
+		return -EINVAL;
+
+	return do_nanosleep(dur, rem);
+}
