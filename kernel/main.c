@@ -31,12 +31,12 @@
 
 #if ENABLE_SMP
 
-static void wake_up_other_harts(uint64_t init_hart_id)
+static void wake_up_other_harts(u64 init_hart_id)
 {
-	uint64_t start_addr;
+	u64 start_addr;
 
 	start_addr = symbol_phys(hart_entry);
-	for (uint64_t id = 0; id < NR_CPUS; ++id) {
+	for (u64 id = 0; id < NR_CPUS; ++id) {
 		if (id == init_hart_id)
 			continue;
 
@@ -44,7 +44,7 @@ static void wake_up_other_harts(uint64_t init_hart_id)
 	}
 }
 
-void start_hart(uint64_t hart_id)
+void start_hart(u64 hart_id)
 {
 	write_tp(hart_id);
 
@@ -63,7 +63,7 @@ void start_hart(uint64_t hart_id)
 
 #endif
 
-void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
+void start_kernel(usize_t hart_id, u64 dtb, usize_t load_offset)
 {
 	write_tp(hart_id);
 
@@ -73,7 +73,7 @@ void start_kernel(size_t hart_id, uint64_t dtb, size_t load_offset)
 
 	memblock_init();
 	memblock_reserve(_SKERNEL_PHYS, _KERNEL_SIZE);
-	size_t dtb_size = round_up(fdt_totalsize(dtb_phys), PAGE_SIZE);
+	usize_t dtb_size = round_up(fdt_totalsize(dtb_phys), PAGE_SIZE);
 	memblock_reserve(dtb_phys, dtb_size);
 	dtb_early_init_scan_mem();
 	dtb_early_init_scan_reserved_mem();

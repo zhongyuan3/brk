@@ -52,7 +52,7 @@ void pagecache_init(void)
 
 static unsigned int mapping_hash(pgoff_t index)
 {
-	uint64_t h = (uint64_t)index;
+	u64 h = (u64)index;
 	h *= 0x9E3779B97F4A7C15ULL;
 	h ^= h >> 32;
 	return (unsigned int)(h & (ADDRESS_SPACE_HSIZE - 1));
@@ -70,7 +70,7 @@ address_space_alloc(void *host, const struct address_space_operations *a_ops)
 	m->host = host;
 	m->a_ops = a_ops;
 	spinlock_init(&m->lock, "address_space.lock");
-	for (size_t i = 0; i < ADDRESS_SPACE_HSIZE; ++i)
+	for (usize_t i = 0; i < ADDRESS_SPACE_HSIZE; ++i)
 		hlist_head_init(&m->pages[i]);
 	list_init(&m->dirty_pages);
 	m->nrpages = 0;
@@ -104,8 +104,9 @@ void address_space_free(struct address_space *m)
 		return;
 
 	spinlock_acquire(&m->lock);
-	for (size_t i = 0; i < ADDRESS_SPACE_HSIZE; ++i) {
-		hlist_for_each_entry_safe(cp, n, &m->pages[i], ht_node) {
+	for (usize_t i = 0; i < ADDRESS_SPACE_HSIZE; ++i) {
+		hlist_for_each_entry_safe(cp, n, &m->pages[i], ht_node)
+		{
 			__detach_locked(m, cp);
 			spinlock_release(&m->lock);
 			detach_and_put(cp);
@@ -360,7 +361,7 @@ void truncate_inode_pages(struct address_space *m, loff_t new_size)
 {
 	pgoff_t first_full;
 	pgoff_t partial_idx;
-	size_t partial_off;
+	usize_t partial_off;
 	struct cached_page *cp;
 	struct hlist_node *n;
 	struct cached_page *partial = NULL;
@@ -372,14 +373,15 @@ void truncate_inode_pages(struct address_space *m, loff_t new_size)
 
 	first_full = (pgoff_t)((new_size + PAGE_SIZE - 1) >> PAGE_SHIFT);
 	partial_idx = (pgoff_t)(new_size >> PAGE_SHIFT);
-	partial_off = (size_t)(new_size & (PAGE_SIZE - 1));
+	partial_off = (usize_t)(new_size & (PAGE_SIZE - 1));
 
 	/* Phase 1: detach every page strictly past new_size from the cache.
 	 * Detaching drops the cache's implicit reference; any user references
 	 * still outstanding will keep the page alive until their put. */
 	spinlock_acquire(&m->lock);
-	for (size_t i = 0; i < ADDRESS_SPACE_HSIZE; ++i) {
-		hlist_for_each_entry_safe(cp, n, &m->pages[i], ht_node) {
+	for (usize_t i = 0; i < ADDRESS_SPACE_HSIZE; ++i) {
+		hlist_for_each_entry_safe(cp, n, &m->pages[i], ht_node)
+		{
 			if (cp->index < first_full)
 				continue;
 			__detach_locked(m, cp);
@@ -411,7 +413,7 @@ void truncate_inode_pages(struct address_space *m, loff_t new_size)
 	}
 }
 
-ssize_t generic_file_read(struct file *file, char *buf, size_t size,
+ssize_t generic_file_read(struct file *file, char *buf, usize_t size,
 			  loff_t *pos)
 {
 	struct inode *inode = file->f_inode;
@@ -433,12 +435,12 @@ ssize_t generic_file_read(struct file *file, char *buf, size_t size,
 	}
 	end = *pos + (loff_t)size;
 	if (end > isize)
-		size = (size_t)(isize - *pos);
+		size = (usize_t)(isize - *pos);
 
 	while (size > 0) {
 		pgoff_t index = (pgoff_t)(*pos >> PAGE_SHIFT);
-		size_t off = (size_t)(*pos & (PAGE_SIZE - 1));
-		size_t nr = PAGE_SIZE - off;
+		usize_t off = (usize_t)(*pos & (PAGE_SIZE - 1));
+		usize_t nr = PAGE_SIZE - off;
 		struct cached_page *cp;
 
 		if (nr > size)
@@ -463,7 +465,7 @@ ssize_t generic_file_read(struct file *file, char *buf, size_t size,
 	return total > 0 ? total : err;
 }
 
-ssize_t generic_file_write(struct file *file, const char *buf, size_t size,
+ssize_t generic_file_write(struct file *file, const char *buf, usize_t size,
 			   loff_t *pos)
 {
 	struct inode *inode = file->f_inode;
@@ -478,8 +480,8 @@ ssize_t generic_file_write(struct file *file, const char *buf, size_t size,
 
 	while (size > 0) {
 		pgoff_t index = (pgoff_t)(*pos >> PAGE_SHIFT);
-		size_t off = (size_t)(*pos & (PAGE_SIZE - 1));
-		size_t nr = PAGE_SIZE - off;
+		usize_t off = (usize_t)(*pos & (PAGE_SIZE - 1));
+		usize_t nr = PAGE_SIZE - off;
 		struct cached_page *cp;
 		bool full_page = (off == 0 && nr >= PAGE_SIZE);
 

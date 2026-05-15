@@ -37,28 +37,27 @@ static inline bool pgde_large(pgde_t pgde)
 	return pgde_present(pgde) && pgde_flags(pgde) != PTE_V;
 }
 
-static inline size_t pgde_index(uint64_t vaddr)
+static inline usize_t pgde_index(u64 vaddr)
 {
 	return (vaddr >> PGD_SHIFT) & (PTRS_PER_PGD - 1);
 }
 
-static inline void pgde_set_pmd(pgde_t *pgdep, uint64_t pmd_phys)
+static inline void pgde_set_pmd(pgde_t *pgdep, u64 pmd_phys)
 {
 	pgde_val(*pgdep) = ((pmd_phys >> PAGE_SHIFT) << 10) | PTE_V;
 }
 
-static inline void pgde_set_large(pgde_t *pgdep, uint64_t phys,
-				  unsigned int flags)
+static inline void pgde_set_large(pgde_t *pgdep, u64 phys, unsigned int flags)
 {
 	pgde_val(*pgdep) = ((phys >> PGD_SHIFT) << 28) | PTE_V | flags;
 }
 
-static inline uint64_t pgde_get_pmd(pgde_t pgde)
+static inline u64 pgde_get_pmd(pgde_t pgde)
 {
 	return (pgde_val(pgde) >> 10) << PAGE_SHIFT;
 }
 
-static inline uint64_t pgde_get_large(pgde_t pgde)
+static inline u64 pgde_get_large(pgde_t pgde)
 {
 	return (pgde_val(pgde) >> 28) << PGD_SHIFT;
 }
@@ -89,28 +88,27 @@ static inline bool pmde_large(pmde_t pmde)
 	return pmde_present(pmde) && pmde_flags(pmde) != PTE_V;
 }
 
-static inline size_t pmde_index(uint64_t vaddr)
+static inline usize_t pmde_index(u64 vaddr)
 {
 	return (vaddr >> PMDE_SHIFT) & (PTRS_PER_PMD - 1);
 }
 
-static inline void pmde_set_pt(pmde_t *pmdep, uint64_t pt_phys)
+static inline void pmde_set_pt(pmde_t *pmdep, u64 pt_phys)
 {
 	pmde_val(*pmdep) = ((pt_phys >> PAGE_SHIFT) << 10) | PTE_V;
 }
 
-static inline void pmde_set_large(pmde_t *pmdep, uint64_t phys,
-				  unsigned int flags)
+static inline void pmde_set_large(pmde_t *pmdep, u64 phys, unsigned int flags)
 {
 	pmde_val(*pmdep) = ((phys >> PMDE_SHIFT) << 19) | PTE_V | flags;
 }
 
-static inline uint64_t pmde_get_pt(pmde_t pmde)
+static inline u64 pmde_get_pt(pmde_t pmde)
 {
 	return (pmde_val(pmde) >> 10) << PAGE_SHIFT;
 }
 
-static inline uint64_t pmde_get_large(pmde_t pmde)
+static inline u64 pmde_get_large(pmde_t pmde)
 {
 	return (pmde_val(pmde) >> 19) << PMDE_SHIFT;
 }
@@ -136,17 +134,17 @@ static inline bool pte_present(pte_t pte)
 	return pte_flags(pte) & PTE_V;
 }
 
-static inline size_t pte_index(uint64_t vaddr)
+static inline usize_t pte_index(u64 vaddr)
 {
 	return (vaddr >> PTE_SHIFT) & (PTRS_PER_PT - 1);
 }
 
-static inline void pte_set(pte_t *ptep, uint64_t phys, unsigned int flags)
+static inline void pte_set(pte_t *ptep, u64 phys, unsigned int flags)
 {
 	pte_val(*ptep) = ((phys >> PAGE_SHIFT) << 10) | PTE_V | flags;
 }
 
-static inline uint64_t pte_get(pte_t pte)
+static inline u64 pte_get(pte_t pte)
 {
 	return (pte_val(pte) >> 10) << PAGE_SHIFT;
 }

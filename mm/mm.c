@@ -65,7 +65,7 @@ static void mm_free_seg(struct mm_struct *mm)
 	list_for_each_entry_safe(curr, next, &mm->seg, list) {
 		list_del(&curr->list);
 		uvunmap(mm->pgd, curr->addr, curr->size);
-		for (size_t i = 0; i < curr->nr_pages; ++i) {
+		for (usize_t i = 0; i < curr->nr_pages; ++i) {
 			ASSERT(curr->pages[i]);
 			page_free(curr->pages[i], 0);
 		}
@@ -88,7 +88,7 @@ static void mm_free_heap(struct mm_struct *mm)
 {
 	if (mm->heap->size > 0) {
 		uvunmap(mm->pgd, mm->heap->addr, mm->heap->size);
-		for (size_t i = 0; i < mm->heap->nr_pages; ++i) {
+		for (usize_t i = 0; i < mm->heap->nr_pages; ++i) {
 			ASSERT(mm->heap->pages[i]);
 			page_free(mm->heap->pages[i], 0);
 		}
@@ -109,7 +109,7 @@ void mm_free(struct mm_struct *mm)
 static int mm_copy_area(struct vm_area *dst, struct vm_area *src,
 			struct mm_struct *mm)
 {
-	size_t npgs;
+	usize_t npgs;
 	struct page **pgs;
 	int err = 0;
 
@@ -118,9 +118,9 @@ static int mm_copy_area(struct vm_area *dst, struct vm_area *src,
 	if (!pgs)
 		return -ENOMEM;
 
-	size_t i = 0;
-	uint64_t addr = src->addr;
-	size_t size = src->size;
+	usize_t i = 0;
+	u64 addr = src->addr;
+	usize_t size = src->size;
 	unsigned int flags = src->flags;
 	while (size > 0 && i < npgs) {
 		struct page *pg = page_alloc(0);
@@ -128,7 +128,7 @@ static int mm_copy_area(struct vm_area *dst, struct vm_area *src,
 			err = -ENOMEM;
 			goto failed;
 		}
-		uint64_t dst_pa = page_to_phys(pg);
+		u64 dst_pa = page_to_phys(pg);
 		err = uvmap(mm->pgd, addr, PAGE_SIZE, dst_pa, flags);
 		if (err) {
 			ASSERT(pg);
@@ -153,9 +153,9 @@ static int mm_copy_area(struct vm_area *dst, struct vm_area *src,
 	return 0;
 
 failed:
-	for (uint64_t a = src->addr; a < addr; a += PAGE_SIZE)
+	for (u64 a = src->addr; a < addr; a += PAGE_SIZE)
 		uvunmap(mm->pgd, a, PAGE_SIZE);
-	for (size_t j = 0; j < i; ++j) {
+	for (usize_t j = 0; j < i; ++j) {
 		ASSERT(pgs[j]);
 		page_free(pgs[j], 0);
 	}
@@ -167,7 +167,7 @@ static int mm_copy_seg(struct mm_struct *dst, struct mm_struct *src)
 {
 	LIST_DEFINE(seg);
 	struct vm_area *curr, *next;
-	size_t npgs;
+	usize_t npgs;
 	struct page **pgs;
 	int err = 0;
 
@@ -199,7 +199,7 @@ failed:
 			uvunmap(dst->pgd, curr->addr, curr->size);
 			npgs = curr->nr_pages;
 			pgs = curr->pages;
-			for (size_t i = 0; i < npgs; ++i) {
+			for (usize_t i = 0; i < npgs; ++i) {
 				ASSERT(pgs[i]);
 				page_free(pgs[i], 0);
 			}
@@ -226,7 +226,7 @@ static int mm_copy_stack(struct mm_struct *dst, struct mm_struct *src)
 		return -ENOMEM;
 	}
 
-	uint64_t pa = page_to_phys(pg);
+	u64 pa = page_to_phys(pg);
 	int err = uvmap(dst->pgd, src->stack->addr, src->stack->size, pa,
 			src->stack->flags);
 	if (err) {

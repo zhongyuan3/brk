@@ -2,109 +2,109 @@
 #include <brk/kernel.h>
 #include <brk/string.h>
 
-void *memcpy(void *dst, const void *src, size_t n)
+void *memcpy(void *dst, const void *src, usize_t n)
 {
 	unsigned char *d = (unsigned char *)dst;
 	const unsigned char *s = (const unsigned char *)src;
 
-	for (size_t i = 0; i < n; ++i)
+	for (usize_t i = 0; i < n; ++i)
 		d[i] = s[i];
 
 	return dst;
 }
 
-void *memmove(void *dst, const void *src, size_t n)
+void *memmove(void *dst, const void *src, usize_t n)
 {
 	unsigned char *d = (unsigned char *)dst;
 	const unsigned char *s = (const unsigned char *)src;
 
 	if (d < s) {
-		for (size_t i = 0; i < n; ++i)
+		for (usize_t i = 0; i < n; ++i)
 			d[i] = s[i];
 	} else if (d > s) {
-		for (size_t i = n; i > 0; --i)
+		for (usize_t i = n; i > 0; --i)
 			d[i - 1] = s[i - 1];
 	}
 
 	return dst;
 }
 
-void *memset(void *s, int c, size_t n)
+void *memset(void *s, int c, usize_t n)
 {
 	unsigned char *p = (unsigned char *)s;
 	unsigned char uc = (unsigned char)c;
 
-	for (size_t i = 0; i < n; ++i)
+	for (usize_t i = 0; i < n; ++i)
 		p[i] = uc;
 
 	return s;
 }
 
-void *memchr(const void *s, int c, size_t n)
+void *memchr(const void *s, int c, usize_t n)
 {
 	const unsigned char *p = (const unsigned char *)s;
 	unsigned char uc = (unsigned char)c;
 
-	for (size_t i = 0; i < n; ++i)
+	for (usize_t i = 0; i < n; ++i)
 		if (p[i] == uc)
 			return (void *)(p + i);
 
 	return NULL;
 }
 
-void *memrchr(const void *s, int c, size_t n)
+void *memrchr(const void *s, int c, usize_t n)
 {
 	const unsigned char *p = (const unsigned char *)s;
 	unsigned char uc = (unsigned char)c;
 
-	for (size_t i = n; i > 0; --i)
+	for (usize_t i = n; i > 0; --i)
 		if (p[i - 1] == uc)
 			return (void *)(p + i - 1);
 
 	return NULL;
 }
 
-int memcmp(const void *s1, const void *s2, size_t n)
+int memcmp(const void *s1, const void *s2, usize_t n)
 {
 	const unsigned char *p1 = (const unsigned char *)s1;
 	const unsigned char *p2 = (const unsigned char *)s2;
 
-	for (size_t i = 0; i < n; ++i)
+	for (usize_t i = 0; i < n; ++i)
 		if (p1[i] != p2[i])
 			return (p1[i] > p2[i]) ? 1 : -1;
 
 	return 0;
 }
 
-void memswap(void *s1, void *s2, size_t size)
+void memswap(void *s1, void *s2, usize_t size)
 {
 	unsigned char t;
 	unsigned char *p1 = s1;
 	unsigned char *p2 = s2;
 
-	for (size_t i = 0; i < size; ++i) {
+	for (usize_t i = 0; i < size; ++i) {
 		t = p1[i];
 		p1[i] = p2[i];
 		p2[i] = t;
 	}
 }
 
-size_t strlen(const char *s)
+usize_t strlen(const char *s)
 {
 	const char *p = s;
 	while (*p != '\0')
 		++p;
-	return (size_t)(p - s);
+	return (usize_t)(p - s);
 }
 
-size_t strnlen(const char *s, size_t n)
+usize_t strnlen(const char *s, usize_t n)
 {
 	const char *p = s;
 	while (n > 0 && *p != '\0') {
 		++p;
 		--n;
 	}
-	return (size_t)(p - s);
+	return (usize_t)(p - s);
 }
 
 int strcmp(const char *s1, const char *s2)
@@ -116,7 +116,7 @@ int strcmp(const char *s1, const char *s2)
 	return (*(unsigned char *)s1 - *(unsigned char *)s2);
 }
 
-int strncmp(const char *s1, const char *s2, size_t n)
+int strncmp(const char *s1, const char *s2, usize_t n)
 {
 	if (n == 0)
 		return 0;
@@ -126,7 +126,7 @@ int strncmp(const char *s1, const char *s2, size_t n)
 		++s2;
 	}
 
-	if (n == (size_t)-1)
+	if (n == (usize_t)-1)
 		return 0;
 
 	return (*(unsigned char *)s1 - *(unsigned char *)s2);
@@ -140,10 +140,10 @@ char *strcpy(char *dst, const char *src)
 	return ret;
 }
 
-char *strncpy(char *dst, const char *src, size_t n)
+char *strncpy(char *dst, const char *src, usize_t n)
 {
 	char *ret = dst;
-	size_t i;
+	usize_t i;
 
 	for (i = 0; i < n && src[i] != '\0'; ++i)
 		dst[i] = src[i];
@@ -154,7 +154,7 @@ char *strncpy(char *dst, const char *src, size_t n)
 	return ret;
 }
 
-size_t strlcpy(char *dst, char const *src, size_t size)
+usize_t strlcpy(char *dst, char const *src, usize_t size)
 {
 	char *d = dst;
 
@@ -169,7 +169,7 @@ size_t strlcpy(char *dst, char const *src, size_t size)
 	*dst = '\0';
 
 finally:
-	return (size_t)(dst - d) + strlen(src);
+	return (usize_t)(dst - d) + strlen(src);
 }
 
 char *strcat(char *dst, char const *src)
@@ -178,7 +178,7 @@ char *strcat(char *dst, char const *src)
 	return dst;
 }
 
-char *strncat(char *dst, char const *src, size_t n)
+char *strncat(char *dst, char const *src, usize_t n)
 {
 	char *d = dst;
 	dst += strlen(dst);
@@ -190,9 +190,9 @@ char *strncat(char *dst, char const *src, size_t n)
 	return d;
 }
 
-size_t strlcat(char *dst, char const *src, size_t size)
+usize_t strlcat(char *dst, char const *src, usize_t size)
 {
-	size_t len = strnlen(dst, size);
+	usize_t len = strnlen(dst, size);
 	if (len == size)
 		return size + strlen(src);
 	return len + strlcpy(dst + len, src, size - len);
@@ -231,8 +231,8 @@ char *strstr(char const *haystack, char const *needle)
 	if (*needle == '\0')
 		return (char *)haystack;
 
-	size_t needle_len = strlen(needle);
-	size_t haystack_len = strlen(haystack);
+	usize_t needle_len = strlen(needle);
+	usize_t haystack_len = strlen(haystack);
 	if (needle_len > haystack_len)
 		return NULL;
 
@@ -348,28 +348,28 @@ const char *strerror(int errnum)
 	if (errnum < 0)
 		errnum = -errnum;
 
-	if ((size_t)errnum >= countof(errmsgs))
+	if ((usize_t)errnum >= countof(errmsgs))
 		return "Unknown error";
 	return errmsgs[errnum];
 }
 
-size_t strspn(const char *s, const char *accept)
+usize_t strspn(const char *s, const char *accept)
 {
 	bool map[256] = { false };
 	for (int i = 0; accept[i] != '\0'; ++i)
 		map[(int)accept[i]] = true;
-	size_t cnt = 0;
+	usize_t cnt = 0;
 	while (map[(int)s[cnt]])
 		++cnt;
 	return cnt;
 }
 
-size_t strcspn(const char *s, const char *reject)
+usize_t strcspn(const char *s, const char *reject)
 {
 	bool map[256] = { false };
 	for (int i = 0; reject[i] != '\0'; ++i)
 		map[(int)reject[i]] = true;
-	size_t cnt = 0;
+	usize_t cnt = 0;
 	while (!map[(int)s[cnt]])
 		++cnt;
 	return cnt;

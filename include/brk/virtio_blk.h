@@ -33,15 +33,15 @@
 #define SECTOR_SIZE 512
 
 struct virtio_blk_req {
-	uint32_t type;
-	uint32_t reserved;
-	uint64_t sector;
+	u32 type;
+	u32 reserved;
+	u64 sector;
 };
 
 struct virtio_blk_transation {
-	uint64_t buf_phys;
-	uint64_t sector;
-	size_t sec_count;
+	u64 buf_phys;
+	u64 sector;
+	usize_t sec_count;
 	bool is_write;
 	bool completed;
 };
@@ -52,9 +52,9 @@ struct virtio_blk_track {
 };
 
 int virtio_blk_init(struct virtio_device *dev, unsigned int queue_size);
-void virtio_blk_init_hart(uint32_t hart_id);
-int virtio_blk_read(uint64_t sector, uint64_t buf_phys, size_t sec_count);
-int virtio_blk_write(uint64_t sector, uint64_t buf_phys, size_t sec_count);
+void virtio_blk_init_hart(u32 hart_id);
+int virtio_blk_read(u64 sector, u64 buf_phys, usize_t sec_count);
+int virtio_blk_write(u64 sector, u64 buf_phys, usize_t sec_count);
 void virtio_blk_intr(void);
 
 #endif

@@ -6,7 +6,7 @@
 #include <brk/process.h>
 #include <brk/syscall.h>
 
-static uint64_t (*systable[])(void) = {
+static u64 (*systable[])(void) = {
 	[SYS_read] = sys_read,
 	[SYS_write] = sys_write,
 	[SYS_exit] = sys_exit,
@@ -70,14 +70,14 @@ static uint64_t (*systable[])(void) = {
 void syscall(void)
 {
 	struct process *proc = current_process();
-	uint64_t num = proc->tf.a7;
+	u64 num = proc->tf.a7;
 	if (num < countof(systable) && systable[num])
 		proc->tf.a0 = systable[num]();
 	else
 		proc->tf.a0 = -ENOSYS;
 }
 
-uint64_t syscall_arg_raw(int argno)
+u64 syscall_arg_raw(int argno)
 {
 	struct process *proc = current_process();
 

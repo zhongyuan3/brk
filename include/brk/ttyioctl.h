@@ -9,10 +9,10 @@
 #define TTY_LFLAG_ECHO ECHO
 
 struct brk_tty_attr {
-	uint32_t lflags;
-	uint8_t vmin;
-	uint8_t vtime;
-	uint8_t _pad[2];
+	u32 lflags;
+	u8 vmin;
+	u8 vtime;
+	u8 _pad[2];
 };
 
 #define BRK_TIOCGLFLAGS 0xBF01u

@@ -102,15 +102,15 @@ void tty_timer_tick(void)
 
 	spinlock_acquire(&tty->lock);
 	if (tty->null_raw_armed &&
-	    (int64_t)(jiffies_get() - tty->null_raw_deadline_jiffies) >= 0)
+	    (s64)(jiffies_get() - tty->null_raw_deadline_jiffies) >= 0)
 		wake = true;
 	if (!wake) {
 		struct tty_file_priv *p;
 
 		list_for_each_entry(p, &tty->vtime_waiters, vtime_link) {
 			if (p->raw_timer_armed &&
-			    (int64_t)(jiffies_get() -
-				      p->raw_deadline_jiffies) >= 0) {
+			    (s64)(jiffies_get() - p->raw_deadline_jiffies) >=
+				    0) {
 				wake = true;
 				break;
 			}
@@ -137,18 +137,18 @@ static void tty_echo(struct tty *tty, int c)
 	tty->port->put_char(tty->port, c);
 }
 
-static size_t tty_rx_avail(struct tty *tty)
+static usize_t tty_rx_avail(struct tty *tty)
 {
 	return tty->rx_w - tty->rx_r;
 }
 
 static int tty_read_noncanon(struct tty *tty, struct tty_file_priv *priv,
-			     char *buf, size_t n, size_t *read_out)
+			     char *buf, usize_t n, usize_t *read_out)
 {
 	unsigned char vmin = tty->termios.c_cc[VMIN];
 	unsigned char vtime = tty->termios.c_cc[VTIME];
-	size_t avail;
-	size_t give;
+	usize_t avail;
+	usize_t give;
 
 	if (vmin == 0 && vtime == 0) {
 		avail = tty_rx_avail(tty);
@@ -161,7 +161,7 @@ static int tty_read_noncanon(struct tty *tty, struct tty_file_priv *priv,
 			avail = tty_rx_avail(tty);
 		}
 		give = avail < n ? avail : n;
-		for (size_t i = 0; i < give; ++i)
+		for (usize_t i = 0; i < give; ++i)
 			*buf++ = tty->rx_buf[tty->rx_r++ % TTY_RX_BUF_SIZE];
 		*read_out = give;
 		return 0;
@@ -171,7 +171,7 @@ static int tty_read_noncanon(struct tty *tty, struct tty_file_priv *priv,
 		avail = tty_rx_avail(tty);
 		if (avail > 0) {
 			give = avail < n ? avail : n;
-			for (size_t i = 0; i < give; ++i)
+			for (usize_t i = 0; i < give; ++i)
 				*buf++ = tty->rx_buf[tty->rx_r++ %
 						     TTY_RX_BUF_SIZE];
 			*read_out = give;
@@ -181,11 +181,11 @@ static int tty_read_noncanon(struct tty *tty, struct tty_file_priv *priv,
 		if (priv) {
 			list_add_tail(&priv->vtime_link, &tty->vtime_waiters);
 			priv->raw_deadline_jiffies =
-				jiffies_get() + (uint64_t)vtime * 100u;
+				jiffies_get() + (u64)vtime * 100u;
 			priv->raw_timer_armed = true;
 		} else {
 			tty->null_raw_deadline_jiffies =
-				jiffies_get() + (uint64_t)vtime * 100u;
+				jiffies_get() + (u64)vtime * 100u;
 			tty->null_raw_armed = true;
 		}
 
@@ -199,17 +199,16 @@ static int tty_read_noncanon(struct tty *tty, struct tty_file_priv *priv,
 				return -1;
 			}
 			if (priv) {
-				if ((int64_t)(jiffies_get() -
-					      priv->raw_deadline_jiffies) >=
-				    0) {
+				if ((s64)(jiffies_get() -
+					  priv->raw_deadline_jiffies) >= 0) {
 					priv->raw_timer_armed = false;
 					list_del_init(&priv->vtime_link);
 					*read_out = 0;
 					return 0;
 				}
 			} else {
-				if ((int64_t)(jiffies_get() -
-					      tty->null_raw_deadline_jiffies) >=
+				if ((s64)(jiffies_get() -
+					  tty->null_raw_deadline_jiffies) >=
 				    0) {
 					tty->null_raw_armed = false;
 					*read_out = 0;
@@ -227,13 +226,13 @@ static int tty_read_noncanon(struct tty *tty, struct tty_file_priv *priv,
 
 		avail = tty_rx_avail(tty);
 		give = avail < n ? avail : n;
-		for (size_t i = 0; i < give; ++i)
+		for (usize_t i = 0; i < give; ++i)
 			*buf++ = tty->rx_buf[tty->rx_r++ % TTY_RX_BUF_SIZE];
 		*read_out = give;
 		return 0;
 	}
 
-	size_t need = vmin;
+	usize_t need = vmin;
 
 	if (need == 0)
 		need = 1;
@@ -244,16 +243,16 @@ static int tty_read_noncanon(struct tty *tty, struct tty_file_priv *priv,
 	}
 	avail = tty_rx_avail(tty);
 	give = avail < n ? avail : n;
-	for (size_t i = 0; i < give; ++i)
+	for (usize_t i = 0; i < give; ++i)
 		*buf++ = tty->rx_buf[tty->rx_r++ % TTY_RX_BUF_SIZE];
 	*read_out = give;
 	return 0;
 }
 
-int tty_read(struct tty *tty, struct file *file, char *buf, size_t n,
-	     size_t *read)
+int tty_read(struct tty *tty, struct file *file, char *buf, usize_t n,
+	     usize_t *read)
 {
-	size_t target = n;
+	usize_t target = n;
 	int c;
 	struct tty_file_priv *priv = file ? file->private_data : NULL;
 
@@ -289,7 +288,7 @@ int tty_read(struct tty *tty, struct file *file, char *buf, size_t n,
 		return 0;
 	}
 
-	size_t rc = 0;
+	usize_t rc = 0;
 	int err = tty_read_noncanon(tty, priv, buf, n, &rc);
 
 	spinlock_release(&tty->lock);
@@ -298,7 +297,7 @@ int tty_read(struct tty *tty, struct file *file, char *buf, size_t n,
 	return err;
 }
 
-int tty_write(struct tty *tty, const char *buf, size_t n, size_t *written)
+int tty_write(struct tty *tty, const char *buf, usize_t n, usize_t *written)
 {
 	if (!tty->port || !tty->port->put_char) {
 		if (written)
@@ -306,7 +305,7 @@ int tty_write(struct tty *tty, const char *buf, size_t n, size_t *written)
 		return 0;
 	}
 
-	for (size_t i = 0; i < n; ++i)
+	for (usize_t i = 0; i < n; ++i)
 		tty->port->put_char(tty->port, (unsigned char)buf[i]);
 
 	if (written)
@@ -440,7 +439,7 @@ long tty_ioctl(struct tty *tty, struct file *file, unsigned int cmd,
 		return 0;
 	}
 	case BRK_TIOCGLFLAGS: {
-		uint32_t *p = (uint32_t *)arg;
+		u32 *p = (u32 *)arg;
 
 		if (!p)
 			return -EINVAL;
@@ -450,7 +449,7 @@ long tty_ioctl(struct tty *tty, struct file *file, unsigned int cmd,
 		return 0;
 	}
 	case BRK_TIOCSLFLAGS: {
-		uint32_t *p = (uint32_t *)arg;
+		u32 *p = (u32 *)arg;
 		tcflag_t old;
 
 		if (!p)

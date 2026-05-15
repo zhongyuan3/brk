@@ -5,13 +5,13 @@
 #include <brk/types.h>
 
 struct rtc_device {
-	uint64_t phys_base;
-	size_t size;
-	uint32_t irq;
+	u64 phys_base;
+	usize_t size;
+	u32 irq;
 };
 
 void rtc_init(void);
-uint64_t rtc_read_ns(void);
+u64 rtc_read_ns(void);
 void rtc_read_timeval(struct timeval *tv);
 void rtc_set_timeval(const struct timeval *tv);
 void rtc_read_timespec(struct timespec *ts);

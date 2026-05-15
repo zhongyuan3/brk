@@ -35,7 +35,7 @@ void proc_cache_init(void)
 			alignof(struct process), "proc_cache");
 }
 
-static uint64_t kstack_alloc(void)
+static u64 kstack_alloc(void)
 {
 	struct page *pg = page_alloc(KSTACK_PAGE_ORDER);
 	if (!pg)
@@ -43,7 +43,7 @@ static uint64_t kstack_alloc(void)
 	return page_to_virt(pg);
 }
 
-static void kstack_free(uint64_t stack)
+static void kstack_free(u64 stack)
 {
 	struct page *pg = virt_to_page(stack);
 	ASSERT(pg);
@@ -142,7 +142,7 @@ void proc_init_user(void)
 		panic("failed to create user init process\n");
 	spinlock_acquire(&init_proc->lock);
 	strlcpy(init_proc->name, "init", sizeof(init_proc->name));
-	init_proc->ctx.ra = (uint64_t)user_init_proc_return;
+	init_proc->ctx.ra = (u64)user_init_proc_return;
 	init_proc->ctx.sp = init_proc->kstack + KSTACK_SIZE;
 	init_proc->state = PROCESS_STATE_RUNNING;
 	init_proc->irq_enabled = true;
@@ -166,16 +166,16 @@ bool proc_is_killed(struct process *proc)
 	return killed;
 }
 
-int proc_set_brk(uint64_t addr)
+int proc_set_brk(u64 addr)
 {
 	struct process *proc = current_process();
 	struct mm_struct *mm = proc->mm;
 	struct vm_area *heap = mm->heap;
-	uint64_t heap_start = heap->addr;
-	uint64_t curr_heap_end = heap_start + heap->size;
+	u64 heap_start = heap->addr;
+	u64 curr_heap_end = heap_start + heap->size;
 	int err = 0;
-	uint64_t new_heap_end;
-	size_t incr;
+	u64 new_heap_end;
+	usize_t incr;
 
 	if (addr < heap_start)
 		return 0;
@@ -187,22 +187,22 @@ int proc_set_brk(uint64_t addr)
 
 	new_heap_end = round_up(addr, PAGE_SIZE);
 	incr = new_heap_end - curr_heap_end;
-	size_t old_npgs = heap->nr_pages;
-	size_t new_npgs = old_npgs + (incr >> PAGE_SHIFT);
+	usize_t old_npgs = heap->nr_pages;
+	usize_t new_npgs = old_npgs + (incr >> PAGE_SHIFT);
 	struct page **new_pgs = kcalloc(new_npgs, sizeof(struct page *));
 	if (!new_pgs)
 		return -ENOMEM;
 	memcpy(new_pgs, heap->pages, old_npgs * sizeof(struct page *));
 
 	addr = curr_heap_end;
-	size_t i = old_npgs;
+	usize_t i = old_npgs;
 	while (i < new_npgs) {
 		struct page *pg = page_alloc(0);
 		if (!pg) {
 			err = -ENOMEM;
 			goto failed;
 		}
-		uint64_t pa = page_to_phys(pg);
+		u64 pa = page_to_phys(pg);
 		err = uvmap(mm->pgd, addr, PAGE_SIZE, pa, PTE_R | PTE_W);
 		if (err) {
 			ASSERT(pg);
@@ -225,9 +225,9 @@ int proc_set_brk(uint64_t addr)
 	return 0;
 
 failed:
-	for (uint64_t a = curr_heap_end; a < addr; a += PAGE_SIZE)
+	for (u64 a = curr_heap_end; a < addr; a += PAGE_SIZE)
 		uvunmap(mm->pgd, a, PAGE_SIZE);
-	for (size_t j = old_npgs; j < i; ++j) {
+	for (usize_t j = old_npgs; j < i; ++j) {
 		ASSERT(new_pgs[j]);
 		page_free(new_pgs[j], 0);
 	}
@@ -308,7 +308,7 @@ bool proc_get_info(pid_t pid, struct proc_info *info)
 	info->utime = target->ptms.tms_utime;
 	info->ktime = target->ptms.tms_stime;
 	info->brk = target->mm ? target->mm->brk : 0;
-	for (size_t i = 0; i < PROCESS_NAME_MAX; ++i) {
+	for (usize_t i = 0; i < PROCESS_NAME_MAX; ++i) {
 		info->name[i] = target->name[i];
 		if (target->name[i] == '\0')
 			break;
@@ -391,7 +391,7 @@ int proc_fork(void)
 	spinlock_acquire(&child->lock);
 	cpid = child->pid;
 	child->state = PROCESS_STATE_RUNNING;
-	child->ctx.ra = (uint64_t)proc_fork_return;
+	child->ctx.ra = (u64)proc_fork_return;
 	child->ctx.sp = child->kstack + KSTACK_SIZE;
 	spinlock_release(&child->lock);
 

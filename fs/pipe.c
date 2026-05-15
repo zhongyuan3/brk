@@ -21,8 +21,8 @@
 
 struct anon_pipe {
 	spinlock_t lock;
-	size_t head;
-	size_t count;
+	usize_t head;
+	usize_t count;
 	unsigned int readers;
 	unsigned int writers;
 	bool nonblock;
@@ -50,7 +50,7 @@ static struct dentry *pipefs_lookup(struct inode *dir, struct dentry *dentry,
 }
 
 static int pipefs_dir_getattr(const struct path *path, struct stat *st,
-			      uint32_t mask, unsigned int flags)
+			      u32 mask, unsigned int flags)
 {
 	struct inode *inode = path->dentry->d_inode;
 
@@ -77,7 +77,7 @@ static int pipefs_dir_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t pipefs_dir_read(struct file *file, char *buf, size_t size,
+static ssize_t pipefs_dir_read(struct file *file, char *buf, usize_t size,
 			       loff_t *pos)
 {
 	(void)file;
@@ -87,8 +87,8 @@ static ssize_t pipefs_dir_read(struct file *file, char *buf, size_t size,
 	return -EISDIR;
 }
 
-static ssize_t pipefs_dir_write(struct file *file, const char *buf, size_t size,
-				loff_t *pos)
+static ssize_t pipefs_dir_write(struct file *file, const char *buf,
+				usize_t size, loff_t *pos)
 {
 	(void)file;
 	(void)buf;
@@ -232,7 +232,7 @@ static struct dentry *pipefs_mount(struct file_system_type *fs_type, int flags,
 	return root_dentry;
 }
 
-static int pipe_getattr(const struct path *path, struct stat *st, uint32_t mask,
+static int pipe_getattr(const struct path *path, struct stat *st, u32 mask,
 			unsigned int flags)
 {
 	struct inode *inode = path->dentry->d_inode;
@@ -282,10 +282,11 @@ static int pipe_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t pipe_read(struct file *file, char *buf, size_t size, loff_t *pos)
+static ssize_t pipe_read(struct file *file, char *buf, usize_t size,
+			 loff_t *pos)
 {
 	struct anon_pipe *pipe = file->f_inode->i_private;
-	size_t n, first;
+	usize_t n, first;
 	ssize_t total = 0;
 
 	(void)pos;
@@ -333,11 +334,11 @@ static ssize_t pipe_read(struct file *file, char *buf, size_t size, loff_t *pos)
 	return total;
 }
 
-static ssize_t pipe_write(struct file *file, const char *buf, size_t size,
+static ssize_t pipe_write(struct file *file, const char *buf, usize_t size,
 			  loff_t *pos)
 {
 	struct anon_pipe *pipe = file->f_inode->i_private;
-	size_t n, first;
+	usize_t n, first;
 	ssize_t total = 0;
 
 	(void)pos;

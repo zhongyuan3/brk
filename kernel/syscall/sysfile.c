@@ -52,11 +52,11 @@ static int do_pipe2(int *pipefd, int flags)
 	return 0;
 }
 
-uint64_t sys_read(void)
+u64 sys_read(void)
 {
 	int fd;
 	void *buf;
-	size_t n;
+	usize_t n;
 	struct file *fp;
 	int err;
 
@@ -70,11 +70,11 @@ uint64_t sys_read(void)
 	return file_read(fp, buf, n);
 }
 
-uint64_t sys_write(void)
+u64 sys_write(void)
 {
 	int fd;
 	const void *buf;
-	size_t n;
+	usize_t n;
 	struct file *fp;
 	int err;
 
@@ -88,13 +88,13 @@ uint64_t sys_write(void)
 	return file_write(fp, buf, n);
 }
 
-uint64_t sys_open(void)
+u64 sys_open(void)
 {
 	int fd;
 	struct file *fp = NULL;
 	char *path = syscall_arg_ptr(0);
 	int flags = syscall_arg_raw(1);
-	mode_t mode = syscall_arg_raw(2);
+	umode_t mode = syscall_arg_raw(2);
 
 	fp = do_openat(AT_FDCWD, path, flags, mode);
 	if (IS_ERR(fp))
@@ -108,14 +108,14 @@ uint64_t sys_open(void)
 	return fd;
 }
 
-uint64_t sys_openat(void)
+u64 sys_openat(void)
 {
 	int fd;
 	struct file *fp = NULL;
 	int dirfd = syscall_arg_raw(0);
 	char *path = syscall_arg_ptr(1);
 	int flags = syscall_arg_raw(2);
-	mode_t mode = syscall_arg_raw(3);
+	umode_t mode = syscall_arg_raw(3);
 
 	fp = do_openat(dirfd, path, flags, mode);
 	if (IS_ERR(fp))
@@ -129,7 +129,7 @@ uint64_t sys_openat(void)
 	return fd;
 }
 
-uint64_t sys_close(void)
+u64 sys_close(void)
 {
 	int err;
 	struct file *fp = NULL;
@@ -144,7 +144,7 @@ uint64_t sys_close(void)
 	return 0;
 }
 
-uint64_t sys_execve(void)
+u64 sys_execve(void)
 {
 	char *path = syscall_arg_ptr(0);
 	char **argv = syscall_arg_ptr(1);
@@ -152,32 +152,32 @@ uint64_t sys_execve(void)
 	return do_execve(path, argv, envp);
 }
 
-uint64_t sys_mmap(void)
+u64 sys_mmap(void)
 {
 	return -ENOSYS;
 }
 
-uint64_t sys_munmap(void)
+u64 sys_munmap(void)
 {
 	return -ENOSYS;
 }
 
-uint64_t sys_mprotect(void)
+u64 sys_mprotect(void)
 {
 	return -ENOSYS;
 }
 
-uint64_t sys_msync(void)
+u64 sys_msync(void)
 {
 	return -ENOSYS;
 }
 
-uint64_t sys_mremap(void)
+u64 sys_mremap(void)
 {
 	return -ENOSYS;
 }
 
-uint64_t sys_fstat(void)
+u64 sys_fstat(void)
 {
 	struct file *fp = NULL;
 	struct stat *buf;
@@ -190,7 +190,7 @@ uint64_t sys_fstat(void)
 	return file_stat(fp, buf);
 }
 
-uint64_t sys_lstat(void)
+u64 sys_lstat(void)
 {
 	struct file *fp = NULL;
 	struct stat *buf;
@@ -203,7 +203,7 @@ uint64_t sys_lstat(void)
 	return file_stat(fp, buf);
 }
 
-uint64_t sys_stat(void)
+u64 sys_stat(void)
 {
 	int err;
 	const char *path = syscall_arg_ptr(0);
@@ -219,14 +219,14 @@ uint64_t sys_stat(void)
 	return err;
 }
 
-uint64_t sys_link(void)
+u64 sys_link(void)
 {
 	char *oldpath = syscall_arg_ptr(0);
 	char *newpath = syscall_arg_ptr(1);
 	return do_linkat(AT_FDCWD, oldpath, AT_FDCWD, newpath, 0);
 }
 
-uint64_t sys_linkat(void)
+u64 sys_linkat(void)
 {
 	int olddirfd = syscall_arg_int(0);
 	char *oldpath = syscall_arg_ptr(1);
@@ -236,13 +236,13 @@ uint64_t sys_linkat(void)
 	return do_linkat(olddirfd, oldpath, newdirfd, newpath, flags);
 }
 
-uint64_t sys_unlink(void)
+u64 sys_unlink(void)
 {
 	char *path = syscall_arg_ptr(0);
 	return do_unlinkat(AT_FDCWD, path, 0);
 }
 
-uint64_t sys_unlinkat(void)
+u64 sys_unlinkat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	char *path = syscall_arg_ptr(1);
@@ -250,42 +250,42 @@ uint64_t sys_unlinkat(void)
 	return do_unlinkat(dirfd, path, flags);
 }
 
-uint64_t sys_symlink(void)
+u64 sys_symlink(void)
 {
 	const char *target = syscall_arg_ptr(0);
 	char *linkpath = syscall_arg_ptr(1);
 	return do_symlinkat(AT_FDCWD, linkpath, target);
 }
 
-uint64_t sys_readlink(void)
+u64 sys_readlink(void)
 {
 	const char *pathname = syscall_arg_ptr(0);
 	char *buf = syscall_arg_ptr(1);
-	size_t bufsiz = syscall_arg_raw(2);
+	usize_t bufsiz = syscall_arg_raw(2);
 	return do_readlinkat(AT_FDCWD, pathname, buf, bufsiz);
 }
 
-uint64_t sys_rename(void)
+u64 sys_rename(void)
 {
 	const char *oldpathname = syscall_arg_ptr(0);
 	const char *newpathname = syscall_arg_ptr(1);
 	return do_renameat(AT_FDCWD, oldpathname, AT_FDCWD, newpathname, 0);
 }
 
-uint64_t sys_creat(void)
+u64 sys_creat(void)
 {
 	const char *pathname = syscall_arg_ptr(0);
-	mode_t mode = syscall_arg_raw(1);
+	umode_t mode = syscall_arg_raw(1);
 	return do_creat(pathname, mode);
 }
 
-uint64_t sys_rmdir(void)
+u64 sys_rmdir(void)
 {
 	const char *pathname = syscall_arg_ptr(0);
 	return do_rmdir(pathname);
 }
 
-uint64_t sys_uname(void)
+u64 sys_uname(void)
 {
 	struct utsname name = {
 		.sysname = "BRK",
@@ -300,11 +300,11 @@ uint64_t sys_uname(void)
 	return 0;
 }
 
-uint64_t sys_getcwd(void)
+u64 sys_getcwd(void)
 {
 	struct process *proc = current_process();
 	char *buf = syscall_arg_ptr(0);
-	size_t size = syscall_arg_raw(1);
+	usize_t size = syscall_arg_raw(1);
 	int err = path_to_absolute(&proc->cwd, buf, size);
 	if (err) {
 		klog_warn("%s(): %s\n", __func__, strerror(err));
@@ -313,7 +313,7 @@ uint64_t sys_getcwd(void)
 	return 0;
 }
 
-uint64_t sys_chdir(void)
+u64 sys_chdir(void)
 {
 	char *pathname = syscall_arg_ptr(0);
 	struct process *proc = current_process();
@@ -338,7 +338,7 @@ uint64_t sys_chdir(void)
 	return 0;
 }
 
-uint64_t sys_fchdir(void)
+u64 sys_fchdir(void)
 {
 	int err;
 	int fd = 0;
@@ -358,7 +358,7 @@ uint64_t sys_fchdir(void)
 	return 0;
 }
 
-uint64_t sys_renameat(void)
+u64 sys_renameat(void)
 {
 	int olddirfd = syscall_arg_int(0);
 	const char *oldpathname = syscall_arg_ptr(1);
@@ -367,7 +367,7 @@ uint64_t sys_renameat(void)
 	return do_renameat(olddirfd, oldpathname, newdirfd, newpathname, 0);
 }
 
-uint64_t sys_renameat2(void)
+u64 sys_renameat2(void)
 {
 	int olddirfd = syscall_arg_int(0);
 	const char *oldpathname = syscall_arg_ptr(1);
@@ -377,7 +377,7 @@ uint64_t sys_renameat2(void)
 	return do_renameat(olddirfd, oldpathname, newdirfd, newpathname, flags);
 }
 
-uint64_t sys_symlinkat(void)
+u64 sys_symlinkat(void)
 {
 	const char *target;
 	int newdirfd;
@@ -392,12 +392,12 @@ uint64_t sys_symlinkat(void)
 	return do_symlinkat(newdirfd, linkpath, target);
 }
 
-uint64_t sys_readlinkat(void)
+u64 sys_readlinkat(void)
 {
 	int dirfd;
 	const char *pathname;
 	char *buf;
-	size_t bufsiz;
+	usize_t bufsiz;
 	int err;
 
 	err = syscall_arg_fd(0, &dirfd, NULL);
@@ -409,37 +409,37 @@ uint64_t sys_readlinkat(void)
 	return do_readlinkat(dirfd, pathname, buf, bufsiz);
 }
 
-uint64_t sys_mkdir(void)
+u64 sys_mkdir(void)
 {
 	char *path = syscall_arg_ptr(0);
 	return do_mkdirat(AT_FDCWD, path, 0);
 }
 
-uint64_t sys_mkdirat(void)
+u64 sys_mkdirat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	char *pathname = syscall_arg_ptr(1);
 	return do_mkdirat(dirfd, pathname, 0);
 }
 
-uint64_t sys_mknod(void)
+u64 sys_mknod(void)
 {
 	char *path = syscall_arg_ptr(0);
-	mode_t mode = syscall_arg_raw(1);
+	umode_t mode = syscall_arg_raw(1);
 	dev_t dev = syscall_arg_raw(2);
 	return do_mknodat(AT_FDCWD, path, mode, dev);
 }
 
-uint64_t sys_mknodat(void)
+u64 sys_mknodat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	char *path = syscall_arg_ptr(1);
-	mode_t mode = syscall_arg_raw(2);
+	umode_t mode = syscall_arg_raw(2);
 	dev_t dev = syscall_arg_raw(3);
 	return do_mknodat(dirfd, path, mode, dev);
 }
 
-uint64_t sys_pipe(void)
+u64 sys_pipe(void)
 {
 	int *pipefd = syscall_arg_ptr(0);
 	int err;
@@ -448,10 +448,10 @@ uint64_t sys_pipe(void)
 		return -EFAULT;
 
 	err = do_pipe2(pipefd, 0);
-	return err < 0 ? (uint64_t)(long)err : 0;
+	return err < 0 ? (u64)(long)err : 0;
 }
 
-uint64_t sys_pipe2(void)
+u64 sys_pipe2(void)
 {
 	int *pipefd = syscall_arg_ptr(0);
 	int flags = syscall_arg_int(1);
@@ -459,10 +459,10 @@ uint64_t sys_pipe2(void)
 	if (!pipefd)
 		return -EFAULT;
 
-	return (uint64_t)(long)do_pipe2(pipefd, flags);
+	return (u64)(long)do_pipe2(pipefd, flags);
 }
 
-uint64_t sys_dup(void)
+u64 sys_dup(void)
 {
 	int oldfd;
 	int newfd;
@@ -483,7 +483,7 @@ uint64_t sys_dup(void)
 	}
 }
 
-uint64_t sys_dup2(void)
+u64 sys_dup2(void)
 {
 	int oldfd;
 	int newfd;
@@ -512,7 +512,7 @@ uint64_t sys_dup2(void)
 	return newfd;
 }
 
-uint64_t sys_mount(void)
+u64 sys_mount(void)
 {
 	const char *source = syscall_arg_ptr(0);
 	const char *target = syscall_arg_ptr(1);
@@ -522,7 +522,7 @@ uint64_t sys_mount(void)
 	return do_mount(source, target, type, flags, data);
 }
 
-uint64_t sys_umount2(void)
+u64 sys_umount2(void)
 {
 	const char *target = syscall_arg_ptr(0);
 	int flags = syscall_arg_int(1);
@@ -558,7 +558,7 @@ uint64_t sys_umount2(void)
 	return 0;
 }
 
-uint64_t sys_lseek(void)
+u64 sys_lseek(void)
 {
 	int fd = 0;
 	struct file *fp = NULL;
@@ -577,13 +577,13 @@ uint64_t sys_lseek(void)
 
 struct getdents_context {
 	struct dir_context ctx;
-	uint8_t *buf;
-	size_t size;
-	size_t pos;
+	u8 *buf;
+	usize_t size;
+	usize_t pos;
 };
 
 static bool getdents_filldir(struct dir_context *ctx, const char *name,
-			     int namelen, loff_t offset, uint64_t ino,
+			     int namelen, loff_t offset, u64 ino,
 			     unsigned int d_type)
 {
 	struct getdents_context *gctx;
@@ -593,7 +593,7 @@ static bool getdents_filldir(struct dir_context *ctx, const char *name,
 	if (gctx->pos > gctx->size)
 		return false;
 
-	size_t len = offsetof(struct dirent, d_name) + namelen + 1;
+	usize_t len = offsetof(struct dirent, d_name) + namelen + 1;
 	len = round_up(len, alignof(struct dirent));
 
 	if (len > gctx->size - gctx->pos)
@@ -611,12 +611,12 @@ static bool getdents_filldir(struct dir_context *ctx, const char *name,
 	return true;
 }
 
-uint64_t sys_getdents(void)
+u64 sys_getdents(void)
 {
 	int fd = -1;
 	struct file *fp = NULL;
 	void *buf;
-	size_t size;
+	usize_t size;
 	int err;
 
 	err = syscall_arg_fd(0, &fd, &fp);
@@ -661,13 +661,13 @@ uint64_t sys_getdents(void)
 
 struct getdents64_context {
 	struct dir_context ctx;
-	uint8_t *buf;
-	size_t size;
-	size_t pos;
+	u8 *buf;
+	usize_t size;
+	usize_t pos;
 };
 
 static bool getdents64_filldir(struct dir_context *ctx, const char *name,
-			       int namelen, loff_t offset, uint64_t ino,
+			       int namelen, loff_t offset, u64 ino,
 			       unsigned int d_type)
 {
 	struct getdents64_context *gctx;
@@ -677,7 +677,7 @@ static bool getdents64_filldir(struct dir_context *ctx, const char *name,
 	if (gctx->pos > gctx->size)
 		return false;
 
-	size_t len = offsetof(struct dirent64, d_name) + namelen + 1;
+	usize_t len = offsetof(struct dirent64, d_name) + namelen + 1;
 	len = round_up(len, alignof(struct dirent64));
 
 	if (len > gctx->size - gctx->pos)
@@ -695,12 +695,12 @@ static bool getdents64_filldir(struct dir_context *ctx, const char *name,
 	return true;
 }
 
-uint64_t sys_getdents64(void)
+u64 sys_getdents64(void)
 {
 	int fd = -1;
 	struct file *fp = NULL;
 	void *buf;
-	size_t size;
+	usize_t size;
 	int err;
 
 	err = syscall_arg_fd(0, &fd, &fp);
@@ -745,7 +745,7 @@ uint64_t sys_getdents64(void)
 	return ctx.pos;
 }
 
-struct file *do_openat(int dirfd, const char *pathname, int flags, mode_t mode)
+struct file *do_openat(int dirfd, const char *pathname, int flags, umode_t mode)
 {
 	int err;
 	struct file *file;
@@ -833,7 +833,7 @@ struct file *do_openat(int dirfd, const char *pathname, int flags, mode_t mode)
 	return file;
 }
 
-int do_mkdirat(int dirfd, const char *pathname, mode_t mode)
+int do_mkdirat(int dirfd, const char *pathname, umode_t mode)
 {
 	int err;
 	struct path path;
@@ -866,7 +866,7 @@ int do_mkdirat(int dirfd, const char *pathname, mode_t mode)
 	return err;
 }
 
-int do_mknodat(int dirfd, const char *pathname, mode_t mode, dev_t dev)
+int do_mknodat(int dirfd, const char *pathname, umode_t mode, dev_t dev)
 {
 	int err;
 	struct path path;
@@ -1016,22 +1016,22 @@ int do_symlinkat(int dirfd, const char *pathname, const char *target)
 	return err;
 }
 
-uint64_t sys_ioctl(void)
+u64 sys_ioctl(void)
 {
 	struct file *fp;
 	int err;
 
 	err = syscall_arg_fd(0, NULL, &fp);
 	if (err)
-		return (uint64_t)(long)err;
+		return (u64)(long)err;
 
 	unsigned int cmd = (unsigned int)syscall_arg_raw(1);
 	unsigned long arg = (unsigned long)syscall_arg_raw(2);
 	long ret = file_ioctl(fp, cmd, arg);
-	return (uint64_t)(long)ret;
+	return (u64)(long)ret;
 }
 
-int do_readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz)
+int do_readlinkat(int dirfd, const char *pathname, char *buf, usize_t bufsiz)
 {
 	int err;
 	struct path path;
@@ -1068,7 +1068,7 @@ int do_readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz)
 	return err;
 }
 
-int do_creat(const char *pathname, mode_t mode)
+int do_creat(const char *pathname, umode_t mode)
 {
 	int err;
 	struct path path;

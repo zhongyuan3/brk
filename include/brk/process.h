@@ -1,14 +1,14 @@
 #ifndef BRK_PROCESS_H
 #define BRK_PROCESS_H
 
-#include <brk/path.h>
 #include <brk/asm.h>
 #include <brk/fs_types.h>
 #include <brk/limits.h>
 #include <brk/lock.h>
 #include <brk/mm_types.h>
+#include <brk/path.h>
 #include <brk/resource.h>
-#include <brk/time.h>
+#include <brk/times.h>
 #include <brk/types.h>
 
 #define KSTACK_PAGE_ORDER 1
@@ -20,57 +20,57 @@
 #define PROCESS_NAME_MAX 32
 
 struct trapframe {
-	/* 0   */ uint64_t kernel_sp;
-	/* 8   */ uint64_t ra;
-	/* 16  */ uint64_t sp;
-	/* 24  */ uint64_t gp;
-	/* 32  */ uint64_t tp;
-	/* 40  */ uint64_t t0;
-	/* 48  */ uint64_t t1;
-	/* 56  */ uint64_t t2;
-	/* 64  */ uint64_t s0;
-	/* 72  */ uint64_t s1;
-	/* 80  */ uint64_t a0;
-	/* 88  */ uint64_t a1;
-	/* 96  */ uint64_t a2;
-	/* 104 */ uint64_t a3;
-	/* 112 */ uint64_t a4;
-	/* 120 */ uint64_t a5;
-	/* 128 */ uint64_t a6;
-	/* 136 */ uint64_t a7;
-	/* 144 */ uint64_t s2;
-	/* 152 */ uint64_t s3;
-	/* 160 */ uint64_t s4;
-	/* 168 */ uint64_t s5;
-	/* 176 */ uint64_t s6;
-	/* 184 */ uint64_t s7;
-	/* 192 */ uint64_t s8;
-	/* 200 */ uint64_t s9;
-	/* 208 */ uint64_t s10;
-	/* 216 */ uint64_t s11;
-	/* 224 */ uint64_t t3;
-	/* 232 */ uint64_t t4;
-	/* 240 */ uint64_t t5;
-	/* 248 */ uint64_t t6;
-	/* 256 */ uint64_t epc;
-	/* 264 */ uint64_t cpuid;
+	/* 0   */ u64 kernel_sp;
+	/* 8   */ u64 ra;
+	/* 16  */ u64 sp;
+	/* 24  */ u64 gp;
+	/* 32  */ u64 tp;
+	/* 40  */ u64 t0;
+	/* 48  */ u64 t1;
+	/* 56  */ u64 t2;
+	/* 64  */ u64 s0;
+	/* 72  */ u64 s1;
+	/* 80  */ u64 a0;
+	/* 88  */ u64 a1;
+	/* 96  */ u64 a2;
+	/* 104 */ u64 a3;
+	/* 112 */ u64 a4;
+	/* 120 */ u64 a5;
+	/* 128 */ u64 a6;
+	/* 136 */ u64 a7;
+	/* 144 */ u64 s2;
+	/* 152 */ u64 s3;
+	/* 160 */ u64 s4;
+	/* 168 */ u64 s5;
+	/* 176 */ u64 s6;
+	/* 184 */ u64 s7;
+	/* 192 */ u64 s8;
+	/* 200 */ u64 s9;
+	/* 208 */ u64 s10;
+	/* 216 */ u64 s11;
+	/* 224 */ u64 t3;
+	/* 232 */ u64 t4;
+	/* 240 */ u64 t5;
+	/* 248 */ u64 t6;
+	/* 256 */ u64 epc;
+	/* 264 */ u64 cpuid;
 };
 
 struct context {
-	uint64_t ra;
-	uint64_t sp;
-	uint64_t s0;
-	uint64_t s1;
-	uint64_t s2;
-	uint64_t s3;
-	uint64_t s4;
-	uint64_t s5;
-	uint64_t s6;
-	uint64_t s7;
-	uint64_t s8;
-	uint64_t s9;
-	uint64_t s10;
-	uint64_t s11;
+	u64 ra;
+	u64 sp;
+	u64 s0;
+	u64 s1;
+	u64 s2;
+	u64 s3;
+	u64 s4;
+	u64 s5;
+	u64 s6;
+	u64 s7;
+	u64 s8;
+	u64 s9;
+	u64 s10;
+	u64 s11;
 };
 
 enum process_state {
@@ -103,9 +103,9 @@ struct process {
 	struct path root;
 	struct tms ptms;
 	struct trapframe tf;
-	uint64_t kstack;
-	uint64_t ktime;
-	uint64_t utime;
+	u64 kstack;
+	u64 ktime;
+	u64 utime;
 	int time_slice;
 	char name[PROCESS_NAME_MAX];
 	bool irq_enabled;
@@ -127,7 +127,7 @@ void proc_free(struct process *proc);
 void proc_set_killed(struct process *proc);
 bool proc_is_killed(struct process *proc);
 int proc_fork(void);
-int proc_set_brk(uint64_t addr);
+int proc_set_brk(u64 addr);
 int proc_alloc_fd(struct process *proc, struct file *fp);
 void proc_dump(void);
 
@@ -155,9 +155,9 @@ struct proc_info {
 	enum process_state state;
 	int exit_status;
 	bool killed;
-	uint64_t utime;
-	uint64_t ktime;
-	uint64_t brk;
+	u64 utime;
+	u64 ktime;
+	u64 brk;
 	char name[PROCESS_NAME_MAX];
 };
 

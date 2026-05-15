@@ -7,35 +7,35 @@
 #include <brk/types.h>
 
 struct tmpfs_dir_entry {
-	uint32_t d_ino;
-	int32_t d_off;
-	uint16_t d_entry_len;
-	uint8_t d_name_len;
-	uint8_t d_type;
+	u32 d_ino;
+	s32 d_off;
+	u16 d_entry_len;
+	u8 d_name_len;
+	u8 d_type;
 	char d_name[];
 };
 
 struct tmpfs_inode {
 	struct page *i_page;
-	uint32_t i_size;
-	uint32_t i_no;
-	mode_t i_mode;
-	uint32_t i_nlink;
-	uint32_t i_rdev;
-	uint32_t i_atime;
-	uint32_t i_atime_nsec;
-	uint32_t i_mtime;
-	uint32_t i_mtime_nsec;
-	uint32_t i_ctime;
-	uint32_t i_ctime_nsec;
-	uint32_t i_uid;
-	uint32_t i_gid;
+	u32 i_size;
+	u32 i_no;
+	umode_t i_mode;
+	u32 i_nlink;
+	u32 i_rdev;
+	u32 i_atime;
+	u32 i_atime_nsec;
+	u32 i_mtime;
+	u32 i_mtime_nsec;
+	u32 i_ctime;
+	u32 i_ctime_nsec;
+	u32 i_uid;
+	u32 i_gid;
 };
 
 struct tmpfs_super_block {
 	struct page *s_imap;
 	sleeplock_t s_lock;
-	uint32_t s_icnt;
+	u32 s_icnt;
 };
 
 #define TMPFS_MAGIC 0x706d74

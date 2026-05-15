@@ -70,16 +70,16 @@ static void free_inode(struct inode *inode)
 		kmem_cache_free(&inode_cache, inode);
 }
 
-static uint32_t hash(const struct super_block *sb, unsigned long ino)
+static u32 hash(const struct super_block *sb, unsigned long ino)
 {
-	const uint8_t *k = (uint8_t *)&sb;
-	uint32_t h = 0x811c9dc5;
-	for (size_t i = 0; i < sizeof(void *); ++i) {
+	const u8 *k = (u8 *)&sb;
+	u32 h = 0x811c9dc5;
+	for (usize_t i = 0; i < sizeof(void *); ++i) {
 		h ^= k[i];
 		h *= 0x01000193;
 	}
-	k = (uint8_t *)&ino;
-	for (size_t i = 0; i < sizeof(ino); ++i) {
+	k = (u8 *)&ino;
+	for (usize_t i = 0; i < sizeof(ino); ++i) {
 		h ^= k[i];
 		h *= 0x01000193;
 	}

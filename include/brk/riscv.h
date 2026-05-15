@@ -3,14 +3,14 @@
 
 #include <brk/types.h>
 
-static inline uint64_t read_tp(void)
+static inline u64 read_tp(void)
 {
-	uint64_t x;
+	u64 x;
 	asm volatile("mv %0, tp" : "=r"(x));
 	return x;
 }
 
-static inline void write_tp(uint64_t x)
+static inline void write_tp(u64 x)
 {
 	asm volatile("mv tp, %0" : : "r"(x));
 }
@@ -22,31 +22,31 @@ static inline void write_tp(uint64_t x)
 #define SSTATUS_UIE (1 << 0) /* User Interrupt Enable */
 #define SSTATUS_SUM (1 << 18) /* Permit Supervisor User Memory access */
 
-static inline uint64_t read_sstatus(void)
+static inline u64 read_sstatus(void)
 {
-	uint64_t x;
+	u64 x;
 	asm volatile("csrr %0, sstatus" : "=r"(x));
 	return x;
 }
 
-static inline void write_sstatus(uint64_t x)
+static inline void write_sstatus(u64 x)
 {
 	asm volatile("csrw sstatus, %0" : : "r"(x));
 }
 
-static inline uint64_t read_satp(void)
+static inline u64 read_satp(void)
 {
-	uint64_t x;
+	u64 x;
 	asm volatile("csrr %0, satp" : "=r"(x));
 	return x;
 }
 
-static inline uint64_t make_satp_sv39(uint64_t pt)
+static inline u64 make_satp_sv39(u64 pt)
 {
-	return ((uint64_t)8 << 60) | (pt >> 12);
+	return ((u64)8 << 60) | (pt >> 12);
 }
 
-static inline void write_satp(uint64_t x)
+static inline void write_satp(u64 x)
 {
 	asm volatile("csrw satp, %0" : : "r"(x));
 }
@@ -56,40 +56,40 @@ static inline void sfence_vma(void)
 	asm volatile("sfence.vma zero, zero");
 }
 
-static inline uint64_t read_stvec(void)
+static inline u64 read_stvec(void)
 {
-	uint64_t x;
+	u64 x;
 	asm volatile("csrr %0, stvec" : "=r"(x));
 	return x;
 }
 
-static inline void write_stvec(uint64_t x)
+static inline void write_stvec(u64 x)
 {
 	asm volatile("csrw stvec, %0" : : "r"(x));
 }
 
-static inline uint64_t read_scause(void)
+static inline u64 read_scause(void)
 {
-	uint64_t x;
+	u64 x;
 	asm volatile("csrr %0, scause" : "=r"(x));
 	return x;
 }
 
-static inline uint64_t read_sepc(void)
+static inline u64 read_sepc(void)
 {
-	uint64_t x;
+	u64 x;
 	asm volatile("csrr %0, sepc" : "=r"(x));
 	return x;
 }
 
-static inline void write_sepc(uint64_t x)
+static inline void write_sepc(u64 x)
 {
 	asm volatile("csrw sepc, %0" : : "r"(x));
 }
 
-static inline uint64_t read_stval(void)
+static inline u64 read_stval(void)
 {
-	uint64_t x;
+	u64 x;
 	asm volatile("csrr %0, stval" : "=r"(x));
 	return x;
 }
@@ -98,21 +98,21 @@ static inline uint64_t read_stval(void)
 #define SIE_STIE (1L << 5) /* Timer */
 #define SIE_SSIE (1L << 1) /* Software */
 
-static inline uint64_t read_sie(void)
+static inline u64 read_sie(void)
 {
-	uint64_t x;
+	u64 x;
 	asm volatile("csrr %0, sie" : "=r"(x));
 	return x;
 }
 
-static inline void write_sie(uint64_t x)
+static inline void write_sie(u64 x)
 {
 	asm volatile("csrw sie, %0" : : "r"(x));
 }
 
-static inline uint64_t read_time(void)
+static inline u64 read_time(void)
 {
-	uint64_t time;
+	u64 time;
 	asm volatile("csrr %0, time" : "=r"(time));
 	return time;
 }
@@ -140,20 +140,20 @@ static inline bool intr_enabled(void)
  */
 static inline bool intr_off_get(void)
 {
-	uint64_t old;
-	uint64_t i = SSTATUS_SIE;
+	u64 old;
+	u64 i = SSTATUS_SIE;
 	asm volatile("csrrc %0, sstatus, %1" : "=r"(old) : "r"(i));
 	return (old & SSTATUS_SIE) != 0;
 }
 
-static inline uint64_t read_sscratch(void)
+static inline u64 read_sscratch(void)
 {
-	uint64_t x;
+	u64 x;
 	asm volatile("csrr %0, sscratch" : "=r"(x));
 	return x;
 }
 
-static inline void write_sscratch(uint64_t x)
+static inline void write_sscratch(u64 x)
 {
 	asm volatile("csrw sscratch, %0" : : "r"(x));
 }

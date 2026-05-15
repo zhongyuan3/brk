@@ -17,7 +17,7 @@ struct file;
  */
 struct tty_file_priv {
 	struct list_head vtime_link;
-	uint64_t raw_deadline_jiffies;
+	u64 raw_deadline_jiffies;
 	bool raw_timer_armed;
 };
 
@@ -32,11 +32,11 @@ struct tty {
 	struct winsize winsize;
 	struct list_head vtime_waiters;
 	bool null_raw_armed;
-	uint64_t null_raw_deadline_jiffies;
+	u64 null_raw_deadline_jiffies;
 	char rx_buf[TTY_RX_BUF_SIZE];
-	size_t rx_r;
-	size_t rx_w;
-	size_t rx_e;
+	usize_t rx_r;
+	usize_t rx_w;
+	usize_t rx_e;
 };
 
 void tty_boot_init(void);
@@ -47,9 +47,9 @@ void tty_file_priv_destroy(struct tty_file_priv *priv);
 
 void tty_init(struct tty *tty, struct tty_port *port);
 void tty_timer_tick(void);
-int tty_read(struct tty *tty, struct file *file, char *buf, size_t n,
-	     size_t *read);
-int tty_write(struct tty *tty, const char *buf, size_t n, size_t *written);
+int tty_read(struct tty *tty, struct file *file, char *buf, usize_t n,
+	     usize_t *read);
+int tty_write(struct tty *tty, const char *buf, usize_t n, usize_t *written);
 void tty_receive(struct tty *tty, int c);
 long tty_ioctl(struct tty *tty, struct file *file, unsigned int cmd,
 	       unsigned long arg);

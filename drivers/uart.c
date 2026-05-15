@@ -35,20 +35,20 @@
 #define SPR 7 /* ScratchPad Register */
 
 static struct uart_device uart;
-static uint8_t volatile *mem_base;
+static u8 volatile *mem_base;
 static SPINLOCK_DEFINE(uart_lock);
 
-static volatile uint8_t *uart_reg(unsigned int reg)
+static volatile u8 *uart_reg(unsigned int reg)
 {
 	return mem_base + reg;
 }
 
-static void uart_write_reg(unsigned int reg, uint8_t val)
+static void uart_write_reg(unsigned int reg, u8 val)
 {
 	writeb(val, uart_reg(reg));
 }
 
-static uint8_t uart_read_reg(unsigned int reg)
+static u8 uart_read_reg(unsigned int reg)
 {
 	return readb(uart_reg(reg));
 }
@@ -94,7 +94,7 @@ void uart_init(void)
 	plic_set_priority(uart.irq, 1);
 }
 
-void uart_init_hart(uint32_t hart_id)
+void uart_init_hart(u32 hart_id)
 {
 	plic_enable(hart_id, uart.irq);
 }

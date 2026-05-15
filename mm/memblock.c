@@ -10,15 +10,15 @@ static struct memblock_region memory[INIT_MEMBLOCK_REGIONS];
 static struct memblock_region reserved[INIT_MEMBLOCK_RESERVED_REGIONS];
 static struct memblock init_memblock;
 
-static void memblock_move_regions(struct memblock_type *type, size_t to,
-				  size_t from, size_t n)
+static void memblock_move_regions(struct memblock_type *type, usize_t to,
+				  usize_t from, usize_t n)
 {
 	memmove(&type->regions[to], &type->regions[from],
 		n * sizeof(struct memblock_region));
 }
 
-static void memblock_insert_region(struct memblock_type *type, size_t idx,
-				   uint64_t base, size_t size)
+static void memblock_insert_region(struct memblock_type *type, usize_t idx,
+				   u64 base, usize_t size)
 {
 	if (idx < type->cnt)
 		memblock_move_regions(type, idx + 1, idx, type->cnt - idx);
@@ -32,7 +32,7 @@ static void memblock_merge_regions(struct memblock_type *type)
 	if (type->cnt < 2)
 		return;
 
-	size_t idx = 0;
+	usize_t idx = 0;
 	while (idx < type->cnt - 1) {
 		struct memblock_region *this = &type->regions[idx];
 		struct memblock_region *next = &type->regions[idx + 1];
@@ -48,14 +48,14 @@ static void memblock_merge_regions(struct memblock_type *type)
 	}
 }
 
-static int memblock_add_region(struct memblock_type *type, uint64_t base,
-			       size_t size)
+static int memblock_add_region(struct memblock_type *type, u64 base,
+			       usize_t size)
 {
-	size_t idx;
+	usize_t idx;
 	struct memblock_region *rgn;
-	uint64_t old_base = base;
-	uint64_t end = base + size;
-	size_t nr_new = 0;
+	u64 old_base = base;
+	u64 end = base + size;
+	usize_t nr_new = 0;
 	bool insert = false;
 
 	if (size == 0)
@@ -77,8 +77,8 @@ repeat:
 	nr_new = 0;
 
 	for_each_memblock_type(type, idx, rgn) {
-		uint64_t rbase = rgn->base;
-		uint64_t rend = rbase + rgn->size;
+		u64 rbase = rgn->base;
+		u64 rend = rbase + rgn->size;
 
 		if (end <= rbase)
 			break;
@@ -125,20 +125,20 @@ void memblock_init(void)
 	init_memblock.reserved.cnt = 0;
 }
 
-int memblock_add(uint64_t base, size_t size)
+int memblock_add(u64 base, usize_t size)
 {
 	return memblock_add_region(&init_memblock.memory, base, size);
 }
 
-int memblock_reserve(uint64_t base, size_t size)
+int memblock_reserve(u64 base, usize_t size)
 {
 	return memblock_add_region(&init_memblock.reserved, base, size);
 }
 
-uint64_t memblock_alloc(size_t size, uint64_t min_addr, size_t align)
+u64 memblock_alloc(usize_t size, u64 min_addr, usize_t align)
 {
-	uint64_t start, end;
-	uint64_t idx;
+	u64 start, end;
+	u64 idx;
 
 	ASSERT(is_power_of_two(align));
 
@@ -146,7 +146,7 @@ uint64_t memblock_alloc(size_t size, uint64_t min_addr, size_t align)
 		if (start < min_addr)
 			continue;
 
-		uint64_t aligned_start = round_up(max(start, min_addr), align);
+		u64 aligned_start = round_up(max(start, min_addr), align);
 		if (aligned_start + size > end)
 			continue;
 
@@ -157,13 +157,13 @@ uint64_t memblock_alloc(size_t size, uint64_t min_addr, size_t align)
 	return 0;
 }
 
-static int memblock_remove_region(struct memblock_type *type, size_t rgn_idx,
-				  uint64_t base, size_t size)
+static int memblock_remove_region(struct memblock_type *type, usize_t rgn_idx,
+				  u64 base, usize_t size)
 {
-	uint64_t end = base + size;
+	u64 end = base + size;
 	struct memblock_region *rgn = &type->regions[rgn_idx];
-	uint64_t rbase = rgn->base;
-	uint64_t rend = rbase + rgn->size;
+	u64 rbase = rgn->base;
+	u64 rend = rbase + rgn->size;
 
 	ASSERT(base >= rbase && end <= rend);
 
@@ -195,13 +195,13 @@ static int memblock_remove_region(struct memblock_type *type, size_t rgn_idx,
 	return 0;
 }
 
-static bool memblock_find_region(struct memblock_type *type, uint64_t base,
-				 size_t size, size_t *pidx,
+static bool memblock_find_region(struct memblock_type *type, u64 base,
+				 usize_t size, usize_t *pidx,
 				 struct memblock_region *prgn)
 {
-	size_t idx;
+	usize_t idx;
 	struct memblock_region *rgn;
-	uint64_t end = base + size;
+	u64 end = base + size;
 
 	for_each_memblock_type(type, idx, rgn) {
 		if (base >= rgn->base && end <= rgn->base + rgn->size) {
@@ -215,9 +215,9 @@ static bool memblock_find_region(struct memblock_type *type, uint64_t base,
 	return false;
 }
 
-void memblock_free(uint64_t base, size_t size)
+void memblock_free(u64 base, usize_t size)
 {
-	size_t idx;
+	usize_t idx;
 	struct memblock_region rgn;
 
 	if (!memblock_find_region(&init_memblock.reserved, base, size, &idx,
@@ -228,7 +228,7 @@ void memblock_free(uint64_t base, size_t size)
 			       rgn.size);
 }
 
-uint64_t memblock_get_ram_base(void)
+u64 memblock_get_ram_base(void)
 {
 	if (init_memblock.memory.cnt == 0)
 		return 0;
@@ -243,17 +243,17 @@ void memblock_dump_all(void)
 	memblock_dump(&init_memblock.reserved);
 }
 
-void __next_mem_range(uint64_t *pidx, uint64_t *pstart, uint64_t *pend)
+void __next_mem_range(u64 *pidx, u64 *pstart, u64 *pend)
 {
-	uint32_t idx_mem = (*pidx >> 32) & 0xffffffffUL;
-	uint32_t idx_res = *pidx & 0xffffffffUL;
+	u32 idx_mem = (*pidx >> 32) & 0xffffffffUL;
+	u32 idx_res = *pidx & 0xffffffffUL;
 	struct memblock_type *mem = &init_memblock.memory;
 	struct memblock_type *res = &init_memblock.reserved;
 
 	for (; idx_mem < mem->cnt; ++idx_mem) {
 		struct memblock_region *m;
-		uint64_t mstart;
-		uint64_t mend;
+		u64 mstart;
+		u64 mend;
 
 		m = &mem->regions[idx_mem];
 		mstart = m->base;
@@ -265,14 +265,14 @@ void __next_mem_range(uint64_t *pidx, uint64_t *pstart, uint64_t *pend)
 			if (pend)
 				*pend = mend;
 			idx_mem += 1;
-			*pidx = ((uint64_t)idx_mem << 32) | idx_res;
+			*pidx = ((u64)idx_mem << 32) | idx_res;
 			return;
 		}
 
 		for (; idx_res < res->cnt + 1; ++idx_res) {
 			struct memblock_region *r;
-			uint64_t rstart;
-			uint64_t rend;
+			u64 rstart;
+			u64 rend;
 
 			r = &res->regions[idx_res];
 			rstart = idx_res == 0 ? 0 : r[-1].base + r[-1].size;
@@ -292,7 +292,7 @@ void __next_mem_range(uint64_t *pidx, uint64_t *pstart, uint64_t *pend)
 				else
 					++idx_res;
 
-				*pidx = ((uint64_t)idx_mem << 32) | idx_res;
+				*pidx = ((u64)idx_mem << 32) | idx_res;
 				return;
 			}
 		}
@@ -301,7 +301,7 @@ void __next_mem_range(uint64_t *pidx, uint64_t *pstart, uint64_t *pend)
 	*pidx = UINT64_MAX;
 }
 
-void __next_mem_pfn_range(uint32_t *pidx, uint64_t *pstart, uint64_t *pend)
+void __next_mem_pfn_range(u32 *pidx, u64 *pstart, u64 *pend)
 {
 	struct memblock_type *mem = &init_memblock.memory;
 	if (*pidx >= mem->cnt) {
@@ -314,16 +314,16 @@ void __next_mem_pfn_range(uint32_t *pidx, uint64_t *pstart, uint64_t *pend)
 	*pidx += 1;
 }
 
-static void memblock_free_range(uint64_t start, uint64_t end)
+static void memblock_free_range(u64 start, u64 end)
 {
 	unsigned int order;
-	size_t npgs;
+	usize_t npgs;
 
 	while (start < end) {
 		order = page_order(end - start);
 		if (order > PAGE_ORDER_MAX)
 			order = PAGE_ORDER_MAX;
-		while (!is_aligned(start, (size_t)1 << (PAGE_SHIFT + order)))
+		while (!is_aligned(start, (usize_t)1 << (PAGE_SHIFT + order)))
 			--order;
 
 		npgs = (1 << order);
@@ -339,12 +339,12 @@ static void memblock_free_range(uint64_t start, uint64_t end)
 
 void memblock_free_all(void)
 {
-	uint64_t idx;
-	uint64_t start, end;
+	u64 idx;
+	u64 start, end;
 
-	uint64_t bases[INIT_MEMBLOCK_REGIONS];
-	size_t sizes[INIT_MEMBLOCK_REGIONS];
-	size_t cnt = 0;
+	u64 bases[INIT_MEMBLOCK_REGIONS];
+	usize_t sizes[INIT_MEMBLOCK_REGIONS];
+	usize_t cnt = 0;
 
 	for_each_mem_range(idx, start, end) {
 		memblock_free_range(start, end);
@@ -352,20 +352,20 @@ void memblock_free_all(void)
 		sizes[cnt++] = end - start;
 	}
 
-	for (size_t i = 0; i < cnt; ++i)
+	for (usize_t i = 0; i < cnt; ++i)
 		memblock_reserve(bases[i], sizes[i]);
 }
 
 void memblock_dump(struct memblock_type *type)
 {
-	size_t idx;
+	usize_t idx;
 	struct memblock_region *rgn;
 
 	printk(" %s.cnt=%zu\n", type->name, type->cnt);
 	for_each_memblock_type(type, idx, rgn) {
-		uint64_t start = rgn->base;
-		size_t size = rgn->size;
-		uint64_t end = start + size;
+		u64 start = rgn->base;
+		usize_t size = rgn->size;
+		u64 end = start + size;
 		printk(" %s[%zu]\t[%p-%p], %zx bytes\n", type->name, idx,
 		       (void *)start, (void *)end, size);
 	}

@@ -18,17 +18,17 @@ static int brkfs_readpage(struct address_space *m, struct cached_page *cp)
 {
 	struct inode *inode = m->host;
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
-	uint32_t bs = sbi->s_sb.s_blocksize;
+	u32 bs = sbi->s_sb.s_blocksize;
 	loff_t off = (loff_t)cp->index << PAGE_SHIFT;
-	uint8_t *data = cached_page_addr(cp);
+	u8 *data = cached_page_addr(cp);
 
 	if (bs > PAGE_SIZE || PAGE_SIZE % bs != 0) {
 		klog_warn("%s(): unsupported blocksize %u\n", __func__, bs);
 		return -EIO;
 	}
 
-	for (size_t boff = 0; boff < PAGE_SIZE; boff += bs) {
-		uint32_t bno;
+	for (usize_t boff = 0; boff < PAGE_SIZE; boff += bs) {
+		u32 bno;
 		int err;
 
 		err = brkfs_inode_getblk(inode, off + (loff_t)boff, &bno, 0,
@@ -51,9 +51,9 @@ static int brkfs_writepage(struct address_space *m, struct cached_page *cp)
 {
 	struct inode *inode = m->host;
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
-	uint32_t bs = sbi->s_sb.s_blocksize;
+	u32 bs = sbi->s_sb.s_blocksize;
 	loff_t off = (loff_t)cp->index << PAGE_SHIFT;
-	uint8_t *data = cached_page_addr(cp);
+	u8 *data = cached_page_addr(cp);
 	int ret = 0;
 
 	if (bs > PAGE_SIZE || PAGE_SIZE % bs != 0) {
@@ -61,8 +61,8 @@ static int brkfs_writepage(struct address_space *m, struct cached_page *cp)
 		return -EIO;
 	}
 
-	for (size_t boff = 0; boff < PAGE_SIZE; boff += bs) {
-		uint32_t bno;
+	for (usize_t boff = 0; boff < PAGE_SIZE; boff += bs) {
+		u32 bno;
 		int err;
 
 		err = brkfs_inode_getblk(inode, off + (loff_t)boff, &bno,
@@ -119,7 +119,7 @@ static int brkfs_file_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t brkfs_file_read(struct file *file, char *buf, size_t size,
+static ssize_t brkfs_file_read(struct file *file, char *buf, usize_t size,
 			       loff_t *pos)
 {
 	struct inode *inode = file->f_inode;
@@ -129,7 +129,7 @@ static ssize_t brkfs_file_read(struct file *file, char *buf, size_t size,
 
 	/* Fallback path (no page cache attached, e.g. for symlinks read via
 	 * brkfs_readlink that does not go through the file_operations). */
-	size_t rd = 0;
+	usize_t rd = 0;
 	int err;
 
 	sleeplock_acquire(&inode->i_rwsem);
@@ -140,8 +140,8 @@ static ssize_t brkfs_file_read(struct file *file, char *buf, size_t size,
 	return (ssize_t)rd;
 }
 
-static ssize_t brkfs_file_write(struct file *file, const char *buf, size_t size,
-				loff_t *pos)
+static ssize_t brkfs_file_write(struct file *file, const char *buf,
+				usize_t size, loff_t *pos)
 {
 	struct inode *inode = file->f_inode;
 
@@ -149,7 +149,7 @@ static ssize_t brkfs_file_write(struct file *file, const char *buf, size_t size,
 		return generic_file_write(file, buf, size, pos);
 
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
-	size_t wr = 0;
+	usize_t wr = 0;
 	int err;
 
 	sleeplock_acquire(&inode->i_rwsem);

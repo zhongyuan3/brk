@@ -60,7 +60,7 @@ static void brkfs_evict_inode(struct inode *inode)
 		inode->i_size = 0;
 		inode->i_nlink = 0;
 		brkfs_inode_write(sbi, inode);
-		brkfs_inode_free(sbi, (uint32_t)inode->i_ino);
+		brkfs_inode_free(sbi, (u32)inode->i_ino);
 	}
 }
 
