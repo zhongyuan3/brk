@@ -1,8 +1,8 @@
 #ifndef BRK_TIMER_H
 #define BRK_TIMER_H
 
-#include <brk/types.h>
 #include <brk/time.h>
+#include <brk/types.h>
 
 void timer_init(void);
 uint64_t timer_get_time(void);
@@ -17,7 +17,7 @@ void walltime_set(const struct timeval *tv);
 void walltime_get_ts(struct timespec *ts);
 void walltime_set_ts(const struct timespec *ts);
 
-uint64_t do_nanosleep(const struct timeval *dur, struct timeval *rem);
+uint64_t do_nanosleep(const struct timespec *dur, struct timespec *rem);
 
 uint64_t jiffies_get(void);
 

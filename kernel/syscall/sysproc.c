@@ -48,16 +48,6 @@ uint64_t sys_exit(void)
 	return 0;
 }
 
-uint64_t sys_nanosleep(void)
-{
-	struct timeval *dur, *rem;
-
-	dur = (struct timeval *)syscall_arg_raw(0);
-	rem = (struct timeval *)syscall_arg_raw(1);
-
-	return do_nanosleep(dur, rem);
-}
-
 uint64_t sys_kill(void)
 {
 	return -ENOSYS;
