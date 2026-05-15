@@ -18,8 +18,8 @@ struct path;
 struct iattr {
 	unsigned int ia_valid;
 	umode_t ia_mode;
-	uid_t ia_uid;
-	gid_t ia_gid;
+	kuid_t ia_uid;
+	kgid_t ia_gid;
 	loff_t ia_size;
 	struct timespec ia_atime;
 	struct timespec ia_mtime;
@@ -46,7 +46,7 @@ struct dir_context {
 	 * Return: true to continue, false to stop.
 	 */
 	bool (*actor)(struct dir_context *ctx, const char *name, int namelen,
-		      loff_t offset, uint64_t ino, unsigned int d_type);
+		      loff_t offset, u64 ino, unsigned int d_type);
 
 	loff_t pos;
 };

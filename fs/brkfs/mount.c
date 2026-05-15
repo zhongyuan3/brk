@@ -14,9 +14,9 @@
 
 static int brkfs_read_super(struct brkfs_super_block *sb, struct blkdev *bdev)
 {
-	size_t bno = BRKFS_SUPER_OFFSET / bdev->phy_bsize;
-	uint32_t cnt = BRKFS_SUPER_SIZE / bdev->phy_bsize;
-	uint8_t *buf = kmalloc(sizeof(struct brkfs_super_block));
+	usize_t bno = BRKFS_SUPER_OFFSET / bdev->phy_bsize;
+	u32 cnt = BRKFS_SUPER_SIZE / bdev->phy_bsize;
+	u8 *buf = kmalloc(sizeof(struct brkfs_super_block));
 	int err;
 
 	if (!buf)

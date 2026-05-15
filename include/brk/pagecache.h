@@ -65,8 +65,7 @@ struct address_space_operations {
 	 *
 	 * Return: 0 on success, negative errno on failure.
 	 */
-	int (*writepage)(struct address_space *mapping,
-			 struct cached_page *cp);
+	int (*writepage)(struct address_space *mapping, struct cached_page *cp);
 };
 
 /*
@@ -91,8 +90,7 @@ address_space_alloc(void *host, const struct address_space_operations *a_ops);
 void address_space_free(struct address_space *mapping);
 
 /* Lookup helpers — each returns the page with @refcnt incremented. */
-struct cached_page *find_get_page(struct address_space *mapping,
-				  pgoff_t index);
+struct cached_page *find_get_page(struct address_space *mapping, pgoff_t index);
 struct cached_page *find_or_create_page(struct address_space *mapping,
 					pgoff_t index);
 /*
@@ -136,9 +134,9 @@ int filemap_writeback(struct address_space *mapping);
 void truncate_inode_pages(struct address_space *mapping, loff_t new_size);
 
 /* Generic file I/O helpers built on top of the page cache. */
-ssize_t generic_file_read(struct file *file, char *buf, size_t size,
+ssize_t generic_file_read(struct file *file, char *buf, usize_t size,
 			  loff_t *pos);
-ssize_t generic_file_write(struct file *file, const char *buf, size_t size,
+ssize_t generic_file_write(struct file *file, const char *buf, usize_t size,
 			   loff_t *pos);
 
 static inline void *cached_page_addr(const struct cached_page *cp)

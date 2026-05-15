@@ -9,20 +9,20 @@
 #include <brk/timer.h>
 #include <brk/tty.h>
 
-static uint64_t timer_interval;
-static uint64_t jiffies;
+static u64 timer_interval;
+static u64 jiffies;
 static SPINLOCK_DEFINE(jiffies_lock);
-static uint64_t xorshift_state;
+static u64 xorshift_state;
 static struct timespec walltime;
 static struct timespec boot_time;
 
 void timer_init(void)
 {
-	uint32_t timebase_freq = cpu_get_timebase_freq();
+	u32 timebase_freq = cpu_get_timebase_freq();
 	timer_interval = timebase_freq / 1000;
 }
 
-uint64_t timer_get_time(void)
+u64 timer_get_time(void)
 {
 	return read_time();
 }
@@ -99,7 +99,7 @@ void walltime_set_ts(const struct timespec *ts)
 	spinlock_release(&jiffies_lock);
 }
 
-uint64_t do_nanosleep(const struct timespec *dur, struct timespec *rem)
+u64 do_nanosleep(const struct timespec *dur, struct timespec *rem)
 {
 	struct timespec start, curr;
 
@@ -128,12 +128,12 @@ static void xorshift_srand(void)
 	xorshift_state = read_time();
 }
 
-static uint32_t xorshift_rand(void)
+static u32 xorshift_rand(void)
 {
 	xorshift_state ^= xorshift_state >> 12;
 	xorshift_state ^= xorshift_state << 25;
 	xorshift_state ^= xorshift_state >> 27;
-	return (uint32_t)(xorshift_state * 0x2545F4914F6CDD1DULL >> 32);
+	return (u32)(xorshift_state * 0x2545F4914F6CDD1DULL >> 32);
 }
 
 void timer_srand(void)
@@ -141,14 +141,14 @@ void timer_srand(void)
 	xorshift_srand();
 }
 
-uint32_t timer_rand(void)
+u32 timer_rand(void)
 {
 	return xorshift_rand();
 }
 
-uint64_t jiffies_get(void)
+u64 jiffies_get(void)
 {
-	uint64_t j;
+	u64 j;
 	spinlock_acquire(&jiffies_lock);
 	j = jiffies;
 	spinlock_release(&jiffies_lock);

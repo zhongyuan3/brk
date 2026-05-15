@@ -15,6 +15,6 @@ int dtb_parse_plic(struct plic_device *plic);
 int dtb_parse_uart(struct uart_device *uart);
 int dtb_parse_rtc(struct rtc_device *rtc);
 
-extern uint64_t dtb_phys;
+extern u64 dtb_phys;
 
 #endif

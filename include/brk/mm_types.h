@@ -4,15 +4,15 @@
 #include <brk/types.h>
 
 typedef struct {
-	uint64_t pgde;
+	u64 pgde;
 } pgde_t;
 
 typedef struct {
-	uint64_t pmde;
+	u64 pmde;
 } pmde_t;
 
 typedef struct {
-	uint64_t pte;
+	u64 pte;
 } pte_t;
 
 struct kmem_cache;
@@ -31,8 +31,8 @@ struct page {
 			void *slab_free_objs;
 			struct kmem_cache *slab_cache;
 			struct list_head slab_list;
-			size_t slab_free_count;
-			size_t slab_objs_count;
+			usize_t slab_free_count;
+			usize_t slab_objs_count;
 		};
 
 		struct { /* tmpfs */
@@ -52,7 +52,7 @@ struct mm_struct {
 	struct list_head seg;
 	struct vm_area *stack;
 	struct vm_area *heap;
-	uint64_t brk;
+	u64 brk;
 };
 
 #endif

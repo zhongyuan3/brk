@@ -85,7 +85,7 @@ static const char *skip_component(const char *pathname,
 	while (*p != '\0' && *p != '/')
 		p++;
 
-	uint32_t len = p - start;
+	u32 len = p - start;
 
 	*component_name = QSTR_MAKE(start, len);
 
@@ -229,10 +229,10 @@ void path_put(struct path *path)
 	mount_put(path->mnt);
 }
 
-int path_to_absolute(const struct path *path, char *buf, size_t bufsz)
+int path_to_absolute(const struct path *path, char *buf, usize_t bufsz)
 {
 	struct path cur;
-	size_t pos;
+	usize_t pos;
 
 	if (!path || !path->mnt || !path->dentry || !buf || bufsz == 0)
 		return -EINVAL;
@@ -245,7 +245,7 @@ int path_to_absolute(const struct path *path, char *buf, size_t bufsz)
 
 	while (1) {
 		const char *name;
-		size_t len;
+		usize_t len;
 		struct dentry *parent;
 
 		if (cur.dentry == cur.mnt->mnt_root && cur.mnt->mnt_parent &&

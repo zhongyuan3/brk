@@ -48,18 +48,18 @@ void trap_init(void)
 	timer_init();
 }
 
-void trap_init_hart(uint32_t hart_id)
+void trap_init_hart(u32 hart_id)
 {
 	(void)hart_id;
-	write_stvec((uint64_t)kernel_trap_vector);
+	write_stvec((u64)kernel_trap_vector);
 	write_sie(read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
 	timer_set_next();
 	intr_on();
 }
 
-static const char *cause_to_str(uint64_t cause)
+static const char *cause_to_str(u64 cause)
 {
-	uint64_t code = TRAP_CAUSE_CODE(cause);
+	u64 code = TRAP_CAUSE_CODE(cause);
 	if (TRAP_IS_INTERRUPT(cause)) {
 		if (code > countof(interrupt_strs) || !interrupt_strs[code])
 			return "Unexpected interrupt";
@@ -75,12 +75,12 @@ static const char *cause_to_str(uint64_t cause)
 
 void kernel_trap_handler(void)
 {
-	uint64_t sstatus = read_sstatus();
-	uint64_t scause = read_scause();
-	uint64_t sepc = read_sepc();
-	uint64_t stval = read_stval();
+	u64 sstatus = read_sstatus();
+	u64 scause = read_scause();
+	u64 sepc = read_sepc();
+	u64 stval = read_stval();
 	struct process *proc = current_process();
-	uint64_t code = TRAP_CAUSE_CODE(scause);
+	u64 code = TRAP_CAUSE_CODE(scause);
 
 	if (TRAP_IS_INTERRUPT(scause)) {
 		if (code == 5) {
@@ -106,13 +106,13 @@ struct trapframe *user_trap_handler(void)
 {
 	struct trapframe *tf;
 	struct process *proc;
-	uint64_t jiffies;
-	uint64_t scause = read_scause();
-	uint64_t sepc = read_sepc();
-	uint64_t stval = read_stval();
-	uint64_t code = TRAP_CAUSE_CODE(scause);
+	u64 jiffies;
+	u64 scause = read_scause();
+	u64 sepc = read_sepc();
+	u64 stval = read_stval();
+	u64 code = TRAP_CAUSE_CODE(scause);
 
-	write_stvec((uint64_t)kernel_trap_vector);
+	write_stvec((u64)kernel_trap_vector);
 
 	tf = (struct trapframe *)read_sscratch();
 	proc = container_of(tf, struct process, tf);
@@ -136,7 +136,7 @@ struct trapframe *user_trap_handler(void)
 			irq_handle_external(current_cpuid());
 		} else {
 			klog_warn("%s: scause=%#lx,sepc=%#lx,stval=%#lx\n",
-				 cause_to_str(scause), scause, sepc, stval);
+				  cause_to_str(scause), scause, sepc, stval);
 			proc_set_killed(proc);
 		}
 	} else {
@@ -148,7 +148,7 @@ struct trapframe *user_trap_handler(void)
 			syscall();
 		} else {
 			klog_warn("%s: scause=%#lx,sepc=%#lx,stval=%#lx\n",
-				 cause_to_str(scause), scause, sepc, stval);
+				  cause_to_str(scause), scause, sepc, stval);
 			proc_set_killed(proc);
 		}
 	}
@@ -165,12 +165,12 @@ struct trapframe *user_trap_handler(void)
 
 void prepare_to_return(void)
 {
-	uint64_t sstatus;
+	u64 sstatus;
 	struct process *proc;
 
 	intr_off();
 
-	write_stvec((uint64_t)user_trap_vector);
+	write_stvec((u64)user_trap_vector);
 
 	proc = current_process();
 

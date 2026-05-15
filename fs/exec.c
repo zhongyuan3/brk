@@ -21,24 +21,24 @@
 struct exec_args {
 	char **argv;
 	char **envp;
-	size_t argv_size;
-	size_t envp_size;
+	usize_t argv_size;
+	usize_t envp_size;
 	int argc;
 	int envc;
 };
 
 struct exec_strings_acc {
 	int count;
-	size_t bytes;
+	usize_t bytes;
 };
 
-static int exec_read_exact(struct file *fp, uint64_t off, void *buf, size_t n)
+static int exec_read_exact(struct file *fp, u64 off, void *buf, usize_t n)
 {
 	loff_t ret = file_lseek(fp, off, SEEK_SET);
 
 	if (ret < 0) {
 		klog_error("%s(): Failed to lseek file: %s\n", __func__,
-			  strerror(ret));
+			   strerror(ret));
 		return -EIO;
 	}
 
@@ -46,11 +46,12 @@ static int exec_read_exact(struct file *fp, uint64_t off, void *buf, size_t n)
 
 	if (rcnt < 0) {
 		klog_error("%s(): Failed to read file: %s\n", __func__,
-			  strerror(rcnt));
+			   strerror(rcnt));
 		return -EIO;
 	}
-	if ((size_t)rcnt != n) {
-		klog_error("%s(): Failed to read file (short read)\n", __func__);
+	if ((usize_t)rcnt != n) {
+		klog_error("%s(): Failed to read file (short read)\n",
+			   __func__);
 		return -EIO;
 	}
 	return 0;
@@ -65,7 +66,7 @@ static int elf_validate_exec_hdr(const struct elf64_hdr *h)
 	return 0;
 }
 
-static int elf_read_phdr(struct file *f, uint64_t off, struct elf64_phdr *phdr)
+static int elf_read_phdr(struct file *f, u64 off, struct elf64_phdr *phdr)
 {
 	ssize_t r;
 	loff_t ret = file_lseek(f, off, SEEK_SET);
@@ -75,7 +76,7 @@ static int elf_read_phdr(struct file *f, uint64_t off, struct elf64_phdr *phdr)
 	r = file_read(f, phdr, sizeof(*phdr));
 	if (r < 0)
 		return -EIO;
-	if ((size_t)r != sizeof(*phdr))
+	if ((usize_t)r != sizeof(*phdr))
 		return -ENOEXEC;
 	return 0;
 }
@@ -91,13 +92,13 @@ static int exec_read_elf_header(struct file *f, struct elf64_hdr *elf_hdr)
 	return elf_validate_exec_hdr(elf_hdr);
 }
 
-static int exec_accum_strings(char **arr, size_t *total_size,
+static int exec_accum_strings(char **arr, usize_t *total_size,
 			      struct exec_strings_acc *out)
 {
 	out->count = 0;
 	out->bytes = 0;
 	for (; arr[out->count]; ++out->count) {
-		size_t l = strlen(arr[out->count]) + 1;
+		usize_t l = strlen(arr[out->count]) + 1;
 
 		out->bytes += l;
 		*total_size += l;
@@ -107,9 +108,9 @@ static int exec_accum_strings(char **arr, size_t *total_size,
 	return 0;
 }
 
-static uint64_t random_ustack(void)
+static u64 random_ustack(void)
 {
-	uint64_t ustack_top = USER_SPACE_SIZE_MAX;
+	u64 ustack_top = USER_SPACE_SIZE_MAX;
 
 	timer_srand();
 	ustack_top -= (timer_rand() % 32 + 1) * PAGE_SIZE;
@@ -117,9 +118,9 @@ static uint64_t random_ustack(void)
 	return ustack_top;
 }
 
-static uint64_t stack_push_ptr_slots(uint64_t *ksp, uint64_t *sp, int nptr)
+static u64 stack_push_ptr_slots(u64 *ksp, u64 *sp, int nptr)
 {
-	size_t n = (size_t)(nptr + 1) * sizeof(char *);
+	usize_t n = (usize_t)(nptr + 1) * sizeof(char *);
 
 	*ksp -= n;
 	*ksp = round_down(*ksp, sizeof(char *));
@@ -128,11 +129,11 @@ static uint64_t stack_push_ptr_slots(uint64_t *ksp, uint64_t *sp, int nptr)
 	return *sp;
 }
 
-static void copy_exec_strings(char **src, int n, uint64_t *k_pos,
-			      uint64_t *u_pos, char **dst_ptr_array)
+static void copy_exec_strings(char **src, int n, u64 *k_pos, u64 *u_pos,
+			      char **dst_ptr_array)
 {
 	for (int i = 0; i < n; ++i) {
-		size_t l = strlen(src[i]) + 1;
+		usize_t l = strlen(src[i]) + 1;
 
 		memcpy((char *)*k_pos, src[i], l);
 		dst_ptr_array[i] = (char *)*u_pos;
@@ -141,21 +142,21 @@ static void copy_exec_strings(char **src, int n, uint64_t *k_pos,
 	}
 }
 
-static void push_args(struct exec_args *args, uint64_t *psp,
-		      uint64_t stack_virt, struct process *proc)
+static void push_args(struct exec_args *args, u64 *psp, u64 stack_virt,
+		      struct process *proc)
 {
-	uint64_t sp = *psp;
-	uint64_t ksp = stack_virt + USTACK_SIZE;
+	u64 sp = *psp;
+	u64 ksp = stack_virt + USTACK_SIZE;
 
 	ksp -= args->envp_size;
 	sp -= args->envp_size;
-	uint64_t envp_strs_kstart = ksp;
-	uint64_t envp_strs_ustart = sp;
+	u64 envp_strs_kstart = ksp;
+	u64 envp_strs_ustart = sp;
 
 	ksp -= args->argv_size;
 	sp -= args->argv_size;
-	uint64_t argv_strs_kstart = ksp;
-	uint64_t argv_strs_ustart = sp;
+	u64 argv_strs_kstart = ksp;
+	u64 argv_strs_ustart = sp;
 
 	proc->tf.a2 = stack_push_ptr_slots(&ksp, &sp, args->envc);
 	char **envp_kstart = (char **)ksp;
@@ -198,13 +199,13 @@ static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 		   struct elf64_phdr *ph, struct file *fp)
 {
 	int err = 0;
-	size_t npgs = vma->size >> PAGE_SHIFT;
+	usize_t npgs = vma->size >> PAGE_SHIFT;
 	struct page **pgs = kcalloc(npgs, sizeof(struct page *));
-	size_t i = 0;
-	uint64_t addr = vma->addr;
+	usize_t i = 0;
+	u64 addr = vma->addr;
 	unsigned int flags = vma->flags;
-	uint64_t seg_vstart = ph->p_vaddr;
-	uint64_t seg_fend = ph->p_vaddr + ph->p_filesz;
+	u64 seg_vstart = ph->p_vaddr;
+	u64 seg_fend = ph->p_vaddr + ph->p_filesz;
 
 	if (!pgs)
 		return -ENOMEM;
@@ -216,18 +217,18 @@ static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 			err = -ENOMEM;
 			goto failed;
 		}
-		uint64_t pa = page_to_phys(pg);
+		u64 pa = page_to_phys(pg);
 		void *va = (void *)phys_to_virt(pa);
-		uint64_t page_lo = addr;
-		uint64_t page_hi = addr + PAGE_SIZE;
-		uint64_t file_lo = page_lo > seg_vstart ? page_lo : seg_vstart;
-		uint64_t file_hi = page_hi < seg_fend ? page_hi : seg_fend;
+		u64 page_lo = addr;
+		u64 page_hi = addr + PAGE_SIZE;
+		u64 file_lo = page_lo > seg_vstart ? page_lo : seg_vstart;
+		u64 file_hi = page_hi < seg_fend ? page_hi : seg_fend;
 
 		memset(va, 0, PAGE_SIZE);
 		if (file_lo < file_hi) {
-			size_t n = (size_t)(file_hi - file_lo);
-			uint64_t fo = ph->p_offset + (file_lo - seg_vstart);
-			size_t dst_off = (size_t)(file_lo - page_lo);
+			usize_t n = (usize_t)(file_hi - file_lo);
+			u64 fo = ph->p_offset + (file_lo - seg_vstart);
+			usize_t dst_off = (usize_t)(file_lo - page_lo);
 
 			err = exec_read_exact(fp, fo, (char *)va + dst_off, n);
 			if (err) {
@@ -252,9 +253,9 @@ static int map_seg(struct mm_struct *mm, struct vm_area *vma,
 	return 0;
 
 failed:
-	for (uint64_t a = vma->addr; a < addr; a += PAGE_SIZE)
+	for (u64 a = vma->addr; a < addr; a += PAGE_SIZE)
 		uvunmap(mm->pgd, a, PAGE_SIZE);
-	for (size_t j = 0; j < i; ++j) {
+	for (usize_t j = 0; j < i; ++j) {
 		ASSERT(pgs[j]);
 		page_free(pgs[j], 0);
 	}
@@ -265,7 +266,7 @@ failed:
 static int load_seg(struct mm_struct *mm, struct elf64_phdr *ph,
 		    struct file *fp)
 {
-	uint64_t start, end;
+	u64 start, end;
 	struct vm_area *vma;
 	int err;
 
@@ -291,13 +292,13 @@ static int load_seg(struct mm_struct *mm, struct elf64_phdr *ph,
 	return 0;
 }
 
-static uint64_t find_brk(struct mm_struct *mm)
+static u64 find_brk(struct mm_struct *mm)
 {
 	struct vm_area *vma = NULL;
-	uint64_t brk = 0;
+	u64 brk = 0;
 
 	list_for_each_entry(vma, &mm->seg, list) {
-		uint64_t end = vma->addr + vma->size;
+		u64 end = vma->addr + vma->size;
 
 		if (end >= brk)
 			brk = end;
@@ -309,8 +310,8 @@ static int map_stack(struct mm_struct *mm)
 {
 	struct page *pg = page_alloc(USTACK_PAGE_ORDER);
 	struct page **pgs;
-	uint64_t pa;
-	uint64_t base;
+	u64 pa;
+	u64 base;
 	int err;
 
 	if (!pg)
@@ -368,9 +369,9 @@ static int __do_execve(const char *path, struct exec_args *args)
 	}
 
 	{
-		uint64_t phoff = elf_hdr.e_phoff;
+		u64 phoff = elf_hdr.e_phoff;
 
-		for (uint16_t i = 0; i < elf_hdr.e_phnum;
+		for (u16 i = 0; i < elf_hdr.e_phnum;
 		     ++i, phoff += sizeof(phdr)) {
 			err = elf_read_phdr(f, phoff, &phdr);
 			if (err)
@@ -396,10 +397,10 @@ static int __do_execve(const char *path, struct exec_args *args)
 		goto err;
 
 	{
-		uint64_t sp = new_mm->stack->addr + new_mm->stack->size;
+		u64 sp = new_mm->stack->addr + new_mm->stack->size;
 		struct page *stack_pg = new_mm->stack->pages[0];
-		uint64_t stack_phys = page_to_phys(stack_pg);
-		uint64_t stack_virt = phys_to_virt(stack_phys);
+		u64 stack_phys = page_to_phys(stack_pg);
+		u64 stack_virt = phys_to_virt(stack_phys);
 
 		push_args(args, &sp, stack_virt, proc);
 		strlcpy(proc->name, args->argv[0], sizeof(proc->name));
@@ -429,7 +430,7 @@ int do_execve(const char *path, char **argv, char **envp)
 	struct exec_args args;
 	struct exec_strings_acc argv_acc;
 	struct exec_strings_acc env_acc;
-	size_t total_size;
+	usize_t total_size;
 	char *empty_envp[1] = { NULL };
 	char *argv_if_empty[2];
 
@@ -443,7 +444,7 @@ int do_execve(const char *path, char **argv, char **envp)
 		return -E2BIG;
 
 	if (argv_acc.count == 0) {
-		size_t plen = strlen(path) + 1;
+		usize_t plen = strlen(path) + 1;
 
 		total_size = plen;
 		if (total_size > ARG_MAX)
@@ -459,7 +460,7 @@ int do_execve(const char *path, char **argv, char **envp)
 		args.argv_size = argv_acc.bytes;
 	}
 
-	total_size += (size_t)(args.argc + 1) * sizeof(char *);
+	total_size += (usize_t)(args.argc + 1) * sizeof(char *);
 	if (total_size > ARG_MAX)
 		return -E2BIG;
 
@@ -469,7 +470,7 @@ int do_execve(const char *path, char **argv, char **envp)
 
 	args.envc = env_acc.count;
 	args.envp_size = env_acc.bytes;
-	total_size += (size_t)(env_acc.count + 1) * sizeof(char *);
+	total_size += (usize_t)(env_acc.count + 1) * sizeof(char *);
 	if (total_size > ARG_MAX)
 		return -E2BIG;
 

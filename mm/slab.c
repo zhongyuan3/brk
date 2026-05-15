@@ -37,8 +37,8 @@ static void slab_unmark_page_range(struct page *head, unsigned int order)
 
 static struct page *kmalloc_block_head(struct page *pg, unsigned int order)
 {
-	size_t pfn = page_to_pfn(pg);
-	size_t head_pfn = pfn & ~(((size_t)1 << order) - 1);
+	usize_t pfn = page_to_pfn(pg);
+	usize_t head_pfn = pfn & ~(((usize_t)1 << order) - 1);
 
 	return pfn_to_page(head_pfn);
 }
@@ -63,7 +63,7 @@ static void kmalloc_unmark_block(struct page *head, unsigned int order)
 		(head + i)->flags &= ~PAGE_FLAGS_KMALLOC;
 }
 
-static int kmalloc_cache_index(size_t size)
+static int kmalloc_cache_index(usize_t size)
 {
 	if (size <= 8)
 		return 0;
@@ -91,15 +91,15 @@ static int kmalloc_cache_index(size_t size)
 
 void kmalloc_init(void)
 {
-	size_t sz[NR_KMALLOC_CACHES] = {
+	usize_t sz[NR_KMALLOC_CACHES] = {
 		8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096,
 	};
-	size_t align = alignof(max_align_t);
+	usize_t align = alignof(max_align_t);
 	for (int i = 0; i < NR_KMALLOC_CACHES; ++i)
 		kmem_cache_init(&kmalloc_caches[i], sz[i], align, "kmalloc");
 }
 
-void *kmalloc(size_t size)
+void *kmalloc(usize_t size)
 {
 	if (size == 0)
 		return NULL;
@@ -120,9 +120,9 @@ void *kmalloc(size_t size)
 	return (void *)page_to_virt(pg);
 }
 
-void *kcalloc(size_t nmemb, size_t size)
+void *kcalloc(usize_t nmemb, usize_t size)
 {
-	size_t bytes;
+	usize_t bytes;
 
 	if (nmemb != 0 && size > SIZE_MAX / nmemb)
 		return NULL;
@@ -137,7 +137,7 @@ void *kcalloc(size_t nmemb, size_t size)
 	return ptr;
 }
 
-void *kzalloc(size_t size)
+void *kzalloc(usize_t size)
 {
 	return kcalloc(1, size);
 }
@@ -146,7 +146,7 @@ void kfree(void *ptr)
 {
 	if (!ptr)
 		return;
-	struct page *pg = virt_to_page((uint64_t)ptr);
+	struct page *pg = virt_to_page((u64)ptr);
 
 	if (pg->flags & PAGE_FLAGS_SLAB) {
 		kmem_cache_free(pg->slab_cache, ptr);
@@ -165,8 +165,8 @@ void kfree(void *ptr)
 
 static int kmem_cache_add_page(struct kmem_cache *cache)
 {
-	size_t align = cache->align;
-	size_t size = cache->size;
+	usize_t align = cache->align;
+	usize_t size = cache->size;
 
 	struct page *pg = page_alloc(cache->page_order);
 
@@ -175,8 +175,8 @@ static int kmem_cache_add_page(struct kmem_cache *cache)
 
 	slab_mark_page_range(pg, cache->page_order, cache);
 
-	uint64_t addr = page_to_virt(pg);
-	uint64_t end_addr = addr + (1 << (PAGE_SHIFT + cache->page_order));
+	u64 addr = page_to_virt(pg);
+	u64 end_addr = addr + (1 << (PAGE_SHIFT + cache->page_order));
 
 	if (!is_aligned(addr, align))
 		addr = round_up(addr, align);
@@ -204,7 +204,7 @@ static int kmem_cache_add_page(struct kmem_cache *cache)
 	return 0;
 }
 
-int kmem_cache_init(struct kmem_cache *cache, size_t size, size_t align,
+int kmem_cache_init(struct kmem_cache *cache, usize_t size, usize_t align,
 		    const char *name)
 {
 	int ret;
@@ -296,7 +296,7 @@ retry:
 void kmem_cache_free(struct kmem_cache *cache, void *obj)
 {
 	struct page *curr;
-	uint64_t start, end;
+	u64 start, end;
 	struct list_head *list;
 
 	if (!obj)
@@ -304,13 +304,13 @@ void kmem_cache_free(struct kmem_cache *cache, void *obj)
 
 	spinlock_acquire(&cache->lock);
 
-	ASSERT(is_aligned((uint64_t)obj, cache->align));
+	ASSERT(is_aligned((u64)obj, cache->align));
 
 	list = &cache->slab_list;
 	list_for_each_entry(curr, list, slab_list) {
 		start = page_to_virt(curr);
 		end = start + (PAGE_SIZE << curr->slab_cache->page_order);
-		if (start <= (uint64_t)obj && (uint64_t)obj < end) {
+		if (start <= (u64)obj && (u64)obj < end) {
 			*(void **)obj = curr->slab_free_objs;
 			curr->slab_free_objs = obj;
 			curr->slab_free_count++;

@@ -17,7 +17,7 @@ static int brkfs_dir_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t brkfs_dir_read(struct file *file, char *buf, size_t size,
+static ssize_t brkfs_dir_read(struct file *file, char *buf, usize_t size,
 			      loff_t *pos)
 {
 	(void)file;
@@ -27,7 +27,7 @@ static ssize_t brkfs_dir_read(struct file *file, char *buf, size_t size,
 	return -EISDIR;
 }
 
-static ssize_t brkfs_dir_write(struct file *file, const char *buf, size_t size,
+static ssize_t brkfs_dir_write(struct file *file, const char *buf, usize_t size,
 			       loff_t *pos)
 {
 	(void)file;
@@ -50,9 +50,9 @@ static int brkfs_dir_iterate_shared(struct file *file, struct dir_context *ctx)
 	struct inode *inode = file->f_inode;
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
 	struct brkfs_inode_info *di = inode->i_private;
-	size_t bsz = sbi->s_sb.s_blocksize;
+	usize_t bsz = sbi->s_sb.s_blocksize;
 	loff_t off = ctx->pos;
-	uint8_t *blk;
+	u8 *blk;
 	unsigned int bi;
 	int err = 0;
 
@@ -64,10 +64,10 @@ static int brkfs_dir_iterate_shared(struct file *file, struct dir_context *ctx)
 		return -ENOMEM;
 
 	for (bi = 0; bi < BRKFS_DIRECT_BLOCKS; bi++) {
-		uint32_t pblk = di->i_block[bi];
+		u32 pblk = di->i_block[bi];
 		loff_t blk_base = (loff_t)bi * (loff_t)bsz;
 		struct brkfs_dir_entry *ent;
-		size_t left;
+		usize_t left;
 
 		if (blk_base >= inode->i_size)
 			break;
@@ -81,7 +81,7 @@ static int brkfs_dir_iterate_shared(struct file *file, struct dir_context *ctx)
 		ent = (struct brkfs_dir_entry *)blk;
 		left = bsz;
 		while (left >= BRKFS_DIR_ENTRY_MIN_LEN) {
-			uint16_t el = ent->entry_len;
+			u16 el = ent->entry_len;
 
 			if (el < BRKFS_DIR_ENTRY_MIN_LEN || el > left) {
 				err = -EIO;
@@ -89,8 +89,7 @@ static int brkfs_dir_iterate_shared(struct file *file, struct dir_context *ctx)
 			}
 			if (ent->inode != 0) {
 				loff_t entry_off =
-					blk_base +
-					(loff_t)((uint8_t *)ent - blk);
+					blk_base + (loff_t)((u8 *)ent - blk);
 
 				if (entry_off >= off) {
 					if (!ctx->actor(ctx, ent->name,
@@ -102,7 +101,7 @@ static int brkfs_dir_iterate_shared(struct file *file, struct dir_context *ctx)
 					}
 				}
 			}
-			ent = (struct brkfs_dir_entry *)((uint8_t *)ent + el);
+			ent = (struct brkfs_dir_entry *)((u8 *)ent + el);
 			left -= el;
 		}
 	}

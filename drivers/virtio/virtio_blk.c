@@ -22,19 +22,19 @@ static struct virtio_blk_req *blk_reqs;
 static struct virtio_blk_track *blk_tracks;
 static bool *blk_desc_used;
 static struct kmem_cache blk_trans_cache;
-static uint16_t blk_used_idx;
+static u16 blk_used_idx;
 static SPINLOCK_DEFINE(blk_lock);
 
-static int virtio_blk_init_alloc(uint32_t queue_size)
+static int virtio_blk_init_alloc(u32 queue_size)
 {
 	int err = -ENOMEM;
-	size_t size;
+	usize_t size;
 
 	blk_vq.desc = kcalloc(queue_size, sizeof(struct virtq_desc));
 	if (!blk_vq.desc)
 		goto err0;
 
-	size = sizeof(struct virtq_avail) + sizeof(uint16_t) * queue_size;
+	size = sizeof(struct virtq_avail) + sizeof(u16) * queue_size;
 	blk_vq.avail = kzalloc(size);
 	if (!blk_vq.avail)
 		goto err1;
@@ -91,7 +91,7 @@ err0:
 
 static int virtio_blk_init_check(struct virtio_device *dev)
 {
-	uint64_t mem_base = (uint64_t)dev->mem_base;
+	u64 mem_base = (u64)dev->mem_base;
 
 	if (dev->id != VIRTIO_DEVICE_ID_BLK)
 		return -EINVAL;
@@ -113,12 +113,12 @@ static int virtio_blk_init_check(struct virtio_device *dev)
 
 int virtio_blk_init(struct virtio_device *dev, unsigned int queue_size)
 {
-	uint64_t mem_base;
-	uint32_t status;
-	uint64_t features;
+	u64 mem_base;
+	u32 status;
+	u64 features;
 	int err;
-	uint64_t paddr;
-	uint32_t queue_size_max;
+	u64 paddr;
+	u32 queue_size_max;
 
 	err = virtio_blk_init_check(dev);
 	if (err)
@@ -128,7 +128,7 @@ int virtio_blk_init(struct virtio_device *dev, unsigned int queue_size)
 	if (err)
 		return err;
 
-	mem_base = (uint64_t)dev->mem_base;
+	mem_base = (u64)dev->mem_base;
 
 	/* reset device */
 	status = 0;
@@ -180,13 +180,13 @@ int virtio_blk_init(struct virtio_device *dev, unsigned int queue_size)
 	writel(queue_size, mem_base + VIRTIO_QUEUE_SIZE_OFFSET);
 
 	/* write physical addresses. */
-	paddr = virt_to_phys((uint64_t)blk_vq.desc);
+	paddr = virt_to_phys((u64)blk_vq.desc);
 	writel(paddr & 0xffffffff, mem_base + VIRTIO_QUEUE_DESC_LOW_OFFSET);
 	writel(paddr >> 32, mem_base + VIRTIO_QUEUE_DESC_HIGH_OFFSET);
-	paddr = virt_to_phys((uint64_t)blk_vq.avail);
+	paddr = virt_to_phys((u64)blk_vq.avail);
 	writel(paddr & 0xffffffff, mem_base + VIRTIO_QUEUE_DRIVER_LOW_OFFSET);
 	writel(paddr >> 32, mem_base + VIRTIO_QUEUE_DRIVER_HIGH_OFFSET);
-	paddr = virt_to_phys((uint64_t)blk_vq.used);
+	paddr = virt_to_phys((u64)blk_vq.used);
 	writel(paddr & 0xffffffff, mem_base + VIRTIO_QUEUE_DEVICE_LOW_OFFSET);
 	writel(paddr >> 32, mem_base + VIRTIO_QUEUE_DEVICE_HIGH_OFFSET);
 
@@ -205,7 +205,7 @@ int virtio_blk_init(struct virtio_device *dev, unsigned int queue_size)
 	return 0;
 }
 
-void virtio_blk_init_hart(uint32_t hart_id)
+void virtio_blk_init_hart(u32 hart_id)
 {
 	plic_enable(hart_id, blk_dev->irq);
 }
@@ -280,7 +280,7 @@ static int virtio_blk_transfer(struct virtio_blk_transation *trans)
 	req->reserved = 0;
 	req->sector = trans->sector;
 
-	blk_vq.desc[idx[0]].addr = virt_to_phys((uint64_t)req);
+	blk_vq.desc[idx[0]].addr = virt_to_phys((u64)req);
 	blk_vq.desc[idx[0]].len = sizeof(struct virtio_blk_req);
 	blk_vq.desc[idx[0]].flags = VIRTQ_DESC_F_NEXT;
 	blk_vq.desc[idx[0]].next = idx[1];
@@ -296,7 +296,7 @@ static int virtio_blk_transfer(struct virtio_blk_transation *trans)
 
 	status = &blk_tracks[idx[0]].status;
 	*status = 0xff;
-	blk_vq.desc[idx[2]].addr = virt_to_phys((uint64_t)status);
+	blk_vq.desc[idx[2]].addr = virt_to_phys((u64)status);
 	blk_vq.desc[idx[2]].len = sizeof(*status);
 	blk_vq.desc[idx[2]].flags = VIRTQ_DESC_F_WRITE;
 	blk_vq.desc[idx[2]].next = 0;
@@ -326,7 +326,7 @@ static int virtio_blk_transfer(struct virtio_blk_transation *trans)
 	return 0;
 }
 
-int virtio_blk_read(uint64_t sector, uint64_t buf, size_t sec_count)
+int virtio_blk_read(u64 sector, u64 buf, usize_t sec_count)
 {
 	struct virtio_blk_transation *trans;
 	int err;
@@ -346,7 +346,7 @@ int virtio_blk_read(uint64_t sector, uint64_t buf, size_t sec_count)
 	return 0;
 }
 
-int virtio_blk_write(uint64_t sector, uint64_t buf, size_t sec_count)
+int virtio_blk_write(u64 sector, u64 buf, usize_t sec_count)
 {
 	struct virtio_blk_transation *trans;
 	int err;
@@ -368,15 +368,15 @@ int virtio_blk_write(uint64_t sector, uint64_t buf, size_t sec_count)
 
 void virtio_blk_intr(void)
 {
-	uint32_t status;
-	uint32_t id;
+	u32 status;
+	u32 id;
 	struct virtio_blk_transation *trans;
-	uint16_t curr_used_idx;
-	uint64_t mem_base;
+	u16 curr_used_idx;
+	u64 mem_base;
 
 	spinlock_acquire(&blk_lock);
 
-	mem_base = (uint64_t)blk_dev->mem_base;
+	mem_base = (u64)blk_dev->mem_base;
 
 	status = readl(mem_base + VIRTIO_INTERRUPT_STATUS_OFFSET) & 0x3;
 	writel(status, mem_base + VIRTIO_INTERRUPT_ACK_OFFSET);

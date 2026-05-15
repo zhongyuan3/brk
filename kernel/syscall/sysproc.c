@@ -14,20 +14,20 @@
 #include <brk/timer.h>
 #include <brk/vmalloc.h>
 
-uint64_t sys_brk(void)
+u64 sys_brk(void)
 {
-	uint64_t addr = syscall_arg_raw(0);
+	u64 addr = syscall_arg_raw(0);
 	if (addr == 0)
 		return current_process()->mm->brk;
 	return proc_set_brk(addr);
 }
 
-uint64_t sys_clone(void)
+u64 sys_clone(void)
 {
 	return -ENOSYS;
 }
 
-uint64_t sys_wait4(void)
+u64 sys_wait4(void)
 {
 	pid_t pid = syscall_arg_raw(0);
 	int *wstatus = (int *)syscall_arg_raw(1);
@@ -36,35 +36,35 @@ uint64_t sys_wait4(void)
 	return proc_wait(pid, wstatus, opts, rus);
 }
 
-uint64_t sys_fork(void)
+u64 sys_fork(void)
 {
 	return proc_fork();
 }
 
-uint64_t sys_exit(void)
+u64 sys_exit(void)
 {
 	int status = syscall_arg_raw(0);
 	proc_exit(status);
 	return 0;
 }
 
-uint64_t sys_kill(void)
+u64 sys_kill(void)
 {
 	return -ENOSYS;
 }
 
-uint64_t sys_sched_yield(void)
+u64 sys_sched_yield(void)
 {
 	proc_yield();
 	return 0;
 }
 
-uint64_t sys_getpid(void)
+u64 sys_getpid(void)
 {
 	return current_process()->pid;
 }
 
-uint64_t sys_getppid(void)
+u64 sys_getppid(void)
 {
 	return current_process()->parent->pid;
 }

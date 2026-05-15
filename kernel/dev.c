@@ -206,15 +206,15 @@ int chrdev_alloc_devnum(dev_t *dev_out)
 static int bdev_readpage(struct address_space *m, struct cached_page *cp)
 {
 	struct blkdev *bd = m->host;
-	uint32_t bs = bd->phy_bsize;
+	u32 bs = bd->phy_bsize;
 
 	if (bs == 0 || PAGE_SIZE % bs != 0)
 		return -EIO;
 	if (cp->page == NULL)
 		return -EIO;
 
-	uint32_t nsec = (uint32_t)(PAGE_SIZE / bs);
-	uint64_t sector = (uint64_t)cp->index * nsec;
+	u32 nsec = (u32)(PAGE_SIZE / bs);
+	u64 sector = (u64)cp->index * nsec;
 
 	if (sector + nsec > bd->phy_bcnt)
 		return -ENXIO;
@@ -225,13 +225,13 @@ static int bdev_readpage(struct address_space *m, struct cached_page *cp)
 static int bdev_writepage(struct address_space *m, struct cached_page *cp)
 {
 	struct blkdev *bd = m->host;
-	uint32_t bs = bd->phy_bsize;
+	u32 bs = bd->phy_bsize;
 
 	if (bs == 0 || PAGE_SIZE % bs != 0)
 		return -EIO;
 
-	uint32_t nsec = (uint32_t)(PAGE_SIZE / bs);
-	uint64_t sector = (uint64_t)cp->index * nsec;
+	u32 nsec = (u32)(PAGE_SIZE / bs);
+	u64 sector = (u64)cp->index * nsec;
 
 	if (sector + nsec > bd->phy_bcnt)
 		return -ENXIO;
@@ -245,7 +245,7 @@ static const struct address_space_operations bdev_aops = {
 	.writepage = bdev_writepage,
 };
 
-int bdev_read_page(struct blkdev *bd, uint64_t index, void *buf)
+int bdev_read_page(struct blkdev *bd, u64 index, void *buf)
 {
 	struct cached_page *cp;
 
@@ -261,7 +261,7 @@ int bdev_read_page(struct blkdev *bd, uint64_t index, void *buf)
 	return 0;
 }
 
-int bdev_write_page(struct blkdev *bd, uint64_t index, const void *buf)
+int bdev_write_page(struct blkdev *bd, u64 index, const void *buf)
 {
 	struct cached_page *cp;
 	int err;
@@ -464,8 +464,7 @@ int blkdev_alloc_devnum(dev_t *dev_out)
  * every block I/O path) only ever provides such buffers, so the
  * historic kmalloc'd bounce buffer is no longer needed.
  */
-static int disk0_read(struct blkdev *bd, uint64_t blk_id, void *buf,
-		      uint32_t blk_cnt)
+static int disk0_read(struct blkdev *bd, u64 blk_id, void *buf, u32 blk_cnt)
 {
 	if (blk_id >= bd->phy_bcnt) {
 		klog_warn("%s(): Invalid blk_id: %lu, phy_bcnt: %lu\n",
@@ -480,12 +479,12 @@ static int disk0_read(struct blkdev *bd, uint64_t blk_id, void *buf,
 	if (blk_cnt == 0)
 		return 0;
 
-	uint64_t buf_phys = virt_to_phys((uint64_t)buf);
+	u64 buf_phys = virt_to_phys((u64)buf);
 	return virtio_blk_read(blk_id, buf_phys, blk_cnt);
 }
 
-static int disk0_write(struct blkdev *bd, uint64_t blk_id, const void *buf,
-		       uint32_t blk_cnt)
+static int disk0_write(struct blkdev *bd, u64 blk_id, const void *buf,
+		       u32 blk_cnt)
 {
 	if (blk_id >= bd->phy_bcnt) {
 		klog_warn("%s(): Invalid blk_id: %lu, phy_bcnt: %lu\n",
@@ -500,18 +499,18 @@ static int disk0_write(struct blkdev *bd, uint64_t blk_id, const void *buf,
 	if (blk_cnt == 0)
 		return 0;
 
-	uint64_t buf_phys = virt_to_phys((uint64_t)buf);
+	u64 buf_phys = virt_to_phys((u64)buf);
 	return virtio_blk_write(blk_id, buf_phys, blk_cnt);
 }
 
-static int dev_console0_read(struct file *file, char *buf, size_t n,
-			     size_t *read)
+static int dev_console0_read(struct file *file, char *buf, usize_t n,
+			     usize_t *read)
 {
 	return tty_read(tty_boot(), file, buf, n, read);
 }
 
-static int dev_console0_write(struct file *file, const char *buf, size_t n,
-			      size_t *written)
+static int dev_console0_write(struct file *file, const char *buf, usize_t n,
+			      usize_t *written)
 {
 	(void)file;
 	return tty_write(tty_boot(), buf, n, written);
@@ -581,14 +580,14 @@ static int chrdev_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t chrdev_read(struct file *file, char *buf, size_t size,
+static ssize_t chrdev_read(struct file *file, char *buf, usize_t size,
 			   loff_t *pos)
 {
 	(void)pos;
 	struct inode *ip = file->f_inode;
 	int err = 0;
 	struct chrdev *cd;
-	size_t rcnt = 0;
+	usize_t rcnt = 0;
 
 	sleeplock_acquire(&ip->i_rwsem);
 
@@ -607,14 +606,14 @@ unlock_and_out:
 	return rcnt;
 }
 
-static ssize_t chrdev_write(struct file *file, const char *buf, size_t size,
+static ssize_t chrdev_write(struct file *file, const char *buf, usize_t size,
 			    loff_t *pos)
 {
 	(void)pos;
 	struct inode *ip = file->f_inode;
 	int err = 0;
 	struct chrdev *cd;
-	size_t wcnt = 0;
+	usize_t wcnt = 0;
 
 	sleeplock_acquire(&ip->i_rwsem);
 
@@ -689,7 +688,7 @@ static int blkdev_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t blkdev_read(struct file *file, char *buf, size_t size,
+static ssize_t blkdev_read(struct file *file, char *buf, usize_t size,
 			   loff_t *pos)
 {
 	(void)file;
@@ -699,7 +698,7 @@ static ssize_t blkdev_read(struct file *file, char *buf, size_t size,
 	return 0;
 }
 
-static ssize_t blkdev_write(struct file *file, const char *buf, size_t size,
+static ssize_t blkdev_write(struct file *file, const char *buf, usize_t size,
 			    loff_t *pos)
 {
 	(void)file;

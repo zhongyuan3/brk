@@ -75,7 +75,7 @@ loff_t file_lseek(struct file *file, loff_t len, int whence)
 	return ret;
 }
 
-ssize_t file_read(struct file *file, void *buf, size_t size)
+ssize_t file_read(struct file *file, void *buf, usize_t size)
 {
 	loff_t *pos = &file->f_pos;
 	sleeplock_acquire(&file->f_pos_lock);
@@ -84,7 +84,7 @@ ssize_t file_read(struct file *file, void *buf, size_t size)
 	return ret;
 }
 
-ssize_t file_write(struct file *file, const void *buf, size_t size)
+ssize_t file_write(struct file *file, const void *buf, usize_t size)
 {
 	loff_t *pos = &file->f_pos;
 	sleeplock_acquire(&file->f_pos_lock);

@@ -19,7 +19,7 @@ union fmt_arg {
 
 struct internal_display {
 	struct display *dis;
-	size_t cnt;
+	usize_t cnt;
 };
 
 enum {
@@ -62,7 +62,7 @@ enum {
 #define S(x) [x - 'A']
 #define OOB(x) ((unsigned)(x) - 'A' > 'z' - 'A')
 
-static uint8_t const states[STATE_STOP + 1]['z' - 'A' + 1] = {
+static u8 const states[STATE_STOP + 1]['z' - 'A' + 1] = {
 	{ STATE_INVALID },
 	{
 		/* STATE_START */
@@ -184,20 +184,20 @@ static char *fmt_x(uintmax_t x, char *s, char const *d)
 	return s;
 }
 
-static void out(struct internal_display *dis, char const *buf, size_t len)
+static void out(struct internal_display *dis, char const *buf, usize_t len)
 {
-	size_t n = 0;
+	usize_t n = 0;
 	dis->dis->write(dis->dis, buf, len, &n);
 	dis->cnt += n;
 }
 
-static void pad(struct internal_display *dis, size_t pad_len, char pad_ch)
+static void pad(struct internal_display *dis, usize_t pad_len, char pad_ch)
 {
-	for (size_t i = 0; i < pad_len; ++i)
+	for (usize_t i = 0; i < pad_len; ++i)
 		out(dis, &pad_ch, 1);
 }
 
-static void pop_n(va_list *ap, unsigned int st, size_t cnt)
+static void pop_n(va_list *ap, unsigned int st, usize_t cnt)
 {
 	switch (st) {
 	case STATE_N_INT:
@@ -219,7 +219,7 @@ static void pop_n(va_list *ap, unsigned int st, size_t cnt)
 		*va_arg(*ap, intmax_t *) = (intmax_t)cnt;
 		break;
 	case STATE_N_SIZE:
-		*va_arg(*ap, size_t *) = cnt;
+		*va_arg(*ap, usize_t *) = cnt;
 		break;
 	case STATE_N_PTRDIFF:
 		*va_arg(*ap, ptrdiff_t *) = (ptrdiff_t)cnt;
@@ -304,7 +304,7 @@ static void pop_arg(va_list *ap, unsigned int st, union fmt_arg *arg)
 		arg->i = va_arg(*ap, unsigned long long);
 		break;
 	case STATE_SIZE_T:
-		arg->i = va_arg(*ap, size_t);
+		arg->i = va_arg(*ap, usize_t);
 		break;
 	case STATE_PTR:
 		arg->p = va_arg(*ap, void *);
@@ -346,9 +346,9 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 
 		++s;
 
-		size_t width = 0;
+		usize_t width = 0;
 		bool has_width = false;
-		size_t prec = 0;
+		usize_t prec = 0;
 		bool has_prec = false;
 		unsigned int flags = 0;
 
@@ -374,9 +374,9 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 			int fw = va_arg(ap, int);
 			if (fw < 0) {
 				flags |= LEFT_ALIGN;
-				width = (size_t)(-(unsigned)fw);
+				width = (usize_t)(-(unsigned)fw);
 			} else {
-				width = (size_t)fw;
+				width = (usize_t)fw;
 			}
 		} else if (*s >= '0' && *s <= '9') {
 			has_width = true;
@@ -392,7 +392,7 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 				int pr = va_arg(ap, int);
 				if (pr >= 0) {
 					has_prec = true;
-					prec = (size_t)pr;
+					prec = (usize_t)pr;
 				}
 			} else {
 				has_prec = true;
@@ -431,16 +431,16 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 		char const *digits = "0123456789abcdef";
 
 		char *raw = NULL;
-		size_t raw_len = 0;
+		usize_t raw_len = 0;
 
 		char const *radix = NULL;
-		size_t radix_len = 0;
+		usize_t radix_len = 0;
 		char const *sign = NULL;
-		size_t sign_len = 0;
+		usize_t sign_len = 0;
 
-		size_t lspace_pad = 0;
-		size_t lzero_pad = 0;
-		size_t rspace_pad = 0;
+		usize_t lspace_pad = 0;
+		usize_t lzero_pad = 0;
+		usize_t rspace_pad = 0;
 
 		switch (pch) {
 		case 'i':
@@ -521,9 +521,9 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 			sign_len = 1;
 		}
 
-		size_t total_len = sign_len + radix_len + lzero_pad + raw_len;
+		usize_t total_len = sign_len + radix_len + lzero_pad + raw_len;
 		if (has_width && width > total_len) {
-			size_t pad_extra = width - total_len;
+			usize_t pad_extra = width - total_len;
 			if (flags & LEFT_ALIGN)
 				rspace_pad = pad_extra;
 			else if (flags & ZERO_PAD)
@@ -546,7 +546,7 @@ invalid:
 	return -1;
 }
 
-int snprintf(char *buf, size_t size, char const *format, ...)
+int snprintf(char *buf, usize_t size, char const *format, ...)
 {
 	va_list ap;
 	va_start(ap, format);
@@ -557,15 +557,15 @@ int snprintf(char *buf, size_t size, char const *format, ...)
 
 struct string_display {
 	char *buf;
-	size_t size;
-	size_t pos;
+	usize_t size;
+	usize_t pos;
 };
 
 static int string_display_write(struct display *dis, char const *buf,
-				size_t len, size_t *wlen)
+				usize_t len, usize_t *wlen)
 {
 	struct string_display *sd = dis->priv;
-	size_t n = min(len, sd->size - sd->pos);
+	usize_t n = min(len, sd->size - sd->pos);
 	if (n > 0) {
 		memcpy(sd->buf + sd->pos, buf, n);
 		sd->pos += n;
@@ -577,7 +577,7 @@ static int string_display_write(struct display *dis, char const *buf,
 	return 0;
 }
 
-int vsnprintf(char *buf, size_t size, char const *format, va_list ap)
+int vsnprintf(char *buf, usize_t size, char const *format, va_list ap)
 {
 	struct string_display sd = {
 		.buf = buf,

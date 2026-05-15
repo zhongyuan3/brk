@@ -129,7 +129,7 @@ void path_put(struct path *path);
  * Convert a resolved path object to absolute string form.
  * Returns 0 on success, negative errno on failure.
  */
-int path_to_absolute(const struct path *path, char *buf, size_t bufsz);
+int path_to_absolute(const struct path *path, char *buf, usize_t bufsz);
 
 int path_dot(struct path *path, struct path *dot);
 int path_dot_dot(struct path *path, struct path *dotdot);

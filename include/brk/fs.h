@@ -250,8 +250,8 @@ struct inode {
 	struct timespec i_mtime;
 	struct timespec i_ctime;
 
-	gid_t i_gid;
-	uid_t i_uid;
+	kgid_t i_gid;
+	kuid_t i_uid;
 
 	/*
 	 * Page cache for regular files (and any inode whose backing store can
@@ -391,8 +391,8 @@ struct inode_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*getattr)(const struct path *path, struct stat *stat,
-		       uint32_t mask, unsigned int flags);
+	int (*getattr)(const struct path *path, struct stat *stat, u32 mask,
+		       unsigned int flags);
 
 	/**
 	 * setattr() - set inode attributes
@@ -458,7 +458,8 @@ struct file_operations {
 	 *
 	 * Return: bytes read, %0 at EOF, or negative errno.
 	 */
-	ssize_t (*read)(struct file *file, char *buf, size_t size, loff_t *pos);
+	ssize_t (*read)(struct file *file, char *buf, usize_t size,
+			loff_t *pos);
 
 	/**
 	 * write() - write to file
@@ -469,7 +470,7 @@ struct file_operations {
 	 *
 	 * Return: bytes written, or negative errno.
 	 */
-	ssize_t (*write)(struct file *file, const char *buf, size_t size,
+	ssize_t (*write)(struct file *file, const char *buf, usize_t size,
 			 loff_t *pos);
 
 	/**
@@ -559,23 +560,23 @@ struct file *file_alloc(struct path *path, fmode_t mode);
 struct file *file_dup(struct file *file);
 void file_put(struct file *file);
 loff_t file_lseek(struct file *file, loff_t len, int whence);
-ssize_t file_read(struct file *file, void *buf, size_t size);
-ssize_t file_write(struct file *file, const void *buf, size_t size);
+ssize_t file_read(struct file *file, void *buf, usize_t size);
+ssize_t file_write(struct file *file, const void *buf, usize_t size);
 long file_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 int file_stat(struct file *file, struct stat *buf);
 int file_truncate(struct file *file, loff_t size);
 void file_cache_init(void);
 
-struct file *do_openat(int dirfd, const char *path, int flags, mode_t mode);
+struct file *do_openat(int dirfd, const char *path, int flags, umode_t mode);
 int do_execve(const char *path, char **argv, char **envp);
-int do_mkdirat(int dirfd, const char *path, mode_t mode);
-int do_mknodat(int dirfd, const char *path, mode_t mode, dev_t dev);
+int do_mkdirat(int dirfd, const char *path, umode_t mode);
+int do_mknodat(int dirfd, const char *path, umode_t mode, dev_t dev);
 int do_linkat(int olddirfd, const char *oldpath, int newdirfd,
 	      const char *newpath, int flags);
 int do_unlinkat(int dirfd, const char *path, int flags);
 int do_symlinkat(int dirfd, const char *pathname, const char *target);
-int do_readlinkat(int dirfd, const char *path, char *buf, size_t bufsiz);
-int do_creat(const char *pathname, mode_t mode);
+int do_readlinkat(int dirfd, const char *path, char *buf, usize_t bufsiz);
+int do_creat(const char *pathname, umode_t mode);
 int do_renameat(int olddirfd, const char *oldpath, int newdirfd,
 		const char *newpath, unsigned int flags);
 int do_rmdir(const char *pathname);

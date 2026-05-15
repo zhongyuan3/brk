@@ -60,17 +60,17 @@ struct chrdev {
 struct file;
 
 struct chrdev_operations {
-	int (*read)(struct file *file, char *buf, size_t n, size_t *read);
-	int (*write)(struct file *file, const char *buf, size_t n,
-		     size_t *written);
+	int (*read)(struct file *file, char *buf, usize_t n, usize_t *read);
+	int (*write)(struct file *file, const char *buf, usize_t n,
+		     usize_t *written);
 	long (*ioctl)(struct file *file, unsigned int cmd, unsigned long arg);
 };
 
 struct blkdev {
 	struct list_head list;
 	dev_t dev;
-	uint32_t phy_bsize;
-	uint64_t phy_bcnt;
+	u32 phy_bsize;
+	u64 phy_bcnt;
 	struct blkdev_operations *ops;
 	void *priv;
 	/*
@@ -83,10 +83,9 @@ struct blkdev {
 };
 
 struct blkdev_operations {
-	int (*read)(struct blkdev *bd, uint64_t blk_id, void *buf,
-		    uint32_t blk_cnt);
-	int (*write)(struct blkdev *bd, uint64_t blk_id, const void *buf,
-		     uint32_t blk_cnt);
+	int (*read)(struct blkdev *bd, u64 blk_id, void *buf, u32 blk_cnt);
+	int (*write)(struct blkdev *bd, u64 blk_id, const void *buf,
+		     u32 blk_cnt);
 };
 
 /*
@@ -97,8 +96,8 @@ struct blkdev_operations {
  * returning, so metadata consumers (super, bitmap, inode table) get
  * strict ordering / durability semantics for free.
  */
-int bdev_read_page(struct blkdev *bd, uint64_t index, void *buf);
-int bdev_write_page(struct blkdev *bd, uint64_t index, const void *buf);
+int bdev_read_page(struct blkdev *bd, u64 index, void *buf);
+int bdev_write_page(struct blkdev *bd, u64 index, const void *buf);
 
 struct chrdev *chrdev_alloc(void);
 void chrdev_free(struct chrdev *cd);

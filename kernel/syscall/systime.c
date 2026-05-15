@@ -15,7 +15,7 @@
 #include <brk/timer.h>
 #include <brk/vmalloc.h>
 
-uint64_t sys_gettimeofday(void)
+u64 sys_gettimeofday(void)
 {
 	struct timeval *tv;
 
@@ -24,7 +24,7 @@ uint64_t sys_gettimeofday(void)
 	return 0;
 }
 
-uint64_t sys_settimeofday(void)
+u64 sys_settimeofday(void)
 {
 	const struct timeval *tv;
 
@@ -35,7 +35,7 @@ uint64_t sys_settimeofday(void)
 	return 0;
 }
 
-uint64_t sys_times(void)
+u64 sys_times(void)
 {
 	struct tms *buf;
 
@@ -44,7 +44,7 @@ uint64_t sys_times(void)
 	return 0;
 }
 
-uint64_t sys_nanosleep(void)
+u64 sys_nanosleep(void)
 {
 	struct timespec *dur, *rem;
 

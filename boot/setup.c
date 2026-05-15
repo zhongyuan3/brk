@@ -7,19 +7,17 @@
 #include <brk/types.h>
 #include <libfdt.h>
 
-static uint64_t alloc_pmd_early(uint64_t)
+static u64 alloc_pmd_early(u64) __attribute__((section(".text.head")));
+static void vmap_early(u64 addr, usize_t size, u64 paddr, unsigned int flags)
 	__attribute__((section(".text.head")));
-static void vmap_early(uint64_t addr, size_t size, uint64_t paddr,
-		       unsigned int flags)
-	__attribute__((section(".text.head")));
-void make_early_pgtable(uint64_t dtb) __attribute__((section(".text.head")));
+void make_early_pgtable(u64 dtb) __attribute__((section(".text.head")));
 void setup_early_pgtable(void) __attribute__((section(".text.head")));
 
-static uint64_t alloc_pmd_early(uint64_t prev)
+static u64 alloc_pmd_early(u64 prev)
 {
-	uint64_t end;
+	u64 end;
 
-	end = (uint64_t)early_pgdir + NR_EARLY_PGDIR_PAGES * PAGE_SIZE;
+	end = (u64)early_pgdir + NR_EARLY_PGDIR_PAGES * PAGE_SIZE;
 	if (prev + PAGE_SIZE < end)
 		return prev + PAGE_SIZE;
 
@@ -28,14 +26,13 @@ static uint64_t alloc_pmd_early(uint64_t prev)
 		;
 }
 
-static void vmap_early(uint64_t addr, size_t size, uint64_t paddr,
-		       unsigned int flags)
+static void vmap_early(u64 addr, usize_t size, u64 paddr, unsigned int flags)
 {
 	pgde_t *pgdep;
 	pmde_t *pmdep;
-	uint64_t pmd_phys;
-	uint64_t end_addr = addr + size;
-	uint64_t prev = (uint64_t)early_pgdir;
+	u64 pmd_phys;
+	u64 end_addr = addr + size;
+	u64 prev = (u64)early_pgdir;
 
 	while (addr < end_addr) {
 		pgdep = (pgde_t *)early_pgdir + pgde_index(addr);
@@ -53,17 +50,17 @@ static void vmap_early(uint64_t addr, size_t size, uint64_t paddr,
 	}
 }
 
-void make_early_pgtable(uint64_t dtb)
+void make_early_pgtable(u64 dtb)
 {
-	uint64_t start = (uint64_t)_skernel;
-	uint64_t end = round_up((uint64_t)_ekernel, PAGE_SIZE_2M);
-	size_t size = end - start;
+	u64 start = (u64)_skernel;
+	u64 end = round_up((u64)_ekernel, PAGE_SIZE_2M);
+	usize_t size = end - start;
 	unsigned int flags = PTE_R | PTE_W | PTE_X;
 
 	vmap_early(start, size, start, flags);
 	vmap_early(KERNEL_LINK_ADDR, size, start, flags);
 
-	size_t dtb_end = dtb + fdt_totalsize(dtb);
+	usize_t dtb_end = dtb + fdt_totalsize(dtb);
 	if (dtb >= start && dtb_end <= end)
 		return;
 
@@ -81,6 +78,6 @@ void make_early_pgtable(uint64_t dtb)
 
 void setup_early_pgtable(void)
 {
-	write_satp(make_satp_sv39((uint64_t)early_pgdir));
+	write_satp(make_satp_sv39((u64)early_pgdir));
 	sfence_vma();
 }

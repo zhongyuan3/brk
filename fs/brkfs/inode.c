@@ -57,8 +57,8 @@ static struct dentry *brkfs_lookup(struct inode *dir, struct dentry *dentry,
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode;
-	uint32_t ino;
-	uint8_t type;
+	u32 ino;
+	u8 type;
 	int err;
 
 	(void)flags;
@@ -97,7 +97,7 @@ static int brkfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode = NULL;
-	uint32_t ino = 0;
+	u32 ino = 0;
 	int err;
 
 	(void)excl;
@@ -158,9 +158,8 @@ static int brkfs_link(struct dentry *old_dentry, struct inode *dir,
 	struct inode *old_inode = old_dentry->d_inode;
 	int err;
 
-	err = brkfs_dir_add(dir, (uint32_t)old_inode->i_ino,
-			    new_dentry->d_name.name, new_dentry->d_name.len,
-			    old_inode->i_mode);
+	err = brkfs_dir_add(dir, (u32)old_inode->i_ino, new_dentry->d_name.name,
+			    new_dentry->d_name.len, old_inode->i_mode);
 	if (err)
 		goto out;
 	inode_dup(old_inode);
@@ -208,10 +207,10 @@ static int brkfs_symlink(struct inode *dir, struct dentry *dentry,
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode = NULL;
-	uint32_t ino = 0;
-	size_t len = strlen(symname);
+	u32 ino = 0;
+	usize_t len = strlen(symname);
 	loff_t pos = 0;
-	size_t w = 0;
+	usize_t w = 0;
 	int err;
 
 	err = brkfs_inode_alloc(sbi, &ino);
@@ -264,14 +263,14 @@ static int brkfs_readlink(struct dentry *dentry, char *buf, int bufsiz)
 {
 	struct inode *inode = dentry->d_inode;
 	loff_t pos = 0;
-	size_t rd = 0;
+	usize_t rd = 0;
 	int err;
 
 	if (!S_ISLNK(inode->i_mode))
 		return -EINVAL;
 	if (bufsiz <= 0)
 		return -EINVAL;
-	err = brkfs_file_read_at(inode, &pos, buf, (size_t)(bufsiz - 1), &rd);
+	err = brkfs_file_read_at(inode, &pos, buf, (usize_t)(bufsiz - 1), &rd);
 	if (err)
 		return err;
 	buf[rd] = '\0';
@@ -283,7 +282,7 @@ static int brkfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode = NULL;
-	uint32_t ino = 0;
+	u32 ino = 0;
 	int err;
 
 	err = brkfs_inode_alloc(sbi, &ino);
@@ -304,7 +303,7 @@ static int brkfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto out;
 	}
 
-	err = brkfs_new_dir_body(inode, (uint32_t)dir->i_ino);
+	err = brkfs_new_dir_body(inode, (u32)dir->i_ino);
 	if (err) {
 		inode_put(inode);
 		goto out;
@@ -387,7 +386,7 @@ static int brkfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode;
-	uint32_t ino;
+	u32 ino;
 	int err;
 
 	err = brkfs_inode_alloc(sbi, &ino);
@@ -429,8 +428,8 @@ out:
 	return err;
 }
 
-static int brkfs_getattr(const struct path *path, struct stat *stat,
-			 uint32_t mask, unsigned int flags)
+static int brkfs_getattr(const struct path *path, struct stat *stat, u32 mask,
+			 unsigned int flags)
 {
 	struct inode *inode = path->dentry->d_inode;
 

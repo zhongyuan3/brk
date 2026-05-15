@@ -49,7 +49,7 @@ found:
 struct page *page_zalloc(unsigned int order)
 {
 	struct page *pg;
-	uint64_t virt;
+	u64 virt;
 
 	pg = page_alloc(order);
 	if (!pg)

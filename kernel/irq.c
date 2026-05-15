@@ -6,25 +6,25 @@
 #include <brk/slab.h>
 
 static irq_handler_t *irq_handlers;
-static uint32_t irq_handlers_num;
+static u32 irq_handlers_num;
 static SPINLOCK_DEFINE(irq_handlers_lock);
 
 void irq_init(void)
 {
 	plic_init();
-	uint32_t ndev = plic_get_ndev();
+	u32 ndev = plic_get_ndev();
 	irq_handlers = kcalloc(ndev, sizeof(irq_handler_t));
 	if (!irq_handlers)
 		panic("%s(): kcalloc() failed\n", __func__);
 	irq_handlers_num = ndev;
 }
 
-void irq_init_hart(uint32_t hart_id)
+void irq_init_hart(u32 hart_id)
 {
 	plic_set_threshold(hart_id, 0);
 }
 
-int irq_register_handler(uint32_t source, irq_handler_t handler,
+int irq_register_handler(u32 source, irq_handler_t handler,
 			 irq_handler_t *old_handler)
 {
 	if (source >= irq_handlers_num)
@@ -39,7 +39,7 @@ int irq_register_handler(uint32_t source, irq_handler_t handler,
 	return 0;
 }
 
-int irq_unregister_handler(uint32_t source, irq_handler_t *old_handler)
+int irq_unregister_handler(u32 source, irq_handler_t *old_handler)
 {
 	if (source >= irq_handlers_num)
 		return -EINVAL;
@@ -53,9 +53,9 @@ int irq_unregister_handler(uint32_t source, irq_handler_t *old_handler)
 	return 0;
 }
 
-int irq_handle_external(uint32_t hart_id)
+int irq_handle_external(u32 hart_id)
 {
-	uint32_t source = 0;
+	u32 source = 0;
 	irq_handler_t handler;
 
 	int err = plic_claim(hart_id, &source);

@@ -94,7 +94,7 @@ static struct page *tmpfs_inode_data_page_ro(struct tmpfs_inode *inode,
 }
 
 static struct tmpfs_inode *tmpfs_inode_get(struct tmpfs_super_block *sb,
-					   uint32_t ino)
+					   u32 ino)
 {
 	struct page *pg;
 	struct tmpfs_inode *ip;
@@ -107,7 +107,7 @@ static struct tmpfs_inode *tmpfs_inode_get(struct tmpfs_super_block *sb,
 		return NULL;
 
 	pg = sb->s_imap;
-	for (size_t i = 0, j = ino / TMPFS_INODE_PER_PAGE; i < j; ++i)
+	for (usize_t i = 0, j = ino / TMPFS_INODE_PER_PAGE; i < j; ++i)
 		pg = pg->tmpfs_next;
 
 	ip = (struct tmpfs_inode *)page_to_virt(pg) +
@@ -117,18 +117,18 @@ static struct tmpfs_inode *tmpfs_inode_get(struct tmpfs_super_block *sb,
 }
 
 static struct tmpfs_inode *tmpfs_inode_alloc(struct tmpfs_super_block *sb,
-					     mode_t mode, dev_t rdev)
+					     umode_t mode, dev_t rdev)
 {
 	struct tmpfs_inode *imap;
 	struct page **pg, *new_pg;
-	uint32_t ino = 1;
+	u32 ino = 1;
 
 	pg = &sb->s_imap;
 
 again:
 	for (; *pg; pg = &((*pg)->tmpfs_next)) {
 		imap = (struct tmpfs_inode *)page_to_virt(*pg);
-		for (size_t i = 0; i < TMPFS_INODE_PER_PAGE; ++i) {
+		for (usize_t i = 0; i < TMPFS_INODE_PER_PAGE; ++i) {
 			if (imap[i].i_no == 0) {
 				imap[i].i_page = NULL;
 				imap[i].i_size = 0;
@@ -165,7 +165,7 @@ static void tmpfs_inode_free_data_pages(struct tmpfs_inode *inode)
 	memset(inode, 0, sizeof(*inode));
 }
 
-static void tmpfs_inode_free(struct tmpfs_super_block *sb, uint32_t ino)
+static void tmpfs_inode_free(struct tmpfs_super_block *sb, u32 ino)
 {
 	struct tmpfs_inode *ip;
 
@@ -175,7 +175,7 @@ static void tmpfs_inode_free(struct tmpfs_super_block *sb, uint32_t ino)
 }
 
 static struct tmpfs_inode *tmpfs_inode_alloc_dir(struct tmpfs_super_block *sb,
-						 mode_t mode)
+						 umode_t mode)
 {
 	struct tmpfs_inode *ip;
 	struct page *pg;
@@ -225,15 +225,15 @@ static int tmpfs_inode_read(struct tmpfs_super_block *sb, struct inode *inode)
 	return 0;
 }
 
-static int tmpfs_dir_add_entry_to(struct tmpfs_dir_entry *entries, uint32_t ino,
-				  const char *name, size_t name_len,
-				  uint8_t type, int32_t *pos)
+static int tmpfs_dir_add_entry_to(struct tmpfs_dir_entry *entries, u32 ino,
+				  const char *name, usize_t name_len, u8 type,
+				  s32 *pos)
 {
-	uint16_t n = PAGE_SIZE;
-	uint16_t new_ent_min_len = round_up(20 + name_len, 4);
+	u16 n = PAGE_SIZE;
+	u16 new_ent_min_len = round_up(20 + name_len, 4);
 	struct tmpfs_dir_entry *new_ent;
 	struct tmpfs_dir_entry *ent = entries;
-	uint16_t ent_len, ent_min_len;
+	u16 ent_len, ent_min_len;
 
 	while (n >= TMPFS_DIR_ENT_MIN_LEN) {
 		ent_len = ent->d_entry_len;
@@ -252,7 +252,7 @@ static int tmpfs_dir_add_entry_to(struct tmpfs_dir_entry *entries, uint32_t ino,
 		if (ent->d_ino > 0 &&
 		    ent_len - ent_min_len >= new_ent_min_len) {
 			ent->d_entry_len = ent_min_len;
-			new_ent = (struct tmpfs_dir_entry *)((uint8_t *)ent +
+			new_ent = (struct tmpfs_dir_entry *)((u8 *)ent +
 							     ent_min_len);
 			new_ent->d_entry_len = ent_len - ent_min_len;
 			new_ent->d_ino = ino;
@@ -264,7 +264,7 @@ static int tmpfs_dir_add_entry_to(struct tmpfs_dir_entry *entries, uint32_t ino,
 		}
 
 		*pos += ent_len;
-		ent = (struct tmpfs_dir_entry *)((uint8_t *)ent + ent_len);
+		ent = (struct tmpfs_dir_entry *)((u8 *)ent + ent_len);
 		n -= ent_len;
 	}
 
@@ -276,8 +276,8 @@ static int tmpfs_dir_del_entry_from(struct tmpfs_dir_entry *entries,
 {
 	struct tmpfs_dir_entry *curr = entries;
 	struct tmpfs_dir_entry *prev = NULL;
-	uint16_t n = PAGE_SIZE;
-	uint16_t ent_len;
+	u16 n = PAGE_SIZE;
+	u16 ent_len;
 
 	while (n >= TMPFS_DIR_ENT_MIN_LEN) {
 		ent_len = curr->d_entry_len;
@@ -295,13 +295,13 @@ static int tmpfs_dir_del_entry_from(struct tmpfs_dir_entry *entries,
 
 		prev = curr;
 		n -= ent_len;
-		curr = (struct tmpfs_dir_entry *)((uint8_t *)curr + ent_len);
+		curr = (struct tmpfs_dir_entry *)((u8 *)curr + ent_len);
 	}
 
 	return -ENOENT;
 }
 
-static uint8_t tmpfs_imode_to_dt(mode_t mode)
+static u8 tmpfs_imode_to_dt(umode_t mode)
 {
 	if (S_ISLNK(mode))
 		return DT_LNK;
@@ -326,8 +326,8 @@ static int tmpfs_dir_add_entry(struct tmpfs_inode *dir,
 {
 	struct page **pg, *new_pg;
 	struct tmpfs_dir_entry *entries;
-	uint8_t dt;
-	int32_t pos = 0;
+	u8 dt;
+	s32 pos = 0;
 
 	dt = tmpfs_imode_to_dt(entry->i_mode);
 	if (dt == DT_UNKNOWN)
@@ -372,11 +372,10 @@ static int tmpfs_dir_del_entry(struct tmpfs_inode *dir, unsigned int name_len,
 
 static struct tmpfs_inode *__tmpfs_dir_lookup(struct tmpfs_super_block *sb,
 					      struct tmpfs_dir_entry *entries,
-					      const char *name,
-					      uint32_t name_len)
+					      const char *name, u32 name_len)
 {
 	struct tmpfs_dir_entry *ent = entries;
-	uint16_t n = PAGE_SIZE;
+	u16 n = PAGE_SIZE;
 
 	while (n >= TMPFS_DIR_ENT_MIN_LEN) {
 		if (ent->d_ino > 0 && ent->d_name_len == name_len &&
@@ -384,8 +383,7 @@ static struct tmpfs_inode *__tmpfs_dir_lookup(struct tmpfs_super_block *sb,
 			return tmpfs_inode_get(sb, ent->d_ino);
 
 		n -= ent->d_entry_len;
-		ent = (struct tmpfs_dir_entry *)((uint8_t *)ent +
-						 ent->d_entry_len);
+		ent = (struct tmpfs_dir_entry *)((u8 *)ent + ent->d_entry_len);
 	}
 
 	return NULL;
@@ -393,7 +391,7 @@ static struct tmpfs_inode *__tmpfs_dir_lookup(struct tmpfs_super_block *sb,
 
 static struct tmpfs_inode *tmpfs_dir_lookup(struct tmpfs_super_block *sb,
 					    struct tmpfs_inode *dir,
-					    const char *name, uint32_t name_len)
+					    const char *name, u32 name_len)
 {
 	struct page *pg;
 	struct tmpfs_dir_entry *entries;
@@ -451,7 +449,7 @@ static void tmpfs_free_super(struct tmpfs_super_block *sb)
 	while (curr) {
 		next = curr->tmpfs_next;
 		imap = (struct tmpfs_inode *)page_to_virt(curr);
-		for (size_t i = 0; i < TMPFS_INODE_PER_PAGE; ++i) {
+		for (usize_t i = 0; i < TMPFS_INODE_PER_PAGE; ++i) {
 			if (imap[i].i_nlink > 0)
 				tmpfs_inode_free_data_pages(&imap[i]);
 		}
@@ -462,12 +460,12 @@ static void tmpfs_free_super(struct tmpfs_super_block *sb)
 	kfree(sb);
 }
 
-static int tmpfs_read_file_at(struct tmpfs_inode *inode, void *buf, size_t n,
-			      off_t *pos, size_t *wcnt)
+static int tmpfs_read_file_at(struct tmpfs_inode *inode, void *buf, usize_t n,
+			      off_t *pos, usize_t *wcnt)
 {
-	size_t size, target, start;
+	usize_t size, target, start;
 	struct page *pg;
-	uint8_t *data, *b;
+	u8 *data, *b;
 	off_t off = *pos;
 
 	if (off >= inode->i_size) {
@@ -483,7 +481,7 @@ static int tmpfs_read_file_at(struct tmpfs_inode *inode, void *buf, size_t n,
 	target = n;
 	b = buf;
 	while (1) {
-		data = (uint8_t *)page_to_virt(pg);
+		data = (u8 *)page_to_virt(pg);
 		size = inode->i_size - off;
 		start = off % PAGE_SIZE;
 		if (size > PAGE_SIZE - start)
@@ -508,13 +506,13 @@ static int tmpfs_read_file_at(struct tmpfs_inode *inode, void *buf, size_t n,
 }
 
 static int tmpfs_write_file_at(struct tmpfs_inode *ip, const void *buf,
-			       size_t n, off_t *pos, size_t *rcnt)
+			       usize_t n, off_t *pos, usize_t *rcnt)
 {
 	struct page *pg, *new_pg;
-	size_t target = n, size, start;
+	usize_t target = n, size, start;
 	off_t off = *pos;
-	uint8_t *data;
-	const uint8_t *b = buf;
+	u8 *data;
+	const u8 *b = buf;
 	int ret = 0;
 
 	pg = tmpfs_inode_data_page(ip, off);
@@ -526,7 +524,7 @@ static int tmpfs_write_file_at(struct tmpfs_inode *ip, const void *buf,
 		size = PAGE_SIZE - start;
 		if (size > n)
 			size = n;
-		data = (uint8_t *)page_to_virt(pg);
+		data = (u8 *)page_to_virt(pg);
 		memcpy(data + start, b, size);
 		n -= size;
 		off += size;
@@ -700,7 +698,7 @@ static struct dentry *tmpfs_lookup(struct inode *dir, struct dentry *dentry,
 	struct tmpfs_inode *t_dir, *t_inode;
 	struct tmpfs_super_block *t_sb;
 	struct super_block *sb;
-	uint32_t ino;
+	u32 ino;
 
 	t_dir = dir->i_private;
 	sb = dir->i_sb;
@@ -859,8 +857,8 @@ static int tmpfs_symlink(struct inode *dir, struct dentry *dentry,
 	struct tmpfs_inode *t_inode, *t_dir;
 	struct tmpfs_super_block *t_sb;
 	off_t pos = 0;
-	size_t len, wcnt;
-	uint32_t ino;
+	usize_t len, wcnt;
+	u32 ino;
 	int err;
 
 	if (!symname)
@@ -923,7 +921,7 @@ static int tmpfs_readlink(struct dentry *dentry, char *buf, int bufsiz)
 	struct tmpfs_inode *t_inode = inode->i_private;
 	struct tmpfs_super_block *t_sb = inode->i_sb->s_fs_info;
 	off_t pos = 0;
-	size_t rcnt = 0;
+	usize_t rcnt = 0;
 	int err;
 
 	if (!S_ISLNK(inode->i_mode))
@@ -932,7 +930,7 @@ static int tmpfs_readlink(struct dentry *dentry, char *buf, int bufsiz)
 		return -EINVAL;
 
 	sleeplock_acquire(&t_sb->s_lock);
-	err = tmpfs_read_file_at(t_inode, buf, (size_t)(bufsiz - 1), &pos,
+	err = tmpfs_read_file_at(t_inode, buf, (usize_t)(bufsiz - 1), &pos,
 				 &rcnt);
 	sleeplock_release(&t_sb->s_lock);
 	if (err)
@@ -1008,7 +1006,7 @@ static bool tmpfs_dir_is_empty(struct tmpfs_inode *dir)
 {
 	struct page *pg;
 	struct tmpfs_dir_entry *ent;
-	uint16_t n;
+	u16 n;
 
 	for (pg = dir->i_page; pg; pg = pg->tmpfs_next) {
 		ent = (struct tmpfs_dir_entry *)page_to_virt(pg);
@@ -1023,7 +1021,7 @@ static bool tmpfs_dir_is_empty(struct tmpfs_inode *dir)
 					return false;
 			}
 			n -= ent->d_entry_len;
-			ent = (struct tmpfs_dir_entry *)((uint8_t *)ent +
+			ent = (struct tmpfs_dir_entry *)((u8 *)ent +
 							 ent->d_entry_len);
 		}
 	}
@@ -1134,8 +1132,8 @@ static int tmpfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	return 0;
 }
 
-static int tmpfs_getattr(const struct path *path, struct stat *stat,
-			 uint32_t mask, unsigned int flags)
+static int tmpfs_getattr(const struct path *path, struct stat *stat, u32 mask,
+			 unsigned int flags)
 {
 	(void)flags;
 	(void)mask;
@@ -1163,7 +1161,7 @@ static int tmpfs_setattr(struct dentry *dentry, struct iattr *attr)
 
 static int tmpfs_file_open(struct inode *inode, struct file *file)
 {
-	mode_t imode = inode->i_mode;
+	umode_t imode = inode->i_mode;
 	if (S_ISCHR(imode))
 		file->f_op = &chrdev_fops;
 	else if (S_ISBLK(imode))
@@ -1177,14 +1175,14 @@ static int tmpfs_file_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t tmpfs_file_read(struct file *file, char *buf, size_t size,
+static ssize_t tmpfs_file_read(struct file *file, char *buf, usize_t size,
 			       loff_t *pos)
 {
 	struct inode *inode = file->f_inode;
 	struct tmpfs_inode *t_inode = inode->i_private;
 	struct tmpfs_super_block *t_sb = inode->i_sb->s_fs_info;
 	int err = 0;
-	size_t rcnt = 0;
+	usize_t rcnt = 0;
 
 	sleeplock_acquire(&inode->i_rwsem);
 
@@ -1202,14 +1200,14 @@ static ssize_t tmpfs_file_read(struct file *file, char *buf, size_t size,
 	return rcnt;
 }
 
-static ssize_t tmpfs_file_write(struct file *file, const char *buf, size_t size,
-				loff_t *pos)
+static ssize_t tmpfs_file_write(struct file *file, const char *buf,
+				usize_t size, loff_t *pos)
 {
 	struct inode *inode = file->f_inode;
 	struct tmpfs_inode *t_inode = inode->i_private;
 	struct tmpfs_super_block *t_sb = inode->i_sb->s_fs_info;
 	int err = 0;
-	size_t wcnt = 0;
+	usize_t wcnt = 0;
 
 	loff_t old_pos = *pos;
 
@@ -1229,7 +1227,7 @@ static ssize_t tmpfs_file_write(struct file *file, const char *buf, size_t size,
 
 	inode_touch_mtime(inode);
 	sleeplock_acquire(&t_sb->s_lock);
-	t_inode->i_size = (uint32_t)inode->i_size;
+	t_inode->i_size = (u32)inode->i_size;
 	tmpfs_vfs_times_to_inode(inode, t_inode);
 	sleeplock_release(&t_sb->s_lock);
 
@@ -1306,7 +1304,7 @@ static int tmpfs_dir_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t tmpfs_dir_read(struct file *file, char *buf, size_t size,
+static ssize_t tmpfs_dir_read(struct file *file, char *buf, usize_t size,
 			      loff_t *pos)
 {
 	(void)file;
@@ -1316,7 +1314,7 @@ static ssize_t tmpfs_dir_read(struct file *file, char *buf, size_t size,
 	return -EISDIR;
 }
 
-static ssize_t tmpfs_dir_write(struct file *file, const char *buf, size_t size,
+static ssize_t tmpfs_dir_write(struct file *file, const char *buf, usize_t size,
 			       loff_t *pos)
 {
 	(void)file;
@@ -1349,7 +1347,7 @@ static int tmpfs_dir_iterate_shared(struct file *file, struct dir_context *ctx)
 	struct tmpfs_super_block *t_sb = inode->i_sb->s_fs_info;
 	struct page *pg;
 	struct tmpfs_dir_entry *ent;
-	uint16_t n;
+	u16 n;
 	loff_t remaining;
 
 	sleeplock_acquire(&t_sb->s_lock);
@@ -1367,8 +1365,7 @@ static int tmpfs_dir_iterate_shared(struct file *file, struct dir_context *ctx)
 				ctx->pos += ent->d_entry_len;
 				n -= ent->d_entry_len;
 				ent = (struct tmpfs_dir_entry
-					       *)((uint8_t *)ent +
-						  ent->d_entry_len);
+					       *)((u8 *)ent + ent->d_entry_len);
 				continue;
 			}
 			if (ent->d_ino > 0 &&
@@ -1379,7 +1376,7 @@ static int tmpfs_dir_iterate_shared(struct file *file, struct dir_context *ctx)
 			}
 			ctx->pos += ent->d_entry_len;
 			n -= ent->d_entry_len;
-			ent = (struct tmpfs_dir_entry *)((uint8_t *)ent +
+			ent = (struct tmpfs_dir_entry *)((u8 *)ent +
 							 ent->d_entry_len);
 		}
 	}

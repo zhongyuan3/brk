@@ -32,35 +32,35 @@
  * These can chain together via "next". */
 struct virtq_desc {
 	/* Address (guest-physical). */
-	uint64_t addr;
+	u64 addr;
 	/* Length. */
-	uint32_t len;
+	u32 len;
 	/* The flags as indicated above. */
-	uint16_t flags;
+	u16 flags;
 	/* We chain unused descriptors via this, too */
-	uint16_t next;
+	u16 next;
 };
 
 struct virtq_avail {
-	uint16_t flags;
-	uint16_t idx;
-	uint16_t ring[];
-	/* Only if VIRTIO_F_EVENT_IDX: uint16_t used_event; */
+	u16 flags;
+	u16 idx;
+	u16 ring[];
+	/* Only if VIRTIO_F_EVENT_IDX: u16 used_event; */
 };
 
-/* uint32_t is used here for ids for padding reasons. */
+/* u32 is used here for ids for padding reasons. */
 struct virtq_used_elem {
 	/* Index of start of used descriptor chain. */
-	uint32_t id;
+	u32 id;
 	/* Total length of the descriptor chain which was written to. */
-	uint32_t len;
+	u32 len;
 };
 
 struct virtq_used {
-	uint16_t flags;
-	uint16_t idx;
+	u16 flags;
+	u16 idx;
 	struct virtq_used_elem ring[];
-	/* Only if VIRTIO_F_EVENT_IDX: uint16_t avail_event; */
+	/* Only if VIRTIO_F_EVENT_IDX: u16 avail_event; */
 };
 
 struct virtq {
@@ -71,24 +71,22 @@ struct virtq {
 	struct virtq_used *used;
 };
 
-static inline int virtq_need_event(uint16_t event_idx, uint16_t new_idx,
-				   uint16_t old_idx)
+static inline int virtq_need_event(u16 event_idx, u16 new_idx, u16 old_idx)
 {
-	return (uint16_t)(new_idx - event_idx - 1) <
-	       (uint16_t)(new_idx - old_idx);
+	return (u16)(new_idx - event_idx - 1) < (u16)(new_idx - old_idx);
 }
 
 /* Get location of event indices (only with VIRTIO_F_EVENT_IDX) */
-static inline uint16_t *virtq_used_event(struct virtq *vq)
+static inline u16 *virtq_used_event(struct virtq *vq)
 {
 	/* For backwards compat, used event index is at *end* of avail ring. */
 	return &vq->avail->ring[vq->num];
 }
 
-static inline uint16_t *virtq_avail_event(struct virtq *vq)
+static inline u16 *virtq_avail_event(struct virtq *vq)
 {
 	/* For backwards compat, avail event index is at *end* of used ring. */
-	return (uint16_t *)&vq->used->ring[vq->num];
+	return (u16 *)&vq->used->ring[vq->num];
 }
 
 #endif
