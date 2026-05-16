@@ -10,24 +10,25 @@
 #include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/stat.h>
+#include <brk/pgtable.h>
 #include <brk/string.h>
 
 static int brkfs_read_super(struct brkfs_super_block *sb, struct blkdev *bdev)
 {
-	usize_t bno = BRKFS_SUPER_OFFSET / bdev->phy_bsize;
-	u32 cnt = BRKFS_SUPER_SIZE / bdev->phy_bsize;
-	u8 *buf = kmalloc(sizeof(struct brkfs_super_block));
+	u8 *page;
 	int err;
 
-	if (!buf)
+	page = kmalloc(PAGE_SIZE);
+	if (!page)
 		return -ENOMEM;
-	err = bdev->ops->read(bdev, bno, buf, cnt);
+
+	err = bdev_read_page(bdev, 0, page);
 	if (err) {
-		kfree(buf);
+		kfree(page);
 		return err;
 	}
-	memcpy(sb, buf, sizeof(struct brkfs_super_block));
-	kfree(buf);
+	memcpy(sb, page + BRKFS_SUPER_OFFSET, sizeof(*sb));
+	kfree(page);
 	return 0;
 }
 
