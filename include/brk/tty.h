@@ -9,7 +9,11 @@
 
 #define TTY_RX_BUF_SIZE 1024
 
+/* Passed to tty_port::put_char for erase rendering (not on the wire). */
+#define TTY_VIS_BACKSPACE 0x100
+
 struct file;
+struct tty;
 
 /*
  * Per-struct file wait state (VTIME sleepers only). termios lives on struct tty
@@ -22,6 +26,7 @@ struct tty_file_priv {
 };
 
 struct tty_port {
+	struct tty *tty;
 	void (*put_char)(struct tty_port *port, int c);
 };
 
@@ -39,8 +44,10 @@ struct tty {
 	usize_t rx_e;
 };
 
-void tty_boot_init(void);
+void tty_boot_init(struct tty_port *port);
 struct tty *tty_boot(void);
+
+int tty_chrdev_register(struct tty *tty, dev_t dev);
 
 struct tty_file_priv *tty_file_priv_create(void);
 void tty_file_priv_destroy(struct tty_file_priv *priv);

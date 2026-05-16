@@ -13,6 +13,30 @@
 #include <brk/tty.h>
 #include <brk/uart.h>
 
+static void uart_tty_put_char(struct tty_port *port, int c);
+
+static struct tty_port boot_port = {
+	.put_char = uart_tty_put_char,
+};
+
+static void uart_tty_put_char(struct tty_port *port, int c)
+{
+	(void)port;
+
+	if (c == TTY_VIS_BACKSPACE) {
+		uart_putc('\b');
+		uart_putc(' ');
+		uart_putc('\b');
+	} else {
+		uart_putc(c);
+	}
+}
+
+struct tty_port *uart_tty_port(void)
+{
+	return &boot_port;
+}
+
 #define RHR 0 /* Receiver Holding Register */
 #define THR 0 /* Transmitter Holding Register */
 #define DLL 0 /* Divisor Latch Register */
@@ -55,10 +79,13 @@ static u8 uart_read_reg(unsigned int reg)
 
 static void uart_handle_irq(void)
 {
+	struct tty_port *port = uart_tty_port();
 	int c = uart_getc();
+
 	if (c < 0)
 		return;
-	tty_receive(tty_boot(), c);
+	if (port->tty)
+		tty_receive(port->tty, c);
 }
 
 void uart_init(void)

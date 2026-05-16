@@ -3,12 +3,16 @@
 
 #include <brk/types.h>
 
+struct tty_port;
+
 struct uart_device {
 	u64 phys_base;
 	usize_t size;
 	u32 irq;
 	u32 clock_freq;
 };
+
+struct tty_port *uart_tty_port(void);
 
 void uart_init(void);
 void uart_init_hart(u32 hart_id);

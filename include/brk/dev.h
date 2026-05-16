@@ -106,7 +106,6 @@ int blkdev_alloc_devnum(dev_t *dev_out);
 
 void dev_init(void);
 
-int dev_console_init(void);
 int virtio_disk_init(void);
 
 struct dev_slot {

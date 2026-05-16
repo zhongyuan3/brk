@@ -107,7 +107,6 @@ SRCS += kernel/dev/table.c
 SRCS += kernel/dev/chrdev.c
 SRCS += kernel/dev/blkdev.c
 SRCS += kernel/dev/init.c
-SRCS += drivers/console.c
 SRCS += drivers/virtio_disk.c
 SRCS += mm/init.c
 SRCS += mm/mm.c
