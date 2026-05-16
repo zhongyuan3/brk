@@ -1,12 +1,8 @@
 #ifndef BRK_CONSOLE_H
 #define BRK_CONSOLE_H
 
-#include <brk/types.h>
-
-/* Must match TTY_RX_BUF_SIZE in tty.h (boot console uses tty_boot). */
-#define CONSOLE_BUF_SIZE 1024
-
+/* Boot UART console: TTY setup (early) and /dev/console registration (dev_init). */
 void console_init(void);
-void console_putc(int c);
+int console_register_dev(void);
 
 #endif

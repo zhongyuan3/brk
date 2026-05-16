@@ -1,4 +1,3 @@
-#include <brk/console.h>
 #include <brk/errno.h>
 #include <brk/kernel.h>
 #include <brk/lock.h>
@@ -6,6 +5,7 @@
 #include <brk/printk.h>
 #include <brk/time.h>
 #include <brk/ktime.h>
+#include <brk/tty.h>
 
 static SPINLOCK_DEFINE(printk_lock);
 
@@ -14,13 +14,7 @@ static int display_write(struct display *dis, char const *buf, usize_t len,
 {
 	(void)dis;
 
-	for (usize_t i = 0; i < len; ++i)
-		console_putc(buf[i]);
-
-	if (wlen)
-		*wlen = len;
-
-	return 0;
+	return tty_write(tty_boot(), buf, len, wlen);
 }
 
 void printk(char const *fmt, ...)

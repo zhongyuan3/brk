@@ -1,3 +1,4 @@
+#include <brk/dev.h>
 #include <brk/errno.h>
 #include <brk/fs.h>
 #include <brk/list.h>
@@ -7,9 +8,7 @@
 #include <brk/termios.h>
 #include <brk/timekeeper.h>
 #include <brk/tty.h>
-#include <brk/uart.h>
 
-#define TTY_VIS_BACKSPACE 0x100
 #define CTRL(x) ((x) - '@')
 
 _Static_assert(sizeof(struct termios) == 36,
@@ -17,24 +16,8 @@ _Static_assert(sizeof(struct termios) == 36,
 _Static_assert(sizeof(struct winsize) == 8,
 	       "struct winsize must match Linux uapi for TIOCGWINSZ");
 
-static void uart_boot_put_char(struct tty_port *port, int c)
-{
-	(void)port;
-
-	if (c == TTY_VIS_BACKSPACE) {
-		uart_putc('\b');
-		uart_putc(' ');
-		uart_putc('\b');
-	} else {
-		uart_putc(c);
-	}
-}
-
-static struct tty_port uart_boot_port = {
-	.put_char = uart_boot_put_char,
-};
-
 static struct tty boot_tty;
+static struct tty *tty_chrdev_tty;
 
 static void tty_flush_input(struct tty *tty)
 {
@@ -43,9 +26,9 @@ static void tty_flush_input(struct tty *tty)
 	tty->rx_e = 0;
 }
 
-void tty_boot_init(void)
+void tty_boot_init(struct tty_port *port)
 {
-	tty_init(&boot_tty, &uart_boot_port);
+	tty_init(&boot_tty, port);
 }
 
 struct tty *tty_boot(void)
@@ -78,6 +61,8 @@ void tty_init(struct tty *tty, struct tty_port *port)
 {
 	spinlock_init(&tty->lock, "tty");
 	tty->port = port;
+	if (port)
+		port->tty = tty;
 	memset(&tty->termios, 0, sizeof(tty->termios));
 	tty->termios.c_cflag = CS8 | CREAD;
 	tty->termios.c_lflag = ICANON | ECHO | ECHOE | ISIG;
@@ -501,4 +486,79 @@ long tty_ioctl(struct tty *tty, struct file *file, unsigned int cmd,
 	default:
 		return -ENOTTY;
 	}
+}
+
+static int tty_chrdev_open(struct chrdev *cd, struct file *file)
+{
+	struct tty_file_priv *priv;
+
+	(void)cd;
+
+	priv = tty_file_priv_create();
+	if (!priv)
+		return -ENOMEM;
+	file->private_data = priv;
+	return 0;
+}
+
+static void tty_chrdev_release(struct chrdev *cd, struct file *file)
+{
+	(void)cd;
+
+	if (file->private_data) {
+		tty_file_priv_destroy(file->private_data);
+		file->private_data = NULL;
+	}
+}
+
+static int tty_chrdev_read(struct file *file, char *buf, usize_t n, usize_t *read)
+{
+	if (!tty_chrdev_tty)
+		return -ENODEV;
+	return tty_read(tty_chrdev_tty, file, buf, n, read);
+}
+
+static int tty_chrdev_write(struct file *file, const char *buf, usize_t n,
+			    usize_t *written)
+{
+	(void)file;
+	if (!tty_chrdev_tty)
+		return -ENODEV;
+	return tty_write(tty_chrdev_tty, buf, n, written);
+}
+
+static long tty_chrdev_ioctl(struct file *file, unsigned int cmd,
+			     unsigned long arg)
+{
+	if (!tty_chrdev_tty)
+		return -ENODEV;
+	return tty_ioctl(tty_chrdev_tty, file, cmd, arg);
+}
+
+int tty_chrdev_register(struct tty *tty, dev_t dev)
+{
+	struct chrdev *cd;
+	int err;
+
+	if (!tty)
+		return -EINVAL;
+
+	cd = chrdev_alloc();
+	if (!cd)
+		return -ENOMEM;
+
+	cd->ops.open = tty_chrdev_open;
+	cd->ops.release = tty_chrdev_release;
+	cd->ops.read = tty_chrdev_read;
+	cd->ops.write = tty_chrdev_write;
+	cd->ops.ioctl = tty_chrdev_ioctl;
+
+	err = chrdev_register(cd, dev);
+	if (err) {
+		chrdev_free(cd);
+		return err;
+	}
+
+	tty_chrdev_tty = tty;
+	return 0;
 }
