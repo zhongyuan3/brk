@@ -1,6 +1,9 @@
 #ifndef BRK_DEV_H
 #define BRK_DEV_H
 
+#include <brk/bitmap.h> /* BITS_TO_LONGS */
+#include <brk/list.h>
+#include <brk/lock.h>
 #include <brk/types.h>
 
 /*
@@ -33,53 +36,21 @@
 
 #define DISK0_SIZE (4096 * 1024)
 
-/*
- * Majors in [0, BRK_DEV_FIRST_DYNAMIC_MAJOR) are for static / board-defined
- * devices. chrdev_alloc_major / blkdev_alloc_major only assign from the
- * dynamic range.
- */
 #define BRK_DEV_FIRST_DYNAMIC_MAJOR 16u
-/*
- * When scanning for a free minor, stop at this bound to keep allocation O(1)
- * in practice for this kernel.
- */
 #define BRK_DEV_ALLOC_MINOR_SCAN 4096u
 
 struct chrdev;
-struct chrdev_operations;
 struct blkdev;
-struct blkdev_operations;
+struct file;
 struct address_space;
 
-struct chrdev {
-	dev_t dev;
-	struct chrdev_operations *ops;
-	struct list_head list;
-};
-
-struct file;
-
 struct chrdev_operations {
+	int (*open)(struct chrdev *cd, struct file *file);
+	void (*release)(struct chrdev *cd, struct file *file);
 	int (*read)(struct file *file, char *buf, usize_t n, usize_t *read);
 	int (*write)(struct file *file, const char *buf, usize_t n,
 		     usize_t *written);
 	long (*ioctl)(struct file *file, unsigned int cmd, unsigned long arg);
-};
-
-struct blkdev {
-	struct list_head list;
-	dev_t dev;
-	u32 phy_bsize;
-	u64 phy_bcnt;
-	struct blkdev_operations *ops;
-	void *priv;
-	/*
-	 * Page cache that backs every read/write made through
-	 * bdev_read_page / bdev_write_page. Sized in PAGE_SIZE units;
-	 * each cached_page maps a contiguous PAGE_SIZE region of the
-	 * device starting at index << PAGE_SHIFT bytes.
-	 */
-	struct address_space *bd_mapping;
 };
 
 struct blkdev_operations {
@@ -88,35 +59,38 @@ struct blkdev_operations {
 		     u32 blk_cnt);
 };
 
-/*
- * Page-cached helpers built on top of blkdev_operations. Index is in
- * PAGE_SIZE units of the device. @buf must be PAGE_SIZE bytes. Writes
- * are write-through: the page in the bdev mapping is updated and the
- * data is synchronously pushed to the underlying device before
- * returning, so metadata consumers (super, bitmap, inode table) get
- * strict ordering / durability semantics for free.
- */
+struct chrdev {
+	struct list_head list;
+	dev_t dev;
+	struct chrdev_operations ops;
+};
+
+struct blkdev {
+	struct list_head list;
+	dev_t dev;
+	u32 phy_bsize;
+	u64 phy_bcnt;
+	struct blkdev_operations ops;
+	void *priv;
+	struct address_space *bd_mapping;
+};
+
+int blkdev_check_bounds(struct blkdev *bd, u64 blk_id, u32 blk_cnt);
+
 int bdev_read_page(struct blkdev *bd, u64 index, void *buf);
 int bdev_write_page(struct blkdev *bd, u64 index, const void *buf);
 
 struct chrdev *chrdev_alloc(void);
 void chrdev_free(struct chrdev *cd);
 
-/* Register at an explicit (type, major, minor); dev must match CHRDEV. */
 int chrdev_register(struct chrdev *cd, dev_t dev);
 void chrdev_unregister(struct chrdev *cd);
 struct chrdev *chrdev_get(dev_t dev);
 
-/*
- * Major allocation (dynamic range only). A major stays claimed until
- * chrdev_free_major() after the last character device on that major unregisters,
- * or chrdev_free_major() is called explicitly on an empty major.
- */
 int chrdev_alloc_major(unsigned *major_out);
 void chrdev_free_major(unsigned major);
-
-/* First unused minor in [0, BRK_DEV_ALLOC_MINOR_SCAN) for this major. */
 int chrdev_alloc_minor(unsigned major, unsigned *minor_out);
+int chrdev_alloc_devnum(dev_t *dev_out);
 
 struct blkdev *blkdev_alloc(void);
 void blkdev_free(struct blkdev *bd);
@@ -128,14 +102,34 @@ struct blkdev *blkdev_get(dev_t dev);
 int blkdev_alloc_major(unsigned *major_out);
 void blkdev_free_major(unsigned major);
 int blkdev_alloc_minor(unsigned major, unsigned *minor_out);
-
-/*
- * Allocate a full dev_t: prefers minor 0, then scans minors; majors start at
- * BRK_DEV_FIRST_DYNAMIC_MAJOR. Fails with -ENOMEM if no slot.
- */
-int chrdev_alloc_devnum(dev_t *dev_out);
 int blkdev_alloc_devnum(dev_t *dev_out);
 
 void dev_init(void);
+
+int dev_console_init(void);
+int virtio_disk_init(void);
+
+struct dev_slot {
+	struct list_head list;
+	dev_t dev;
+};
+
+struct dev_registry {
+	struct list_head lists[BRK_MAJOR_MAX];
+	spinlock_t lock;
+	unsigned long major_pooled[BITS_TO_LONGS(BRK_MAJOR_MAX)];
+};
+
+void dev_registry_init(struct dev_registry *reg);
+int dev_registry_register(struct dev_registry *reg, struct dev_slot *slot,
+			  dev_t dev, unsigned int dev_type);
+void dev_registry_unregister(struct dev_registry *reg, struct dev_slot *slot);
+struct dev_slot *dev_registry_get(struct dev_registry *reg, dev_t dev);
+int dev_registry_alloc_major(struct dev_registry *reg, unsigned *major_out);
+void dev_registry_free_major(struct dev_registry *reg, unsigned major);
+int dev_registry_alloc_minor(struct dev_registry *reg, unsigned major,
+			     unsigned *minor_out, unsigned int dev_type);
+int dev_registry_alloc_devnum(struct dev_registry *reg, dev_t *dev_out,
+			      unsigned int dev_type);
 
 #endif
