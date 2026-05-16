@@ -1,6 +1,5 @@
 #include <brk/dtb.h>
 #include <brk/ioremap.h>
-#include <brk/ktime.h>
 #include <brk/lock.h>
 #include <brk/mm.h>
 #include <brk/mmio.h>
@@ -8,7 +7,7 @@
 #include <brk/printk.h>
 #include <brk/rtc.h>
 #include <brk/time.h>
-#include <brk/timer.h>
+#include <brk/timeconst.h>
 
 /* Android Goldfish RTC (QEMU virt), see QEMU hw/rtc/goldfish_rtc.c */
 #define RTC_TIME_LOW 0x00u
@@ -106,7 +105,6 @@ void rtc_set_timespec(const struct timespec *ts)
 void rtc_init(void)
 {
 	struct rtc_device dev;
-	struct timespec ts;
 	int err;
 
 	err = dtb_parse_rtc(&dev);
@@ -123,6 +121,4 @@ void rtc_init(void)
 	}
 
 	rtc_ok = true;
-	rtc_read_timespec(&ts);
-	walltime_set_ts(&ts);
 }

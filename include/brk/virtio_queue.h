@@ -19,25 +19,12 @@
  * simply an optimization.  */
 #define VIRTQ_AVAIL_F_NO_INTERRUPT 1
 
-/* Support for indirect descriptors */
-#define VIRTIO_F_INDIRECT_DESC 28
-
-/* Support for avail_event and used_event fields */
-#define VIRTIO_F_EVENT_IDX 29
-
-/* Arbitrary descriptor layouts. */
-#define VIRTIO_F_ANY_LAYOUT 27
-
 /* Virtqueue descriptors: 16 bytes.
  * These can chain together via "next". */
 struct virtq_desc {
-	/* Address (guest-physical). */
 	u64 addr;
-	/* Length. */
 	u32 len;
-	/* The flags as indicated above. */
 	u16 flags;
-	/* We chain unused descriptors via this, too */
 	u16 next;
 };
 
@@ -45,14 +32,10 @@ struct virtq_avail {
 	u16 flags;
 	u16 idx;
 	u16 ring[];
-	/* Only if VIRTIO_F_EVENT_IDX: u16 used_event; */
 };
 
-/* u32 is used here for ids for padding reasons. */
 struct virtq_used_elem {
-	/* Index of start of used descriptor chain. */
 	u32 id;
-	/* Total length of the descriptor chain which was written to. */
 	u32 len;
 };
 
@@ -60,32 +43,41 @@ struct virtq_used {
 	u16 flags;
 	u16 idx;
 	struct virtq_used_elem ring[];
-	/* Only if VIRTIO_F_EVENT_IDX: u16 avail_event; */
 };
 
 struct virtq {
 	unsigned int num;
-
 	struct virtq_desc *desc;
 	struct virtq_avail *avail;
 	struct virtq_used *used;
+	bool *desc_used;
+	u16 used_idx;
 };
+
+typedef void (*virtq_used_fn)(struct virtq *vq, u32 id, void *ctx);
+
+int virtq_alloc(struct virtq *vq, unsigned int num);
+void virtq_free(struct virtq *vq);
+int virtq_alloc_desc(struct virtq *vq, unsigned int *idx);
+int virtq_alloc_desc_chain(struct virtq *vq, unsigned int *idx,
+			   unsigned int num);
+void virtq_free_desc(struct virtq *vq, unsigned int idx);
+void virtq_free_desc_chain(struct virtq *vq, unsigned int idx);
+void virtq_submit(struct virtq *vq, u16 head_idx);
+void virtq_process_used(struct virtq *vq, virtq_used_fn fn, void *ctx);
 
 static inline int virtq_need_event(u16 event_idx, u16 new_idx, u16 old_idx)
 {
 	return (u16)(new_idx - event_idx - 1) < (u16)(new_idx - old_idx);
 }
 
-/* Get location of event indices (only with VIRTIO_F_EVENT_IDX) */
 static inline u16 *virtq_used_event(struct virtq *vq)
 {
-	/* For backwards compat, used event index is at *end* of avail ring. */
 	return &vq->avail->ring[vq->num];
 }
 
 static inline u16 *virtq_avail_event(struct virtq *vq)
 {
-	/* For backwards compat, avail event index is at *end* of used ring. */
 	return (u16 *)&vq->used->ring[vq->num];
 }
 

@@ -8,7 +8,7 @@
 #include <brk/pgtable.h>
 #include <brk/process.h>
 #include <brk/riscv.h>
-#include <brk/timer.h>
+#include <brk/timekeeper.h>
 #include <brk/types.h>
 
 SPINLOCK_DEFINE(wait_lock);

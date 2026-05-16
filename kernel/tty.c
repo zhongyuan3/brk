@@ -5,7 +5,7 @@
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/termios.h>
-#include <brk/timer.h>
+#include <brk/timekeeper.h>
 #include <brk/tty.h>
 #include <brk/uart.h>
 

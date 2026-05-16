@@ -30,6 +30,10 @@
 #define VIRTIO_BLK_T_WRITE_ZEROES 13
 #define VIRTIO_BLK_T_SECURE_ERASE 14
 
+#define VIRTIO_BLK_S_OK 0
+#define VIRTIO_BLK_S_IOERR 1
+#define VIRTIO_BLK_S_UNSUPP 2
+
 #define SECTOR_SIZE 512
 
 struct virtio_blk_req {
@@ -38,7 +42,7 @@ struct virtio_blk_req {
 	u64 sector;
 };
 
-struct virtio_blk_transation {
+struct virtio_blk_transaction {
 	u64 buf_phys;
 	u64 sector;
 	usize_t sec_count;
@@ -47,7 +51,7 @@ struct virtio_blk_transation {
 };
 
 struct virtio_blk_track {
-	struct virtio_blk_transation *trans;
+	struct virtio_blk_transaction *trans;
 	char status;
 };
 

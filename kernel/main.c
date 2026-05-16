@@ -18,6 +18,7 @@
 #include <brk/process.h>
 #include <brk/riscv.h>
 #include <brk/rtc.h>
+#include <brk/timekeeper.h>
 #include <brk/sbi.h>
 #include <brk/slab.h>
 #include <brk/string.h>
@@ -101,6 +102,7 @@ void start_kernel(usize_t hart_id, u64 dtb, usize_t load_offset)
 	uart_init_hart(hart_id);
 
 	rtc_init();
+	timekeeper_init();
 
 	trap_init();
 	trap_init_hart(hart_id);

@@ -9,6 +9,7 @@
 #include <brk/riscv.h>
 #include <brk/sbi.h>
 #include <brk/syscall.h>
+#include <brk/timekeeper.h>
 #include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>

@@ -1,15 +1,39 @@
 #include <brk/fs.h>
 #include <brk/ktime.h>
 #include <brk/stat.h>
-#include <brk/timer.h>
+#include <brk/timekeeper.h>
+
+void ktime_get_mono_ts(struct timespec *ts)
+{
+	timekeeper_get_mono_ts(ts);
+}
 
 void ktime_get_real_ts(struct timespec *ts)
 {
-	struct timeval tv;
+	timekeeper_get_real_ts(ts);
+}
 
-	walltime_get(&tv);
-	ts->tv_sec = tv.tv_sec;
-	ts->tv_nsec = (long)tv.tv_usec * 1000L;
+void ktime_set_real_ts(const struct timespec *ts)
+{
+	timekeeper_set_real_ts(ts);
+}
+
+void ktime_get_real_tv(struct timeval *tv)
+{
+	struct timespec ts;
+
+	ktime_get_real_ts(&ts);
+	tv->tv_sec = ts.tv_sec;
+	tv->tv_usec = (suseconds_t)(ts.tv_nsec / (long)NS_PER_US);
+}
+
+void ktime_set_real_tv(const struct timeval *tv)
+{
+	struct timespec ts;
+
+	ts.tv_sec = tv->tv_sec;
+	ts.tv_nsec = (long)tv->tv_usec * (long)NS_PER_US;
+	ktime_set_real_ts(&ts);
 }
 
 time_t ktime_get_real_sec(void)
@@ -18,6 +42,16 @@ time_t ktime_get_real_sec(void)
 
 	ktime_get_real_ts(&ts);
 	return ts.tv_sec;
+}
+
+void ktime_get_boot_ts(struct timespec *ts)
+{
+	timekeeper_get_mono_ts(ts);
+}
+
+u64 ktime_nanosleep(const struct timespec *dur, struct timespec *rem)
+{
+	return timekeeper_nanosleep(dur, rem);
 }
 
 void inode_times_set_all_now(struct inode *inode)
