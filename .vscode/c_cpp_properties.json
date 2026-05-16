@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "name": "brk",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/vendor/libfdt"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/riscv64-unknown-elf-gcc"
+        }
+    ],
+    "version": 4
+}
