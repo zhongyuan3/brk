@@ -1,405 +1,259 @@
 #include <brk/assert.h>
-#include <brk/cpu.h>
 #include <brk/errno.h>
 #include <brk/irq.h>
 #include <brk/kernel.h>
 #include <brk/lock.h>
 #include <brk/mm.h>
-#include <brk/mmio.h>
 #include <brk/panic.h>
 #include <brk/plic.h>
-#include <brk/printk.h>
 #include <brk/process.h>
 #include <brk/slab.h>
 #include <brk/types.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
+#include <brk/virtio_mmio.h>
 #include <brk/virtio_queue.h>
 
-static struct virtio_device *blk_dev;
-static struct virtq blk_vq;
-static struct virtio_blk_req *blk_reqs;
-static struct virtio_blk_track *blk_tracks;
-static bool *blk_desc_used;
-static struct kmem_cache blk_trans_cache;
-static u16 blk_used_idx;
-static SPINLOCK_DEFINE(blk_lock);
+struct virtio_blk_dev {
+	struct virtio_device *vdev;
+	struct virtq vq;
+	struct virtio_blk_req *reqs;
+	struct virtio_blk_track *tracks;
+	spinlock_t lock;
+};
 
-static int virtio_blk_init_alloc(u32 queue_size)
+static struct virtio_blk_dev blk;
+
+static int virtio_blk_status_errno(char status)
 {
-	int err = -ENOMEM;
-	usize_t size;
-
-	blk_vq.desc = kcalloc(queue_size, sizeof(struct virtq_desc));
-	if (!blk_vq.desc)
-		goto err0;
-
-	size = sizeof(struct virtq_avail) + sizeof(u16) * queue_size;
-	blk_vq.avail = kzalloc(size);
-	if (!blk_vq.avail)
-		goto err1;
-
-	size = sizeof(struct virtq_used) +
-	       sizeof(struct virtq_used_elem) * queue_size;
-	blk_vq.used = kzalloc(size);
-	if (!blk_vq.used)
-		goto err2;
-
-	blk_reqs = kcalloc(queue_size, sizeof(struct virtio_blk_req));
-	if (!blk_reqs)
-		goto err3;
-
-	blk_tracks = kcalloc(queue_size, sizeof(struct virtio_blk_track));
-	if (!blk_tracks)
-		goto err4;
-
-	blk_desc_used = kcalloc(queue_size, sizeof(bool));
-	if (!blk_desc_used)
-		goto err5;
-
-	err = kmem_cache_init(&blk_trans_cache,
-			      sizeof(struct virtio_blk_transation),
-			      alignof(struct virtio_blk_transation),
-			      "blk_trans_cache");
-	if (err)
-		goto err6;
-
-	blk_vq.num = queue_size;
-	return 0;
-
-err6:
-	kfree(blk_desc_used);
-	blk_desc_used = NULL;
-err5:
-	kfree(blk_tracks);
-	blk_tracks = NULL;
-err4:
-	kfree(blk_reqs);
-	blk_reqs = NULL;
-err3:
-	kfree(blk_vq.used);
-	blk_vq.used = NULL;
-err2:
-	kfree(blk_vq.avail);
-	blk_vq.avail = NULL;
-err1:
-	kfree(blk_vq.desc);
-	blk_vq.desc = NULL;
-err0:
-	return err;
+	switch (status) {
+	case VIRTIO_BLK_S_OK:
+		return 0;
+	case VIRTIO_BLK_S_IOERR:
+		return -EIO;
+	case VIRTIO_BLK_S_UNSUPP:
+		return -EOPNOTSUPP;
+	default:
+		return -EIO;
+	}
 }
 
 static int virtio_blk_init_check(struct virtio_device *dev)
 {
-	u64 mem_base = (u64)dev->mem_base;
-
 	if (dev->id != VIRTIO_DEVICE_ID_BLK)
 		return -EINVAL;
+	return 0;
+}
 
-	if (readl(mem_base + VIRTIO_MAGIC_VALUE_OFFSET) != VIRTIO_MAGIC_VALUE)
-		return -EINVAL;
+static u32 virtio_blk_negotiate_features(struct virtio_device *dev)
+{
+	u32 features = virtio_mmio_read_features(dev);
 
-	if (readl(mem_base + VIRTIO_VERSION_OFFSET) != 2)
-		return -EINVAL;
+	features &= ~(1u << VIRTIO_BLK_F_RO);
+	features &= ~(1u << VIRTIO_BLK_F_SCSI);
+	features &= ~(1u << VIRTIO_BLK_F_CONFIG_WCE);
+	features &= ~(1u << VIRTIO_BLK_F_MQ);
+	features &= ~(1u << VIRTIO_F_ANY_LAYOUT);
+	features &= ~(1u << VIRTIO_F_EVENT_IDX);
+	features &= ~(1u << VIRTIO_F_INDIRECT_DESC);
+	return features;
+}
 
-	if (readl(mem_base + VIRTIO_DEVICE_ID_OFFSET) != VIRTIO_DEVICE_ID_BLK)
-		return -EINVAL;
+static int virtio_blk_init_alloc(struct virtio_blk_dev *bdev,
+				 unsigned int queue_size)
+{
+	int err;
 
-	if (readl(mem_base + VIRTIO_VENDOR_ID_OFFSET) != VIRTIO_VENDOR_ID)
-		return -EINVAL;
+	err = virtq_alloc(&bdev->vq, queue_size);
+	if (err)
+		return err;
+
+	bdev->reqs = kcalloc(queue_size, sizeof(struct virtio_blk_req));
+	if (!bdev->reqs)
+		goto err_reqs;
+
+	bdev->tracks = kcalloc(queue_size, sizeof(struct virtio_blk_track));
+	if (!bdev->tracks)
+		goto err_tracks;
 
 	return 0;
+
+err_tracks:
+	kfree(bdev->reqs);
+	bdev->reqs = NULL;
+err_reqs:
+	virtq_free(&bdev->vq);
+	return -ENOMEM;
+}
+
+static void virtio_blk_used_cb(struct virtq *vq, u32 id, void *ctx)
+{
+	struct virtio_blk_dev *bdev = ctx;
+	struct virtio_blk_transaction *trans;
+
+	(void)vq;
+
+	if (id >= bdev->vq.num || !bdev->tracks[id].trans)
+		panic("%s(): invalid used id %u\n", __func__, id);
+
+	trans = bdev->tracks[id].trans;
+	trans->completed = true;
+	proc_wake_up(&trans->completed);
 }
 
 int virtio_blk_init(struct virtio_device *dev, unsigned int queue_size)
 {
-	u64 mem_base;
-	u32 status;
-	u64 features;
+	struct virtio_blk_dev *bdev = &blk;
+	u32 features;
 	int err;
-	u64 paddr;
-	u32 queue_size_max;
+
+	if (!dev)
+		return -EINVAL;
+
+	if (!is_power_of_two(queue_size))
+		return -EINVAL;
 
 	err = virtio_blk_init_check(dev);
 	if (err)
 		return err;
 
-	err = virtio_blk_init_alloc(queue_size);
+	err = virtio_blk_init_alloc(bdev, queue_size);
 	if (err)
 		return err;
 
-	mem_base = (u64)dev->mem_base;
+	virtio_mmio_reset(dev);
+	err = virtio_mmio_start_driver(dev);
+	if (err)
+		goto err_deinit;
 
-	/* reset device */
-	status = 0;
-	writel(status, mem_base + VIRTIO_STATUS_OFFSET);
+	features = virtio_blk_negotiate_features(dev);
+	virtio_mmio_write_features(dev, features);
 
-	/* set ACKNOWLEDGE status bit */
-	status |= VIRTIO_STATUS_ACKNOWLEDGE;
-	writel(status, mem_base + VIRTIO_STATUS_OFFSET);
+	err = virtio_mmio_features_ok(dev);
+	if (err)
+		goto err_deinit;
 
-	/* set DRIVER status bit */
-	status |= VIRTIO_STATUS_DRIVER;
-	writel(status, mem_base + VIRTIO_STATUS_OFFSET);
+	err = virtio_mmio_setup_queue(dev, 0, &bdev->vq, queue_size);
+	if (err)
+		goto err_deinit;
 
-	/* negotiate features */
-	features = readl(mem_base + VIRTIO_DEVICE_FEATURES_OFFSET);
-	features &= ~(1 << VIRTIO_BLK_F_RO);
-	features &= ~(1 << VIRTIO_BLK_F_SCSI);
-	features &= ~(1 << VIRTIO_BLK_F_CONFIG_WCE);
-	features &= ~(1 << VIRTIO_BLK_F_MQ);
-	features &= ~(1 << VIRTIO_F_ANY_LAYOUT);
-	features &= ~(1 << VIRTIO_F_EVENT_IDX);
-	features &= ~(1 << VIRTIO_F_INDIRECT_DESC);
-	writel(features, mem_base + VIRTIO_DRIVER_FEATURES_OFFSET);
+	err = virtio_mmio_driver_ok(dev);
+	if (err)
+		goto err_deinit;
 
-	/* tell device that feature negotiation is complete. */
-	status |= VIRTIO_STATUS_FEATURES_OK;
-	writel(status, mem_base + VIRTIO_STATUS_OFFSET);
+	bdev->vdev = dev;
+	spinlock_init(&bdev->lock, "virtio_blk");
 
-	/* re-read status to ensure FEATURES_OK is set. */
-	status = readl(mem_base + VIRTIO_STATUS_OFFSET);
-	if (!(status & VIRTIO_STATUS_FEATURES_OK))
-		panic("%s(): VIRTIO_STATUS_FEATURES_OK unset\n", __func__);
-
-	/* initialize queue 0. */
-	writel(0, mem_base + VIRTIO_QUEUE_SEL_OFFSET);
-
-	/* ensure queue 0 is not in use. */
-	if (readl(mem_base + VIRTIO_QUEUE_READY_OFFSET))
-		panic("%s(): queue should not be ready\n", __func__);
-
-	/* check maximum queue size. */
-	queue_size_max = readl(mem_base + VIRTIO_QUEUE_SIZE_MAX_OFFSET);
-	if (queue_size_max == 0)
-		panic("%s(): virtio blk has no queue 0\n", __func__);
-	if (queue_size_max < queue_size)
-		panic("%s(): virtio blk max queue too short\n", __func__);
-
-	/* set queue size. */
-	writel(queue_size, mem_base + VIRTIO_QUEUE_SIZE_OFFSET);
-
-	/* write physical addresses. */
-	paddr = virt_to_phys((u64)blk_vq.desc);
-	writel(paddr & 0xffffffff, mem_base + VIRTIO_QUEUE_DESC_LOW_OFFSET);
-	writel(paddr >> 32, mem_base + VIRTIO_QUEUE_DESC_HIGH_OFFSET);
-	paddr = virt_to_phys((u64)blk_vq.avail);
-	writel(paddr & 0xffffffff, mem_base + VIRTIO_QUEUE_DRIVER_LOW_OFFSET);
-	writel(paddr >> 32, mem_base + VIRTIO_QUEUE_DRIVER_HIGH_OFFSET);
-	paddr = virt_to_phys((u64)blk_vq.used);
-	writel(paddr & 0xffffffff, mem_base + VIRTIO_QUEUE_DEVICE_LOW_OFFSET);
-	writel(paddr >> 32, mem_base + VIRTIO_QUEUE_DEVICE_HIGH_OFFSET);
-
-	/* queue is ready. */
-	writel(1, mem_base + VIRTIO_QUEUE_READY_OFFSET);
-
-	/* tell device we're completely ready. */
-	status |= VIRTIO_STATUS_DRIVER_OK;
-	writel(status, mem_base + VIRTIO_STATUS_OFFSET);
-
-	blk_dev = dev;
-
-	irq_register_handler(blk_dev->irq, virtio_blk_intr, NULL);
-	plic_set_priority(blk_dev->irq, 1);
+	irq_register_handler(dev->irq, virtio_blk_intr, NULL);
+	plic_set_priority(dev->irq, 1);
 
 	return 0;
+
+err_deinit:
+	virtq_free(&bdev->vq);
+	kfree(bdev->tracks);
+	bdev->tracks = NULL;
+	kfree(bdev->reqs);
+	bdev->reqs = NULL;
+	return err;
 }
 
 void virtio_blk_init_hart(u32 hart_id)
 {
-	plic_enable(hart_id, blk_dev->irq);
+	if (!blk.vdev)
+		return;
+	plic_enable(hart_id, blk.vdev->irq);
 }
 
-static int alloc_desc(unsigned int *desc_idx)
+static int virtio_blk_transfer(struct virtio_blk_transaction *trans)
 {
-	for (unsigned int i = 0; i < blk_vq.num; i++) {
-		if (!blk_desc_used[i]) {
-			blk_desc_used[i] = true;
-			*desc_idx = i;
-			return 0;
-		}
-	}
-	return -ENOMEM;
-}
-
-static void free_desc(unsigned int desc_idx)
-{
-	ASSERT(desc_idx < blk_vq.num);
-	ASSERT(blk_desc_used[desc_idx]);
-	blk_desc_used[desc_idx] = false;
-	blk_vq.desc[desc_idx].addr = 0;
-	blk_vq.desc[desc_idx].len = 0;
-	blk_vq.desc[desc_idx].flags = 0;
-	blk_vq.desc[desc_idx].next = 0;
-}
-
-static void free_desc_chain(unsigned int desc_idx)
-{
-	while (1) {
-		unsigned int flags = blk_vq.desc[desc_idx].flags;
-		unsigned int next = blk_vq.desc[desc_idx].next;
-		free_desc(desc_idx);
-		if (flags & VIRTQ_DESC_F_NEXT)
-			desc_idx = next;
-		else
-			break;
-	}
-}
-
-static int alloc_desc_chain(unsigned int *desc_idx, unsigned int num)
-{
-	for (unsigned int i = 0; i < num; i++) {
-		if (alloc_desc(desc_idx + i)) {
-			for (unsigned int j = 0; j < i; j++)
-				free_desc(desc_idx[j]);
-			return -ENOMEM;
-		}
-	}
-	return 0;
-}
-
-static int virtio_blk_transfer(struct virtio_blk_transation *trans)
-{
+	struct virtio_blk_dev *bdev = &blk;
 	unsigned int idx[3];
 	struct virtio_blk_req *req;
 	char *status;
+	int err;
 
-	spinlock_acquire(&blk_lock);
+	spinlock_acquire(&bdev->lock);
 
-	while (1) {
-		if (alloc_desc_chain(idx, 3) == 0)
-			break;
-		proc_sleep(&blk_vq.desc, &blk_lock);
-	}
+	while (virtq_alloc_desc_chain(&bdev->vq, idx, 3))
+		proc_sleep(&bdev->vq.desc, &bdev->lock);
 
-	req = &blk_reqs[idx[0]];
-	if (trans->is_write)
-		req->type = VIRTIO_BLK_T_OUT;
-	else
-		req->type = VIRTIO_BLK_T_IN;
+	req = &bdev->reqs[idx[0]];
+	req->type = trans->is_write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
 	req->reserved = 0;
 	req->sector = trans->sector;
 
-	blk_vq.desc[idx[0]].addr = virt_to_phys((u64)req);
-	blk_vq.desc[idx[0]].len = sizeof(struct virtio_blk_req);
-	blk_vq.desc[idx[0]].flags = VIRTQ_DESC_F_NEXT;
-	blk_vq.desc[idx[0]].next = idx[1];
+	bdev->vq.desc[idx[0]].addr = virt_to_phys((u64)req);
+	bdev->vq.desc[idx[0]].len = sizeof(*req);
+	bdev->vq.desc[idx[0]].flags = VIRTQ_DESC_F_NEXT;
+	bdev->vq.desc[idx[0]].next = idx[1];
 
-	blk_vq.desc[idx[1]].addr = trans->buf_phys;
-	blk_vq.desc[idx[1]].len = trans->sec_count * SECTOR_SIZE;
-	if (trans->is_write)
-		blk_vq.desc[idx[1]].flags = 0;
-	else
-		blk_vq.desc[idx[1]].flags = VIRTQ_DESC_F_WRITE;
-	blk_vq.desc[idx[1]].flags |= VIRTQ_DESC_F_NEXT;
-	blk_vq.desc[idx[1]].next = idx[2];
+	bdev->vq.desc[idx[1]].addr = trans->buf_phys;
+	bdev->vq.desc[idx[1]].len = trans->sec_count * SECTOR_SIZE;
+	bdev->vq.desc[idx[1]].flags = trans->is_write ? 0 : VIRTQ_DESC_F_WRITE;
+	bdev->vq.desc[idx[1]].flags |= VIRTQ_DESC_F_NEXT;
+	bdev->vq.desc[idx[1]].next = idx[2];
 
-	status = &blk_tracks[idx[0]].status;
+	status = &bdev->tracks[idx[0]].status;
 	*status = 0xff;
-	blk_vq.desc[idx[2]].addr = virt_to_phys((u64)status);
-	blk_vq.desc[idx[2]].len = sizeof(*status);
-	blk_vq.desc[idx[2]].flags = VIRTQ_DESC_F_WRITE;
-	blk_vq.desc[idx[2]].next = 0;
+	bdev->vq.desc[idx[2]].addr = virt_to_phys((u64)status);
+	bdev->vq.desc[idx[2]].len = sizeof(*status);
+	bdev->vq.desc[idx[2]].flags = VIRTQ_DESC_F_WRITE;
+	bdev->vq.desc[idx[2]].next = 0;
 
 	trans->completed = false;
-	blk_tracks[idx[0]].trans = trans;
+	bdev->tracks[idx[0]].trans = trans;
 
-	blk_vq.avail->ring[blk_vq.avail->idx % blk_vq.num] = idx[0];
-
-	__sync_synchronize();
-
-	blk_vq.avail->idx += 1;
-
-	__sync_synchronize();
-
-	writel(0, blk_dev->mem_base + VIRTIO_QUEUE_NOTIFY_OFFSET);
+	virtq_submit(&bdev->vq, idx[0]);
+	virtio_mmio_queue_notify(bdev->vdev, 0);
 
 	while (!trans->completed)
-		proc_sleep(&trans->completed, &blk_lock);
+		proc_sleep(&trans->completed, &bdev->lock);
 
-	blk_tracks[idx[0]].trans = NULL;
-	free_desc_chain(idx[0]);
-	proc_wake_up(&blk_vq.desc);
+	err = virtio_blk_status_errno(bdev->tracks[idx[0]].status);
+	bdev->tracks[idx[0]].trans = NULL;
+	virtq_free_desc_chain(&bdev->vq, idx[0]);
+	proc_wake_up(&bdev->vq.desc);
 
-	spinlock_release(&blk_lock);
-
-	return 0;
+	spinlock_release(&bdev->lock);
+	return err;
 }
 
-int virtio_blk_read(u64 sector, u64 buf, usize_t sec_count)
+static int virtio_blk_rw(u64 sector, u64 buf_phys, usize_t sec_count,
+			 bool write)
 {
-	struct virtio_blk_transation *trans;
-	int err;
+	struct virtio_blk_transaction trans = {
+		.buf_phys = buf_phys,
+		.sector = sector,
+		.sec_count = sec_count,
+		.is_write = write,
+		.completed = false,
+	};
 
-	trans = kmem_cache_alloc(&blk_trans_cache);
-	if (!trans)
-		return -ENOMEM;
-	trans->buf_phys = buf;
-	trans->sector = sector;
-	trans->sec_count = sec_count;
-	trans->is_write = false;
-	trans->completed = false;
-	err = virtio_blk_transfer(trans);
-	kmem_cache_free(&blk_trans_cache, trans);
-	if (err)
-		return err;
-	return 0;
+	return virtio_blk_transfer(&trans);
 }
 
-int virtio_blk_write(u64 sector, u64 buf, usize_t sec_count)
+int virtio_blk_read(u64 sector, u64 buf_phys, usize_t sec_count)
 {
-	struct virtio_blk_transation *trans;
-	int err;
+	return virtio_blk_rw(sector, buf_phys, sec_count, false);
+}
 
-	trans = kmem_cache_alloc(&blk_trans_cache);
-	if (!trans)
-		return -ENOMEM;
-	trans->buf_phys = buf;
-	trans->sector = sector;
-	trans->sec_count = sec_count;
-	trans->is_write = true;
-	trans->completed = false;
-	err = virtio_blk_transfer(trans);
-	kmem_cache_free(&blk_trans_cache, trans);
-	if (err)
-		return err;
-	return 0;
+int virtio_blk_write(u64 sector, u64 buf_phys, usize_t sec_count)
+{
+	return virtio_blk_rw(sector, buf_phys, sec_count, true);
 }
 
 void virtio_blk_intr(void)
 {
-	u32 status;
-	u32 id;
-	struct virtio_blk_transation *trans;
-	u16 curr_used_idx;
-	u64 mem_base;
+	struct virtio_blk_dev *bdev = &blk;
 
-	spinlock_acquire(&blk_lock);
+	spinlock_acquire(&bdev->lock);
 
-	mem_base = (u64)blk_dev->mem_base;
-
-	status = readl(mem_base + VIRTIO_INTERRUPT_STATUS_OFFSET) & 0x3;
-	writel(status, mem_base + VIRTIO_INTERRUPT_ACK_OFFSET);
+	virtio_mmio_ack_interrupt(bdev->vdev);
 
 	__sync_synchronize();
 
-	curr_used_idx = blk_vq.used->idx;
-	while (blk_used_idx != curr_used_idx) {
-		__sync_synchronize();
-		id = blk_vq.used->ring[blk_used_idx % blk_vq.num].id;
+	virtq_process_used(&bdev->vq, virtio_blk_used_cb, bdev);
 
-		if (id >= blk_vq.num || blk_tracks[id].status != 0) {
-			spinlock_release(&blk_lock);
-			panic("%s(): invalid track status %d\n", __func__,
-			      blk_tracks[id].status);
-		}
-
-		trans = blk_tracks[id].trans;
-		trans->completed = true;
-		proc_wake_up(&trans->completed);
-
-		blk_used_idx += 1;
-	}
-
-	spinlock_release(&blk_lock);
+	spinlock_release(&bdev->lock);
 }

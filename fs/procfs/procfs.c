@@ -59,7 +59,7 @@
 #include <brk/slab.h>
 #include <brk/stat.h>
 #include <brk/string.h>
-#include <brk/timer.h>
+#include <brk/ktime.h>
 #include <brk/types.h>
 
 #define PROCFS_MAGIC 0x9fa0
@@ -275,7 +275,7 @@ static int procfs_show_uptime(const struct procfs_entry *e, pid_t pid,
 	(void)pid;
 	struct timespec ts;
 
-	boot_time_get_ts(&ts);
+	ktime_get_boot_ts(&ts);
 
 	/*
 	 * Two fields, mirroring Linux's /proc/uptime: total wall time and

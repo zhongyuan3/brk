@@ -5,7 +5,7 @@
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/time.h>
-#include <brk/timer.h>
+#include <brk/ktime.h>
 
 static SPINLOCK_DEFINE(printk_lock);
 
@@ -60,7 +60,7 @@ void klog(int level, const char *fmt, ...)
 	va_list ap;
 	struct timespec ts = { 0 };
 
-	boot_time_get_ts(&ts);
+	ktime_get_boot_ts(&ts);
 
 	va_start(ap, fmt);
 	spinlock_acquire(&printk_lock);

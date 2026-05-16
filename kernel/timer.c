@@ -1,20 +1,13 @@
 #include <brk/cpu.h>
-#include <brk/errno.h>
-#include <brk/ktime.h>
-#include <brk/lock.h>
 #include <brk/process.h>
 #include <brk/riscv.h>
 #include <brk/sbi.h>
-#include <brk/time.h>
+#include <brk/timekeeper.h>
 #include <brk/timer.h>
 #include <brk/tty.h>
 
 static u64 timer_interval;
-static u64 jiffies;
-static SPINLOCK_DEFINE(jiffies_lock);
 static u64 xorshift_state;
-static struct timespec walltime;
-static struct timespec boot_time;
 
 void timer_init(void)
 {
@@ -34,93 +27,13 @@ void timer_set_next(void)
 
 void timer_handle_int(void)
 {
-	if (current_cpuid() == init_cpuid) {
-		spinlock_acquire(&jiffies_lock);
-		++jiffies;
-		walltime.tv_nsec += NS_PER_MS;
-		if (walltime.tv_nsec >= NS_PER_SEC) {
-			walltime.tv_sec += 1;
-			walltime.tv_nsec = 0;
-		}
-		boot_time.tv_nsec += NS_PER_MS;
-		if (boot_time.tv_nsec >= NS_PER_SEC) {
-			boot_time.tv_sec += 1;
-			boot_time.tv_nsec = 0;
-		}
-		spinlock_release(&jiffies_lock);
-	}
+	if (current_cpuid() == init_cpuid)
+		timekeeper_tick();
 
-	proc_wake_all(&jiffies);
+	proc_wake_all(timekeeper_wait_chan());
 
 	tty_timer_tick();
 	timer_set_next();
-}
-
-static void walltime_get_locked(struct timeval *tv)
-{
-	tv->tv_sec = walltime.tv_sec;
-	tv->tv_usec = walltime.tv_nsec / NS_PER_US;
-}
-
-static void walltime_get_ts_locked(struct timespec *ts)
-{
-	ts->tv_sec = walltime.tv_sec;
-	ts->tv_nsec = walltime.tv_nsec;
-}
-
-void walltime_get(struct timeval *tv)
-{
-	spinlock_acquire(&jiffies_lock);
-	walltime_get_locked(tv);
-	spinlock_release(&jiffies_lock);
-}
-
-void walltime_set(const struct timeval *tv)
-{
-	spinlock_acquire(&jiffies_lock);
-	walltime.tv_sec = tv->tv_sec;
-	walltime.tv_nsec = tv->tv_usec * NS_PER_US;
-	spinlock_release(&jiffies_lock);
-}
-
-void walltime_get_ts(struct timespec *ts)
-{
-	spinlock_acquire(&jiffies_lock);
-	ts->tv_sec = walltime.tv_sec;
-	ts->tv_nsec = walltime.tv_nsec;
-	spinlock_release(&jiffies_lock);
-}
-
-void walltime_set_ts(const struct timespec *ts)
-{
-	spinlock_acquire(&jiffies_lock);
-	walltime.tv_sec = ts->tv_sec;
-	walltime.tv_nsec = ts->tv_nsec;
-	spinlock_release(&jiffies_lock);
-}
-
-u64 do_nanosleep(const struct timespec *dur, struct timespec *rem)
-{
-	struct timespec start, curr;
-
-	walltime_get_ts(&start);
-	spinlock_acquire(&jiffies_lock);
-	for (;;) {
-		if (proc_is_killed(current_process())) {
-			spinlock_release(&jiffies_lock);
-			return -EINTR;
-		}
-		walltime_get_ts_locked(&curr);
-		if ((curr.tv_sec - start.tv_sec >= dur->tv_sec) &&
-		    (curr.tv_nsec - start.tv_nsec >= dur->tv_nsec))
-			break;
-		proc_sleep(&jiffies, &jiffies_lock);
-	}
-	spinlock_release(&jiffies_lock);
-
-	rem->tv_sec = curr.tv_sec - start.tv_sec;
-	rem->tv_nsec = curr.tv_nsec - start.tv_nsec;
-	return 0;
 }
 
 static void xorshift_srand(void)
@@ -144,21 +57,4 @@ void timer_srand(void)
 u32 timer_rand(void)
 {
 	return xorshift_rand();
-}
-
-u64 jiffies_get(void)
-{
-	u64 j;
-	spinlock_acquire(&jiffies_lock);
-	j = jiffies;
-	spinlock_release(&jiffies_lock);
-	return j;
-}
-
-void boot_time_get_ts(struct timespec *ts)
-{
-	spinlock_acquire(&jiffies_lock);
-	ts->tv_sec = boot_time.tv_sec;
-	ts->tv_nsec = boot_time.tv_nsec;
-	spinlock_release(&jiffies_lock);
 }

@@ -1,3 +1,4 @@
+#include <brk/errno.h>
 #include <brk/ioremap.h>
 #include <brk/list.h>
 #include <brk/lock.h>
@@ -5,6 +6,7 @@
 #include <brk/pgtable.h>
 #include <brk/slab.h>
 #include <brk/virtio.h>
+#include <brk/virtio_mmio.h>
 
 static LIST_DEFINE(vdevs);
 static SPINLOCK_DEFINE(vdevs_lock);
@@ -12,6 +14,7 @@ static SPINLOCK_DEFINE(vdevs_lock);
 struct virtio_device *virtio_dev_create(u64 phys_base, usize_t size, u32 irq)
 {
 	struct virtio_device *dev;
+	int err;
 
 	dev = kmalloc(sizeof(*dev));
 	if (!dev)
@@ -29,13 +32,20 @@ struct virtio_device *virtio_dev_create(u64 phys_base, usize_t size, u32 irq)
 
 	list_init(&dev->list);
 
-	dev->id = readl(dev->mem_base + VIRTIO_DEVICE_ID_OFFSET);
+	err = virtio_mmio_probe(dev);
+	if (err) {
+		iounmap(dev->mem_base, dev->size);
+		kfree(dev);
+		return NULL;
+	}
 
+	dev->id = readl(dev->mem_base + VIRTIO_DEVICE_ID_OFFSET);
 	return dev;
 }
 
 void virtio_dev_destroy(struct virtio_device *dev)
 {
+	virtio_dev_remove(dev);
 	iounmap(dev->mem_base, dev->size);
 	kfree(dev);
 }
