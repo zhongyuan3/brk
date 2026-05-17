@@ -84,16 +84,14 @@ static pte_t *get_pt_virt(u64 pt_phys, enum vmap_mode mode)
 static void vunmap_range(pgde_t *pgd, u64 addr, u64 end_addr,
 			 enum vmap_mode mode)
 {
-	usize_t rem_size;
 	pgde_t *pgdep;
 	pmde_t *pmd, *pmdep;
 	pte_t *pt, *ptep;
 
 	while (addr < end_addr) {
-		rem_size = end_addr - addr;
 		pgdep = pgd + pgde_index(addr);
 		if (pgde_large(*pgdep)) {
-			ASSERT(rem_size >= PAGE_SIZE_1G);
+			ASSERT(end_addr - addr >= PAGE_SIZE_1G);
 			pgde_clear(pgdep);
 			addr += PAGE_SIZE_1G;
 			continue;
@@ -102,7 +100,7 @@ static void vunmap_range(pgde_t *pgd, u64 addr, u64 end_addr,
 		pmd = get_pmd_virt(pgde_get_pmd(*pgdep), mode);
 		pmdep = pmd + pmde_index(addr);
 		if (pmde_large(*pmdep)) {
-			ASSERT(rem_size >= PAGE_SIZE_2M);
+			ASSERT(end_addr - addr >= PAGE_SIZE_2M);
 			pmde_clear(pmdep);
 			addr += PAGE_SIZE_2M;
 			continue;

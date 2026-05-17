@@ -41,16 +41,7 @@ BRK_LD := $(BUILD_DIR)/kernel/brk.ld
 BRK_ELF := $(BUILD_DIR)/brk.elf
 ROOTFS_IMG := $(BUILD_DIR)/rootfs.img
 
-ifeq ($(BUILD),debug)
-OPT := 0
-else ifeq ($(BUILD),release)
-OPT := 2
-else
-$(error unknown BUILD value '$(BUILD)', expected debug or release)
-endif
-
-CFLAGS := -O$(OPT)
-CFLAGS += -Wall
+CFLAGS := -Wall
 CFLAGS += -Wextra
 CFLAGS += -Werror
 CFLAGS += -ggdb
@@ -64,12 +55,24 @@ CFLAGS += -nostdlib
 CFLAGS += -fno-stack-protector
 CFLAGS += -fno-pie
 CFLAGS += -no-pie
-CFLAGS += -Iinclude
-CFLAGS += -Ivendor/libfdt
-CFLAGS += -MMD -MP
+
 ifeq ($(ENABLE_SMP),1)
 CFLAGS += -DENABLE_SMP=1
 endif
+
+ifeq ($(BUILD),debug)
+CFLAGS += -O0
+else ifeq ($(BUILD),release)
+CFLAGS += -O2
+CFLAGS += -DNDEBUG
+else
+$(error unknown BUILD value '$(BUILD)', expected debug or release)
+endif
+
+CFLAGS += -MMD -MP
+
+CFLAGS += -Iinclude
+CFLAGS += -Ivendor/libfdt
 
 QEMU_COMMON := -machine virt -nographic
 QEMU_COMMON += -m $(RAM)
