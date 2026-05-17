@@ -44,18 +44,12 @@ static const char *const interrupt_strs[] = {
 	[13] = "Counter-overflow interrupt",
 };
 
-void trap_init(void)
-{
-	timer_init();
-}
-
 void trap_init_hart(u32 hart_id)
 {
 	(void)hart_id;
 	write_stvec((u64)kernel_trap_vector);
 	write_sie(read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
 	timer_set_next();
-	intr_on();
 }
 
 static const char *cause_to_str(u64 cause)

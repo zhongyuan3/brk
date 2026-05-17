@@ -87,6 +87,7 @@ SRCS += boot/setup.c
 SRCS += kernel/dtb.c
 SRCS += kernel/ktime.c
 SRCS += kernel/timekeeper.c
+SRCS += kernel/init.c
 SRCS += kernel/main.c
 SRCS += kernel/panic.c
 SRCS += kernel/printk.c
