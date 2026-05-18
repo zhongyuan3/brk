@@ -4,8 +4,6 @@
 #include <brk/sbi.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
-#include <brk/tty.h>
-
 static u64 timer_interval;
 static u64 xorshift_state;
 
@@ -32,7 +30,6 @@ void timer_handle_int(void)
 
 	proc_wake_all(timekeeper_wait_chan());
 
-	tty_timer_tick();
 	timer_set_next();
 }
 
