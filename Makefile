@@ -146,6 +146,7 @@ SRCS += fs/super.c
 SRCS += fs/exec.c
 SRCS += fs/path.c
 SRCS += fs/filesystem.c
+SRCS += fs/namei.c
 SRCS += lib/string.c
 SRCS += lib/printf.c
 SRCS += lib/qsort.c

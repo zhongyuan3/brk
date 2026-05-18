@@ -522,3 +522,36 @@ void pipe_fs_init(void)
 		panic("pipe_fs_init: kernel_mount(pipefs) failed: %d\n",
 		      PTR_ERR(pipe_mnt));
 }
+
+int do_pipe2(int *pipefd, int flags)
+{
+	struct file *rf, *wf;
+	struct process *proc = current_process();
+	int fd0, fd1, err;
+
+	if (flags & ~(O_CLOEXEC | O_NONBLOCK))
+		return -EINVAL;
+
+	err = anon_pipe_create(&rf, &wf, (unsigned int)flags);
+	if (err)
+		return err;
+
+	fd0 = proc_alloc_fd(proc, rf);
+	if (fd0 < 0) {
+		file_put(wf);
+		file_put(rf);
+		return -EMFILE;
+	}
+
+	fd1 = proc_alloc_fd(proc, wf);
+	if (fd1 < 0) {
+		proc->ofiles[fd0] = NULL;
+		file_put(wf);
+		file_put(rf);
+		return -EMFILE;
+	}
+
+	pipefd[0] = fd0;
+	pipefd[1] = fd1;
+	return 0;
+}
