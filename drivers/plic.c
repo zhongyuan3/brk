@@ -53,6 +53,21 @@ int plic_enable(u32 hart_id, u32 source)
 	return 0;
 }
 
+int plic_disable(u32 hart_id, u32 source)
+{
+	volatile u32 *senable;
+
+	if (!plic_source_is_valid(source))
+		return -EINVAL;
+
+	senable = plic_senable(hart_id);
+	if (!senable)
+		return -EINVAL;
+
+	senable[source / 32] &= ~(1 << (source % 32));
+	return 0;
+}
+
 int plic_set_priority(u32 source, unsigned int priority)
 {
 	if (!plic_source_is_valid(source))

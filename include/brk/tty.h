@@ -2,7 +2,9 @@
 #define BRK_TTY_H
 
 #include <brk/lock.h>
+#include <brk/refcnt.h>
 #include <brk/types.h>
+#include <uapi/types.h>
 
 #define TTY_RX_BUF_SIZE 1024
 
@@ -10,30 +12,67 @@
 #define TTY_VIS_BACKSPACE 0x100
 
 struct file;
+struct chrdev;
 struct tty;
+struct tty_port;
+struct tty_operations;
+struct tty_driver;
+
+struct tty_operations {
+	int (*put_char)(struct tty *tty, int c);
+};
 
 struct tty_port {
 	struct tty *tty;
-	void (*put_char)(struct tty_port *port, int c);
+	struct tty_driver *driver;
+	spinlock_t lock;
+	void *client_data;
 };
 
-struct tty {
+struct tty_driver {
+	const char *name;
+	const struct tty_operations *ops;
+	struct tty_port **ports;
+	struct chrdev **cds;
+	int num_ports;
+	unsigned major;
+	unsigned minor_start;
+	struct hlist_node driver_list;
 	spinlock_t lock;
+	void *driver_data;
+};
+
+struct tty_driver *tty_alloc_driver(int num_ports);
+void tty_free_driver(struct tty_driver *driver);
+int tty_register_driver(struct tty_driver *driver);
+void tty_unregister_driver(struct tty_driver *driver);
+struct tty_port *tty_lookup_port(dev_t dev);
+
+int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port);
+void tty_driver_remove_port(struct tty_driver *driver, struct tty_port *port);
+
+struct tty_port *tty_port_alloc(void);
+void tty_port_free(struct tty_port *port);
+
+int tty_create_fs_nodes(void);
+
+struct tty {
 	struct tty_port *port;
-	char rx_buf[TTY_RX_BUF_SIZE];
+	u8 *rx_buf;
+	usize_t rx_size;
 	usize_t rx_r;
 	usize_t rx_w;
 	usize_t rx_e;
+	arc_t refcnt;
 };
 
-void tty_boot_init(struct tty_port *port);
-struct tty *tty_boot(void);
-
-int tty_chrdev_register(struct tty *tty, dev_t dev);
-
+struct tty *tty_alloc(void);
+void tty_free(struct tty *tty);
 void tty_init(struct tty *tty, struct tty_port *port);
-int tty_read(struct tty *tty, char *buf, usize_t n, usize_t *read);
-int tty_write(struct tty *tty, const char *buf, usize_t n, usize_t *written);
+struct tty *tty_open(struct tty_port *port);
+void tty_close(struct tty *tty);
+ssize_t tty_read(struct tty *tty, void *buf, usize_t n);
+ssize_t tty_write(struct tty *tty, const void *buf, usize_t n);
 void tty_receive(struct tty *tty, int c);
 
 #endif

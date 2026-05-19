@@ -1162,16 +1162,19 @@ static int tmpfs_setattr(struct dentry *dentry, struct iattr *attr)
 static int tmpfs_file_open(struct inode *inode, struct file *file)
 {
 	umode_t imode = inode->i_mode;
-	if (S_ISCHR(imode))
+	if (S_ISCHR(imode)) {
 		file->f_op = &chrdev_fops;
-	else if (S_ISBLK(imode))
+		return chrdev_fops.open(inode, file);
+	} else if (S_ISBLK(imode)) {
 		file->f_op = &blkdev_fops;
-	else if (S_ISREG(imode))
+		return blkdev_fops.open(inode, file);
+	} else if (S_ISREG(imode)) {
 		file->f_op = &tmpfs_file_fops;
-	else if (S_ISDIR(imode))
+	} else if (S_ISDIR(imode)) {
 		file->f_op = &tmpfs_dir_fops;
-	else
+	} else {
 		return -EINVAL;
+	}
 	return 0;
 }
 

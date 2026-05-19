@@ -19,5 +19,6 @@ void virtio_dev_destroy(struct virtio_device *dev);
 void virtio_dev_add(struct virtio_device *dev);
 void virtio_dev_remove(struct virtio_device *dev);
 struct virtio_device *virtio_dev_get(u32 id);
+void virtio_init_scan(void);
 
 #endif

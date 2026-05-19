@@ -4,6 +4,7 @@
 #include <brk/panic.h>
 #include <brk/virtio.h>
 #include <brk/virtio_mmio.h>
+#include <uapi/errno.h>
 
 static u64 virtio_mmio_base(struct virtio_device *dev)
 {
@@ -86,15 +87,16 @@ int virtio_mmio_setup_queue(struct virtio_device *dev, u32 queue_id,
 	writel(queue_id, base + VIRTIO_QUEUE_SEL_OFFSET);
 
 	if (readl(base + VIRTIO_QUEUE_READY_OFFSET))
-		panic("%s(): queue %u should not be ready\n", __func__, queue_id);
+		panic("%s(): queue %u should not be ready\n", __func__,
+		      queue_id);
 
 	queue_size_max = readl(base + VIRTIO_QUEUE_SIZE_MAX_OFFSET);
 	if (queue_size_max == 0)
 		panic("%s(): virtio device has no queue %u\n", __func__,
 		      queue_id);
 	if (queue_size_max < queue_size)
-		panic("%s(): virtio queue %u max size %u too short\n",
-		      __func__, queue_id, queue_size_max);
+		panic("%s(): virtio queue %u max size %u too short\n", __func__,
+		      queue_id, queue_size_max);
 
 	writel(queue_size, base + VIRTIO_QUEUE_SIZE_OFFSET);
 
@@ -136,4 +138,20 @@ u32 virtio_mmio_ack_interrupt(struct virtio_device *dev)
 	status = readl(base + VIRTIO_INTERRUPT_STATUS_OFFSET) & 0x3;
 	writel(status, base + VIRTIO_INTERRUPT_ACK_OFFSET);
 	return status;
+}
+
+int virtio_mmio_read(struct virtio_device *dev, void *buf, size_t size,
+		     u32 offset)
+{
+	u64 base;
+
+	if (offset >= dev->size || offset + size > dev->size)
+		return -EINVAL;
+
+	base = virtio_mmio_base(dev) + offset;
+	for (size_t i = 0; i < size; ++i) {
+		((u8 *)buf)[i] = readb(base + i);
+	}
+
+	return 0;
 }

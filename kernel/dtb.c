@@ -6,8 +6,11 @@
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
+#include <brk/types.h>
+#include <brk/uart.h>
 #include <brk/virtio.h>
 #include <libfdt.h>
+#include <uapi/errno.h>
 
 u64 dtb_phys;
 
@@ -212,7 +215,7 @@ static int dtb_get_irq(int node, u32 *irq)
 	return 0;
 }
 
-int dtb_parse_uart(struct uart_device *uart)
+int dtb_parse_uart(struct ns16550a_device *uart)
 {
 	int node;
 	const u32 *clock_freq;
@@ -294,10 +297,88 @@ int dtb_init_scan_virtio_dev(void)
 
 		vdev = virtio_dev_create(addr, size, irq);
 		if (!vdev)
-
 			continue;
 
 		virtio_dev_add(vdev);
 	}
 	return 0;
+}
+
+void dtb_init_scan_serial(void)
+{
+	int parent;
+	const u32 *clock_freq;
+	int len;
+	u64 addr = 0;
+	u64 size = 0;
+	u32 irq = 0;
+	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
+	int err = 0;
+	int subnode;
+	struct ns16550a_device *dev;
+
+	parent = fdt_path_offset(dtb_virt, "/soc/");
+	if (parent < 0) {
+		klog_debug("no /soc/ node found\n");
+		return;
+	}
+
+	fdt_for_each_subnode(subnode, dtb_virt, parent) {
+		klog_debug("subnode: %d, name: %s\n", subnode,
+			   fdt_get_name(dtb_virt, subnode, NULL));
+		if (fdt_node_check_compatible(dtb_virt, subnode, "ns16550a") ==
+		    0) {
+			klog_debug("found ns16550a node: %d, name: %s\n",
+				   subnode,
+				   fdt_get_name(dtb_virt, subnode, NULL));
+
+			err = dtb_get_one_reg(subnode, &addr, &size);
+			if (err) {
+				klog_debug("failed to get one reg: %d\n", err);
+				continue;
+			}
+			if (dtb_get_irq(subnode, &irq)) {
+				klog_debug("failed to get irq: %d\n", err);
+				continue;
+			}
+			clock_freq = fdt_getprop(dtb_virt, subnode,
+						 "clock-frequency", &len);
+			if (!clock_freq || len != sizeof(u32)) {
+				klog_debug(
+					"failed to get clock frequency: %d\n",
+					(int)(unsigned long)clock_freq);
+				continue;
+			}
+
+			dev = ns16550a_device_alloc();
+			if (!dev) {
+				klog_debug(
+					"failed to allocate ns16550a device\n");
+				continue;
+			}
+
+			dev->phys_base = addr;
+			dev->size = size;
+			dev->irq = irq;
+			dev->clock_freq = fdt32_to_cpu(*clock_freq);
+			err = ns16550a_device_init(dev);
+			if (err) {
+				klog_debug(
+					"failed to initialize ns16550a device: %d\n",
+					err);
+				ns16550a_device_free(dev);
+				continue;
+			}
+			err = ns16550a_add_device(dev);
+			if (err) {
+				klog_debug(
+					"failed to add ns16550a device: %d\n",
+					err);
+				ns16550a_device_finalize(dev);
+				ns16550a_device_free(dev);
+				continue;
+			}
+			klog_info("ns16550a device added: %d\n", subnode);
+		}
+	}
 }

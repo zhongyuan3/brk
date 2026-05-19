@@ -104,14 +104,8 @@ SRCS += kernel/syscall/syscall.c
 SRCS += kernel/syscall/sysfile.c
 SRCS += kernel/syscall/sysproc.c
 SRCS += kernel/syscall/systime.c
-SRCS += kernel/tty.c
 SRCS += kernel/console.c
 SRCS += kernel/lock.c
-SRCS += kernel/dev/table.c
-SRCS += kernel/dev/chrdev.c
-SRCS += kernel/dev/blkdev.c
-SRCS += kernel/dev/init.c
-SRCS += drivers/virtio_disk.c
 SRCS += mm/init.c
 SRCS += mm/mm.c
 SRCS += mm/memblock.c
@@ -121,13 +115,19 @@ SRCS += mm/slab.c
 SRCS += mm/vmalloc.c
 SRCS += mm/ioremap.c
 SRCS += mm/pagecache.c
+SRCS += drivers/base/dev_map.c
+SRCS += drivers/block/blkdev.c
+SRCS += drivers/char/chrdev.c
+SRCS += drivers/tty/tty.c
+SRCS += drivers/tty/tty_driver.c
+SRCS += drivers/tty/tty_port.c
 SRCS += drivers/plic.c
 SRCS += drivers/rtc.c
 SRCS += drivers/uart.c
+SRCS += drivers/virtio_disk.c
 SRCS += drivers/virtio/virtio.c
 SRCS += drivers/virtio/virtio_mmio.c
 SRCS += drivers/virtio/virtio_virtq.c
-SRCS += drivers/virtio/virtio_blk.c
 SRCS += fs/tmpfs/tmpfs.c
 SRCS += fs/procfs/procfs.c
 SRCS += fs/brkfs/brkfs.c
@@ -218,3 +218,15 @@ clean:
 	$(RM) -r $(BUILD_DIR)
 
 -include $(DEPS)
+
+.PHONY: dts
+
+dts: $(BUILD_DIR)/devicetree.dts
+
+$(BUILD_DIR)/devicetree.dts: $(BUILD_DIR)/devicetree.dtb
+	@mkdir -p $(dir $@)
+	dtc -I dtb -O dts -o $@ $<
+
+$(BUILD_DIR)/devicetree.dtb:
+	@mkdir -p $(dir $@)
+	$(QEMU) -machine virt,dumpdtb=$@ -nographic

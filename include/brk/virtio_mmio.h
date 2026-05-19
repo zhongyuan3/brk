@@ -16,5 +16,6 @@ int virtio_mmio_setup_queue(struct virtio_device *dev, u32 queue_id,
 int virtio_mmio_driver_ok(struct virtio_device *dev);
 void virtio_mmio_queue_notify(struct virtio_device *dev, u32 queue_id);
 u32 virtio_mmio_ack_interrupt(struct virtio_device *dev);
+int virtio_mmio_read(struct virtio_device *dev, void *buf, size_t size, u32 offset);
 
 #endif

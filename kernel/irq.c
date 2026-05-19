@@ -6,6 +6,7 @@
 #include <brk/slab.h>
 
 static irq_handler_t *irq_handlers;
+static void **irq_handlers_ctx;
 static u32 irq_handlers_num;
 static SPINLOCK_DEFINE(irq_handlers_lock);
 
@@ -16,6 +17,9 @@ void irq_init(void)
 	irq_handlers = kcalloc(ndev, sizeof(irq_handler_t));
 	if (!irq_handlers)
 		panic("%s(): kcalloc() failed\n", __func__);
+	irq_handlers_ctx = kcalloc(ndev, sizeof(void *));
+	if (!irq_handlers_ctx)
+		panic("%s(): kcalloc() failed\n", __func__);
 	irq_handlers_num = ndev;
 }
 
@@ -24,8 +28,8 @@ void irq_init_hart(u32 hart_id)
 	plic_set_threshold(hart_id, 0);
 }
 
-int irq_register_handler(u32 source, irq_handler_t handler,
-			 irq_handler_t *old_handler)
+int irq_register_handler(u32 source, irq_handler_t handler, void *ctx,
+			 irq_handler_t *old_handler, void **old_ctx)
 {
 	if (source >= irq_handlers_num)
 		return -EINVAL;
@@ -33,13 +37,17 @@ int irq_register_handler(u32 source, irq_handler_t handler,
 	spinlock_acquire(&irq_handlers_lock);
 	if (old_handler)
 		*old_handler = irq_handlers[source];
+	if (old_ctx)
+		*old_ctx = irq_handlers_ctx[source];
 
 	irq_handlers[source] = handler;
+	irq_handlers_ctx[source] = ctx;
 	spinlock_release(&irq_handlers_lock);
 	return 0;
 }
 
-int irq_unregister_handler(u32 source, irq_handler_t *old_handler)
+int irq_unregister_handler(u32 source, irq_handler_t *old_handler,
+			   void **old_ctx)
 {
 	if (source >= irq_handlers_num)
 		return -EINVAL;
@@ -47,8 +55,11 @@ int irq_unregister_handler(u32 source, irq_handler_t *old_handler)
 	spinlock_acquire(&irq_handlers_lock);
 	if (old_handler)
 		*old_handler = irq_handlers[source];
+	if (old_ctx)
+		*old_ctx = irq_handlers_ctx[source];
 
 	irq_handlers[source] = NULL;
+	irq_handlers_ctx[source] = NULL;
 	spinlock_release(&irq_handlers_lock);
 	return 0;
 }
@@ -57,6 +68,7 @@ int irq_handle_external(u32 hart_id)
 {
 	u32 source = 0;
 	irq_handler_t handler;
+	void *ctx;
 
 	int err = plic_claim(hart_id, &source);
 	if (err)
@@ -67,10 +79,26 @@ int irq_handle_external(u32 hart_id)
 
 	spinlock_acquire(&irq_handlers_lock);
 	handler = irq_handlers[source];
+	ctx = irq_handlers_ctx[source];
 	spinlock_release(&irq_handlers_lock);
 
 	if (handler)
-		handler();
+		handler(ctx);
 
 	return plic_complete(hart_id, source);
+}
+
+int irq_set_priority(u32 source, unsigned int priority)
+{
+	return plic_set_priority(source, priority);
+}
+
+int irq_enable_source(u32 hart_id, u32 source)
+{
+	return plic_enable(hart_id, source);
+}
+
+int irq_disable_source(u32 hart_id, u32 source)
+{
+	return plic_disable(hart_id, source);
 }

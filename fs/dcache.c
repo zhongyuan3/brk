@@ -1,3 +1,4 @@
+#define KLOG_LEVEL KLOG_INFO
 #include <brk/assert.h>
 #include <brk/dcache.h>
 #include <brk/errno.h>
