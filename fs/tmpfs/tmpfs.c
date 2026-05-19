@@ -552,16 +552,28 @@ static int tmpfs_write_file_at(struct tmpfs_inode *ip, const void *buf,
 	return ret;
 }
 
+static void tmpfs_inode_attach_fops(struct inode *inode)
+{
+	if (S_ISCHR(inode->i_mode))
+		inode->i_fop = &chrdev_fops;
+	else if (S_ISBLK(inode->i_mode))
+		inode->i_fop = &blkdev_fops;
+	else if (S_ISDIR(inode->i_mode))
+		inode->i_fop = &tmpfs_dir_fops;
+	else
+		inode->i_fop = &tmpfs_file_fops;
+}
+
 static int tmpfs_init_new_inode(struct tmpfs_super_block *sb,
 				struct inode *inode)
 {
 	int err;
 
 	inode->i_op = &tmpfs_iops;
-	inode->i_fop = &tmpfs_file_fops;
 	err = tmpfs_inode_read(sb, inode);
 	if (err)
 		return err;
+	tmpfs_inode_attach_fops(inode);
 	inode_unlock_new(inode);
 	return 0;
 }
@@ -1161,21 +1173,10 @@ static int tmpfs_setattr(struct dentry *dentry, struct iattr *attr)
 
 static int tmpfs_file_open(struct inode *inode, struct file *file)
 {
-	umode_t imode = inode->i_mode;
-	if (S_ISCHR(imode)) {
-		file->f_op = &chrdev_fops;
-		return chrdev_fops.open(inode, file);
-	} else if (S_ISBLK(imode)) {
-		file->f_op = &blkdev_fops;
-		return blkdev_fops.open(inode, file);
-	} else if (S_ISREG(imode)) {
-		file->f_op = &tmpfs_file_fops;
-	} else if (S_ISDIR(imode)) {
-		file->f_op = &tmpfs_dir_fops;
-	} else {
-		return -EINVAL;
-	}
-	return 0;
+	(void)file;
+	if (S_ISREG(inode->i_mode) || S_ISLNK(inode->i_mode))
+		return 0;
+	return -EINVAL;
 }
 
 static ssize_t tmpfs_file_read(struct file *file, char *buf, usize_t size,

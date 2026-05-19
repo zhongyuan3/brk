@@ -380,10 +380,8 @@ int virtio_disk_add_device(struct virtio_disk_device *disk)
 	spinlock_acquire(&vdisk_driver->lock);
 	for (unsigned i = 0; i < vdisk_driver->num_disks; i++) {
 		if (vdisk_driver->disks[i] == NULL) {
-			dev_t dev = BLKDEV |
-				    MKDEV(vdisk_driver->major,
-					  vdisk_driver->minor_start + i);
-			bd->dev = dev;
+			bd->dev = MKBLKDEV(vdisk_driver->major,
+					   vdisk_driver->minor_start + i);
 			err = blkdev_register(bd);
 			if (err) {
 				spinlock_release(&vdisk_driver->lock);
@@ -391,6 +389,7 @@ int virtio_disk_add_device(struct virtio_disk_device *disk)
 				return err;
 			}
 			vdisk_driver->disks[i] = disk;
+			vdisk_driver->bdevs[i] = bd;
 			spinlock_release(&vdisk_driver->lock);
 			return 0;
 		}
@@ -486,8 +485,8 @@ int virtio_disk_create_fs_nodes(void)
 			snprintf(name, sizeof(name) - 1, "/dev/vdisk%u", i);
 			err = do_mknodat(
 				AT_FDCWD, name, S_IFBLK,
-				BLKDEV | MKDEV(vdisk_driver->major,
-					       vdisk_driver->minor_start + i));
+				MKBLKDEV(vdisk_driver->major,
+					 vdisk_driver->minor_start + i));
 			if (err)
 				break;
 			klog_info("/dev/vdisk%u created successfully\n", i);

@@ -45,11 +45,11 @@ struct tty_driver {
 struct tty_driver *tty_alloc_driver(int num_ports);
 void tty_free_driver(struct tty_driver *driver);
 int tty_register_driver(struct tty_driver *driver);
-void tty_unregister_driver(struct tty_driver *driver);
+int tty_unregister_driver(struct tty_driver *driver);
 struct tty_port *tty_lookup_port(dev_t dev);
 
 int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port);
-void tty_driver_remove_port(struct tty_driver *driver, struct tty_port *port);
+int tty_driver_remove_port(struct tty_driver *driver, struct tty_port *port);
 
 struct tty_port *tty_port_alloc(void);
 void tty_port_free(struct tty_port *port);
@@ -69,6 +69,8 @@ struct tty {
 struct tty *tty_alloc(void);
 void tty_free(struct tty *tty);
 void tty_init(struct tty *tty, struct tty_port *port);
+struct tty *tty_attach_port(struct tty_port *port);
+void tty_detach_port(struct tty_port *port);
 struct tty *tty_open(struct tty_port *port);
 void tty_close(struct tty *tty);
 ssize_t tty_read(struct tty *tty, void *buf, usize_t n);

@@ -22,7 +22,8 @@ struct tty *tty_alloc(void)
 		kfree(tty);
 		return NULL;
 	}
-	arc_init(&tty->refcnt, 1);
+	tty->rx_size = TTY_RX_BUF_SIZE;
+	arc_init(&tty->refcnt, 0);
 	return tty;
 }
 
@@ -107,7 +108,7 @@ void tty_receive(struct tty *tty, int c)
 	switch (c) {
 	case CTRL('U'): /* Kill line. */
 		while (tty->rx_e != tty->rx_w &&
-		       tty->rx_buf[(tty->rx_e - 1) % TTY_RX_BUF_SIZE] != '\n') {
+		       tty->rx_buf[(tty->rx_e - 1) % tty->rx_size] != '\n') {
 			tty->rx_e--;
 			ops->put_char(tty, TTY_VIS_BACKSPACE);
 		}
@@ -120,15 +121,15 @@ void tty_receive(struct tty *tty, int c)
 		}
 		break;
 	default:
-		if (c != 0 && tty->rx_e - tty->rx_r < TTY_RX_BUF_SIZE) {
+		if (c != 0 && tty->rx_e - tty->rx_r < tty->rx_size) {
 			c = (c == '\r') ? '\n' : c;
 
 			ops->put_char(tty, c);
 
-			tty->rx_buf[tty->rx_e++ % TTY_RX_BUF_SIZE] = c;
+			tty->rx_buf[tty->rx_e++ % tty->rx_size] = c;
 
 			if (c == '\n' || c == CTRL('D') ||
-			    tty->rx_e - tty->rx_r == TTY_RX_BUF_SIZE) {
+			    tty->rx_e - tty->rx_r == tty->rx_size) {
 				tty->rx_w = tty->rx_e;
 				proc_wake_all(&tty->rx_r);
 			}
@@ -139,16 +140,20 @@ void tty_receive(struct tty *tty, int c)
 	spinlock_release(&tty->port->lock);
 }
 
-struct tty *tty_open(struct tty_port *port)
+struct tty *tty_attach_port(struct tty_port *port)
 {
+	struct tty *tty;
+
+	if (!port)
+		return NULL;
+
 	spinlock_acquire(&port->lock);
 	if (port->tty) {
-		arc_inc(&port->tty->refcnt);
 		spinlock_release(&port->lock);
 		return port->tty;
 	}
 
-	struct tty *tty = tty_alloc();
+	tty = tty_alloc();
 	if (!tty) {
 		spinlock_release(&port->lock);
 		return NULL;
@@ -157,20 +162,46 @@ struct tty *tty_open(struct tty_port *port)
 	tty_init(tty, port);
 	port->tty = tty;
 	spinlock_release(&port->lock);
+	return tty;
+}
 
+void tty_detach_port(struct tty_port *port)
+{
+	struct tty *tty;
+
+	if (!port)
+		return;
+
+	spinlock_acquire(&port->lock);
+	tty = port->tty;
+	port->tty = NULL;
+	spinlock_release(&port->lock);
+
+	if (tty)
+		tty_free(tty);
+}
+
+struct tty *tty_open(struct tty_port *port)
+{
+	struct tty *tty;
+
+	if (!port)
+		return NULL;
+
+	spinlock_acquire(&port->lock);
+	tty = port->tty;
+	if (!tty) {
+		spinlock_release(&port->lock);
+		return NULL;
+	}
+	arc_inc(&tty->refcnt);
+	spinlock_release(&port->lock);
 	return tty;
 }
 
 void tty_close(struct tty *tty)
 {
-	bool do_free = false;
-	spinlock_acquire(&tty->port->lock);
-	if (arc_dec_fetch(&tty->refcnt) <= 0) {
-		tty->port->tty = NULL;
-		do_free = true;
-	}
-	spinlock_release(&tty->port->lock);
-	if (do_free) {
-		tty_free(tty);
-	}
+	if (!tty)
+		return;
+	arc_dec(&tty->refcnt);
 }
