@@ -1,8 +1,10 @@
+#include <brk/chrdev.h>
 #include <brk/cpu.h>
 #include <brk/dtb.h>
 #include <brk/ioremap.h>
 #include <brk/irq.h>
 #include <brk/kernel.h>
+#include <brk/list.h>
 #include <brk/lock.h>
 #include <brk/mm.h>
 #include <brk/mmio.h>
@@ -10,32 +12,12 @@
 #include <brk/pgtable.h>
 #include <brk/plic.h>
 #include <brk/printk.h>
+#include <brk/slab.h>
 #include <brk/tty.h>
+#include <brk/types.h>
 #include <brk/uart.h>
-
-static void uart_tty_put_char(struct tty_port *port, int c);
-
-static struct tty_port boot_port = {
-	.put_char = uart_tty_put_char,
-};
-
-static void uart_tty_put_char(struct tty_port *port, int c)
-{
-	(void)port;
-
-	if (c == TTY_VIS_BACKSPACE) {
-		uart_putc('\b');
-		uart_putc(' ');
-		uart_putc('\b');
-	} else {
-		uart_putc(c);
-	}
-}
-
-struct tty_port *uart_tty_port(void)
-{
-	return &boot_port;
-}
+#include <uapi/errno.h>
+#include <uapi/types.h>
 
 #define RHR 0 /* Receiver Holding Register */
 #define THR 0 /* Transmitter Holding Register */
@@ -58,101 +40,250 @@ struct tty_port *uart_tty_port(void)
 #define MSR 6 /* Modem Status Register */
 #define SPR 7 /* ScratchPad Register */
 
-static struct uart_device uart;
-static u8 volatile *mem_base;
-static SPINLOCK_DEFINE(uart_lock);
-
-static volatile u8 *uart_reg(unsigned int reg)
+struct ns16550a_device *ns16550a_device_alloc(void)
 {
-	return mem_base + reg;
+	struct ns16550a_device *dev = kzalloc(sizeof(*dev));
+	if (!dev)
+		return NULL;
+	spinlock_init(&dev->lock, "ns16550a_device");
+	return dev;
 }
 
-static void uart_write_reg(unsigned int reg, u8 val)
+void ns16550a_device_free(struct ns16550a_device *dev)
 {
-	writeb(val, uart_reg(reg));
+	kfree(dev);
 }
 
-static u8 uart_read_reg(unsigned int reg)
+static volatile u8 *ns16550a_device_reg(struct ns16550a_device *dev,
+					unsigned int reg)
 {
-	return readb(uart_reg(reg));
+	return dev->mem_base + reg;
 }
 
-static void uart_handle_irq(void)
+static void ns16550a_device_write_reg(struct ns16550a_device *dev,
+				      unsigned int reg, u8 val)
 {
-	struct tty_port *port = uart_tty_port();
-	int c = uart_getc();
+	writeb(val, ns16550a_device_reg(dev, reg));
+}
 
+static u8 ns16550a_device_read_reg(struct ns16550a_device *dev,
+				   unsigned int reg)
+{
+	return readb(ns16550a_device_reg(dev, reg));
+}
+
+static int ns16550a_device_getc(struct ns16550a_device *dev)
+{
+	int ret = 0;
+	spinlock_acquire(&dev->lock);
+	if (ns16550a_device_read_reg(dev, LSR) & LSR_RX_READY)
+		ret = ns16550a_device_read_reg(dev, RHR);
+	else
+		ret = -ENODATA;
+	spinlock_release(&dev->lock);
+	return ret;
+}
+
+static void ns16550a_device_handle_irq(void *ctx)
+{
+	struct ns16550a_device *dev = ctx;
+	int c;
+	struct tty_port *port = dev->port;
+
+	c = ns16550a_device_getc(dev);
 	if (c < 0)
 		return;
-	if (port->tty)
-		tty_receive(port->tty, c);
+
+	if (!port || !port->tty)
+		return;
+
+	tty_receive(port->tty, c);
 }
 
-void uart_init(void)
+int ns16550a_device_init(struct ns16550a_device *dev)
 {
-	dtb_parse_uart(&uart);
+	int err;
 
-	mem_base = ioremap(uart.phys_base, uart.size, PTE_R | PTE_W);
+	dev->mem_base = ioremap(dev->phys_base, dev->size, PTE_R | PTE_W);
+	if (!dev->mem_base)
+		return -ENOMEM;
 
 	/* Disable interrupts. */
-	uart_write_reg(IER, 0x00);
+	ns16550a_device_write_reg(dev, IER, 0x00);
 
 	/* Special mode to set baud rate. */
-	uart_write_reg(LCR, LCR_BAUD_LATCH);
+	ns16550a_device_write_reg(dev, LCR, LCR_BAUD_LATCH);
 
 	/* LSB for baud rate of 38.4K */
-	uart_write_reg(DLL, 0x03);
+	ns16550a_device_write_reg(dev, DLL, 0x03);
 
 	/* MSB for baud rate of 48.4K */
-	uart_write_reg(DLM, 0x00);
+	ns16550a_device_write_reg(dev, DLM, 0x00);
 
 	/*
 	 * Leave set-baud mode, and set word length to 8 bits, no parity
 	 */
-	uart_write_reg(LCR, LCR_EIGHT_BITS);
+	ns16550a_device_write_reg(dev, LCR, LCR_EIGHT_BITS);
 
 	/* Reset and enable FIFOs */
-	uart_write_reg(FCR, FCR_FIFO_CLEAR | FCR_FIFO_ENABLE);
+	ns16550a_device_write_reg(dev, FCR, FCR_FIFO_CLEAR | FCR_FIFO_ENABLE);
 
 	/* Enable transmit and receive interrupts */
-	uart_write_reg(IER, LSR_RX_READY | LSR_TX_IDLE);
+	ns16550a_device_write_reg(dev, IER, LSR_RX_READY | LSR_TX_IDLE);
 
-	irq_register_handler(uart.irq, uart_handle_irq, NULL);
-	plic_set_priority(uart.irq, 1);
+	err = irq_register_handler(dev->irq, ns16550a_device_handle_irq, dev,
+				   NULL, NULL);
+	if (err) {
+		iounmap((void *)dev->mem_base, dev->size);
+		return err;
+	}
+
+	return 0;
 }
 
-void uart_init_hart(u32 hart_id)
+void ns16550a_device_finalize(struct ns16550a_device *dev)
 {
-	plic_enable(hart_id, uart.irq);
+	irq_unregister_handler(dev->irq, NULL, NULL);
+	iounmap((void *)dev->mem_base, dev->size);
 }
 
-void uart_putc(int c)
+static int ns16550a_device_enable_irq(struct ns16550a_device *dev, u32 hart_id)
 {
-	spinlock_acquire(&uart_lock);
-
-	if (panicked)
-		for (;;)
-			;
-
-	while (!(uart_read_reg(LSR) & LSR_TX_IDLE))
-		;
-	uart_write_reg(THR, c);
-
-	spinlock_release(&uart_lock);
+	int err;
+	err = irq_enable_source(hart_id, dev->irq);
+	if (err)
+		return err;
+	err = irq_set_priority(dev->irq, 1);
+	if (err) {
+		irq_disable_source(hart_id, dev->irq);
+		return err;
+	}
+	return 0;
 }
 
-int uart_getc(void)
+static int ns16550a_device_putc(struct ns16550a_device *dev, int c)
 {
-	int c;
-
-	spinlock_acquire(&uart_lock);
-
-	if (uart_read_reg(LSR) & LSR_RX_READY)
-		c = uart_read_reg(RHR);
+	int ret = 0;
+	spinlock_acquire(&dev->lock);
+	if (ns16550a_device_read_reg(dev, LSR) & LSR_TX_IDLE)
+		ns16550a_device_write_reg(dev, THR, c);
 	else
-		c = -1;
+		ret = -EBUSY;
+	spinlock_release(&dev->lock);
+	return ret;
+}
 
-	spinlock_release(&uart_lock);
+static int ns16550a_tty_put_char(struct tty *tty, int c)
+{
+	struct ns16550a_device *dev = tty->port->client_data;
+	if (!dev)
+		return -EIO;
 
-	return c;
+	if (c == TTY_VIS_BACKSPACE) {
+		ns16550a_device_putc(dev, '\b');
+		ns16550a_device_putc(dev, ' ');
+		ns16550a_device_putc(dev, '\b');
+	} else {
+		ns16550a_device_putc(dev, c);
+	}
+	return 0;
+}
+
+static const struct tty_operations ns16550a_ops = {
+	.put_char = ns16550a_tty_put_char,
+};
+
+static struct tty_driver *ns16550a_driver;
+
+int ns16550a_driver_init(void)
+{
+	struct tty_driver *driver;
+	int err;
+	struct ns16550a_driver_data *data;
+	dev_t dev = 0;
+
+	data = kzalloc(sizeof(*data));
+	if (!data)
+		return -ENOMEM;
+
+	driver = tty_alloc_driver(NS16550A_NUM_PORTS);
+	if (!driver) {
+		kfree(data);
+		return -ENOMEM;
+	}
+
+	err = chrdev_alloc_region(NS16550A_MAJOR, 0, NS16550A_NUM_PORTS, &dev);
+	if (err) {
+		tty_free_driver(driver);
+		kfree(data);
+		return err;
+	}
+	driver->major = MAJOR(dev);
+	driver->minor_start = MINOR(dev);
+	driver->name = "ns16550a";
+	driver->ops = &ns16550a_ops;
+	driver->driver_data = data;
+
+	err = tty_register_driver(driver);
+	if (err) {
+		kfree(data);
+		tty_free_driver(driver);
+		return err;
+	}
+
+	ns16550a_driver = driver;
+
+	return 0;
+}
+
+int ns16550a_add_device(struct ns16550a_device *dev)
+{
+	struct tty_port *port;
+	int err;
+	struct ns16550a_driver_data *data;
+
+	if (!ns16550a_driver)
+		return -ENXIO;
+
+	port = tty_port_alloc();
+	if (!port)
+		return -ENOMEM;
+
+	port->driver = ns16550a_driver;
+	port->client_data = dev;
+	dev->port = port;
+
+	err = tty_driver_add_port(ns16550a_driver, port);
+	if (err) {
+		tty_port_free(port);
+		return err;
+	}
+
+	data = ns16550a_driver->driver_data;
+
+	spinlock_acquire(&ns16550a_driver->lock);
+	hlist_add_head(&dev->node, &data->devices);
+	spinlock_release(&ns16550a_driver->lock);
+
+	return 0;
+}
+
+int ns16550a_enable_irq(u32 hart_id)
+{
+	struct ns16550a_device *dev;
+
+	if (!ns16550a_driver)
+		return -ENXIO;
+
+	struct ns16550a_driver_data *data = ns16550a_driver->driver_data;
+	int err = 0;
+
+	spinlock_acquire(&ns16550a_driver->lock);
+	hlist_for_each_entry(dev, &data->devices, node) {
+		err = ns16550a_device_enable_irq(dev, hart_id);
+		if (err)
+			break;
+	}
+	spinlock_release(&ns16550a_driver->lock);
+	return err;
 }

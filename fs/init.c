@@ -1,5 +1,5 @@
 #include <brk/dcache.h>
-#include <brk/dev.h>
+#include <brk/device.h>
 #include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fcntl.h>
@@ -10,6 +10,9 @@
 #include <brk/process.h>
 #include <brk/stat.h>
 #include <brk/string.h>
+#include <brk/tty.h>
+#include <brk/virtio_disk.h>
+#include <uapi/fcntl.h>
 
 static void register_builtin_filesystems(void)
 {
@@ -33,11 +36,22 @@ int fs_init(void)
 	path_dup(&proc->root);
 	proc->cwd = proc->root;
 
-	err = do_mknodat(AT_FDCWD, "/disk0", S_IFBLK, DEV_DISK0);
+	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
 	if (err)
 		return err;
+	klog_info("/dev directory created\n");
 
-	err = do_mount("/disk0", "/", "brkfs", 0, NULL);
+	err = virtio_disk_create_fs_nodes();
+	if (err)
+		return err;
+	klog_info("virtio disk fs nodes created\n");
+
+	err = tty_create_fs_nodes();
+	if (err)
+		return err;
+	klog_info("tty fs nodes created\n");
+
+	err = do_mount("/dev/vdisk0", "/", "brkfs", 0, NULL);
 	if (err)
 		return err;
 	klog_info("/ mounted successfully\n");
@@ -57,7 +71,7 @@ int fs_init(void)
 	path_dup(&root_path);
 	proc->cwd = root_path;
 
-	err = do_mkdirat(AT_FDCWD, "/dev", 0);
+	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
 	if (err && err != -EEXIST)
 		return err;
 	if (err == -EEXIST)
@@ -68,12 +82,7 @@ int fs_init(void)
 		return err;
 	klog_info("/dev mounted successfully\n");
 
-	err = do_mknodat(AT_FDCWD, "/dev/console", S_IFCHR, DEV_CONSOLE0);
-	if (err)
-		return err;
-	klog_info("/dev/console created successfully\n");
-
-	err = do_mkdirat(AT_FDCWD, "/proc", 0);
+	err = do_mkdirat(AT_FDCWD, "/proc", 0755);
 	if (err && err != -EEXIST)
 		return err;
 	if (err == -EEXIST)
@@ -84,12 +93,22 @@ int fs_init(void)
 		return err;
 	klog_info("/proc mounted successfully\n");
 
-	struct file *f = do_openat(AT_FDCWD, "/dev/console", O_RDWR, 0);
+	err = virtio_disk_create_fs_nodes();
+	if (err)
+		return err;
+	klog_info("virtio disk fs nodes created\n");
+
+	err = tty_create_fs_nodes();
+	if (err)
+		return err;
+	klog_info("tty fs nodes created\n");
+
+	struct file *f = do_openat(AT_FDCWD, "/dev/tty0", O_RDWR, 0);
 	if (IS_ERR(f)) {
 		err = PTR_ERR(f);
 		return err;
 	}
-	klog_info("/dev/console opened successfully\n");
+	klog_info("/dev/tty0 opened successfully\n");
 
 	proc->ofiles[0] = f;
 	proc->ofiles[1] = file_dup(f);

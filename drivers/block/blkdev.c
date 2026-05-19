@@ -1,4 +1,5 @@
-#include <brk/dev.h>
+#include <brk/blkdev.h>
+#include <brk/device.h>
 #include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
@@ -10,8 +11,97 @@
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <uapi/errno.h>
+#include <uapi/types.h>
 
-static struct dev_registry blkdev_registry;
+static struct dev_map bd_map;
+static struct hlist_head bd_htable[MAJOR_MAX];
+static SPINLOCK_DEFINE(bd_htable_lock);
+
+void blkdev_registry_init(void)
+{
+	dev_map_init(&bd_map, FIRST_DYNAMIC_BLKDEV_MAJOR);
+}
+
+int blkdev_register(struct blkdev *bd)
+{
+	dev_t dev = bd->dev;
+
+	if (!IS_BLKDEV(dev))
+		return -EINVAL;
+
+	klog_debug("%s: devtype=%u, major=%u, minor=%u\n", __func__,
+		   DEVTYPE(dev), MAJOR(dev), MINOR(dev));
+
+	spinlock_acquire(&bd_htable_lock);
+	hlist_add_head(&bd->hlist, &bd_htable[MAJOR(dev)]);
+	spinlock_release(&bd_htable_lock);
+
+	return 0;
+}
+
+static struct blkdev *blkdev_get_no_lock(dev_t dev)
+{
+	struct blkdev *bd;
+
+	hlist_for_each_entry(bd, &bd_htable[MAJOR(dev)], hlist) {
+		if (bd->dev == dev)
+			return bd;
+	}
+
+	return NULL;
+}
+
+void blkdev_unregister(struct blkdev *bd)
+{
+	spinlock_acquire(&bd_htable_lock);
+	hlist_del_init(&bd->hlist);
+	spinlock_release(&bd_htable_lock);
+}
+
+struct blkdev *blkdev_get(dev_t dev)
+{
+	struct blkdev *bd;
+
+	klog_debug("%s: devtype=%u, major=%u, minor=%u\n", __func__,
+		   DEVTYPE(dev), MAJOR(dev), MINOR(dev));
+
+	spinlock_acquire(&bd_htable_lock);
+	bd = blkdev_get_no_lock(dev);
+	spinlock_release(&bd_htable_lock);
+	return bd;
+}
+
+int blkdev_alloc_major(unsigned *major_out)
+{
+	return alloc_dev_major(&bd_map, major_out);
+}
+
+void blkdev_free_major(unsigned major)
+{
+	free_dev_major(&bd_map, major);
+}
+
+int blkdev_alloc_minor(unsigned major, unsigned *minor_out)
+{
+	return alloc_dev_minor(&bd_map, major, minor_out);
+}
+
+void blkdev_free_minor(unsigned major, unsigned minor)
+{
+	free_dev_minor(&bd_map, major, minor);
+}
+
+int blkdev_alloc_region(unsigned major, unsigned base_minor, unsigned count,
+			dev_t *dev_out)
+{
+	return alloc_dev_region(&bd_map, major, base_minor, count, dev_out);
+}
+
+void blkdev_free_region(unsigned major, unsigned minor, unsigned count)
+{
+	free_dev_region(&bd_map, major, minor, count);
+}
 
 int blkdev_check_bounds(struct blkdev *bd, u64 blk_id, u32 blk_cnt)
 {
@@ -138,50 +228,6 @@ void blkdev_free(struct blkdev *bd)
 	kfree(bd);
 }
 
-int blkdev_register(struct blkdev *bd, dev_t dev)
-{
-	if (!IS_BLKDEV(dev))
-		return -EINVAL;
-	return dev_registry_register(&blkdev_registry, (struct dev_slot *)bd,
-				     dev, BLKDEV);
-}
-
-void blkdev_unregister(struct blkdev *bd)
-{
-	dev_registry_unregister(&blkdev_registry, (struct dev_slot *)bd);
-}
-
-struct blkdev *blkdev_get(dev_t dev)
-{
-	return (struct blkdev *)dev_registry_get(&blkdev_registry, dev);
-}
-
-int blkdev_alloc_major(unsigned *major_out)
-{
-	return dev_registry_alloc_major(&blkdev_registry, major_out);
-}
-
-void blkdev_free_major(unsigned major)
-{
-	dev_registry_free_major(&blkdev_registry, major);
-}
-
-int blkdev_alloc_minor(unsigned major, unsigned *minor_out)
-{
-	return dev_registry_alloc_minor(&blkdev_registry, major, minor_out,
-					BLKDEV);
-}
-
-int blkdev_alloc_devnum(dev_t *dev_out)
-{
-	return dev_registry_alloc_devnum(&blkdev_registry, dev_out, BLKDEV);
-}
-
-void blkdev_registry_init(void)
-{
-	dev_registry_init(&blkdev_registry);
-}
-
 static int blkdev_open(struct inode *inode, struct file *file)
 {
 	(void)inode;
@@ -214,14 +260,14 @@ static loff_t blkdev_llseek(struct file *file, loff_t offset, int whence)
 	(void)file;
 	(void)offset;
 	(void)whence;
-	return 0;
+	return -EOPNOTSUPP;
 }
 
 static int blkdev_iterate_shared(struct file *file, struct dir_context *ctx)
 {
 	(void)file;
 	(void)ctx;
-	return 0;
+	return -EOPNOTSUPP;
 }
 
 static int blkdev_fsync(struct file *file, loff_t start, loff_t end,
@@ -231,13 +277,13 @@ static int blkdev_fsync(struct file *file, loff_t start, loff_t end,
 	(void)start;
 	(void)end;
 	(void)datasync;
-	return 0;
+	return -EOPNOTSUPP;
 }
 
 static int blkdev_flush(struct file *file)
 {
 	(void)file;
-	return 0;
+	return -EOPNOTSUPP;
 }
 
 static long blkdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)

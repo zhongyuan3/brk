@@ -1,7 +1,7 @@
 #include "brkfs.h"
 #include <brk/asm.h>
 #include <brk/bitmap.h>
-#include <brk/dev.h>
+#include <brk/device.h>
 #include <brk/dirent.h>
 #include <brk/errno.h>
 #include <brk/fs.h>
@@ -12,6 +12,7 @@
 #include <brk/stat.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <brk/blkdev.h>
 
 struct brkfs_sb_info *brkfs_sb_info_alloc(struct blkdev *bdev,
 					  struct brkfs_super_block *sb)

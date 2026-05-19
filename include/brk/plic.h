@@ -17,6 +17,7 @@ struct plic_device {
 
 void plic_init(void);
 int plic_enable(u32 hart_id, u32 source);
+int plic_disable(u32 hart_id, u32 source);
 int plic_set_priority(u32 source, unsigned int priority);
 int plic_set_threshold(u32 hart_id, unsigned int threshold);
 int plic_claim(u32 hart_id, u32 *source);

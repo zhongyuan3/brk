@@ -1,6 +1,6 @@
 #include "brkfs.h"
 #include <brk/dcache.h>
-#include <brk/dev.h>
+#include <brk/device.h>
 #include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
