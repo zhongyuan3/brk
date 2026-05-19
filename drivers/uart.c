@@ -94,10 +94,11 @@ static void ns16550a_device_handle_irq(void *ctx)
 	if (c < 0)
 		return;
 
-	if (!port || !port->tty)
+	if (!port)
 		return;
 
-	tty_receive(port->tty, c);
+	if (port->tty)
+		tty_receive(port->tty, c);
 }
 
 int ns16550a_device_init(struct ns16550a_device *dev)
@@ -128,8 +129,8 @@ int ns16550a_device_init(struct ns16550a_device *dev)
 	/* Reset and enable FIFOs */
 	ns16550a_device_write_reg(dev, FCR, FCR_FIFO_CLEAR | FCR_FIFO_ENABLE);
 
-	/* Enable transmit and receive interrupts */
-	ns16550a_device_write_reg(dev, IER, LSR_RX_READY | LSR_TX_IDLE);
+	/* Enable receive interrupts */
+	ns16550a_device_write_reg(dev, IER, IER_RX_ENABLE);
 
 	err = irq_register_handler(dev->irq, ns16550a_device_handle_irq, dev,
 				   NULL, NULL);

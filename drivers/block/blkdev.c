@@ -27,7 +27,9 @@ int blkdev_register(struct blkdev *bd)
 {
 	dev_t dev = bd->dev;
 
-	if (!IS_BLKDEV(dev))
+	if (!bd || !IS_BLKDEV(dev))
+		return -EINVAL;
+	if (!minor_is_allocated(&bd_map, MAJOR(dev), MINOR(dev)))
 		return -EINVAL;
 
 	klog_debug("%s: devtype=%u, major=%u, minor=%u\n", __func__,
@@ -230,8 +232,14 @@ void blkdev_free(struct blkdev *bd)
 
 static int blkdev_open(struct inode *inode, struct file *file)
 {
-	(void)inode;
+	struct blkdev *bd;
+
+	bd = blkdev_get(inode->i_rdev);
+	if (!bd)
+		return -ENODEV;
+
 	file->f_op = &blkdev_fops;
+	file->private_data = bd;
 	return 0;
 }
 

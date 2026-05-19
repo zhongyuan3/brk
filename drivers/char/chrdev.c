@@ -32,7 +32,11 @@ void chrdev_free(struct chrdev *cd)
 
 int chrdev_register(struct chrdev *cd)
 {
-	if (!IS_CHRDEV(cd->dev))
+	if (!cd || !IS_CHRDEV(cd->dev))
+		return -EINVAL;
+	if (!cd->fops || !cd->fops->open)
+		return -EINVAL;
+	if (!minor_is_allocated(&cd_map, MAJOR(cd->dev), MINOR(cd->dev)))
 		return -EINVAL;
 
 	spinlock_acquire(&cd_htable_lock);
@@ -105,7 +109,7 @@ static int chrdev_open(struct inode *inode, struct file *file)
 	struct chrdev *cd;
 
 	cd = chrdev_get(inode->i_rdev);
-	if (!cd)
+	if (!cd || !cd->fops || !cd->fops->open)
 		return -ENODEV;
 
 	return cd->fops->open(inode, file);

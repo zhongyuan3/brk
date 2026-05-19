@@ -188,27 +188,24 @@ void free_dev_region(struct dev_map *map, unsigned major, unsigned minor,
 
 	spinlock_acquire(&map->lock);
 	hlist_for_each_entry(curr, &map->entries[major], entry) {
-		if (curr->minor_start < minor) {
-			spinlock_release(&map->lock);
-			klog_error("%s: minor_start %u is less than %u",
-				   __func__, curr->minor_start, minor);
-			return;
-		}
+		if (curr->minor_start + curr->count <= minor)
+			continue;
 
-		if (curr->minor_start == minor) {
-			if (curr->count != count) {
-				klog_error("%s: count %u is not equal to %u",
-					   __func__, curr->count, count);
-				spinlock_release(&map->lock);
-				return;
-			}
+		if (curr->minor_start == minor && curr->count == count) {
 			hlist_del_init(&curr->entry);
 			spinlock_release(&map->lock);
 			kfree(curr);
 			return;
 		}
+
+		klog_error("%s: region %u+%u does not match %u+%u", __func__,
+			   curr->minor_start, curr->count, minor, count);
+		spinlock_release(&map->lock);
+		return;
 	}
 	spinlock_release(&map->lock);
+	klog_error("%s: no region at minor %u count %u", __func__, minor,
+		   count);
 }
 
 bool major_is_allocated(struct dev_map *map, unsigned major)
