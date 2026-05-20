@@ -1,0 +1,9 @@
+obj-y += init.o
+obj-y += mm.o
+obj-y += memblock.o
+obj-y += pgalloc.o
+obj-y += pgtable.o
+obj-y += slab.o
+obj-y += vmalloc.o
+obj-y += ioremap.o
+obj-y += pagecache.o

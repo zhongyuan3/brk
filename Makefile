@@ -1,21 +1,11 @@
-ifndef CROSS_COMPILE
-CROSS_COMPILE := $(shell \
-if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' > /dev/null 2>&1; \
-then echo 'riscv64-unknown-elf-'; \
-elif riscv64-elf-objdump -i 2>&1 | grep 'elf64-big' > /dev/null 2>&1; \
-then echo 'riscv64-elf-'; \
-elif riscv64-none-elf-objdump -i 2>&1 | grep 'elf64-big' > /dev/null 2>&1; \
-then echo 'riscv64-none-elf-'; \
-elif riscv64-linux-gnu-objdump -i 2>&1 | grep 'elf64-big' > /dev/null 2>&1; \
-then echo 'riscv64-linux-gnu-'; \
-elif riscv64-unknown-linux-gnu-objdump -i 2>&1 | grep 'elf64-big' > /dev/null 2>&1; \
-then echo 'riscv64-unknown-linux-gnu-'; \
-else echo "***" 1>&2; \
-echo "*** Error: Cross compiler not found" 1>&2; \
-echo "***" 1>&2; \
-exit 1; \
-fi)
-endif
+BRK_SRC := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+BRK_TOP_MAKEFILE := $(BRK_SRC)/Makefile
+
+# Suppress "make[N]: Entering/Leaving directory ..." from recursive makes.
+MAKEFLAGS += --no-print-directory
+
+include $(BRK_SRC)/scripts/toolchain.mk
+
 BUILD ?= debug
 RAM ?= 128M
 BUILD_DIR ?= build/$(BUILD)
@@ -71,8 +61,10 @@ endif
 
 CFLAGS += -MMD -MP
 
-CFLAGS += -Iinclude
-CFLAGS += -Ivendor/libfdt
+CFLAGS += -I$(BRK_SRC)/include
+CFLAGS += -I$(BRK_SRC)/vendor/libfdt
+
+export BRK_SRC BRK_TOP_MAKEFILE BUILD_DIR CROSS_COMPILE CC LD AS AR CFLAGS
 
 QEMU_COMMON := -machine virt -nographic
 QEMU_COMMON += -m $(RAM)
@@ -82,88 +74,26 @@ QEMU_COMMON += -drive file=$(ROOTFS_IMG),if=none,format=raw,id=x0
 QEMU_COMMON += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 QEMU_COMMON += -global virtio-mmio.force-legacy=false
 
-SRCS := boot/head.S
-SRCS += boot/setup.c
-SRCS += kernel/dtb.c
-SRCS += kernel/ktime.c
-SRCS += kernel/timekeeper.c
-SRCS += kernel/init.c
-SRCS += kernel/main.c
-SRCS += kernel/panic.c
-SRCS += kernel/printk.c
-SRCS += kernel/trap.c
-SRCS += kernel/cpu.c
-SRCS += kernel/timer.c
-SRCS += kernel/irq.c
-SRCS += kernel/entry.S
-SRCS += kernel/process/process.c
-SRCS += kernel/process/sched.c
-SRCS += kernel/process/switch.S
-SRCS += kernel/process/pid.c
-SRCS += kernel/syscall/syscall.c
-SRCS += kernel/syscall/sysfile.c
-SRCS += kernel/syscall/sysproc.c
-SRCS += kernel/syscall/systime.c
-SRCS += kernel/console.c
-SRCS += kernel/lock.c
-SRCS += mm/init.c
-SRCS += mm/mm.c
-SRCS += mm/memblock.c
-SRCS += mm/pgalloc.c
-SRCS += mm/pgtable.c
-SRCS += mm/slab.c
-SRCS += mm/vmalloc.c
-SRCS += mm/ioremap.c
-SRCS += mm/pagecache.c
-SRCS += drivers/base/dev_map.c
-SRCS += drivers/block/blkdev.c
-SRCS += drivers/char/chrdev.c
-SRCS += drivers/tty/tty.c
-SRCS += drivers/tty/tty_driver.c
-SRCS += drivers/tty/tty_port.c
-SRCS += drivers/plic.c
-SRCS += drivers/rtc.c
-SRCS += drivers/uart.c
-SRCS += drivers/virtio_disk.c
-SRCS += drivers/virtio/virtio.c
-SRCS += drivers/virtio/virtio_mmio.c
-SRCS += drivers/virtio/virtio_virtq.c
-SRCS += fs/tmpfs/tmpfs.c
-SRCS += fs/procfs/procfs.c
-SRCS += fs/brkfs/brkfs.c
-SRCS += fs/brkfs/dir.c
-SRCS += fs/brkfs/file.c
-SRCS += fs/brkfs/inode.c
-SRCS += fs/brkfs/mount.c
-SRCS += fs/brkfs/super.c
-SRCS += fs/init.c
-SRCS += fs/pipe.c
-SRCS += fs/dcache.c
-SRCS += fs/file.c
-SRCS += fs/inode.c
-SRCS += fs/mount.c
-SRCS += fs/super.c
-SRCS += fs/exec.c
-SRCS += fs/path.c
-SRCS += fs/filesystem.c
-SRCS += fs/namei.c
-SRCS += lib/string.c
-SRCS += lib/printf.c
-SRCS += lib/qsort.c
-SRCS += lib/hash.c
-SRCS += lib/bitmap.c
-SRCS += vendor/libfdt/fdt.c
-SRCS += vendor/libfdt/fdt_ro.c
-SRCS += vendor/libfdt/fdt_wip.c
-SRCS += vendor/libfdt/fdt_addresses.c
-SRCS += vendor/libfdt/fdt_rw.c
+# Top-level modules: each builds $(BUILD_DIR)/<name>/built-in.o
+core-y := boot
+core-y += kernel
+core-y += mm
+core-y += drivers
+core-y += fs
+core-y += lib
+core-y += vendor
 
-OBJS_S := $(patsubst %.S,$(BUILD_DIR)/%.o,$(filter %.S,$(SRCS)))
-OBJS_C := $(patsubst %.c,$(BUILD_DIR)/%.o,$(filter %.c,$(SRCS)))
-OBJS := $(OBJS_S) $(OBJS_C)
-DEPS := $(OBJS:.o=.d)
+core-builtin := $(addprefix $(BUILD_DIR)/,$(patsubst %,%/built-in.o,$(core-y)))
 
-.PHONY: all brk run gdb-server gdb-client rootfs clean help
+ifdef build
+# Subdirectory build (invoked recursively)
+src := $(build)
+obj := $(BUILD_DIR)/$(build)
+include scripts/Makefile.build
+else
+# Top-level build
+
+.PHONY: all brk run gdb-server gdb-client rootfs clean help FORCE
 
 all: brk
 
@@ -196,28 +126,24 @@ gdb-client: $(BRK_ELF)
 
 rootfs: $(ROOTFS_IMG)
 
-$(BRK_LD): $(BRK_LD_S)
+$(BRK_LD): $(BRK_SRC)/$(BRK_LD_S)
 	@mkdir -p $(dir $@)
-	$(CPP) $(CFLAGS) -o $@ $<
+	@echo "  CPP     $@"
+	@$(CPP) $(CFLAGS) -o $@ $<
 
-$(BRK_ELF): $(OBJS) $(BRK_LD)
-	$(LD) -z max-page-size=4096 -T $(BRK_LD) -static -o $@ $(OBJS)
+$(BRK_ELF): $(core-builtin) $(BRK_LD)
+	@echo "  LD      $@"
+	@$(LD) -z max-page-size=4096 -T $(BRK_LD) -static -o $@ $(core-builtin)
 
-$(ROOTFS_IMG): scripts/mkrootfs.sh
+# Build each top-level module's built-in.o via recursive make
+$(BUILD_DIR)/%/built-in.o: FORCE
+	@$(MAKE) -f $(BRK_TOP_MAKEFILE) build=$*
+
+$(ROOTFS_IMG): $(BRK_SRC)/scripts/mkrootfs.sh
 	@./scripts/mkrootfs.sh "$(ROOTFS_IMG)"
-
-$(BUILD_DIR)/%.o: %.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-$(BUILD_DIR)/%.o: %.S
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
 	$(RM) -r $(BUILD_DIR)
-
--include $(DEPS)
 
 .PHONY: dts
 
@@ -230,3 +156,5 @@ $(BUILD_DIR)/devicetree.dts: $(BUILD_DIR)/devicetree.dtb
 $(BUILD_DIR)/devicetree.dtb:
 	@mkdir -p $(dir $@)
 	$(QEMU) -machine virt,dumpdtb=$@ -nographic
+
+endif
