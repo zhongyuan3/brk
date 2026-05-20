@@ -34,9 +34,6 @@ ROOTFS_IMG := $(BUILD_DIR)/rootfs.img
 CFLAGS := -Wall
 CFLAGS += -Wextra
 CFLAGS += -Werror
-CFLAGS += -ggdb
-CFLAGS += -gdwarf-2
-CFLAGS += -fno-omit-frame-pointer
 CFLAGS += -march=rv64gc
 CFLAGS += -mcmodel=medany
 CFLAGS += -ffreestanding
@@ -46,15 +43,37 @@ CFLAGS += -fno-stack-protector
 CFLAGS += -fno-pie
 CFLAGS += -no-pie
 
+LDFLAGS := -z max-page-size=4096
+
 ifeq ($(ENABLE_SMP),1)
 CFLAGS += -DENABLE_SMP=1
 endif
 
 ifeq ($(BUILD),debug)
+ENABLE_GC ?= 0
 CFLAGS += -O0
+CFLAGS += -ggdb
+CFLAGS += -gdwarf-2
+CFLAGS += -fno-omit-frame-pointer
+ifeq ($(ENABLE_GC),1)
+CFLAGS += -ffunction-sections
+CFLAGS += -fdata-sections
+LDFLAGS += --gc-sections
+endif
 else ifeq ($(BUILD),release)
+ifeq ($(ENABLE_GC),0)
+$(error ENABLE_GC=0 is not supported for release builds)
+endif
 CFLAGS += -O2
 CFLAGS += -DNDEBUG
+CFLAGS += -fomit-frame-pointer
+CFLAGS += -fmerge-all-constants
+CFLAGS += -fno-semantic-interposition
+CFLAGS += -fno-unwind-tables
+CFLAGS += -fno-asynchronous-unwind-tables
+CFLAGS += -ffunction-sections
+CFLAGS += -fdata-sections
+LDFLAGS += --gc-sections
 else
 $(error unknown BUILD value '$(BUILD)', expected debug or release)
 endif
@@ -64,7 +83,7 @@ CFLAGS += -MMD -MP
 CFLAGS += -I$(BRK_SRC)/include
 CFLAGS += -I$(BRK_SRC)/vendor/libfdt
 
-export BRK_SRC BRK_TOP_MAKEFILE BUILD_DIR CROSS_COMPILE CC LD AS AR CFLAGS
+export BRK_SRC BRK_TOP_MAKEFILE BUILD_DIR CROSS_COMPILE CC LD AS AR CFLAGS LDFLAGS
 
 QEMU_COMMON := -machine virt -nographic
 QEMU_COMMON += -m $(RAM)
@@ -112,6 +131,7 @@ help:
 	@echo "  RAM=<size>"
 	@echo "  CROSS_COMPILE=<prefix>"
 	@echo "  ENABLE_SMP={0|1}"
+	@echo "  ENABLE_GC={0|1}  (debug only, default 0; release always uses GC)"
 
 brk: $(BRK_ELF)
 
@@ -133,7 +153,7 @@ $(BRK_LD): $(BRK_SRC)/$(BRK_LD_S)
 
 $(BRK_ELF): $(core-builtin) $(BRK_LD)
 	@echo "  LD      $@"
-	@$(LD) -z max-page-size=4096 -T $(BRK_LD) -static -o $@ $(core-builtin)
+	@$(LD) $(LDFLAGS) -T $(BRK_LD) -static -o $@ $(core-builtin)
 
 # Build each top-level module's built-in.o via recursive make
 $(BUILD_DIR)/%/built-in.o: FORCE
