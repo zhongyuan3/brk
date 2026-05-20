@@ -1,0 +1,39 @@
+# Kbuild-style rules for one source directory.
+# Included from the top Makefile when $(build) is set.
+#
+# Each directory Makefile sets:
+#   obj-y    -- .o files built in this directory
+#   subdir-y -- child directories (each produces subdir/built-in.o)
+
+obj-y :=
+subdir-y :=
+
+include $(BRK_SRC)/$(src)/Makefile
+
+obj-y := $(strip $(obj-y))
+subdir-y := $(strip $(subdir-y))
+
+obj-y-full := $(addprefix $(obj)/,$(obj-y))
+subdir-builtin := $(addprefix $(obj)/,$(patsubst %,%/built-in.o,$(subdir-y)))
+
+$(obj)/built-in.o: $(obj-y-full) $(subdir-builtin)
+	@echo "  LD      $@"
+	@$(LD) -r -o $@ $^
+
+# Recurse into child directories
+$(subdir-builtin): FORCE
+	@$(MAKE) -f $(BRK_TOP_MAKEFILE) build=$(patsubst $(BUILD_DIR)/%,%,$(@D))
+
+$(obj)/%.o: $(BRK_SRC)/$(src)/%.c
+	@mkdir -p $(dir $@)
+	@echo "  CC      $@"
+	@$(CC) $(CFLAGS) -c -o $@ $<
+
+$(obj)/%.o: $(BRK_SRC)/$(src)/%.S
+	@mkdir -p $(dir $@)
+	@echo "  AS      $@"
+	@$(CC) $(CFLAGS) -c -o $@ $<
+
+.PHONY: FORCE
+
+-include $(obj-y-full:.o=.d)

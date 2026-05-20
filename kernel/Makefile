@@ -1,0 +1,17 @@
+obj-y += dtb.o
+obj-y += ktime.o
+obj-y += timekeeper.o
+obj-y += init.o
+obj-y += main.o
+obj-y += panic.o
+obj-y += printk.o
+obj-y += trap.o
+obj-y += cpu.o
+obj-y += timer.o
+obj-y += irq.o
+obj-y += entry.o
+obj-y += console.o
+obj-y += lock.o
+
+subdir-y += process
+subdir-y += syscall
