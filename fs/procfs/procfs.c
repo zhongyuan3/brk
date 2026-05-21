@@ -352,7 +352,7 @@ static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
 				  char *buf, usize_t size)
 {
 	(void)e;
-	struct proc_info info;
+	struct process_info info;
 
 	if (!proc_get_info(pid, &info))
 		return -ESRCH;
@@ -377,7 +377,7 @@ static int procfs_show_pid_stat(const struct procfs_entry *e, pid_t pid,
 				char *buf, usize_t size)
 {
 	(void)e;
-	struct proc_info info;
+	struct process_info info;
 
 	if (!proc_get_info(pid, &info))
 		return -ESRCH;
@@ -398,7 +398,7 @@ static int procfs_show_pid_cmdline(const struct procfs_entry *e, pid_t pid,
 				   char *buf, usize_t size)
 {
 	(void)e;
-	struct proc_info info;
+	struct process_info info;
 	usize_t n;
 
 	if (!proc_get_info(pid, &info))

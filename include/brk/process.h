@@ -19,7 +19,7 @@
 #define TIME_SLICE_MAX 5
 #define PROCESS_NAME_MAX 32
 
-struct trapframe {
+struct trap_frame {
 	/* 0   */ u64 kernel_sp;
 	/* 8   */ u64 ra;
 	/* 16  */ u64 sp;
@@ -56,7 +56,7 @@ struct trapframe {
 	/* 264 */ u64 cpuid;
 };
 
-struct context {
+struct switch_frame {
 	u64 ra;
 	u64 sp;
 	u64 s0;
@@ -91,7 +91,7 @@ struct process {
 
 	spinlock_t lock;
 	void *chan;
-	struct context ctx;
+	struct switch_frame ctx;
 	pid_t pid;
 	enum process_state state;
 	int exit_status;
@@ -102,7 +102,7 @@ struct process {
 	struct path cwd;
 	struct path root;
 	struct tms ptms;
-	struct trapframe tf;
+	struct trap_frame tf;
 	u64 kstack;
 	u64 ktime;
 	u64 utime;
@@ -114,7 +114,7 @@ struct process {
 struct cpu {
 	struct process *current;
 	struct process *handoff;
-	struct context ctx;
+	struct switch_frame ctx;
 	int irq_nest;
 	bool irq_enabled;
 };
@@ -149,7 +149,7 @@ void pid_free(pid_t pid);
  * Read-only snapshot of the parts of a process that are safe to look at
  * from outside the scheduler / proc_lock.
  */
-struct proc_info {
+struct process_info {
 	pid_t pid;
 	pid_t ppid;
 	enum process_state state;
@@ -172,7 +172,7 @@ int proc_snapshot_pids(pid_t *out, int max);
  * Snapshot a single process's fields into @info. Returns true on
  * success, false if no such pid exists.
  */
-bool proc_get_info(pid_t pid, struct proc_info *info);
+bool proc_get_info(pid_t pid, struct process_info *info);
 
 /* Lightweight existence check. */
 bool proc_pid_exists(pid_t pid);
@@ -184,7 +184,7 @@ struct process *current_process(void);
 struct cpu *current_cpu(void);
 cpuid_t current_cpuid(void);
 
-void switch_context(struct context *prev, struct context *next);
+void switch_context(struct switch_frame *prev, struct switch_frame *next);
 
 extern cpuid_t init_cpuid;
 extern struct process *init_proc;

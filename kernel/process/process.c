@@ -269,7 +269,7 @@ bool proc_pid_exists(pid_t pid)
 	return found;
 }
 
-bool proc_get_info(pid_t pid, struct proc_info *info)
+bool proc_get_info(pid_t pid, struct process_info *info)
 {
 	struct process *p, *target = NULL;
 

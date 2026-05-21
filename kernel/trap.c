@@ -97,9 +97,9 @@ void kernel_trap_handler(void)
 	write_sstatus(sstatus);
 }
 
-struct trapframe *user_trap_handler(void)
+struct trap_frame *user_trap_handler(void)
 {
-	struct trapframe *tf;
+	struct trap_frame *tf;
 	struct process *proc;
 	u64 jiffies;
 	u64 scause = read_scause();
@@ -109,7 +109,7 @@ struct trapframe *user_trap_handler(void)
 
 	write_stvec((u64)kernel_trap_vector);
 
-	tf = (struct trapframe *)read_sscratch();
+	tf = (struct trap_frame *)read_sscratch();
 	proc = container_of(tf, struct process, tf);
 	write_tp(tf->cpuid);
 	write_sstatus(read_sstatus() | SSTATUS_SUM);
