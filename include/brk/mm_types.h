@@ -3,19 +3,19 @@
 
 #include <brk/types.h>
 
-typedef struct {
+typedef struct __pgde {
 	u64 pgde;
 } pgde_t;
 
-typedef struct {
+typedef struct __pmde {
 	u64 pmde;
 } pmde_t;
 
-typedef struct {
+typedef struct __pte {
 	u64 pte;
 } pte_t;
 
-struct kmem_cache;
+struct kobj_pool;
 
 struct page {
 	unsigned int flags;
@@ -29,7 +29,7 @@ struct page {
 
 		struct { /* SLAB */
 			void *slab_free_objs;
-			struct kmem_cache *slab_cache;
+			struct kobj_pool *slab_cache;
 			struct list_head slab_list;
 			usize_t slab_free_count;
 			usize_t slab_objs_count;
@@ -41,17 +41,20 @@ struct page {
 	};
 };
 
-struct free_area {
-	struct list_head free_list;
+struct uvm_region {
+	struct list_head list;
+	u64 addr;
+	usize_t size;
+	struct page **pages;
+	usize_t nr_pages;
+	unsigned int flags;
 };
 
-struct vm_area;
-
-struct mm_struct {
+struct uvm_space {
 	pgde_t *pgd;
 	struct list_head seg;
-	struct vm_area *stack;
-	struct vm_area *heap;
+	struct uvm_region *stack;
+	struct uvm_region *heap;
 	u64 brk;
 };
 

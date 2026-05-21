@@ -15,7 +15,7 @@
 
 static struct hlist_head dentry_htable[DENTRY_HTABLE_SIZE];
 static SPINLOCK_DEFINE(dentry_htable_lock);
-static struct kmem_cache dentry_cache;
+static struct kobj_pool dentry_cache;
 
 void dentry_cache_init(void)
 {

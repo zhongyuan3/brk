@@ -6,7 +6,7 @@
 
 #define NR_KMALLOC_CACHES 10
 
-struct kmem_cache {
+struct kobj_pool {
 	const char *name;
 	usize_t size;
 	usize_t align;
@@ -15,11 +15,11 @@ struct kmem_cache {
 	spinlock_t lock;
 };
 
-int kmem_cache_init(struct kmem_cache *cache, usize_t size, usize_t align,
+int kmem_cache_init(struct kobj_pool *cache, usize_t size, usize_t align,
 		    const char *name);
-void kmem_cache_deinit(struct kmem_cache *cache);
-void *kmem_cache_alloc(struct kmem_cache *cache);
-void kmem_cache_free(struct kmem_cache *cache, void *obj);
+void kmem_cache_deinit(struct kobj_pool *cache);
+void *kmem_cache_alloc(struct kobj_pool *cache);
+void kmem_cache_free(struct kobj_pool *cache, void *obj);
 
 void kmalloc_init(void);
 void *kmalloc(usize_t size);

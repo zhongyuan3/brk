@@ -11,17 +11,17 @@
 #include <brk/types.h>
 #include <brk/vmalloc.h>
 
-static struct kmem_cache mm_cache;
+static struct kobj_pool mm_cache;
 
 void mm_cache_init(void)
 {
-	kmem_cache_init(&mm_cache, sizeof(struct mm_struct),
-			alignof(struct mm_struct), "mm_cache");
+	kmem_cache_init(&mm_cache, sizeof(struct uvm_space),
+			alignof(struct uvm_space), "mm_cache");
 }
 
-struct mm_struct *mm_alloc(void)
+struct uvm_space *mm_alloc(void)
 {
-	struct mm_struct *mm;
+	struct uvm_space *mm;
 
 	mm = kmem_cache_alloc(&mm_cache);
 	if (!mm)
@@ -35,16 +35,16 @@ struct mm_struct *mm_alloc(void)
 
 	list_init(&mm->seg);
 
-	mm->stack = vm_area_alloc();
+	mm->stack = uvm_region_alloc();
 	if (!mm->stack) {
 		destroy_user_pgtable(mm->pgd);
 		kmem_cache_free(&mm_cache, mm);
 		return NULL;
 	}
 
-	mm->heap = vm_area_alloc();
+	mm->heap = uvm_region_alloc();
 	if (!mm->heap) {
-		vm_area_free(mm->stack);
+		uvm_region_free(mm->stack);
 		destroy_user_pgtable(mm->pgd);
 		kmem_cache_free(&mm_cache, mm);
 		return NULL;
@@ -55,9 +55,9 @@ struct mm_struct *mm_alloc(void)
 	return mm;
 }
 
-static void mm_free_seg(struct mm_struct *mm)
+static void mm_free_seg(struct uvm_space *mm)
 {
-	struct vm_area *curr, *next;
+	struct uvm_region *curr, *next;
 
 	if (list_empty(&mm->seg))
 		return;
@@ -70,21 +70,21 @@ static void mm_free_seg(struct mm_struct *mm)
 			page_free(curr->pages[i], 0);
 		}
 		kfree(curr->pages);
-		vm_area_free(curr);
+		uvm_region_free(curr);
 	}
 }
 
-static void mm_free_stack(struct mm_struct *mm)
+static void mm_free_stack(struct uvm_space *mm)
 {
 	if (mm->stack->size > 0) {
 		uvunmap(mm->pgd, mm->stack->addr, mm->stack->size);
 		ASSERT(mm->stack->pages[0]);
 		page_free(mm->stack->pages[0], USTACK_PAGE_ORDER);
 	}
-	vm_area_free(mm->stack);
+	uvm_region_free(mm->stack);
 }
 
-static void mm_free_heap(struct mm_struct *mm)
+static void mm_free_heap(struct uvm_space *mm)
 {
 	if (mm->heap->size > 0) {
 		uvunmap(mm->pgd, mm->heap->addr, mm->heap->size);
@@ -94,10 +94,10 @@ static void mm_free_heap(struct mm_struct *mm)
 		}
 		kfree(mm->heap->pages);
 	}
-	vm_area_free(mm->heap);
+	uvm_region_free(mm->heap);
 }
 
-void mm_free(struct mm_struct *mm)
+void mm_free(struct uvm_space *mm)
 {
 	mm_free_seg(mm);
 	mm_free_stack(mm);
@@ -106,8 +106,8 @@ void mm_free(struct mm_struct *mm)
 	kmem_cache_free(&mm_cache, mm);
 }
 
-static int mm_copy_area(struct vm_area *dst, struct vm_area *src,
-			struct mm_struct *mm)
+static int mm_copy_area(struct uvm_region *dst, struct uvm_region *src,
+			struct uvm_space *mm)
 {
 	usize_t npgs;
 	struct page **pgs;
@@ -163,10 +163,10 @@ failed:
 	return err;
 }
 
-static int mm_copy_seg(struct mm_struct *dst, struct mm_struct *src)
+static int mm_copy_seg(struct uvm_space *dst, struct uvm_space *src)
 {
 	LIST_DEFINE(seg);
-	struct vm_area *curr, *next;
+	struct uvm_region *curr, *next;
 	usize_t npgs;
 	struct page **pgs;
 	int err = 0;
@@ -175,14 +175,14 @@ static int mm_copy_seg(struct mm_struct *dst, struct mm_struct *src)
 		return 0;
 
 	list_for_each_entry(curr, &src->seg, list) {
-		struct vm_area *vma = vm_area_alloc();
+		struct uvm_region *vma = uvm_region_alloc();
 		if (!vma) {
 			err = -ENOMEM;
 			goto failed;
 		}
 		err = mm_copy_area(vma, curr, dst);
 		if (err) {
-			vm_area_free(vma);
+			uvm_region_free(vma);
 			goto failed;
 		}
 		list_add(&vma->list, &seg);
@@ -204,13 +204,13 @@ failed:
 				page_free(pgs[i], 0);
 			}
 			kfree(curr->pages);
-			vm_area_free(curr);
+			uvm_region_free(curr);
 		}
 	}
 	return err;
 }
 
-static int mm_copy_stack(struct mm_struct *dst, struct mm_struct *src)
+static int mm_copy_stack(struct uvm_space *dst, struct uvm_space *src)
 {
 	if (src->stack->size == 0)
 		return 0;
@@ -251,7 +251,7 @@ static int mm_copy_stack(struct mm_struct *dst, struct mm_struct *src)
 	return 0;
 }
 
-static int mm_copy_heap(struct mm_struct *dst, struct mm_struct *src)
+static int mm_copy_heap(struct uvm_space *dst, struct uvm_space *src)
 {
 	if (src->heap->size == 0)
 		return 0;
@@ -259,7 +259,7 @@ static int mm_copy_heap(struct mm_struct *dst, struct mm_struct *src)
 	return mm_copy_area(dst->heap, src->heap, dst);
 }
 
-int mm_copy(struct mm_struct *dst, struct mm_struct *src)
+int mm_copy(struct uvm_space *dst, struct uvm_space *src)
 {
 	int err;
 
@@ -281,4 +281,18 @@ int mm_copy(struct mm_struct *dst, struct mm_struct *src)
 	}
 
 	return 0;
+}
+
+struct uvm_region *uvm_region_alloc(void)
+{
+	struct uvm_region *reg = kzalloc(sizeof(struct uvm_region));
+	if (!reg)
+		return NULL;
+	list_init(&reg->list);
+	return reg;
+}
+
+void uvm_region_free(struct uvm_region *region)
+{
+	kfree(region);
 }

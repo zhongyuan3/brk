@@ -27,7 +27,7 @@ struct cpu cpus[NR_CPUS];
 
 static LIST_DEFINE(procs);
 static SPINLOCK_DEFINE(procs_lock);
-static struct kmem_cache proc_cache;
+static struct kobj_pool proc_cache;
 
 void proc_cache_init(void)
 {
@@ -169,8 +169,8 @@ bool proc_is_killed(struct process *proc)
 int proc_set_brk(u64 addr)
 {
 	struct process *proc = current_process();
-	struct mm_struct *mm = proc->mm;
-	struct vm_area *heap = mm->heap;
+	struct uvm_space *mm = proc->mm;
+	struct uvm_region *heap = mm->heap;
 	u64 heap_start = heap->addr;
 	u64 curr_heap_end = heap_start + heap->size;
 	int err = 0;

@@ -12,10 +12,10 @@
 #include <brk/string.h>
 #include <brk/types.h>
 
-static struct kmem_cache kmalloc_caches[NR_KMALLOC_CACHES];
+static struct kobj_pool kmalloc_caches[NR_KMALLOC_CACHES];
 
 static void slab_mark_page_range(struct page *head, unsigned int order,
-				 struct kmem_cache *cache)
+				 struct kobj_pool *cache)
 {
 	unsigned int nr = 1U << order;
 
@@ -163,7 +163,7 @@ void kfree(void *ptr)
 	}
 }
 
-static int kmem_cache_add_page(struct kmem_cache *cache)
+static int kmem_cache_add_page(struct kobj_pool *cache)
 {
 	usize_t align = cache->align;
 	usize_t size = cache->size;
@@ -204,7 +204,7 @@ static int kmem_cache_add_page(struct kmem_cache *cache)
 	return 0;
 }
 
-int kmem_cache_init(struct kmem_cache *cache, usize_t size, usize_t align,
+int kmem_cache_init(struct kobj_pool *cache, usize_t size, usize_t align,
 		    const char *name)
 {
 	int ret;
@@ -238,7 +238,7 @@ int kmem_cache_init(struct kmem_cache *cache, usize_t size, usize_t align,
 	return ret;
 }
 
-void kmem_cache_deinit(struct kmem_cache *cache)
+void kmem_cache_deinit(struct kobj_pool *cache)
 {
 	struct list_head *first;
 	struct page *pg;
@@ -258,7 +258,7 @@ void kmem_cache_deinit(struct kmem_cache *cache)
 	spinlock_release(&cache->lock);
 }
 
-void *kmem_cache_alloc(struct kmem_cache *cache)
+void *kmem_cache_alloc(struct kobj_pool *cache)
 {
 	struct page *curr;
 	void *obj;
@@ -293,7 +293,7 @@ retry:
 	goto retry;
 }
 
-void kmem_cache_free(struct kmem_cache *cache, void *obj)
+void kmem_cache_free(struct kobj_pool *cache, void *obj)
 {
 	struct page *curr;
 	u64 start, end;

@@ -66,8 +66,11 @@ void setup_final_pgtable(void);
 void switch_pgtable(pgde_t *pgd);
 
 void mm_cache_init(void);
-struct mm_struct *mm_alloc(void);
-void mm_free(struct mm_struct *mm);
-int mm_copy(struct mm_struct *dst, struct mm_struct *src);
+struct uvm_space *mm_alloc(void);
+void mm_free(struct uvm_space *mm);
+int mm_copy(struct uvm_space *dst, struct uvm_space *src);
+
+struct uvm_region *uvm_region_alloc(void);
+void uvm_region_free(struct uvm_region *region);
 
 #endif

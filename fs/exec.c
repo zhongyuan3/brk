@@ -195,7 +195,7 @@ static unsigned int flags_to_perm(unsigned int flags)
 	return perm;
 }
 
-static int map_seg(struct mm_struct *mm, struct vm_area *vma,
+static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 		   struct elf64_phdr *ph, struct file *fp)
 {
 	int err = 0;
@@ -263,11 +263,11 @@ failed:
 	return err;
 }
 
-static int load_seg(struct mm_struct *mm, struct elf64_phdr *ph,
+static int load_seg(struct uvm_space *mm, struct elf64_phdr *ph,
 		    struct file *fp)
 {
 	u64 start, end;
-	struct vm_area *vma;
+	struct uvm_region *vma;
 	int err;
 
 	start = round_down(ph->p_vaddr, PAGE_SIZE);
@@ -275,7 +275,7 @@ static int load_seg(struct mm_struct *mm, struct elf64_phdr *ph,
 	if (end == start)
 		return 0;
 
-	vma = vm_area_alloc();
+	vma = uvm_region_alloc();
 	if (!vma)
 		return -ENOMEM;
 	vma->addr = start;
@@ -284,7 +284,7 @@ static int load_seg(struct mm_struct *mm, struct elf64_phdr *ph,
 
 	err = map_seg(mm, vma, ph, fp);
 	if (err) {
-		vm_area_free(vma);
+		uvm_region_free(vma);
 		return err;
 	}
 
@@ -292,9 +292,9 @@ static int load_seg(struct mm_struct *mm, struct elf64_phdr *ph,
 	return 0;
 }
 
-static u64 find_brk(struct mm_struct *mm)
+static u64 find_brk(struct uvm_space *mm)
 {
-	struct vm_area *vma = NULL;
+	struct uvm_region *vma = NULL;
 	u64 brk = 0;
 
 	list_for_each_entry(vma, &mm->seg, list) {
@@ -306,7 +306,7 @@ static u64 find_brk(struct mm_struct *mm)
 	return brk;
 }
 
-static int map_stack(struct mm_struct *mm)
+static int map_stack(struct uvm_space *mm)
 {
 	struct page *pg = page_alloc(USTACK_PAGE_ORDER);
 	struct page **pgs;
@@ -349,7 +349,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 	struct elf64_phdr phdr = { 0 };
 	struct process *proc = current_process();
 	struct file *f = NULL;
-	struct mm_struct *new_mm = NULL;
+	struct uvm_space *new_mm = NULL;
 	int err = 0;
 
 	f = do_openat(AT_FDCWD, path, O_RDONLY, 0);
@@ -407,7 +407,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 
 		switch_pgtable(new_mm->pgd);
 
-		struct mm_struct *old_mm = proc->mm;
+		struct uvm_space *old_mm = proc->mm;
 
 		proc->mm = new_mm;
 		mm_free(old_mm);
