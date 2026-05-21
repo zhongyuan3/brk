@@ -190,7 +190,7 @@ static int ns16550a_tty_put_char(struct tty *tty, int c)
 	return 0;
 }
 
-static const struct tty_operations ns16550a_ops = {
+static const struct tty_ops ns16550a_ops = {
 	.put_char = ns16550a_tty_put_char,
 };
 

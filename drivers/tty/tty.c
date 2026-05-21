@@ -84,7 +84,7 @@ ssize_t tty_read(struct tty *tty, void *buf, usize_t n)
 
 ssize_t tty_write(struct tty *tty, const void *buf, usize_t n)
 {
-	const struct tty_operations *ops = tty->port->driver->ops;
+	const struct tty_ops *ops = tty->port->driver->ops;
 	const u8 *p = buf;
 	const u8 *end = p + n;
 	int err = 0;
@@ -103,7 +103,7 @@ ssize_t tty_write(struct tty *tty, const void *buf, usize_t n)
 void tty_receive(struct tty *tty, int c)
 {
 	spinlock_acquire(&tty->port->lock);
-	const struct tty_operations *ops = tty->port->driver->ops;
+	const struct tty_ops *ops = tty->port->driver->ops;
 
 	switch (c) {
 	case CTRL('U'): /* Kill line. */
