@@ -15,7 +15,7 @@
 static struct kobj_pool kmalloc_caches[NR_KMALLOC_CACHES];
 
 static void slab_mark_page_range(struct page *head, unsigned int order,
-				 struct kobj_pool *cache)
+				 struct kobj_pool *pool)
 {
 	unsigned int nr = 1U << order;
 
@@ -23,7 +23,7 @@ static void slab_mark_page_range(struct page *head, unsigned int order,
 		struct page *p = head + i;
 
 		p->flags |= PAGE_FLAGS_SLAB;
-		p->slab_cache = cache;
+		p->slab_cache = pool;
 	}
 }
 
@@ -63,7 +63,7 @@ static void kmalloc_unmark_block(struct page *head, unsigned int order)
 		(head + i)->flags &= ~PAGE_FLAGS_KMALLOC;
 }
 
-static int kmalloc_cache_index(usize_t size)
+static int kmalloc_obj_pool_index(usize_t size)
 {
 	if (size <= 8)
 		return 0;
@@ -96,7 +96,7 @@ void kmalloc_init(void)
 	};
 	usize_t align = alignof(max_align_t);
 	for (int i = 0; i < NR_KMALLOC_CACHES; ++i)
-		kmem_cache_init(&kmalloc_caches[i], sz[i], align, "kmalloc");
+		kobj_pool_init(&kmalloc_caches[i], sz[i], align, "kmalloc");
 }
 
 void *kmalloc(usize_t size)
@@ -104,9 +104,9 @@ void *kmalloc(usize_t size)
 	if (size == 0)
 		return NULL;
 
-	int index = kmalloc_cache_index(size);
+	int index = kmalloc_obj_pool_index(size);
 	if (index >= 0)
-		return kmem_cache_alloc(&kmalloc_caches[index]);
+		return kobj_pool_alloc(&kmalloc_caches[index]);
 
 	unsigned int order = page_order(size);
 	struct page *pg = page_alloc(order);
@@ -149,7 +149,7 @@ void kfree(void *ptr)
 	struct page *pg = virt_to_page((u64)ptr);
 
 	if (pg->flags & PAGE_FLAGS_SLAB) {
-		kmem_cache_free(pg->slab_cache, ptr);
+		kobj_pool_free(pg->slab_cache, ptr);
 	} else if (pg->flags & PAGE_FLAGS_KMALLOC) {
 		struct page *head =
 			kmalloc_block_head(pg, pg->buddy_page_order);
@@ -163,20 +163,20 @@ void kfree(void *ptr)
 	}
 }
 
-static int kmem_cache_add_page(struct kobj_pool *cache)
+static int kobj_pool_add_page(struct kobj_pool *pool)
 {
-	usize_t align = cache->align;
-	usize_t size = cache->size;
+	usize_t align = pool->align;
+	usize_t size = pool->size;
 
-	struct page *pg = page_alloc(cache->page_order);
+	struct page *pg = page_alloc(pool->page_order);
 
 	if (!pg)
 		return -ENOMEM;
 
-	slab_mark_page_range(pg, cache->page_order, cache);
+	slab_mark_page_range(pg, pool->page_order, pool);
 
 	u64 addr = page_to_virt(pg);
-	u64 end_addr = addr + (1 << (PAGE_SHIFT + cache->page_order));
+	u64 end_addr = addr + (1 << (PAGE_SHIFT + pool->page_order));
 
 	if (!is_aligned(addr, align))
 		addr = round_up(addr, align);
@@ -185,8 +185,8 @@ static int kmem_cache_add_page(struct kobj_pool *cache)
 
 	pg->slab_objs_count = pg->slab_free_count = (end_addr - addr) / size;
 	if (pg->slab_objs_count == 0) {
-		slab_unmark_page_range(pg, cache->page_order);
-		page_free(pg, cache->page_order);
+		slab_unmark_page_range(pg, pool->page_order);
+		page_free(pg, pool->page_order);
 		return -ENOMEM;
 	}
 
@@ -199,13 +199,13 @@ static int kmem_cache_add_page(struct kobj_pool *cache)
 	}
 	*(void **)addr = NULL;
 
-	list_add(&pg->slab_list, &cache->slab_list);
+	list_add(&pg->slab_list, &pool->slab_list);
 
 	return 0;
 }
 
-int kmem_cache_init(struct kobj_pool *cache, usize_t size, usize_t align,
-		    const char *name)
+int kobj_pool_init(struct kobj_pool *pool, usize_t size, usize_t align,
+		   const char *name)
 {
 	int ret;
 
@@ -224,53 +224,53 @@ int kmem_cache_init(struct kobj_pool *cache, usize_t size, usize_t align,
 	if (!is_aligned(size, align))
 		size = round_up(size, align);
 
-	cache->size = size;
-	cache->align = align;
-	cache->page_order = page_order(size);
-	cache->name = name;
-	spinlock_init(&cache->lock, name);
+	pool->size = size;
+	pool->align = align;
+	pool->page_order = page_order(size);
+	pool->name = name;
+	spinlock_init(&pool->lock, name);
 
-	list_init(&cache->slab_list);
+	list_init(&pool->slab_list);
 
-	spinlock_acquire(&cache->lock);
-	ret = kmem_cache_add_page(cache);
-	spinlock_release(&cache->lock);
+	spinlock_acquire(&pool->lock);
+	ret = kobj_pool_add_page(pool);
+	spinlock_release(&pool->lock);
 	return ret;
 }
 
-void kmem_cache_deinit(struct kobj_pool *cache)
+void kobj_pool_deinit(struct kobj_pool *pool)
 {
 	struct list_head *first;
 	struct page *pg;
 	struct list_head *list;
 
-	spinlock_acquire(&cache->lock);
-	list = &cache->slab_list;
+	spinlock_acquire(&pool->lock);
+	list = &pool->slab_list;
 	while (!list_empty(list)) {
 		first = list->next;
 		list_del(first);
 		pg = list_entry(first, struct page, slab_list);
 		ASSERT(pg->slab_free_count == pg->slab_objs_count);
-		slab_unmark_page_range(pg, cache->page_order);
+		slab_unmark_page_range(pg, pool->page_order);
 		ASSERT(pg);
-		page_free(pg, cache->page_order);
+		page_free(pg, pool->page_order);
 	}
-	spinlock_release(&cache->lock);
+	spinlock_release(&pool->lock);
 }
 
-void *kmem_cache_alloc(struct kobj_pool *cache)
+void *kobj_pool_alloc(struct kobj_pool *pool)
 {
 	struct page *curr;
 	void *obj;
 	int attempt = 0;
 	struct list_head *list;
 
-	spinlock_acquire(&cache->lock);
-	list = &cache->slab_list;
+	spinlock_acquire(&pool->lock);
+	list = &pool->slab_list;
 
 retry:
 	if (attempt > 1) {
-		spinlock_release(&cache->lock);
+		spinlock_release(&pool->lock);
 		return NULL;
 	}
 
@@ -279,13 +279,13 @@ retry:
 			obj = curr->slab_free_objs;
 			curr->slab_free_objs = *(void **)obj;
 			curr->slab_free_count--;
-			spinlock_release(&cache->lock);
+			spinlock_release(&pool->lock);
 			return obj;
 		}
 	}
 
-	if (attempt == 0 && kmem_cache_add_page(cache) < 0) {
-		spinlock_release(&cache->lock);
+	if (attempt == 0 && kobj_pool_add_page(pool) < 0) {
+		spinlock_release(&pool->lock);
 		return NULL;
 	}
 
@@ -293,7 +293,7 @@ retry:
 	goto retry;
 }
 
-void kmem_cache_free(struct kobj_pool *cache, void *obj)
+void kobj_pool_free(struct kobj_pool *pool, void *obj)
 {
 	struct page *curr;
 	u64 start, end;
@@ -302,11 +302,11 @@ void kmem_cache_free(struct kobj_pool *cache, void *obj)
 	if (!obj)
 		return;
 
-	spinlock_acquire(&cache->lock);
+	spinlock_acquire(&pool->lock);
 
-	ASSERT(is_aligned((u64)obj, cache->align));
+	ASSERT(is_aligned((u64)obj, pool->align));
 
-	list = &cache->slab_list;
+	list = &pool->slab_list;
 	list_for_each_entry(curr, list, slab_list) {
 		start = page_to_virt(curr);
 		end = start + (PAGE_SIZE << curr->slab_cache->page_order);
@@ -314,13 +314,13 @@ void kmem_cache_free(struct kobj_pool *cache, void *obj)
 			*(void **)obj = curr->slab_free_objs;
 			curr->slab_free_objs = obj;
 			curr->slab_free_count++;
-			spinlock_release(&cache->lock);
+			spinlock_release(&pool->lock);
 			return;
 		}
 	}
 
-	spinlock_release(&cache->lock);
+	spinlock_release(&pool->lock);
 
 	panic("%s(): invalid obj %p in cache %s\n", __func__, obj,
-	      cache->name ? cache->name : "(null)");
+	      pool->name ? pool->name : "(null)");
 }

@@ -19,8 +19,8 @@ static struct kobj_pool dentry_cache;
 
 void dentry_cache_init(void)
 {
-	kmem_cache_init(&dentry_cache, sizeof(struct dentry),
-			alignof(struct dentry), "dentry_cache");
+	kobj_pool_init(&dentry_cache, sizeof(struct dentry),
+		       alignof(struct dentry), "dentry_cache");
 }
 
 static struct dentry *__alloc_dentry(struct super_block *sb,
@@ -28,7 +28,7 @@ static struct dentry *__alloc_dentry(struct super_block *sb,
 {
 	struct dentry *d;
 
-	d = kmem_cache_alloc(&dentry_cache);
+	d = kobj_pool_alloc(&dentry_cache);
 	if (!d)
 		return NULL;
 
@@ -49,7 +49,7 @@ static struct dentry *__alloc_dentry(struct super_block *sb,
 	} else {
 		d->d_long_name = kmalloc(name->len + 1);
 		if (!d->d_long_name) {
-			kmem_cache_free(&dentry_cache, d);
+			kobj_pool_free(&dentry_cache, d);
 			return NULL;
 		}
 		d->d_name.name = d->d_long_name;
@@ -68,7 +68,7 @@ static void __free_dentry(struct dentry *dentry)
 {
 	if (dentry->d_name.len >= DENTRY_SHORT_NAME_SIZE)
 		kfree(dentry->d_long_name);
-	kmem_cache_free(&dentry_cache, dentry);
+	kobj_pool_free(&dentry_cache, dentry);
 }
 
 static struct dentry *alloc_dentry(struct dentry *parent,

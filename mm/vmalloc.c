@@ -261,7 +261,7 @@ void uvunmap(pgde_t *pgd, u64 addr, usize_t size)
 
 static struct vmalloc_region *vmalloc_region_alloc(void)
 {
-	struct vmalloc_region *vma = kmem_cache_alloc(&vma_cache);
+	struct vmalloc_region *vma = kobj_pool_alloc(&vma_cache);
 	if (vma) {
 		memset(vma, 0, sizeof(*vma));
 		list_init(&vma->list);
@@ -271,7 +271,7 @@ static struct vmalloc_region *vmalloc_region_alloc(void)
 
 static void vmalloc_region_free(struct vmalloc_region *area)
 {
-	kmem_cache_free(&vma_cache, area);
+	kobj_pool_free(&vma_cache, area);
 }
 
 static struct vmalloc_region *find_vm_area(u64 addr)
@@ -340,8 +340,8 @@ static void free_vm_area(struct vmalloc_region *area)
 
 void vmalloc_init(void)
 {
-	kmem_cache_init(&vma_cache, sizeof(struct vmalloc_region),
-			alignof(struct vmalloc_region), "vma_cache");
+	kobj_pool_init(&vma_cache, sizeof(struct vmalloc_region),
+		       alignof(struct vmalloc_region), "vma_cache");
 	list_init(&vma);
 	struct vmalloc_region *area = vmalloc_region_alloc();
 	area->addr = VMALLOC_START;

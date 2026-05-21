@@ -12,15 +12,15 @@ static struct kobj_pool file_cache;
 
 void file_cache_init(void)
 {
-	kmem_cache_init(&file_cache, sizeof(struct file), alignof(struct file),
-			"file_cache");
+	kobj_pool_init(&file_cache, sizeof(struct file), alignof(struct file),
+		       "file_cache");
 }
 
 struct file *file_alloc(struct path *path, fmode_t mode)
 {
 	struct file *file;
 
-	file = kmem_cache_alloc(&file_cache);
+	file = kobj_pool_alloc(&file_cache);
 	if (!file)
 		return ERR_PTR(-ENOMEM);
 
@@ -38,7 +38,7 @@ struct file *file_alloc(struct path *path, fmode_t mode)
 	int err = file->f_op->open(file->f_inode, file);
 	if (err) {
 		path_put(&file->f_path);
-		kmem_cache_free(&file_cache, file);
+		kobj_pool_free(&file_cache, file);
 		return ERR_PTR(err);
 	}
 
@@ -64,7 +64,7 @@ void file_put(struct file *file)
 
 	path_put(&file->f_path);
 
-	kmem_cache_free(&file_cache, file);
+	kobj_pool_free(&file_cache, file);
 }
 
 loff_t file_lseek(struct file *file, loff_t len, int whence)

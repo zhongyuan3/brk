@@ -17,8 +17,8 @@ static struct kobj_pool inode_cache;
 
 void inode_cache_init(void)
 {
-	kmem_cache_init(&inode_cache, sizeof(struct inode),
-			alignof(struct inode), "inode_cache");
+	kobj_pool_init(&inode_cache, sizeof(struct inode),
+		       alignof(struct inode), "inode_cache");
 }
 
 static struct inode *alloc_inode(struct super_block *sb, unsigned long ino)
@@ -28,7 +28,7 @@ static struct inode *alloc_inode(struct super_block *sb, unsigned long ino)
 	if (sb->s_op->alloc_inode) {
 		inode = sb->s_op->alloc_inode(sb);
 	} else {
-		inode = kmem_cache_alloc(&inode_cache);
+		inode = kobj_pool_alloc(&inode_cache);
 		inode->i_private = NULL;
 	}
 
@@ -67,7 +67,7 @@ static void free_inode(struct inode *inode)
 	if (op->free_inode)
 		op->free_inode(inode);
 	else
-		kmem_cache_free(&inode_cache, inode);
+		kobj_pool_free(&inode_cache, inode);
 }
 
 static u32 hash(const struct super_block *sb, unsigned long ino)

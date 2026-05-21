@@ -15,11 +15,11 @@ struct kobj_pool {
 	spinlock_t lock;
 };
 
-int kmem_cache_init(struct kobj_pool *cache, usize_t size, usize_t align,
-		    const char *name);
-void kmem_cache_deinit(struct kobj_pool *cache);
-void *kmem_cache_alloc(struct kobj_pool *cache);
-void kmem_cache_free(struct kobj_pool *cache, void *obj);
+int kobj_pool_init(struct kobj_pool *pool, usize_t size, usize_t align,
+		   const char *name);
+void kobj_pool_deinit(struct kobj_pool *pool);
+void *kobj_pool_alloc(struct kobj_pool *pool);
+void kobj_pool_free(struct kobj_pool *pool, void *obj);
 
 void kmalloc_init(void);
 void *kmalloc(usize_t size);

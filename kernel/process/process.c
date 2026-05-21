@@ -31,8 +31,8 @@ static struct kobj_pool proc_cache;
 
 void proc_cache_init(void)
 {
-	kmem_cache_init(&proc_cache, sizeof(struct process),
-			alignof(struct process), "proc_cache");
+	kobj_pool_init(&proc_cache, sizeof(struct process),
+		       alignof(struct process), "proc_cache");
 }
 
 static u64 kstack_alloc(void)
@@ -52,7 +52,7 @@ static void kstack_free(u64 stack)
 
 struct process *proc_alloc(void)
 {
-	struct process *proc = kmem_cache_alloc(&proc_cache);
+	struct process *proc = kobj_pool_alloc(&proc_cache);
 	if (!proc)
 		return NULL;
 	memset(proc, 0, sizeof(*proc));
@@ -87,7 +87,7 @@ create_mm_failed:
 kstack_alloc_failed:
 	pid_free(proc->pid);
 pid_alloc_failed:
-	kmem_cache_free(&proc_cache, proc);
+	kobj_pool_free(&proc_cache, proc);
 	return NULL;
 }
 
@@ -99,7 +99,7 @@ void proc_free(struct process *proc)
 	mm_free(proc->mm);
 	kstack_free(proc->kstack);
 	pid_free(proc->pid);
-	kmem_cache_free(&proc_cache, proc);
+	kobj_pool_free(&proc_cache, proc);
 }
 
 int proc_alloc_fd(struct process *proc, struct file *fp)
