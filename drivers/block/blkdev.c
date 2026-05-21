@@ -122,7 +122,7 @@ int blkdev_check_bounds(struct blkdev *bd, u64 blk_id, u32 blk_cnt)
 	return 0;
 }
 
-static int bdev_readpage(struct address_space *m, struct cached_page *cp)
+static int bdev_readpage(struct page_cache *m, struct cached_page *cp)
 {
 	struct blkdev *bd = m->host;
 	u32 bs = bd->phy_bsize;
@@ -145,7 +145,7 @@ static int bdev_readpage(struct address_space *m, struct cached_page *cp)
 	return bd->ops.read(bd, sector, (void *)page_to_virt(cp->page), nsec);
 }
 
-static int bdev_writepage(struct address_space *m, struct cached_page *cp)
+static int bdev_writepage(struct page_cache *m, struct cached_page *cp)
 {
 	struct blkdev *bd = m->host;
 	u32 bs = bd->phy_bsize;
@@ -167,7 +167,7 @@ static int bdev_writepage(struct address_space *m, struct cached_page *cp)
 			     nsec);
 }
 
-static const struct address_space_operations bdev_aops = {
+static const struct page_cache_ops bdev_aops = {
 	.readpage = bdev_readpage,
 	.writepage = bdev_writepage,
 };
@@ -230,7 +230,7 @@ void blkdev_free(struct blkdev *bd)
 	kfree(bd);
 }
 
-static int blkdev_open(struct inode *inode, struct file *file)
+static int blkdev_open(struct fs_inode *inode, struct opened_file *file)
 {
 	struct blkdev *bd;
 
@@ -243,7 +243,7 @@ static int blkdev_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t blkdev_read(struct file *file, char *buf, usize_t size,
+static ssize_t blkdev_read(struct opened_file *file, char *buf, usize_t size,
 			   loff_t *pos)
 {
 	(void)file;
@@ -253,8 +253,8 @@ static ssize_t blkdev_read(struct file *file, char *buf, usize_t size,
 	return -EOPNOTSUPP;
 }
 
-static ssize_t blkdev_write(struct file *file, const char *buf, usize_t size,
-			    loff_t *pos)
+static ssize_t blkdev_write(struct opened_file *file, const char *buf,
+			    usize_t size, loff_t *pos)
 {
 	(void)file;
 	(void)buf;
@@ -263,7 +263,7 @@ static ssize_t blkdev_write(struct file *file, const char *buf, usize_t size,
 	return -EOPNOTSUPP;
 }
 
-static loff_t blkdev_llseek(struct file *file, loff_t offset, int whence)
+static loff_t blkdev_llseek(struct opened_file *file, loff_t offset, int whence)
 {
 	(void)file;
 	(void)offset;
@@ -271,14 +271,15 @@ static loff_t blkdev_llseek(struct file *file, loff_t offset, int whence)
 	return -EOPNOTSUPP;
 }
 
-static int blkdev_iterate_shared(struct file *file, struct dir_context *ctx)
+static int blkdev_iterate_shared(struct opened_file *file,
+				 struct fs_dir_iterator *ctx)
 {
 	(void)file;
 	(void)ctx;
 	return -EOPNOTSUPP;
 }
 
-static int blkdev_fsync(struct file *file, loff_t start, loff_t end,
+static int blkdev_fsync(struct opened_file *file, loff_t start, loff_t end,
 			int datasync)
 {
 	(void)file;
@@ -288,13 +289,14 @@ static int blkdev_fsync(struct file *file, loff_t start, loff_t end,
 	return -EOPNOTSUPP;
 }
 
-static int blkdev_flush(struct file *file)
+static int blkdev_flush(struct opened_file *file)
 {
 	(void)file;
 	return -EOPNOTSUPP;
 }
 
-static long blkdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+static long blkdev_ioctl(struct opened_file *file, unsigned int cmd,
+			 unsigned long arg)
 {
 	(void)file;
 	(void)cmd;
@@ -302,7 +304,7 @@ static long blkdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	return -ENOTTY;
 }
 
-const struct file_operations blkdev_fops = {
+const struct opened_file_ops blkdev_fops = {
 	.open = blkdev_open,
 	.read = blkdev_read,
 	.write = blkdev_write,

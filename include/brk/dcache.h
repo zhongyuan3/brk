@@ -28,17 +28,18 @@ struct qstr {
 		.name = n, .hash = fnv1a_32(n, l), .len = l \
 	}
 
-struct dentry {
+struct path_component {
 	refcnt_t d_count;
 
 	unsigned int d_flags; /* protected by d_lock */
 	spinlock_t d_lock;
 
 	/* Positive dentry: points to inode; negative dentry: NULL. */
-	struct inode *d_inode;
+	struct fs_inode *d_inode;
 	struct list_head d_alias; /* protected by d_inode->i_lock */
 
-	struct dentry *d_parent; /* hold reference count, self if root (no ref) */
+	struct path_component
+		*d_parent; /* hold reference count, self if root (no ref) */
 	struct list_head d_child; /* protected by d_parent->d_lock */
 	struct list_head d_subdirs; /* protected by d_lock */
 
@@ -50,19 +51,19 @@ struct dentry {
 		char *d_long_name;
 	};
 
-	struct super_block *d_sb; /* no reference count */
+	struct fs_state *d_sb; /* no reference count */
 
 	/*
 	 * Dentry operation table.
 	 * Recommended invariant: newly allocated dentries always have a valid
 	 * d_op (at least &generic_dop) before they are visible in lookup paths.
 	 */
-	const struct dentry_operations *d_op;
+	const struct path_component_ops *d_op;
 
 	void *d_fsdata;
 };
 
-struct dentry_operations {
+struct path_component_ops {
 	/**
 	 * compare() - compare a candidate name with a dentry name
 	 * @dentry: cached candidate dentry being tested
@@ -75,7 +76,7 @@ struct dentry_operations {
 	 *
 	 * Return: %0 if equal, non-zero if different.
 	 */
-	int (*compare)(const struct dentry *dentry, unsigned int len,
+	int (*compare)(const struct path_component *dentry, unsigned int len,
 		       const char *str, const struct qstr *name);
 
 	/**
@@ -84,7 +85,7 @@ struct dentry_operations {
 	 *
 	 * Release @d_fsdata and similar.
 	 */
-	void (*release)(struct dentry *dentry);
+	void (*release)(struct path_component *dentry);
 
 	/**
 	 * iput() - dentry is dropping its inode reference
@@ -93,7 +94,7 @@ struct dentry_operations {
 	 *
 	 * If %NULL, the VFS calls inode_put() directly.
 	 */
-	void (*iput)(struct dentry *dentry, struct inode *inode);
+	void (*iput)(struct path_component *dentry, struct fs_inode *inode);
 };
 
 /*
@@ -108,13 +109,16 @@ struct dentry_operations {
  * - Alias list updates should hold inode->i_lock.
  */
 
-struct dentry *dentry_make_root(struct inode *root_inode);
-struct dentry *dentry_alloc_anon(struct inode *inode, const struct qstr *name);
-void dentry_instantiate(struct dentry *dentry, struct inode *inode);
-struct dentry *dentry_dup(struct dentry *dentry);
-void dentry_put(struct dentry *dentry);
-struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name);
-struct dentry *dentry_splice_alias(struct inode *inode, struct dentry *dentry);
+struct path_component *dentry_make_root(struct fs_inode *root_inode);
+struct path_component *dentry_alloc_anon(struct fs_inode *inode,
+					 const struct qstr *name);
+void dentry_instantiate(struct path_component *dentry, struct fs_inode *inode);
+struct path_component *dentry_dup(struct path_component *dentry);
+void dentry_put(struct path_component *dentry);
+struct path_component *dentry_lookup(struct path_component *parent,
+				     const struct qstr *name);
+struct path_component *dentry_splice_alias(struct fs_inode *inode,
+					   struct path_component *dentry);
 void dentry_cache_init(void);
 
 extern const struct qstr slash_name;
@@ -125,7 +129,7 @@ extern const struct qstr dotdot_name;
 #define DOT_NAME_HASH 0x2b0c98f1
 #define DOTDOT_NAME_HASH 0xa3d4a70d
 
-extern const struct dentry_operations generic_dop;
+extern const struct path_component_ops generic_dop;
 
 void dcache_dump(void);
 

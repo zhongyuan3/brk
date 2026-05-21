@@ -18,8 +18,8 @@ typedef unsigned long pgoff_t;
 #define ADDRESS_SPACE_HBITS 6
 #define ADDRESS_SPACE_HSIZE (1u << ADDRESS_SPACE_HBITS)
 
-struct address_space;
-struct address_space_operations;
+struct page_cache;
+struct page_cache_ops;
 
 /*
  * A cached page lives in exactly one address_space at a time.
@@ -35,7 +35,7 @@ struct address_space_operations;
 struct cached_page {
 	refcnt_t refcnt;
 	struct page *page;
-	struct address_space *mapping;
+	struct page_cache *mapping;
 	pgoff_t index;
 	unsigned int flags;
 	spinlock_t lock;
@@ -44,7 +44,7 @@ struct cached_page {
 	struct list_head dirty_list;
 };
 
-struct address_space_operations {
+struct page_cache_ops {
 	/**
 	 * readpage() - populate @cp->page from backing store
 	 *
@@ -54,7 +54,7 @@ struct address_space_operations {
 	 *
 	 * Return: 0 on success, negative errno on failure.
 	 */
-	int (*readpage)(struct address_space *mapping, struct cached_page *cp);
+	int (*readpage)(struct page_cache *mapping, struct cached_page *cp);
 
 	/**
 	 * writepage() - persist @cp->page to backing store
@@ -65,17 +65,17 @@ struct address_space_operations {
 	 *
 	 * Return: 0 on success, negative errno on failure.
 	 */
-	int (*writepage)(struct address_space *mapping, struct cached_page *cp);
+	int (*writepage)(struct page_cache *mapping, struct cached_page *cp);
 };
 
 /*
  * @host is opaque so a mapping can be backed by either a file inode
- * (struct inode *) or a block device (struct blkdev *). Callbacks in
+ * (struct fs_inode *) or a block device (struct blkdev *). Callbacks in
  * a_ops know which one to cast to.
  */
-struct address_space {
+struct page_cache {
 	void *host;
-	const struct address_space_operations *a_ops;
+	const struct page_cache_ops *a_ops;
 
 	spinlock_t lock;
 	struct hlist_head pages[ADDRESS_SPACE_HSIZE];
@@ -85,13 +85,13 @@ struct address_space {
 
 void pagecache_init(void);
 
-struct address_space *
-address_space_alloc(void *host, const struct address_space_operations *a_ops);
-void address_space_free(struct address_space *mapping);
+struct page_cache *address_space_alloc(void *host,
+				       const struct page_cache_ops *a_ops);
+void address_space_free(struct page_cache *mapping);
 
 /* Lookup helpers — each returns the page with @refcnt incremented. */
-struct cached_page *find_get_page(struct address_space *mapping, pgoff_t index);
-struct cached_page *find_or_create_page(struct address_space *mapping,
+struct cached_page *find_get_page(struct page_cache *mapping, pgoff_t index);
+struct cached_page *find_or_create_page(struct page_cache *mapping,
 					pgoff_t index);
 /*
  * read_mapping_page - return a fully populated cached page.
@@ -101,7 +101,7 @@ struct cached_page *find_or_create_page(struct address_space *mapping,
  *
  * Return: cached_page on success, ERR_PTR(-errno) on failure.
  */
-struct cached_page *read_mapping_page(struct address_space *mapping,
+struct cached_page *read_mapping_page(struct page_cache *mapping,
 				      pgoff_t index);
 
 void cached_page_get(struct cached_page *cp);
@@ -121,7 +121,7 @@ bool cached_page_dirty(struct cached_page *cp);
  * Pages remain in the cache after a successful writeback. Returns 0 on
  * success or the first negative errno encountered.
  */
-int filemap_writeback(struct address_space *mapping);
+int filemap_writeback(struct page_cache *mapping);
 
 /*
  * truncate_inode_pages - drop cached pages at or beyond @new_size.
@@ -131,12 +131,12 @@ int filemap_writeback(struct address_space *mapping);
  * zero-filled past the truncation point and marked dirty, so that a
  * later writeback persists the truncation.
  */
-void truncate_inode_pages(struct address_space *mapping, loff_t new_size);
+void truncate_inode_pages(struct page_cache *mapping, loff_t new_size);
 
 /* Generic file I/O helpers built on top of the page cache. */
-ssize_t generic_file_read(struct file *file, char *buf, usize_t size,
+ssize_t generic_file_read(struct opened_file *file, char *buf, usize_t size,
 			  loff_t *pos);
-ssize_t generic_file_write(struct file *file, const char *buf, usize_t size,
+ssize_t generic_file_write(struct opened_file *file, const char *buf, usize_t size,
 			   loff_t *pos);
 
 static inline void *cached_page_addr(const struct cached_page *cp)

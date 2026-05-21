@@ -24,7 +24,7 @@ u64 sys_read(void)
 	int fd;
 	void *buf;
 	usize_t n;
-	struct file *fp;
+	struct opened_file *fp;
 	int err;
 
 	err = syscall_arg_fd(0, &fd, &fp);
@@ -42,7 +42,7 @@ u64 sys_write(void)
 	int fd;
 	const void *buf;
 	usize_t n;
-	struct file *fp;
+	struct opened_file *fp;
 	int err;
 
 	err = syscall_arg_fd(0, &fd, &fp);
@@ -58,7 +58,7 @@ u64 sys_write(void)
 u64 sys_open(void)
 {
 	int fd;
-	struct file *fp = NULL;
+	struct opened_file *fp = NULL;
 	char *path = syscall_arg_ptr(0);
 	int flags = syscall_arg_raw(1);
 	umode_t mode = syscall_arg_raw(2);
@@ -78,7 +78,7 @@ u64 sys_open(void)
 u64 sys_openat(void)
 {
 	int fd;
-	struct file *fp = NULL;
+	struct opened_file *fp = NULL;
 	int dirfd = syscall_arg_raw(0);
 	char *path = syscall_arg_ptr(1);
 	int flags = syscall_arg_raw(2);
@@ -99,7 +99,7 @@ u64 sys_openat(void)
 u64 sys_close(void)
 {
 	int err;
-	struct file *fp = NULL;
+	struct opened_file *fp = NULL;
 	int fd = 0;
 
 	err = syscall_arg_fd(0, &fd, &fp);
@@ -146,7 +146,7 @@ u64 sys_mremap(void)
 
 u64 sys_fstat(void)
 {
-	struct file *fp = NULL;
+	struct opened_file *fp = NULL;
 	struct stat *buf;
 	int err;
 
@@ -159,7 +159,7 @@ u64 sys_fstat(void)
 
 u64 sys_lstat(void)
 {
-	struct file *fp = NULL;
+	struct opened_file *fp = NULL;
 	struct stat *buf;
 	int err;
 
@@ -175,7 +175,7 @@ u64 sys_stat(void)
 	int err;
 	const char *path = syscall_arg_ptr(0);
 	struct stat *buf = syscall_arg_ptr(1);
-	struct file *fp = NULL;
+	struct opened_file *fp = NULL;
 
 	fp = do_openat(AT_FDCWD, path, O_RDONLY, 0);
 	if (IS_ERR(fp))
@@ -284,7 +284,7 @@ u64 sys_chdir(void)
 {
 	char *pathname = syscall_arg_ptr(0);
 	struct process *proc = current_process();
-	struct path new_path;
+	struct file_anchor new_path;
 
 	int err = path_lookup(pathname, 0, &new_path);
 	if (err)
@@ -309,7 +309,7 @@ u64 sys_fchdir(void)
 {
 	int err;
 	int fd = 0;
-	struct file *fp = NULL;
+	struct opened_file *fp = NULL;
 	struct process *proc = current_process();
 
 	err = syscall_arg_fd(0, &fd, &fp);
@@ -434,7 +434,7 @@ u64 sys_dup(void)
 	int oldfd;
 	int newfd;
 	int err;
-	struct file *fp = NULL;
+	struct opened_file *fp = NULL;
 
 	err = syscall_arg_fd(0, &oldfd, &fp);
 	if (err)
@@ -456,7 +456,7 @@ u64 sys_dup2(void)
 	int newfd;
 	int err;
 	struct process *proc = current_process();
-	struct file *f = NULL;
+	struct opened_file *f = NULL;
 
 	err = syscall_arg_fd(0, &oldfd, &f);
 	if (err)
@@ -493,7 +493,7 @@ u64 sys_umount2(void)
 {
 	const char *target = syscall_arg_ptr(0);
 	int flags = syscall_arg_int(1);
-	struct path path;
+	struct file_anchor path;
 	int err;
 
 	err = path_lookup(target, 0, &path);
@@ -508,7 +508,7 @@ u64 sys_umount2(void)
 	}
 	spinlock_release(&path.dentry->d_lock);
 
-	struct mount *mnt = lookup_mount(&path);
+	struct fs_mount_state *mnt = lookup_mount(&path);
 	if (!mnt) {
 		path_put(&path);
 		return -ENOENT;
@@ -528,7 +528,7 @@ u64 sys_umount2(void)
 u64 sys_lseek(void)
 {
 	int fd = 0;
-	struct file *fp = NULL;
+	struct opened_file *fp = NULL;
 	int err;
 	off_t off;
 	int whence;
@@ -543,13 +543,13 @@ u64 sys_lseek(void)
 }
 
 struct getdents_context {
-	struct dir_context ctx;
+	struct fs_dir_iterator ctx;
 	u8 *buf;
 	usize_t size;
 	usize_t pos;
 };
 
-static bool getdents_filldir(struct dir_context *ctx, const char *name,
+static bool getdents_filldir(struct fs_dir_iterator *ctx, const char *name,
 			     int namelen, loff_t offset, u64 ino,
 			     unsigned int d_type)
 {
@@ -581,7 +581,7 @@ static bool getdents_filldir(struct dir_context *ctx, const char *name,
 u64 sys_getdents(void)
 {
 	int fd = -1;
-	struct file *fp = NULL;
+	struct opened_file *fp = NULL;
 	void *buf;
 	usize_t size;
 	int err;
@@ -596,8 +596,8 @@ u64 sys_getdents(void)
 	buf = syscall_arg_ptr(1);
 	size = syscall_arg_raw(2);
 
-	struct inode *inode = fp->f_path.dentry->d_inode;
-	const struct file_operations *fop = fp->f_op;
+	struct fs_inode *inode = fp->f_path.dentry->d_inode;
+	const struct opened_file_ops *fop = fp->f_op;
 
 	if (!fop->iterate_shared)
 		return -EOPNOTSUPP;
@@ -627,13 +627,13 @@ u64 sys_getdents(void)
 }
 
 struct getdents64_context {
-	struct dir_context ctx;
+	struct fs_dir_iterator ctx;
 	u8 *buf;
 	usize_t size;
 	usize_t pos;
 };
 
-static bool getdents64_filldir(struct dir_context *ctx, const char *name,
+static bool getdents64_filldir(struct fs_dir_iterator *ctx, const char *name,
 			       int namelen, loff_t offset, u64 ino,
 			       unsigned int d_type)
 {
@@ -665,7 +665,7 @@ static bool getdents64_filldir(struct dir_context *ctx, const char *name,
 u64 sys_getdents64(void)
 {
 	int fd = -1;
-	struct file *fp = NULL;
+	struct opened_file *fp = NULL;
 	void *buf;
 	usize_t size;
 	int err;
@@ -682,8 +682,8 @@ u64 sys_getdents64(void)
 	buf = syscall_arg_ptr(1);
 	size = syscall_arg_raw(2);
 
-	struct inode *inode = fp->f_path.dentry->d_inode;
-	const struct file_operations *fop = fp->f_op;
+	struct fs_inode *inode = fp->f_path.dentry->d_inode;
+	const struct opened_file_ops *fop = fp->f_op;
 
 	if (!fop->iterate_shared)
 		return -EOPNOTSUPP;
@@ -714,7 +714,7 @@ u64 sys_getdents64(void)
 
 u64 sys_ioctl(void)
 {
-	struct file *fp;
+	struct opened_file *fp;
 	int err;
 
 	err = syscall_arg_fd(0, NULL, &fp);

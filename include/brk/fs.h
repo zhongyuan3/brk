@@ -60,7 +60,7 @@
  *    callbacks while holding global hash/table spinlocks.
  */
 
-struct file_system_type {
+struct fs_driver {
 	const char *name;
 	int fs_flags;
 
@@ -95,8 +95,8 @@ struct file_system_type {
 	 *
 	 * Return: root dentry with reference held, or ERR_PTR(-errno) on failure.
 	 */
-	struct dentry *(*mount)(struct file_system_type *fs_type, int flags,
-				const char *dev_name, void *data);
+	struct path_component *(*mount)(struct fs_driver *fs_type, int flags,
+				      const char *dev_name, void *data);
 
 	/**
 	 * kill_sb() - destroy superblock (unmount filesystem)
@@ -116,7 +116,7 @@ struct file_system_type {
 	 *   - ->kill_sb() handles only superblock/filesystem teardown, not mount
 	 *     namespace topology.
 	 */
-	void (*kill_sb)(struct super_block *sb);
+	void (*kill_sb)(struct fs_state *sb);
 
 	spinlock_t fs_lock;
 	struct list_head fs_supers; /* protected by fs_lock */
@@ -124,18 +124,18 @@ struct file_system_type {
 	struct list_head fs_list; /* protected by file_systems_lock */
 };
 
-struct super_block {
+struct fs_state {
 	struct list_head s_list; /* protected by sb_lock */
-	struct file_system_type *s_type;
+	struct fs_driver *s_type;
 	struct list_head s_instances; /* protected by s_type->fs_lock */
 	refcnt_t s_count;
 
 	unsigned long s_blocksize;
 	unsigned long s_magic;
 	unsigned long s_flags;
-	const struct super_operations *s_op;
+	const struct fs_state_ops *s_op;
 
-	struct dentry *s_root; /* hold ref count */
+	struct path_component *s_root; /* hold ref count */
 
 	void *s_fs_info;
 
@@ -147,10 +147,10 @@ struct super_block {
 	spinlock_t s_mount_lock;
 	struct list_head s_mounts; /* protected by s_mount_lock */
 
-	const struct dentry_operations *s_d_op; /* default d_op for dentries */
+	const struct path_component_ops *s_d_op; /* default d_op for dentries */
 };
 
-struct super_operations {
+struct fs_state_ops {
 	/**
 	 * alloc_inode() - allocate and partially initialize an inode
 	 * @sb: owning superblock
@@ -161,7 +161,7 @@ struct super_operations {
 	 *
 	 * Return: new inode, or %NULL on failure.
 	 */
-	struct inode *(*alloc_inode)(struct super_block *sb);
+	struct fs_inode *(*alloc_inode)(struct fs_state *sb);
 
 	/**
 	 * free_inode() - free memory from alloc_inode()
@@ -169,7 +169,7 @@ struct super_operations {
 	 *
 	 * Called when the inode leaves the cache; evict_inode() has already run.
 	 */
-	void (*free_inode)(struct inode *inode);
+	void (*free_inode)(struct fs_inode *inode);
 
 	/**
 	 * dirty_inode() - notify filesystem of dirty inode metadata
@@ -178,7 +178,7 @@ struct super_operations {
 	 *
 	 * Optional; used for journaling or internal bookkeeping.
 	 */
-	void (*dirty_inode)(struct inode *inode, int flags);
+	void (*dirty_inode)(struct fs_inode *inode, int flags);
 
 	/**
 	 * write_inode() - write inode metadata to disk
@@ -187,7 +187,7 @@ struct super_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*write_inode)(struct inode *inode, int sync);
+	int (*write_inode)(struct fs_inode *inode, int sync);
 
 	/**
 	 * evict_inode() - inode is about to be evicted from memory
@@ -196,7 +196,7 @@ struct super_operations {
 	 * Truncate file data if i_nlink == 0, release on-disk inode, then call
 	 * inode_clear(). If %NULL, the VFS uses generic handling.
 	 */
-	void (*evict_inode)(struct inode *inode);
+	void (*evict_inode)(struct fs_inode *inode);
 
 	/**
 	 * put_super() - superblock is about to be freed
@@ -204,7 +204,7 @@ struct super_operations {
 	 *
 	 * Release @s_fs_info and similar. Called when @s_count reaches zero.
 	 */
-	void (*put_super)(struct super_block *sb);
+	void (*put_super)(struct fs_state *sb);
 
 	/**
 	 * sync_fs() - sync all dirty filesystem state to the device
@@ -213,19 +213,19 @@ struct super_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*sync_fs)(struct super_block *sb, int wait);
+	int (*sync_fs)(struct fs_state *sb, int wait);
 };
 
-struct address_space;
+struct page_cache;
 
-struct inode {
+struct fs_inode {
 	/*
 	 * No extra refcount is held on i_sb by inode itself.
 	 * Contract: superblock must outlive all inodes attached to it.
 	 */
-	struct super_block *i_sb;
-	const struct inode_operations *i_op;
-	const struct file_operations *i_fop;
+	struct fs_state *i_sb;
+	const struct fs_inode_ops *i_op;
+	const struct opened_file_ops *i_fop;
 
 	refcnt_t i_count;
 	spinlock_t i_lock; /* protects i_state and i_dentry linkage */
@@ -262,12 +262,12 @@ struct inode {
 	 * inode_attach_pagecache()) once the file type is known; freed by the
 	 * VFS in inode_put() after ->evict_inode() returns.
 	 */
-	struct address_space *i_mapping;
+	struct page_cache *i_mapping;
 
 	void *i_private;
 };
 
-struct inode_operations {
+struct fs_inode_ops {
 	/**
 	 * lookup() - look up name in directory
 	 * @dir: parent directory inode (i_rwsem read held)
@@ -278,8 +278,9 @@ struct inode_operations {
 	 *
 	 * Return: %NULL if not found, ERR_PTR() if error, a dentry if found.
 	 */
-	struct dentry *(*lookup)(struct inode *dir, struct dentry *dentry,
-				 unsigned int flags);
+	struct path_component *(*lookup)(struct fs_inode *dir,
+				       struct path_component *dentry,
+				       unsigned int flags);
 
 	/**
 	 * create() - create regular file
@@ -290,8 +291,8 @@ struct inode_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*create)(struct inode *dir, struct dentry *dentry, umode_t mode,
-		      bool excl);
+	int (*create)(struct fs_inode *dir, struct path_component *dentry,
+		      umode_t mode, bool excl);
 
 	/**
 	 * link() - create hard link
@@ -301,8 +302,8 @@ struct inode_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*link)(struct dentry *old_dentry, struct inode *dir,
-		    struct dentry *new_dentry);
+	int (*link)(struct path_component *old_dentry, struct fs_inode *dir,
+		    struct path_component *new_dentry);
 
 	/**
 	 * unlink() - remove directory entry
@@ -314,7 +315,7 @@ struct inode_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*unlink)(struct inode *dir, struct dentry *dentry);
+	int (*unlink)(struct fs_inode *dir, struct path_component *dentry);
 
 	/**
 	 * symlink() - create symbolic link
@@ -324,7 +325,7 @@ struct inode_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*symlink)(struct inode *dir, struct dentry *dentry,
+	int (*symlink)(struct fs_inode *dir, struct path_component *dentry,
 		       const char *symname);
 
 	/**
@@ -335,7 +336,7 @@ struct inode_operations {
 	 *
 	 * Return: number of bytes copied, or negative errno.
 	 */
-	int (*readlink)(struct dentry *dentry, char *buf, int bufsiz);
+	int (*readlink)(struct path_component *dentry, char *buf, int bufsiz);
 
 	/**
 	 * mkdir() - create subdirectory
@@ -345,7 +346,8 @@ struct inode_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*mkdir)(struct inode *dir, struct dentry *dentry, umode_t mode);
+	int (*mkdir)(struct fs_inode *dir, struct path_component *dentry,
+		     umode_t mode);
 
 	/**
 	 * rmdir() - remove empty directory
@@ -354,7 +356,7 @@ struct inode_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*rmdir)(struct inode *dir, struct dentry *dentry);
+	int (*rmdir)(struct fs_inode *dir, struct path_component *dentry);
 
 	/**
 	 * rename() - rename or move
@@ -366,8 +368,8 @@ struct inode_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*rename)(struct inode *old_dir, struct dentry *old_dentry,
-		      struct inode *new_dir, struct dentry *new_dentry,
+	int (*rename)(struct fs_inode *old_dir, struct path_component *old_dentry,
+		      struct fs_inode *new_dir, struct path_component *new_dentry,
 		      unsigned int flags);
 
 	/**
@@ -379,8 +381,8 @@ struct inode_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*mknod)(struct inode *dir, struct dentry *dentry, umode_t mode,
-		     dev_t dev);
+	int (*mknod)(struct fs_inode *dir, struct path_component *dentry,
+		     umode_t mode, dev_t dev);
 
 	/**
 	 * getattr() - get inode attributes
@@ -391,8 +393,8 @@ struct inode_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*getattr)(const struct path *path, struct stat *stat, u32 mask,
-		       unsigned int flags);
+	int (*getattr)(const struct file_anchor *path, struct stat *stat,
+		       u32 mask, unsigned int flags);
 
 	/**
 	 * setattr() - set inode attributes
@@ -403,18 +405,17 @@ struct inode_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*setattr)(struct dentry *dentry, struct iattr *attr);
+	int (*setattr)(struct path_component *dentry, struct fs_inode_attr *attr);
 };
 
-struct file {
+struct opened_file {
 	refcnt_t f_count;
 
-	struct path
+	struct file_anchor
 		f_path; /* open path (dentry and mount); holds refs via path_get/path_put */
-	struct inode *
+	struct fs_inode *
 		f_inode; /* cached from f_path.dentry->d_inode; no extra inode refcount */
-	const struct file_operations
-		*f_op; /* file operations; fixed after open */
+	const struct opened_file_ops *f_op; /* file operations; fixed after open */
 
 	spinlock_t f_lock;
 	fmode_t f_mode; /* %FMODE_READ | %FMODE_WRITE, ...; protected by @f_lock */
@@ -426,7 +427,7 @@ struct file {
 	void *private_data; /* filesystem private data; open allocates, release frees */
 };
 
-struct file_operations {
+struct opened_file_ops {
 	/**
 	 * open() - open file
 	 * @inode: file inode
@@ -436,7 +437,7 @@ struct file_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*open)(struct inode *inode, struct file *file);
+	int (*open)(struct fs_inode *inode, struct opened_file *file);
 
 	/**
 	 * release() - last reference dropped
@@ -447,7 +448,7 @@ struct file_operations {
 	 *
 	 * Return: %0 (often ignored).
 	 */
-	int (*release)(struct inode *inode, struct file *file);
+	int (*release)(struct fs_inode *inode, struct opened_file *file);
 
 	/**
 	 * read() - read from file
@@ -458,7 +459,7 @@ struct file_operations {
 	 *
 	 * Return: bytes read, %0 at EOF, or negative errno.
 	 */
-	ssize_t (*read)(struct file *file, char *buf, usize_t size,
+	ssize_t (*read)(struct opened_file *file, char *buf, usize_t size,
 			loff_t *pos);
 
 	/**
@@ -470,7 +471,7 @@ struct file_operations {
 	 *
 	 * Return: bytes written, or negative errno.
 	 */
-	ssize_t (*write)(struct file *file, const char *buf, usize_t size,
+	ssize_t (*write)(struct opened_file *file, const char *buf, usize_t size,
 			 loff_t *pos);
 
 	/**
@@ -481,7 +482,7 @@ struct file_operations {
 	 *
 	 * Return: new offset, or negative errno.
 	 */
-	loff_t (*llseek)(struct file *file, loff_t offset, int whence);
+	loff_t (*llseek)(struct opened_file *file, loff_t offset, int whence);
 
 	/**
 	 * iterate_shared() - iterate directory entries
@@ -492,7 +493,8 @@ struct file_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*iterate_shared)(struct file *file, struct dir_context *ctx);
+	int (*iterate_shared)(struct opened_file *file,
+			      struct fs_dir_iterator *ctx);
 
 	/**
 	 * fsync() - flush file data and/or metadata
@@ -503,7 +505,8 @@ struct file_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*fsync)(struct file *file, loff_t start, loff_t end, int datasync);
+	int (*fsync)(struct opened_file *file, loff_t start, loff_t end,
+		     int datasync);
 
 	/**
 	 * flush() - called on every close()
@@ -513,7 +516,7 @@ struct file_operations {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*flush)(struct file *file);
+	int (*flush)(struct opened_file *file);
 
 	/**
 	 * ioctl() - device control
@@ -523,51 +526,51 @@ struct file_operations {
 	 *
 	 * Return: command-specific value, or negative errno.
 	 */
-	long (*ioctl)(struct file *file, unsigned int cmd, unsigned long arg);
+	long (*ioctl)(struct opened_file *file, unsigned int cmd,
+		      unsigned long arg);
 };
 
-int register_filesystem(struct file_system_type *fs);
-int unregister_filesystem(struct file_system_type *fs);
-struct file_system_type *get_filesystem(const char *name);
+int register_filesystem(struct fs_driver *fs);
+int unregister_filesystem(struct fs_driver *fs);
+struct fs_driver *get_filesystem(const char *name);
 
 /*
  * Iterate every registered filesystem and invoke @fn with the global
  * filesystem list lock held. @fn must be non-blocking (no allocation,
  * no sleeplock acquisition).
  */
-void for_each_filesystem(void (*fn)(const struct file_system_type *fs,
-				    void *ctx),
+void for_each_filesystem(void (*fn)(const struct fs_driver *fs, void *ctx),
 			 void *ctx);
 
-struct super_block *alloc_super(struct file_system_type *type);
-void free_super(struct super_block *sb);
-void super_dup(struct super_block *sb);
-void super_put(struct super_block *sb);
+struct fs_state *alloc_super(struct fs_driver *type);
+void free_super(struct fs_state *sb);
+void super_dup(struct fs_state *sb);
+void super_put(struct fs_state *sb);
 
-struct inode *inode_get_locked(struct super_block *sb, unsigned long ino);
-void inode_unlock_new(struct inode *inode);
-struct inode *inode_dup(struct inode *inode);
-void inode_put(struct inode *inode);
-void inode_mark_dirty(struct inode *inode);
-void inode_clear(struct inode *inode);
+struct fs_inode *inode_get_locked(struct fs_state *sb, unsigned long ino);
+void inode_unlock_new(struct fs_inode *inode);
+struct fs_inode *inode_dup(struct fs_inode *inode);
+void inode_put(struct fs_inode *inode);
+void inode_mark_dirty(struct fs_inode *inode);
+void inode_clear(struct fs_inode *inode);
 void inode_cache_init(void);
 
-struct address_space_operations;
-int inode_attach_pagecache(struct inode *inode,
-			   const struct address_space_operations *a_ops);
+struct page_cache_ops;
+int inode_attach_pagecache(struct fs_inode *inode,
+			   const struct page_cache_ops *a_ops);
 
-struct file *file_alloc(struct path *path, fmode_t mode);
-struct file *file_dup(struct file *file);
-void file_put(struct file *file);
-loff_t file_lseek(struct file *file, loff_t len, int whence);
-ssize_t file_read(struct file *file, void *buf, usize_t size);
-ssize_t file_write(struct file *file, const void *buf, usize_t size);
-long file_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
-int file_stat(struct file *file, struct stat *buf);
-int file_truncate(struct file *file, loff_t size);
+struct opened_file *file_alloc(struct file_anchor *path, fmode_t mode);
+struct opened_file *file_dup(struct opened_file *file);
+void file_put(struct opened_file *file);
+loff_t file_lseek(struct opened_file *file, loff_t len, int whence);
+ssize_t file_read(struct opened_file *file, void *buf, usize_t size);
+ssize_t file_write(struct opened_file *file, const void *buf, usize_t size);
+long file_ioctl(struct opened_file *file, unsigned int cmd, unsigned long arg);
+int file_stat(struct opened_file *file, struct stat *buf);
+int file_truncate(struct opened_file *file, loff_t size);
 void file_cache_init(void);
 
-struct file *do_openat(int dirfd, const char *path, int flags, umode_t mode);
+struct opened_file *do_openat(int dirfd, const char *path, int flags, umode_t mode);
 int do_execve(const char *path, char **argv, char **envp);
 int do_mkdirat(int dirfd, const char *path, umode_t mode);
 int do_mknodat(int dirfd, const char *path, umode_t mode, dev_t dev);
@@ -584,26 +587,26 @@ int do_rmdir(const char *pathname);
 int fs_init(void);
 
 void pipe_fs_init(void);
-int anon_pipe_create(struct file **read_file, struct file **write_file,
+int anon_pipe_create(struct opened_file **read_file, struct opened_file **write_file,
 		     unsigned int flags);
 
 int do_pipe2(int *pipefd, int flags);
 
-extern struct file_system_type tmpfs_fs_type;
-extern struct file_system_type brkfs_fs_type;
-extern struct file_system_type procfs_fs_type;
+extern struct fs_driver tmpfs_fs_type;
+extern struct fs_driver brkfs_fs_type;
+extern struct fs_driver procfs_fs_type;
 
-extern const struct super_operations tmpfs_sops;
-extern const struct inode_operations tmpfs_iops;
-extern const struct file_operations tmpfs_dir_fops;
-extern const struct file_operations tmpfs_file_fops;
+extern const struct fs_state_ops tmpfs_sops;
+extern const struct fs_inode_ops tmpfs_iops;
+extern const struct opened_file_ops tmpfs_dir_fops;
+extern const struct opened_file_ops tmpfs_file_fops;
 
-extern const struct super_operations brkfs_sops;
-extern const struct inode_operations brkfs_iops;
-extern const struct file_operations brkfs_dir_fops;
-extern const struct file_operations brkfs_file_fops;
+extern const struct fs_state_ops brkfs_sops;
+extern const struct fs_inode_ops brkfs_iops;
+extern const struct opened_file_ops brkfs_dir_fops;
+extern const struct opened_file_ops brkfs_file_fops;
 
-extern const struct file_operations chrdev_fops;
-extern const struct file_operations blkdev_fops;
+extern const struct opened_file_ops chrdev_fops;
+extern const struct opened_file_ops blkdev_fops;
 
 #endif

@@ -56,11 +56,11 @@ int fs_init(void)
 		return err;
 	klog_info("/ mounted successfully\n");
 
-	struct mount *root_mnt = lookup_mount(&proc->root);
+	struct fs_mount_state *root_mnt = lookup_mount(&proc->root);
 	if (!root_mnt)
 		return -EINVAL;
 
-	struct path root_path = {
+	struct file_anchor root_path = {
 		.mnt = root_mnt,
 		.dentry = dentry_dup(root_mnt->mnt_root),
 	};
@@ -103,7 +103,7 @@ int fs_init(void)
 		return err;
 	klog_info("tty fs nodes created\n");
 
-	struct file *f = do_openat(AT_FDCWD, "/dev/tty0", O_RDWR, 0);
+	struct opened_file *f = do_openat(AT_FDCWD, "/dev/tty0", O_RDWR, 0);
 	if (IS_ERR(f)) {
 		err = PTR_ERR(f);
 		return err;

@@ -102,7 +102,7 @@ void proc_free(struct process *proc)
 	kobj_pool_free(&proc_cache, proc);
 }
 
-int proc_alloc_fd(struct process *proc, struct file *fp)
+int proc_alloc_fd(struct process *proc, struct opened_file *fp)
 {
 	for (int i = 0; i < OPEN_MAX; ++i) {
 		if (!proc->ofiles[i]) {

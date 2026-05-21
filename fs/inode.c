@@ -17,13 +17,13 @@ static struct kobj_pool inode_cache;
 
 void inode_cache_init(void)
 {
-	kobj_pool_init(&inode_cache, sizeof(struct inode),
-		       alignof(struct inode), "inode_cache");
+	kobj_pool_init(&inode_cache, sizeof(struct fs_inode),
+		       alignof(struct fs_inode), "inode_cache");
 }
 
-static struct inode *alloc_inode(struct super_block *sb, unsigned long ino)
+static struct fs_inode *alloc_inode(struct fs_state *sb, unsigned long ino)
 {
-	struct inode *inode;
+	struct fs_inode *inode;
 
 	if (sb->s_op->alloc_inode) {
 		inode = sb->s_op->alloc_inode(sb);
@@ -60,9 +60,9 @@ static struct inode *alloc_inode(struct super_block *sb, unsigned long ino)
 	return inode;
 }
 
-static void free_inode(struct inode *inode)
+static void free_inode(struct fs_inode *inode)
 {
-	const struct super_operations *op = inode->i_sb->s_op;
+	const struct fs_state_ops *op = inode->i_sb->s_op;
 
 	if (op->free_inode)
 		op->free_inode(inode);
@@ -70,7 +70,7 @@ static void free_inode(struct inode *inode)
 		kobj_pool_free(&inode_cache, inode);
 }
 
-static u32 hash(const struct super_block *sb, unsigned long ino)
+static u32 hash(const struct fs_state *sb, unsigned long ino)
 {
 	const u8 *k = (u8 *)&sb;
 	u32 h = 0x811c9dc5;
@@ -86,11 +86,11 @@ static u32 hash(const struct super_block *sb, unsigned long ino)
 	return h & (INODE_HTABLE_SIZE - 1);
 }
 
-static struct inode *lookup_inode(struct hlist_head *bucket,
-				  const struct super_block *sb,
-				  unsigned long ino)
+static struct fs_inode *lookup_inode(struct hlist_head *bucket,
+				    const struct fs_state *sb,
+				    unsigned long ino)
 {
-	struct inode *inode;
+	struct fs_inode *inode;
 
 	ASSERT(spinlock_holding(&inode_hash_lock));
 
@@ -130,9 +130,9 @@ retry:
  * Guarantee: For the same (sb, ino), only one caller of concurrent inode_get_locked()
  *       will receive an inode in I_NEW state (other callers will wait for inode_unlock_new()).
  */
-struct inode *inode_get_locked(struct super_block *sb, unsigned long ino)
+struct fs_inode *inode_get_locked(struct fs_state *sb, unsigned long ino)
 {
-	struct inode *inode, *old;
+	struct fs_inode *inode, *old;
 	struct hlist_head *head = inode_hash_table + hash(sb, ino);
 
 	spinlock_acquire(&inode_hash_lock);
@@ -182,7 +182,7 @@ struct inode *inode_get_locked(struct super_block *sb, unsigned long ino)
 	return inode;
 }
 
-void inode_unlock_new(struct inode *inode)
+void inode_unlock_new(struct fs_inode *inode)
 {
 	spinlock_acquire(&inode->i_lock);
 	inode->i_state &= ~I_NEW;
@@ -190,15 +190,15 @@ void inode_unlock_new(struct inode *inode)
 	proc_wake_up(&inode->i_state);
 }
 
-struct inode *inode_dup(struct inode *inode)
+struct fs_inode *inode_dup(struct fs_inode *inode)
 {
 	refcnt_inc(&inode->i_count);
 	return inode;
 }
 
-void inode_put(struct inode *inode)
+void inode_put(struct fs_inode *inode)
 {
-	const struct super_operations *s_op;
+	const struct fs_state_ops *s_op;
 
 	if (refcnt_dec_fetch(&inode->i_count) > 0)
 		return;
@@ -234,10 +234,10 @@ void inode_put(struct inode *inode)
 	free_inode(inode);
 }
 
-int inode_attach_pagecache(struct inode *inode,
-			   const struct address_space_operations *a_ops)
+int inode_attach_pagecache(struct fs_inode *inode,
+			   const struct page_cache_ops *a_ops)
 {
-	struct address_space *m;
+	struct page_cache *m;
 
 	if (inode->i_mapping)
 		return 0;
@@ -248,9 +248,9 @@ int inode_attach_pagecache(struct inode *inode,
 	return 0;
 }
 
-void inode_mark_dirty(struct inode *inode)
+void inode_mark_dirty(struct fs_inode *inode)
 {
-	struct super_block *sb = inode->i_sb;
+	struct fs_state *sb = inode->i_sb;
 	bool need_link;
 
 	spinlock_acquire(&inode->i_lock);
@@ -266,7 +266,7 @@ void inode_mark_dirty(struct inode *inode)
 	spinlock_release(&sb->s_inode_lock);
 }
 
-void inode_clear(struct inode *inode)
+void inode_clear(struct fs_inode *inode)
 {
 	spinlock_acquire(&inode->i_lock);
 	inode->i_state |= I_CLEAR;

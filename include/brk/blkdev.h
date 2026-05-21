@@ -5,7 +5,7 @@
 #include <brk/types.h>
 
 struct blkdev;
-struct address_space;
+struct page_cache;
 
 struct blkdev_operations {
 	int (*read)(struct blkdev *bd, u64 blk_id, void *buf, u32 blk_cnt);
@@ -19,7 +19,7 @@ struct blkdev {
 	u64 phy_bcnt;
 	struct blkdev_operations ops;
 	void *priv;
-	struct address_space *bd_mapping;
+	struct page_cache *bd_mapping;
 	struct hlist_node hlist;
 };
 

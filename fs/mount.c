@@ -41,20 +41,20 @@
 static struct hlist_head mount_hashtable[MOUNT_HTABLE_SIZE];
 static SPINLOCK_DEFINE(mount_hashtable_lock);
 static SLEEPLOCK_DEFINE(mount_lock);
-static struct mount *root_mnt;
+static struct fs_mount_state *root_mnt;
 
-static u32 hash(struct mount *mnt, struct dentry *dentry)
+static u32 hash(struct fs_mount_state *mnt, struct path_component *dentry)
 {
-	u32 h1 = fnv1a_32(&mnt, sizeof(struct mount *));
-	u32 h2 = fnv1a_32(&dentry, sizeof(struct dentry *));
+	u32 h1 = fnv1a_32(&mnt, sizeof(struct fs_mount_state *));
+	u32 h2 = fnv1a_32(&dentry, sizeof(struct path_component *));
 	return hash_combine32(h1, h2) & (MOUNT_HTABLE_SIZE - 1);
 }
 
-static struct mount *alloc_mount(unsigned long flags)
+static struct fs_mount_state *alloc_mount(unsigned long flags)
 {
-	struct mount *mnt;
+	struct fs_mount_state *mnt;
 
-	mnt = kzalloc(sizeof(struct mount));
+	mnt = kzalloc(sizeof(struct fs_mount_state));
 	if (!mnt)
 		return NULL;
 
@@ -70,14 +70,15 @@ static struct mount *alloc_mount(unsigned long flags)
 	return mnt;
 }
 
-static void free_mount(struct mount *mnt)
+static void free_mount(struct fs_mount_state *mnt)
 {
 	kfree(mnt);
 }
 
-static bool mountpoint_busy(struct mount *mp_mnt, struct dentry *mp_dentry)
+static bool mountpoint_busy(struct fs_mount_state *mp_mnt,
+			    struct path_component *mp_dentry)
 {
-	struct mount *mnt;
+	struct fs_mount_state *mnt;
 	u32 h = hash(mp_mnt, mp_dentry);
 
 	hlist_for_each_entry(mnt, &mount_hashtable[h], mnt_hash) {
@@ -89,10 +90,10 @@ static bool mountpoint_busy(struct mount *mp_mnt, struct dentry *mp_dentry)
 	return false;
 }
 
-static int graft_tree(struct mount *new_mnt, struct path *mountpoint)
+static int graft_tree(struct fs_mount_state *new_mnt, struct file_anchor *mountpoint)
 {
-	struct dentry *mp_dentry = mountpoint->dentry;
-	struct mount *mp_mnt = mountpoint->mnt;
+	struct path_component *mp_dentry = mountpoint->dentry;
+	struct fs_mount_state *mp_mnt = mountpoint->mnt;
 	u32 h = hash(mp_mnt, mp_dentry);
 
 	sleeplock_acquire(&mount_lock);
@@ -150,11 +151,11 @@ static int graft_tree(struct mount *new_mnt, struct path *mountpoint)
  *
  * Return: mount with reference held, or %NULL if no child mount exists.
  */
-struct mount *lookup_mount(const struct path *path)
+struct fs_mount_state *lookup_mount(const struct file_anchor *path)
 {
-	struct mount *mnt = NULL;
-	struct mount *mp_mnt = path->mnt;
-	struct dentry *mp_dentry = path->dentry;
+	struct fs_mount_state *mnt = NULL;
+	struct fs_mount_state *mp_mnt = path->mnt;
+	struct path_component *mp_dentry = path->dentry;
 	u32 h = hash(mp_mnt, mp_dentry);
 	struct hlist_head *head = &mount_hashtable[h];
 	spinlock_acquire(&mount_hashtable_lock);
@@ -182,10 +183,10 @@ struct mount *lookup_mount(const struct path *path)
 int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
 	     unsigned long flags, void *data)
 {
-	struct file_system_type *type;
-	struct mount *new_mnt;
-	struct path mp_path;
-	struct dentry *root_dentry;
+	struct fs_driver *type;
+	struct fs_mount_state *new_mnt;
+	struct file_anchor mp_path;
+	struct path_component *root_dentry;
 	int err;
 
 	type = get_filesystem(type_name);
@@ -245,7 +246,7 @@ int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
  *
  * Return: %0 on success, negative errno on failure.
  */
-int do_umount(struct mount *mnt, int flags)
+int do_umount(struct fs_mount_state *mnt, int flags)
 {
 	(void)flags;
 	mount_put(mnt);
@@ -253,19 +254,19 @@ int do_umount(struct mount *mnt, int flags)
 }
 
 /* Returns @mnt with refcount incremented. */
-struct mount *mount_dup(struct mount *mnt)
+struct fs_mount_state *mount_dup(struct fs_mount_state *mnt)
 {
 	refcnt_inc(&mnt->mnt_count);
 	return mnt;
 }
 
 /* Drops one reference and may tear down mount at zero. */
-void mount_put(struct mount *mnt)
+void mount_put(struct fs_mount_state *mnt)
 {
-	struct mount *parent;
-	struct dentry *mountpoint;
-	struct dentry *root;
-	struct super_block *sb;
+	struct fs_mount_state *parent;
+	struct path_component *mountpoint;
+	struct path_component *root;
+	struct fs_state *sb;
 
 	if (refcnt_dec_fetch(&mnt->mnt_count) > 0)
 		return;
@@ -313,12 +314,11 @@ void mount_put(struct mount *mnt)
 	free_mount(mnt);
 }
 
-struct mount *kernel_mount(struct file_system_type *fs_type,
-			   unsigned long flags, const char *dev_name,
-			   void *data)
+struct fs_mount_state *kernel_mount(struct fs_driver *fs_type, unsigned long flags,
+			      const char *dev_name, void *data)
 {
-	struct mount *new_mnt;
-	struct dentry *root_dentry;
+	struct fs_mount_state *new_mnt;
+	struct path_component *root_dentry;
 
 	new_mnt = alloc_mount(0);
 	if (!new_mnt)
@@ -337,9 +337,9 @@ struct mount *kernel_mount(struct file_system_type *fs_type,
 	return new_mnt;
 }
 
-int init_mount_tree(struct path *root_path)
+int init_mount_tree(struct file_anchor *root_path)
 {
-	struct mount *mnt = kernel_mount(&tmpfs_fs_type, 0, "", NULL);
+	struct fs_mount_state *mnt = kernel_mount(&tmpfs_fs_type, 0, "", NULL);
 	if (IS_ERR(mnt))
 		return PTR_ERR(mnt);
 	root_mnt = mnt;

@@ -54,30 +54,30 @@ u64 ktime_nanosleep(const struct timespec *dur, struct timespec *rem)
 	return timekeeper_nanosleep(dur, rem);
 }
 
-void inode_times_set_all_now(struct inode *inode)
+void inode_times_set_all_now(struct fs_inode *inode)
 {
 	ktime_get_real_ts(&inode->i_atime);
 	inode->i_mtime = inode->i_atime;
 	inode->i_ctime = inode->i_atime;
 }
 
-void inode_touch_mtime(struct inode *inode)
+void inode_touch_mtime(struct fs_inode *inode)
 {
 	ktime_get_real_ts(&inode->i_mtime);
 }
 
-void inode_touch_ctime(struct inode *inode)
+void inode_touch_ctime(struct fs_inode *inode)
 {
 	ktime_get_real_ts(&inode->i_ctime);
 }
 
-void inode_touch_mtime_ctime(struct inode *inode)
+void inode_touch_mtime_ctime(struct fs_inode *inode)
 {
 	inode_touch_mtime(inode);
 	inode_touch_ctime(inode);
 }
 
-void inode_times_to_stat(const struct inode *inode, struct stat *st)
+void inode_times_to_stat(const struct fs_inode *inode, struct stat *st)
 {
 	st->st_atime = inode->i_atime.tv_sec;
 	st->st_atime_nsec = (unsigned long)inode->i_atime.tv_nsec;
