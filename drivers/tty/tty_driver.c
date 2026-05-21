@@ -15,7 +15,7 @@
 
 static HLIST_HEAD_DEFINE(tty_driver_list);
 static SPINLOCK_DEFINE(tty_driver_lock);
-static const struct file_operations tty_fops;
+static const struct opened_file_ops tty_fops;
 
 struct tty_driver *tty_alloc_driver(int num_ports)
 {
@@ -214,7 +214,7 @@ int tty_driver_remove_port(struct tty_driver *driver, struct tty_port *port)
 	return -ENOENT;
 }
 
-static int tty_file_open(struct inode *inode, struct file *file)
+static int tty_file_open(struct fs_inode *inode, struct opened_file *file)
 {
 	file->f_op = &tty_fops;
 	file->private_data = NULL;
@@ -231,7 +231,7 @@ static int tty_file_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int tty_file_release(struct inode *inode, struct file *file)
+static int tty_file_release(struct fs_inode *inode, struct opened_file *file)
 {
 	(void)inode;
 
@@ -243,7 +243,7 @@ static int tty_file_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t tty_file_read(struct file *file, char *buf, usize_t size,
+static ssize_t tty_file_read(struct opened_file *file, char *buf, usize_t size,
 			     loff_t *pos)
 {
 	(void)pos;
@@ -253,8 +253,8 @@ static ssize_t tty_file_read(struct file *file, char *buf, usize_t size,
 	return tty_read(tty, buf, size);
 }
 
-static ssize_t tty_file_write(struct file *file, const char *buf, usize_t size,
-			      loff_t *pos)
+static ssize_t tty_file_write(struct opened_file *file, const char *buf,
+			      usize_t size, loff_t *pos)
 {
 	(void)pos;
 	struct tty *tty = file->private_data;
@@ -263,7 +263,8 @@ static ssize_t tty_file_write(struct file *file, const char *buf, usize_t size,
 	return tty_write(tty, buf, size);
 }
 
-static loff_t tty_file_llseek(struct file *file, loff_t offset, int whence)
+static loff_t tty_file_llseek(struct opened_file *file, loff_t offset,
+			      int whence)
 {
 	(void)whence;
 	(void)offset;
@@ -271,14 +272,15 @@ static loff_t tty_file_llseek(struct file *file, loff_t offset, int whence)
 	return 0;
 }
 
-static int tty_file_iterate_shared(struct file *file, struct dir_context *ctx)
+static int tty_file_iterate_shared(struct opened_file *file,
+				   struct fs_dir_iterator *ctx)
 {
 	(void)file;
 	(void)ctx;
 	return -ENOTDIR;
 }
 
-static int tty_file_sync(struct file *file, loff_t start, loff_t end,
+static int tty_file_sync(struct opened_file *file, loff_t start, loff_t end,
 			 int datasync)
 {
 	(void)file;
@@ -288,13 +290,13 @@ static int tty_file_sync(struct file *file, loff_t start, loff_t end,
 	return 0;
 }
 
-static int tty_file_flush(struct file *file)
+static int tty_file_flush(struct opened_file *file)
 {
 	(void)file;
 	return 0;
 }
 
-static long tty_file_ioctl(struct file *file, unsigned int cmd,
+static long tty_file_ioctl(struct opened_file *file, unsigned int cmd,
 			   unsigned long arg)
 {
 	(void)file;
@@ -303,7 +305,7 @@ static long tty_file_ioctl(struct file *file, unsigned int cmd,
 	return -ENOTTY;
 }
 
-static const struct file_operations tty_fops = {
+static const struct opened_file_ops tty_fops = {
 	.open = tty_file_open,
 	.release = tty_file_release,
 	.read = tty_file_read,

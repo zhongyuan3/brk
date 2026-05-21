@@ -4,18 +4,19 @@
 #include <brk/time.h>
 #include <brk/types.h>
 
-struct super_block;
-struct super_operations;
-struct inode;
-struct inode_operations;
-struct file;
-struct file_operations;
-struct file_system_type;
-struct dentry;
-struct mount;
-struct path;
+struct fs_driver;
+struct fs_state;
+struct fs_state_ops;
+struct fs_inode;
+struct fs_inode_ops;
+struct opened_file;
+struct opened_file_ops;
+struct path_component;
+struct path_component_ops;
+struct fs_mount_state;
+struct file_anchor;
 
-struct iattr {
+struct fs_inode_attr {
 	unsigned int ia_valid;
 	umode_t ia_mode;
 	kuid_t ia_uid;
@@ -30,10 +31,10 @@ struct iattr {
 	 * implement an ftruncate() like method.  NOTE: filesystem should
 	 * check for (ia_valid & ATTR_FILE), and not for (ia_file != NULL).
 	 */
-	struct file *ia_file;
+	struct opened_file *ia_file;
 };
 
-struct dir_context {
+struct fs_dir_iterator {
 	/**
 	 * actor() - emit a directory entry
 	 * @ctx: directory context
@@ -45,8 +46,8 @@ struct dir_context {
 	 *
 	 * Return: true to continue, false to stop.
 	 */
-	bool (*actor)(struct dir_context *ctx, const char *name, int namelen,
-		      loff_t offset, u64 ino, unsigned int d_type);
+	bool (*actor)(struct fs_dir_iterator *ctx, const char *name,
+		      int namelen, loff_t offset, u64 ino, unsigned int d_type);
 
 	loff_t pos;
 };

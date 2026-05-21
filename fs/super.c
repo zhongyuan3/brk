@@ -7,9 +7,9 @@
 static LIST_DEFINE(super_blocks);
 static SPINLOCK_DEFINE(sb_lock);
 
-struct super_block *alloc_super(struct file_system_type *type)
+struct fs_state *alloc_super(struct fs_driver *type)
 {
-	struct super_block *sb;
+	struct fs_state *sb;
 
 	sb = kzalloc(sizeof(*sb));
 	if (!sb)
@@ -34,7 +34,7 @@ struct super_block *alloc_super(struct file_system_type *type)
 	return sb;
 }
 
-void free_super(struct super_block *sb)
+void free_super(struct fs_state *sb)
 {
 	spinlock_acquire(&sb_lock);
 	list_del_init(&sb->s_list);
@@ -43,12 +43,12 @@ void free_super(struct super_block *sb)
 	kfree(sb);
 }
 
-void super_dup(struct super_block *sb)
+void super_dup(struct fs_state *sb)
 {
 	refcnt_inc(&sb->s_count);
 }
 
-void super_put(struct super_block *sb)
+void super_put(struct fs_state *sb)
 {
 	if (refcnt_dec_fetch(&sb->s_count) > 0)
 		return;

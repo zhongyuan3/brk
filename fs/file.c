@@ -12,13 +12,13 @@ static struct kobj_pool file_cache;
 
 void file_cache_init(void)
 {
-	kobj_pool_init(&file_cache, sizeof(struct file), alignof(struct file),
-		       "file_cache");
+	kobj_pool_init(&file_cache, sizeof(struct opened_file),
+		       alignof(struct opened_file), "file_cache");
 }
 
-struct file *file_alloc(struct path *path, fmode_t mode)
+struct opened_file *file_alloc(struct file_anchor *path, fmode_t mode)
 {
-	struct file *file;
+	struct opened_file *file;
 
 	file = kobj_pool_alloc(&file_cache);
 	if (!file)
@@ -45,15 +45,15 @@ struct file *file_alloc(struct path *path, fmode_t mode)
 	return file;
 }
 
-struct file *file_dup(struct file *file)
+struct opened_file *file_dup(struct opened_file *file)
 {
 	refcnt_inc(&file->f_count);
 	return file;
 }
 
-void file_put(struct file *file)
+void file_put(struct opened_file *file)
 {
-	const struct file_operations *fop;
+	const struct opened_file_ops *fop;
 
 	if (refcnt_dec_fetch(&file->f_count) > 0)
 		return;
@@ -67,7 +67,7 @@ void file_put(struct file *file)
 	kobj_pool_free(&file_cache, file);
 }
 
-loff_t file_lseek(struct file *file, loff_t len, int whence)
+loff_t file_lseek(struct opened_file *file, loff_t len, int whence)
 {
 	loff_t ret = file->f_op->llseek(file, len, whence);
 	if (ret >= 0)
@@ -75,7 +75,7 @@ loff_t file_lseek(struct file *file, loff_t len, int whence)
 	return ret;
 }
 
-ssize_t file_read(struct file *file, void *buf, usize_t size)
+ssize_t file_read(struct opened_file *file, void *buf, usize_t size)
 {
 	loff_t *pos = &file->f_pos;
 	sleeplock_acquire(&file->f_pos_lock);
@@ -84,7 +84,7 @@ ssize_t file_read(struct file *file, void *buf, usize_t size)
 	return ret;
 }
 
-ssize_t file_write(struct file *file, const void *buf, usize_t size)
+ssize_t file_write(struct opened_file *file, const void *buf, usize_t size)
 {
 	loff_t *pos = &file->f_pos;
 	sleeplock_acquire(&file->f_pos_lock);
@@ -93,20 +93,20 @@ ssize_t file_write(struct file *file, const void *buf, usize_t size)
 	return ret;
 }
 
-long file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+long file_ioctl(struct opened_file *file, unsigned int cmd, unsigned long arg)
 {
 	if (!file->f_op->ioctl)
 		return -ENOTTY;
 	return file->f_op->ioctl(file, cmd, arg);
 }
 
-int file_stat(struct file *file, struct stat *buf)
+int file_stat(struct opened_file *file, struct stat *buf)
 {
-	const struct inode_operations *i_op = file->f_inode->i_op;
+	const struct fs_inode_ops *i_op = file->f_inode->i_op;
 	return i_op->getattr(&file->f_path, buf, 0, 0);
 }
 
-int file_truncate(struct file *file, loff_t size)
+int file_truncate(struct opened_file *file, loff_t size)
 {
 	(void)file;
 	(void)size;

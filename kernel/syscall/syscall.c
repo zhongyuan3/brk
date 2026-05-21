@@ -109,7 +109,7 @@ int syscall_arg_int(int argno)
 	return (int)syscall_arg_raw(argno);
 }
 
-int syscall_arg_fd(int argno, int *pfd, struct file **pfp)
+int syscall_arg_fd(int argno, int *pfd, struct opened_file **pfp)
 {
 	int fd = syscall_arg_int(argno);
 	struct process *proc = current_process();

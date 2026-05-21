@@ -1,6 +1,7 @@
 #include "brkfs.h"
 #include <brk/asm.h>
 #include <brk/bitmap.h>
+#include <brk/blkdev.h>
 #include <brk/device.h>
 #include <brk/dirent.h>
 #include <brk/errno.h>
@@ -12,7 +13,6 @@
 #include <brk/stat.h>
 #include <brk/string.h>
 #include <brk/types.h>
-#include <brk/blkdev.h>
 
 struct brkfs_sb_info *brkfs_sb_info_alloc(struct blkdev *bdev,
 					  struct brkfs_super_block *sb)
@@ -157,7 +157,7 @@ int brkfs_data_free(struct brkfs_sb_info *sbi, u32 bno)
 				 sbi->s_sb.s_data_blocks_count, bit);
 }
 
-int brkfs_inode_read(struct brkfs_sb_info *sbi, struct inode *inode)
+int brkfs_inode_read(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 {
 	struct brkfs_inode *disk_i;
 	struct brkfs_inode_info *info;
@@ -206,7 +206,7 @@ out:
 	return err;
 }
 
-int brkfs_inode_write(struct brkfs_sb_info *sbi, struct inode *inode)
+int brkfs_inode_write(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 {
 	u32 bno;
 	u32 ino = inode->i_ino;
@@ -281,7 +281,7 @@ int brkfs_inode_free(struct brkfs_sb_info *sbi, u32 ino)
 int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, u32 ino, umode_t mode,
 			  unsigned int nlink, dev_t rdev)
 {
-	struct inode stub = { 0 };
+	struct fs_inode stub = { 0 };
 	struct brkfs_inode_info info;
 
 	memset(&info, 0, sizeof(info));
@@ -295,7 +295,7 @@ int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, u32 ino, umode_t mode,
 	return brkfs_inode_write(sbi, &stub);
 }
 
-int brkfs_inode_getblk(struct inode *inode, loff_t off, u32 *bno,
+int brkfs_inode_getblk(struct fs_inode *inode, loff_t off, u32 *bno,
 		       unsigned flags, struct brkfs_sb_info *sbi)
 {
 	struct brkfs_inode_info *inf = inode->i_private;
@@ -411,7 +411,7 @@ static usize_t brkfs_dirent_reclen(unsigned int name_len)
 	return round_up(offsetof(struct brkfs_dir_entry, name) + name_len, 4u);
 }
 
-static int brkfs_dir_ensure_first_block(struct inode *dir)
+static int brkfs_dir_ensure_first_block(struct fs_inode *dir)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
 	struct brkfs_inode_info *info = dir->i_private;
@@ -500,7 +500,7 @@ static int __brkfs_dir_add_in_block(u8 *blk, usize_t bs, u32 ino,
 	return -ENOSPC;
 }
 
-int brkfs_dir_add(struct inode *dir, u32 child_ino, const char *name,
+int brkfs_dir_add(struct fs_inode *dir, u32 child_ino, const char *name,
 		  unsigned int name_len, umode_t child_mode)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
@@ -603,7 +603,7 @@ static int __brkfs_dir_remove_in_block(u8 *blk, usize_t bs,
 	return -ENOENT;
 }
 
-int brkfs_new_dir_body(struct inode *inode, u32 parent_ino)
+int brkfs_new_dir_body(struct fs_inode *inode, u32 parent_ino)
 {
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
 	struct brkfs_inode_info *di = inode->i_private;
@@ -668,7 +668,8 @@ int brkfs_new_dir_body(struct inode *inode, u32 parent_ino)
 	return err;
 }
 
-int brkfs_dir_remove(struct inode *dir, const char *name, unsigned int name_len)
+int brkfs_dir_remove(struct fs_inode *dir, const char *name,
+		     unsigned int name_len)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
 	struct brkfs_inode_info *di = dir->i_private;
@@ -704,8 +705,8 @@ out:
 	return err;
 }
 
-int brkfs_dir_lookup(struct inode *dir, const char *name, unsigned int name_len,
-		     u32 *ino_out, u8 *type_out)
+int brkfs_dir_lookup(struct fs_inode *dir, const char *name,
+		     unsigned int name_len, u32 *ino_out, u8 *type_out)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
 	struct brkfs_inode_info *di = dir->i_private;
@@ -761,7 +762,7 @@ int brkfs_dir_lookup(struct inode *dir, const char *name, unsigned int name_len,
 	return -ENOENT;
 }
 
-int brkfs_file_read_at(struct inode *inode, loff_t *pos, void *buf,
+int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
 		       usize_t size, usize_t *read_out)
 {
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
@@ -819,7 +820,7 @@ int brkfs_file_read_at(struct inode *inode, loff_t *pos, void *buf,
 	return err;
 }
 
-int brkfs_file_write_at(struct inode *inode, loff_t *pos, const void *buf,
+int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
 			usize_t size, usize_t *written_out)
 {
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
@@ -885,7 +886,7 @@ int brkfs_file_write_at(struct inode *inode, loff_t *pos, const void *buf,
 	return err;
 }
 
-int brkfs_truncate_inode_blocks(struct inode *inode, loff_t new_size)
+int brkfs_truncate_inode_blocks(struct fs_inode *inode, loff_t new_size)
 {
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
 	struct brkfs_inode_info *inf = inode->i_private;

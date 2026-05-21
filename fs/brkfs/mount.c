@@ -7,10 +7,10 @@
 #include <brk/list.h>
 #include <brk/lock.h>
 #include <brk/path.h>
+#include <brk/pgtable.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/stat.h>
-#include <brk/pgtable.h>
 #include <brk/string.h>
 
 static int brkfs_read_super(struct brkfs_super_block *sb, struct blkdev *bdev)
@@ -35,8 +35,8 @@ static int brkfs_read_super(struct brkfs_super_block *sb, struct blkdev *bdev)
 static struct blkdev *brkfs_get_bdev(const char *dev_name)
 {
 	int err;
-	struct path path = { 0 };
-	struct inode *inode;
+	struct file_anchor path = { 0 };
+	struct fs_inode *inode;
 	struct blkdev *bdev;
 
 	err = path_lookup(dev_name, 0, &path);
@@ -70,16 +70,16 @@ static int brkfs_validate_super(struct brkfs_super_block *sb)
 	return 0;
 }
 
-struct dentry *brkfs_mount(struct file_system_type *fs_type, int flags,
-			   const char *dev_name, void *data)
+struct path_component *brkfs_mount(struct fs_driver *fs_type, int flags,
+				 const char *dev_name, void *data)
 {
 	struct blkdev *bdev = NULL;
 	int err;
 	struct brkfs_super_block brk_sb;
-	struct super_block *sb;
+	struct fs_state *sb;
 	struct brkfs_sb_info *sb_info;
-	struct dentry *root_dentry;
-	struct inode *root_inode;
+	struct path_component *root_dentry;
+	struct fs_inode *root_inode;
 
 	(void)data;
 
@@ -149,9 +149,9 @@ struct dentry *brkfs_mount(struct file_system_type *fs_type, int flags,
 	return root_dentry;
 }
 
-static void brkfs_kill_sb(struct super_block *sb)
+static void brkfs_kill_sb(struct fs_state *sb)
 {
-	struct file_system_type *fs_type = sb->s_type;
+	struct fs_driver *fs_type = sb->s_type;
 
 	spinlock_acquire(&fs_type->fs_lock);
 	list_del(&sb->s_instances);
@@ -160,7 +160,7 @@ static void brkfs_kill_sb(struct super_block *sb)
 	super_put(sb);
 }
 
-struct file_system_type brkfs_fs_type = {
+struct fs_driver brkfs_fs_type = {
 	.name = "brkfs",
 	.mount = brkfs_mount,
 	.kill_sb = brkfs_kill_sb,

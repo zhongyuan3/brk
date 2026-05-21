@@ -6,7 +6,7 @@
 #include <brk/timeconst.h>
 #include <brk/types.h>
 
-struct inode;
+struct fs_inode;
 
 void ktime_get_mono_ts(struct timespec *ts);
 void ktime_get_real_ts(struct timespec *ts);
@@ -19,11 +19,11 @@ void ktime_get_boot_ts(struct timespec *ts);
 
 u64 ktime_nanosleep(const struct timespec *dur, struct timespec *rem);
 
-void inode_times_set_all_now(struct inode *inode);
-void inode_touch_mtime(struct inode *inode);
-void inode_touch_ctime(struct inode *inode);
-void inode_touch_mtime_ctime(struct inode *inode);
+void inode_times_set_all_now(struct fs_inode *inode);
+void inode_touch_mtime(struct fs_inode *inode);
+void inode_touch_ctime(struct fs_inode *inode);
+void inode_touch_mtime_ctime(struct fs_inode *inode);
 
-void inode_times_to_stat(const struct inode *inode, struct stat *st);
+void inode_times_to_stat(const struct fs_inode *inode, struct stat *st);
 
 #endif

@@ -5,7 +5,7 @@
 static LIST_DEFINE(filesystems);
 static SPINLOCK_DEFINE(filesystems_lock);
 
-int register_filesystem(struct file_system_type *fs)
+int register_filesystem(struct fs_driver *fs)
 {
 	spinlock_acquire(&filesystems_lock);
 	list_add_tail(&fs->fs_list, &filesystems);
@@ -13,7 +13,7 @@ int register_filesystem(struct file_system_type *fs)
 	return 0;
 }
 
-int unregister_filesystem(struct file_system_type *fs)
+int unregister_filesystem(struct fs_driver *fs)
 {
 	spinlock_acquire(&filesystems_lock);
 	list_del_init(&fs->fs_list);
@@ -21,9 +21,9 @@ int unregister_filesystem(struct file_system_type *fs)
 	return 0;
 }
 
-struct file_system_type *get_filesystem(const char *name)
+struct fs_driver *get_filesystem(const char *name)
 {
-	struct file_system_type *fs;
+	struct fs_driver *fs;
 	spinlock_acquire(&filesystems_lock);
 	list_for_each_entry(fs, &filesystems, fs_list) {
 		if (!strcmp(fs->name, name)) {
@@ -35,10 +35,10 @@ struct file_system_type *get_filesystem(const char *name)
 	return NULL;
 }
 
-void for_each_filesystem(void (*fn)(const struct file_system_type *, void *),
+void for_each_filesystem(void (*fn)(const struct fs_driver *, void *),
 			 void *ctx)
 {
-	struct file_system_type *fs;
+	struct fs_driver *fs;
 
 	if (!fn)
 		return;

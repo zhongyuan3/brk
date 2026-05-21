@@ -104,7 +104,7 @@ void chrdev_free_region(unsigned major, unsigned minor, unsigned count)
 	free_dev_region(&cd_map, major, minor, count);
 }
 
-static int chrdev_open(struct inode *inode, struct file *file)
+static int chrdev_open(struct fs_inode *inode, struct opened_file *file)
 {
 	struct chrdev *cd;
 
@@ -115,6 +115,6 @@ static int chrdev_open(struct inode *inode, struct file *file)
 	return cd->fops->open(inode, file);
 }
 
-const struct file_operations chrdev_fops = {
+const struct opened_file_ops chrdev_fops = {
 	.open = chrdev_open,
 };

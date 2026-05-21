@@ -58,10 +58,10 @@ static unsigned int mapping_hash(pgoff_t index)
 	return (unsigned int)(h & (ADDRESS_SPACE_HSIZE - 1));
 }
 
-struct address_space *
-address_space_alloc(void *host, const struct address_space_operations *a_ops)
+struct page_cache *address_space_alloc(void *host,
+				       const struct page_cache_ops *a_ops)
 {
-	struct address_space *m;
+	struct page_cache *m;
 
 	m = kzalloc(sizeof(*m));
 	if (!m)
@@ -78,7 +78,7 @@ address_space_alloc(void *host, const struct address_space_operations *a_ops)
 }
 
 /* Caller must hold @m->lock. */
-static void __detach_locked(struct address_space *m, struct cached_page *cp)
+static void __detach_locked(struct page_cache *m, struct cached_page *cp)
 {
 	hlist_del_init(&cp->ht_node);
 	if (cp->flags & PCP_DIRTY) {
@@ -95,7 +95,7 @@ static void detach_and_put(struct cached_page *cp)
 	cached_page_put(cp);
 }
 
-void address_space_free(struct address_space *m)
+void address_space_free(struct page_cache *m)
 {
 	struct cached_page *cp;
 	struct hlist_node *n;
@@ -118,7 +118,7 @@ void address_space_free(struct address_space *m)
 	kfree(m);
 }
 
-static struct cached_page *cached_page_alloc(struct address_space *m,
+static struct cached_page *cached_page_alloc(struct page_cache *m,
 					     pgoff_t index)
 {
 	struct cached_page *cp;
@@ -153,8 +153,7 @@ static void cached_page_destroy(struct cached_page *cp)
 	kobj_pool_free(&cached_page_cache, cp);
 }
 
-static struct cached_page *__lookup_locked(struct address_space *m,
-					   pgoff_t index)
+static struct cached_page *__lookup_locked(struct page_cache *m, pgoff_t index)
 {
 	struct hlist_head *bucket = &m->pages[mapping_hash(index)];
 	struct cached_page *cp;
@@ -166,7 +165,7 @@ static struct cached_page *__lookup_locked(struct address_space *m,
 	return NULL;
 }
 
-struct cached_page *find_get_page(struct address_space *m, pgoff_t index)
+struct cached_page *find_get_page(struct page_cache *m, pgoff_t index)
 {
 	struct cached_page *cp;
 
@@ -178,7 +177,7 @@ struct cached_page *find_get_page(struct address_space *m, pgoff_t index)
 	return cp;
 }
 
-struct cached_page *find_or_create_page(struct address_space *m, pgoff_t index)
+struct cached_page *find_or_create_page(struct page_cache *m, pgoff_t index)
 {
 	struct cached_page *cp, *existing;
 
@@ -265,7 +264,7 @@ void cached_page_mark_uptodate(struct cached_page *cp)
 
 void cached_page_mark_dirty(struct cached_page *cp)
 {
-	struct address_space *m = cp->mapping;
+	struct page_cache *m = cp->mapping;
 	bool need_link;
 
 	spinlock_acquire(&m->lock);
@@ -278,7 +277,7 @@ void cached_page_mark_dirty(struct cached_page *cp)
 	spinlock_release(&m->lock);
 }
 
-struct cached_page *read_mapping_page(struct address_space *m, pgoff_t index)
+struct cached_page *read_mapping_page(struct page_cache *m, pgoff_t index)
 {
 	struct cached_page *cp;
 	int err;
@@ -310,7 +309,7 @@ struct cached_page *read_mapping_page(struct address_space *m, pgoff_t index)
 	return cp;
 }
 
-int filemap_writeback(struct address_space *m)
+int filemap_writeback(struct page_cache *m)
 {
 	int first_err = 0;
 
@@ -357,7 +356,7 @@ int filemap_writeback(struct address_space *m)
 	return first_err;
 }
 
-void truncate_inode_pages(struct address_space *m, loff_t new_size)
+void truncate_inode_pages(struct page_cache *m, loff_t new_size)
 {
 	pgoff_t first_full;
 	pgoff_t partial_idx;
@@ -413,11 +412,11 @@ void truncate_inode_pages(struct address_space *m, loff_t new_size)
 	}
 }
 
-ssize_t generic_file_read(struct file *file, char *buf, usize_t size,
+ssize_t generic_file_read(struct opened_file *file, char *buf, usize_t size,
 			  loff_t *pos)
 {
-	struct inode *inode = file->f_inode;
-	struct address_space *m = inode->i_mapping;
+	struct fs_inode *inode = file->f_inode;
+	struct page_cache *m = inode->i_mapping;
 	ssize_t total = 0;
 	loff_t isize;
 	loff_t end;
@@ -465,11 +464,11 @@ ssize_t generic_file_read(struct file *file, char *buf, usize_t size,
 	return total > 0 ? total : err;
 }
 
-ssize_t generic_file_write(struct file *file, const char *buf, usize_t size,
+ssize_t generic_file_write(struct opened_file *file, const char *buf, usize_t size,
 			   loff_t *pos)
 {
-	struct inode *inode = file->f_inode;
-	struct address_space *m = inode->i_mapping;
+	struct fs_inode *inode = file->f_inode;
+	struct page_cache *m = inode->i_mapping;
 	ssize_t total = 0;
 	int err = 0;
 
