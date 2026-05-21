@@ -33,7 +33,7 @@ struct mount {
 	/* Superblock backing this mount; lifetime managed by mount lifecycle. */
 	struct super_block *mnt_sb;
 
-	arc_t mnt_count;
+	refcnt_t mnt_count;
 	spinlock_t mnt_lock;
 
 	unsigned int mnt_flags;

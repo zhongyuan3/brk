@@ -12,6 +12,7 @@ obj-y += irq.o
 obj-y += entry.o
 obj-y += console.o
 obj-y += lock.o
+obj-y += refcnt.o
 
 subdir-y += process
 subdir-y += syscall

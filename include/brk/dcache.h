@@ -29,7 +29,7 @@ struct qstr {
 	}
 
 struct dentry {
-	arc_t d_count;
+	refcnt_t d_count;
 
 	unsigned int d_flags; /* protected by d_lock */
 	spinlock_t d_lock;

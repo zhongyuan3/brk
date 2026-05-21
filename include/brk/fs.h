@@ -128,7 +128,7 @@ struct super_block {
 	struct list_head s_list; /* protected by sb_lock */
 	struct file_system_type *s_type;
 	struct list_head s_instances; /* protected by s_type->fs_lock */
-	arc_t s_count;
+	refcnt_t s_count;
 
 	unsigned long s_blocksize;
 	unsigned long s_magic;
@@ -227,7 +227,7 @@ struct inode {
 	const struct inode_operations *i_op;
 	const struct file_operations *i_fop;
 
-	arc_t i_count;
+	refcnt_t i_count;
 	spinlock_t i_lock; /* protects i_state and i_dentry linkage */
 	sleeplock_t
 		i_rwsem; /* VFS op serialization: read for lookup, write for mutate */
@@ -407,7 +407,7 @@ struct inode_operations {
 };
 
 struct file {
-	arc_t f_count;
+	refcnt_t f_count;
 
 	struct path
 		f_path; /* open path (dentry and mount); holds refs via path_get/path_put */

@@ -38,7 +38,7 @@ static struct inode *alloc_inode(struct super_block *sb, unsigned long ino)
 	inode->i_sb = sb;
 	inode->i_op = NULL;
 	inode->i_fop = NULL;
-	arc_init(&inode->i_count, 1);
+	refcnt_init(&inode->i_count, 1);
 	spinlock_init(&inode->i_lock, "inode.i_lock");
 	sleeplock_init(&inode->i_rwsem, "inode.i_rwsem");
 	inode->i_state = 0;
@@ -192,7 +192,7 @@ void inode_unlock_new(struct inode *inode)
 
 struct inode *inode_dup(struct inode *inode)
 {
-	arc_inc(&inode->i_count);
+	refcnt_inc(&inode->i_count);
 	return inode;
 }
 
@@ -200,7 +200,7 @@ void inode_put(struct inode *inode)
 {
 	const struct super_operations *s_op;
 
-	if (arc_dec_fetch(&inode->i_count) > 0)
+	if (refcnt_dec_fetch(&inode->i_count) > 0)
 		return;
 
 	spinlock_acquire(&inode->i_lock);

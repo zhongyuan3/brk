@@ -23,7 +23,7 @@ struct tty *tty_alloc(void)
 		return NULL;
 	}
 	tty->rx_size = TTY_RX_BUF_SIZE;
-	arc_init(&tty->refcnt, 0);
+	refcnt_init(&tty->refcnt, 0);
 	return tty;
 }
 
@@ -194,7 +194,7 @@ struct tty *tty_open(struct tty_port *port)
 		spinlock_release(&port->lock);
 		return NULL;
 	}
-	arc_inc(&tty->refcnt);
+	refcnt_inc(&tty->refcnt);
 	spinlock_release(&port->lock);
 	return tty;
 }
@@ -203,5 +203,5 @@ void tty_close(struct tty *tty)
 {
 	if (!tty)
 		return;
-	arc_dec(&tty->refcnt);
+	refcnt_dec(&tty->refcnt);
 }
