@@ -31,7 +31,7 @@ struct virtio_disk_device {
 
 struct virtio_disk_driver {
 	struct virtio_disk_device **disks;
-	struct blkdev **bdevs;
+	struct block_dev **bdevs;
 	unsigned num_disks;
 	spinlock_t lock;
 	unsigned major;

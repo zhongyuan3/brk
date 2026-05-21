@@ -20,17 +20,17 @@ void chrdev_registry_init(void)
 	dev_map_init(&cd_map, FIRST_DYNAMIC_CHRDEV_MAJOR);
 }
 
-struct chrdev *chrdev_alloc(void)
+struct char_dev *chrdev_alloc(void)
 {
-	return kzalloc(sizeof(struct chrdev));
+	return kzalloc(sizeof(struct char_dev));
 }
 
-void chrdev_free(struct chrdev *cd)
+void chrdev_free(struct char_dev *cd)
 {
 	kfree(cd);
 }
 
-int chrdev_register(struct chrdev *cd)
+int chrdev_register(struct char_dev *cd)
 {
 	if (!cd || !IS_CHRDEV(cd->dev))
 		return -EINVAL;
@@ -46,9 +46,9 @@ int chrdev_register(struct chrdev *cd)
 	return 0;
 }
 
-static struct chrdev *chrdev_get_no_lock(dev_t dev)
+static struct char_dev *chrdev_get_no_lock(dev_t dev)
 {
-	struct chrdev *cd;
+	struct char_dev *cd;
 
 	hlist_for_each_entry(cd, &cd_htable[MAJOR(dev)], hlist) {
 		if (cd->dev == dev)
@@ -58,17 +58,17 @@ static struct chrdev *chrdev_get_no_lock(dev_t dev)
 	return NULL;
 }
 
-void chrdev_unregister(struct chrdev *cd)
+void chrdev_unregister(struct char_dev *cd)
 {
 	spinlock_acquire(&cd_htable_lock);
 	hlist_del_init(&cd->hlist);
 	spinlock_release(&cd_htable_lock);
 }
 
-struct chrdev *chrdev_get(dev_t dev)
+struct char_dev *chrdev_get(dev_t dev)
 {
 	spinlock_acquire(&cd_htable_lock);
-	struct chrdev *cd = chrdev_get_no_lock(dev);
+	struct char_dev *cd = chrdev_get_no_lock(dev);
 	spinlock_release(&cd_htable_lock);
 	return cd;
 }
@@ -106,7 +106,7 @@ void chrdev_free_region(unsigned major, unsigned minor, unsigned count)
 
 static int chrdev_open(struct fs_inode *inode, struct opened_file *file)
 {
-	struct chrdev *cd;
+	struct char_dev *cd;
 
 	cd = chrdev_get(inode->i_rdev);
 	if (!cd || !cd->fops || !cd->fops->open)

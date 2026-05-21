@@ -23,7 +23,7 @@ void blkdev_registry_init(void)
 	dev_map_init(&bd_map, FIRST_DYNAMIC_BLKDEV_MAJOR);
 }
 
-int blkdev_register(struct blkdev *bd)
+int blkdev_register(struct block_dev *bd)
 {
 	dev_t dev = bd->dev;
 
@@ -42,9 +42,9 @@ int blkdev_register(struct blkdev *bd)
 	return 0;
 }
 
-static struct blkdev *blkdev_get_no_lock(dev_t dev)
+static struct block_dev *blkdev_get_no_lock(dev_t dev)
 {
-	struct blkdev *bd;
+	struct block_dev *bd;
 
 	hlist_for_each_entry(bd, &bd_htable[MAJOR(dev)], hlist) {
 		if (bd->dev == dev)
@@ -54,16 +54,16 @@ static struct blkdev *blkdev_get_no_lock(dev_t dev)
 	return NULL;
 }
 
-void blkdev_unregister(struct blkdev *bd)
+void blkdev_unregister(struct block_dev *bd)
 {
 	spinlock_acquire(&bd_htable_lock);
 	hlist_del_init(&bd->hlist);
 	spinlock_release(&bd_htable_lock);
 }
 
-struct blkdev *blkdev_get(dev_t dev)
+struct block_dev *blkdev_get(dev_t dev)
 {
-	struct blkdev *bd;
+	struct block_dev *bd;
 
 	klog_debug("%s: devtype=%u, major=%u, minor=%u\n", __func__,
 		   DEVTYPE(dev), MAJOR(dev), MINOR(dev));
@@ -105,7 +105,7 @@ void blkdev_free_region(unsigned major, unsigned minor, unsigned count)
 	free_dev_region(&bd_map, major, minor, count);
 }
 
-int blkdev_check_bounds(struct blkdev *bd, u64 blk_id, u32 blk_cnt)
+int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt)
 {
 	if (blk_cnt == 0)
 		return 0;
@@ -124,7 +124,7 @@ int blkdev_check_bounds(struct blkdev *bd, u64 blk_id, u32 blk_cnt)
 
 static int bdev_readpage(struct page_cache *m, struct cached_page *cp)
 {
-	struct blkdev *bd = m->host;
+	struct block_dev *bd = m->host;
 	u32 bs = bd->phy_bsize;
 	u32 nsec;
 	u64 sector;
@@ -147,7 +147,7 @@ static int bdev_readpage(struct page_cache *m, struct cached_page *cp)
 
 static int bdev_writepage(struct page_cache *m, struct cached_page *cp)
 {
-	struct blkdev *bd = m->host;
+	struct block_dev *bd = m->host;
 	u32 bs = bd->phy_bsize;
 	u32 nsec;
 	u64 sector;
@@ -172,7 +172,7 @@ static const struct page_cache_ops bdev_aops = {
 	.writepage = bdev_writepage,
 };
 
-int bdev_read_page(struct blkdev *bd, u64 index, void *buf)
+int bdev_read_page(struct block_dev *bd, u64 index, void *buf)
 {
 	struct cached_page *cp;
 
@@ -188,7 +188,7 @@ int bdev_read_page(struct blkdev *bd, u64 index, void *buf)
 	return 0;
 }
 
-int bdev_write_page(struct blkdev *bd, u64 index, const void *buf)
+int bdev_write_page(struct block_dev *bd, u64 index, const void *buf)
 {
 	struct cached_page *cp;
 	int err;
@@ -209,9 +209,9 @@ int bdev_write_page(struct blkdev *bd, u64 index, const void *buf)
 	return err;
 }
 
-struct blkdev *blkdev_alloc(void)
+struct block_dev *blkdev_alloc(void)
 {
-	struct blkdev *bd = kzalloc(sizeof(*bd));
+	struct block_dev *bd = kzalloc(sizeof(*bd));
 	if (!bd)
 		return NULL;
 
@@ -223,7 +223,7 @@ struct blkdev *blkdev_alloc(void)
 	return bd;
 }
 
-void blkdev_free(struct blkdev *bd)
+void blkdev_free(struct block_dev *bd)
 {
 	address_space_free(bd->bd_mapping);
 	bd->bd_mapping = NULL;
@@ -232,7 +232,7 @@ void blkdev_free(struct blkdev *bd)
 
 static int blkdev_open(struct fs_inode *inode, struct opened_file *file)
 {
-	struct blkdev *bd;
+	struct block_dev *bd;
 
 	bd = blkdev_get(inode->i_rdev);
 	if (!bd)

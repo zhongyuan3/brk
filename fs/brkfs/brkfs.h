@@ -69,7 +69,7 @@ struct brkfs_dir_entry {
 };
 
 struct brkfs_sb_info {
-	struct blkdev *s_bdev;
+	struct block_dev *s_bdev;
 	struct brkfs_super_block s_sb;
 	u32 s_inodes_per_block;
 	u32 s_bits_per_block;
@@ -79,7 +79,7 @@ struct brkfs_inode_info {
 	u32 i_block[BRKFS_BLOCKS];
 };
 
-struct brkfs_sb_info *brkfs_sb_info_alloc(struct blkdev *bdev,
+struct brkfs_sb_info *brkfs_sb_info_alloc(struct block_dev *bdev,
 					  struct brkfs_super_block *sb);
 void brkfs_sb_info_free(struct brkfs_sb_info *sbi);
 int brkfs_inode_read(struct brkfs_sb_info *sbi, struct fs_inode *inode);

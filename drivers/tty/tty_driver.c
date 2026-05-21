@@ -54,7 +54,7 @@ void tty_free_driver(struct tty_driver *driver)
 static void tty_driver_cleanup_port(struct tty_driver *driver, int i)
 {
 	struct tty_port *port = driver->ports[i];
-	struct chrdev *cd = driver->cds[i];
+	struct char_dev *cd = driver->cds[i];
 
 	if (!port && !cd)
 		return;
@@ -152,7 +152,7 @@ int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port)
 	if (!driver || !port)
 		return -EINVAL;
 
-	struct chrdev *cd = chrdev_alloc();
+	struct char_dev *cd = chrdev_alloc();
 	if (!cd)
 		return -ENOMEM;
 

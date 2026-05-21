@@ -14,7 +14,7 @@
 #include <brk/string.h>
 #include <brk/types.h>
 
-struct brkfs_sb_info *brkfs_sb_info_alloc(struct blkdev *bdev,
+struct brkfs_sb_info *brkfs_sb_info_alloc(struct block_dev *bdev,
 					  struct brkfs_super_block *sb)
 {
 	struct brkfs_sb_info *sbi;
