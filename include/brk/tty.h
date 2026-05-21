@@ -15,10 +15,10 @@ struct opened_file;
 struct chrdev;
 struct tty;
 struct tty_port;
-struct tty_operations;
+struct tty_ops;
 struct tty_driver;
 
-struct tty_operations {
+struct tty_ops {
 	int (*put_char)(struct tty *tty, int c);
 };
 
@@ -31,7 +31,7 @@ struct tty_port {
 
 struct tty_driver {
 	const char *name;
-	const struct tty_operations *ops;
+	const struct tty_ops *ops;
 	struct tty_port **ports;
 	struct chrdev **cds;
 	int num_ports;
