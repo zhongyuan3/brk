@@ -61,7 +61,7 @@ static struct mount *alloc_mount(unsigned long flags)
 	mnt->mnt_parent = mnt;
 	list_init(&mnt->mnt_child);
 	list_init(&mnt->mnt_mounts);
-	arc_init(&mnt->mnt_count, 1);
+	refcnt_init(&mnt->mnt_count, 1);
 	spinlock_init(&mnt->mnt_lock, "mount.mnt_lock");
 	hlist_node_init(&mnt->mnt_hash);
 	list_init(&mnt->mnt_instance);
@@ -255,7 +255,7 @@ int do_umount(struct mount *mnt, int flags)
 /* Returns @mnt with refcount incremented. */
 struct mount *mount_dup(struct mount *mnt)
 {
-	arc_inc(&mnt->mnt_count);
+	refcnt_inc(&mnt->mnt_count);
 	return mnt;
 }
 
@@ -267,7 +267,7 @@ void mount_put(struct mount *mnt)
 	struct dentry *root;
 	struct super_block *sb;
 
-	if (arc_dec_fetch(&mnt->mnt_count) > 0)
+	if (refcnt_dec_fetch(&mnt->mnt_count) > 0)
 		return;
 
 	/*

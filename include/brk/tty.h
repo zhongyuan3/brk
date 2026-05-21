@@ -63,7 +63,7 @@ struct tty {
 	usize_t rx_r;
 	usize_t rx_w;
 	usize_t rx_e;
-	arc_t refcnt;
+	refcnt_t refcnt;
 };
 
 struct tty *tty_alloc(void);

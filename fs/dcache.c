@@ -32,7 +32,7 @@ static struct dentry *__alloc_dentry(struct super_block *sb,
 	if (!d)
 		return NULL;
 
-	arc_init(&d->d_count, 1);
+	refcnt_init(&d->d_count, 1);
 	d->d_flags = DCACHE_UNHASHED;
 	spinlock_init(&d->d_lock, "dentry.d_lock");
 	d->d_inode = NULL;
@@ -155,7 +155,7 @@ struct dentry *dentry_dup(struct dentry *dentry)
 		"%s(): Duplicating dentry: name=%.*s, inode=%ld, refcnt=%d\n",
 		__func__, dentry->d_name.len, dentry->d_name.name,
 		dentry->d_inode->i_ino, arc_get(&dentry->d_count));
-	arc_inc(&dentry->d_count);
+	refcnt_inc(&dentry->d_count);
 	return dentry;
 }
 
@@ -169,7 +169,7 @@ void dentry_put(struct dentry *dentry)
 		   __func__, dentry->d_name.len, dentry->d_name.name,
 		   dentry->d_inode->i_ino, arc_get(&dentry->d_count));
 
-	if (arc_dec_fetch(&dentry->d_count) > 0)
+	if (refcnt_dec_fetch(&dentry->d_count) > 0)
 		return;
 
 	klog_debug("%s(): Freeing dentry: name=%.*s, inode=%ld\n", __func__,
@@ -228,7 +228,7 @@ static struct dentry *dentry_lookup_locked(struct hlist_head *head,
 		    dentry->d_name.len == name->len &&
 		    !dentry->d_op->compare(dentry, name->len, name->name,
 					   &dentry->d_name)) {
-			arc_inc(&dentry->d_count);
+			refcnt_inc(&dentry->d_count);
 			return dentry;
 		}
 	}
@@ -395,7 +395,7 @@ void dcache_dump(void)
 		hlist_for_each_entry(d, head, d_hash) {
 			printk("  Name: %s, Inode: %ld, Refcnt: %d, Negative: %s, Mounted: %s\n",
 			       d->d_name.name, d->d_inode->i_ino,
-			       arc_get(&d->d_count),
+			       refcnt_read(&d->d_count),
 			       d->d_flags & DCACHE_NEGATIVE ? "true" : "false",
 			       d->d_flags & DCACHE_MOUNTED ? "true" : "false");
 		}

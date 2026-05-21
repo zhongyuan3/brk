@@ -33,7 +33,7 @@ struct address_space_operations;
  *   - @ht_node / @dirty_list are protected by mapping->lock.
  */
 struct cached_page {
-	arc_t refcnt;
+	refcnt_t refcnt;
 	struct page *page;
 	struct address_space *mapping;
 	pgoff_t index;

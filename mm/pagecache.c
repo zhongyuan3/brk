@@ -135,7 +135,7 @@ static struct cached_page *cached_page_alloc(struct address_space *m,
 
 	/* Refcount starts at 1 for the cache's implicit reference. The user
 	 * reference will be added by the insertion path below. */
-	arc_init(&cp->refcnt, 1);
+	refcnt_init(&cp->refcnt, 1);
 	cp->page = pg;
 	cp->mapping = m;
 	cp->index = index;
@@ -173,7 +173,7 @@ struct cached_page *find_get_page(struct address_space *m, pgoff_t index)
 	spinlock_acquire(&m->lock);
 	cp = __lookup_locked(m, index);
 	if (cp)
-		arc_inc(&cp->refcnt);
+		refcnt_inc(&cp->refcnt);
 	spinlock_release(&m->lock);
 	return cp;
 }
@@ -193,14 +193,14 @@ struct cached_page *find_or_create_page(struct address_space *m, pgoff_t index)
 	spinlock_acquire(&m->lock);
 	existing = __lookup_locked(m, index);
 	if (existing) {
-		arc_inc(&existing->refcnt);
+		refcnt_inc(&existing->refcnt);
 		spinlock_release(&m->lock);
 		cached_page_destroy(cp);
 		return existing;
 	}
 	hlist_add_head(&cp->ht_node, &m->pages[mapping_hash(index)]);
 	m->nrpages++;
-	arc_inc(&cp->refcnt); /* user reference returned to caller */
+	refcnt_inc(&cp->refcnt); /* user reference returned to caller */
 	spinlock_release(&m->lock);
 
 	return cp;
@@ -208,14 +208,14 @@ struct cached_page *find_or_create_page(struct address_space *m, pgoff_t index)
 
 void cached_page_get(struct cached_page *cp)
 {
-	arc_inc(&cp->refcnt);
+	refcnt_inc(&cp->refcnt);
 }
 
 void cached_page_put(struct cached_page *cp)
 {
 	if (!cp)
 		return;
-	if (arc_dec_fetch(&cp->refcnt) > 0)
+	if (refcnt_dec_fetch(&cp->refcnt) > 0)
 		return;
 
 	/*
@@ -327,7 +327,7 @@ int filemap_writeback(struct address_space *m)
 		if (!list_empty(&m->dirty_pages)) {
 			cp = list_first_entry(&m->dirty_pages,
 					      struct cached_page, dirty_list);
-			arc_inc(&cp->refcnt);
+			refcnt_inc(&cp->refcnt);
 			list_del_init(&cp->dirty_list);
 			spinlock_acquire(&cp->lock);
 			was_dirty = (cp->flags & PCP_DIRTY) != 0;
@@ -393,7 +393,7 @@ void truncate_inode_pages(struct address_space *m, loff_t new_size)
 	if (partial_off) {
 		partial = __lookup_locked(m, partial_idx);
 		if (partial)
-			arc_inc(&partial->refcnt);
+			refcnt_inc(&partial->refcnt);
 	}
 	spinlock_release(&m->lock);
 

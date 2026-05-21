@@ -103,7 +103,7 @@ int tty_unregister_driver(struct tty_driver *driver)
 	for (int i = 0; i < driver->num_ports; i++) {
 		struct tty_port *port = driver->ports[i];
 
-		if (port && port->tty && arc_get(&port->tty->refcnt) > 0) {
+		if (port && port->tty && refcnt_read(&port->tty->refcnt) > 0) {
 			spinlock_release(&driver->lock);
 			return -EBUSY;
 		}
@@ -197,7 +197,7 @@ int tty_driver_remove_port(struct tty_driver *driver, struct tty_port *port)
 		return -EINVAL;
 
 	spinlock_acquire(&driver->lock);
-	if (port->tty && arc_get(&port->tty->refcnt) > 0) {
+	if (port->tty && refcnt_read(&port->tty->refcnt) > 0) {
 		spinlock_release(&driver->lock);
 		return -EBUSY;
 	}

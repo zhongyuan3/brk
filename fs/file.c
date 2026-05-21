@@ -24,7 +24,7 @@ struct file *file_alloc(struct path *path, fmode_t mode)
 	if (!file)
 		return ERR_PTR(-ENOMEM);
 
-	arc_init(&file->f_count, 1);
+	refcnt_init(&file->f_count, 1);
 	path_dup(path);
 	file->f_path = *path;
 	file->f_inode = path->dentry->d_inode;
@@ -47,7 +47,7 @@ struct file *file_alloc(struct path *path, fmode_t mode)
 
 struct file *file_dup(struct file *file)
 {
-	arc_inc(&file->f_count);
+	refcnt_inc(&file->f_count);
 	return file;
 }
 
@@ -55,7 +55,7 @@ void file_put(struct file *file)
 {
 	const struct file_operations *fop;
 
-	if (arc_dec_fetch(&file->f_count) > 0)
+	if (refcnt_dec_fetch(&file->f_count) > 0)
 		return;
 
 	fop = file->f_op;

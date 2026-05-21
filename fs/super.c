@@ -18,7 +18,7 @@ struct super_block *alloc_super(struct file_system_type *type)
 	list_init(&sb->s_list);
 	sb->s_type = type;
 	list_init(&sb->s_instances);
-	arc_init(&sb->s_count, 1);
+	refcnt_init(&sb->s_count, 1);
 
 	sleeplock_init(&sb->s_lock, "super_block.s_lock");
 	spinlock_init(&sb->s_inode_lock, "super_block.s_inode_lock");
@@ -45,12 +45,12 @@ void free_super(struct super_block *sb)
 
 void super_dup(struct super_block *sb)
 {
-	arc_inc(&sb->s_count);
+	refcnt_inc(&sb->s_count);
 }
 
 void super_put(struct super_block *sb)
 {
-	if (arc_dec_fetch(&sb->s_count) > 0)
+	if (refcnt_dec_fetch(&sb->s_count) > 0)
 		return;
 
 	if (sb->s_op->put_super)
