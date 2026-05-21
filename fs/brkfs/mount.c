@@ -71,7 +71,7 @@ static int brkfs_validate_super(struct brkfs_super_block *sb)
 }
 
 struct path_component *brkfs_mount(struct fs_driver *fs_type, int flags,
-				 const char *dev_name, void *data)
+				   const char *dev_name, void *data)
 {
 	struct blkdev *bdev = NULL;
 	int err;

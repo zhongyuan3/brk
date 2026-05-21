@@ -464,8 +464,8 @@ ssize_t generic_file_read(struct opened_file *file, char *buf, usize_t size,
 	return total > 0 ? total : err;
 }
 
-ssize_t generic_file_write(struct opened_file *file, const char *buf, usize_t size,
-			   loff_t *pos)
+ssize_t generic_file_write(struct opened_file *file, const char *buf,
+			   usize_t size, loff_t *pos)
 {
 	struct fs_inode *inode = file->f_inode;
 	struct page_cache *m = inode->i_mapping;

@@ -87,8 +87,8 @@ static u32 hash(const struct fs_state *sb, unsigned long ino)
 }
 
 static struct fs_inode *lookup_inode(struct hlist_head *bucket,
-				    const struct fs_state *sb,
-				    unsigned long ino)
+				     const struct fs_state *sb,
+				     unsigned long ino)
 {
 	struct fs_inode *inode;
 

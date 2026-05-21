@@ -96,7 +96,7 @@ struct fs_driver {
 	 * Return: root dentry with reference held, or ERR_PTR(-errno) on failure.
 	 */
 	struct path_component *(*mount)(struct fs_driver *fs_type, int flags,
-				      const char *dev_name, void *data);
+					const char *dev_name, void *data);
 
 	/**
 	 * kill_sb() - destroy superblock (unmount filesystem)
@@ -279,8 +279,8 @@ struct fs_inode_ops {
 	 * Return: %NULL if not found, ERR_PTR() if error, a dentry if found.
 	 */
 	struct path_component *(*lookup)(struct fs_inode *dir,
-				       struct path_component *dentry,
-				       unsigned int flags);
+					 struct path_component *dentry,
+					 unsigned int flags);
 
 	/**
 	 * create() - create regular file
@@ -368,9 +368,10 @@ struct fs_inode_ops {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*rename)(struct fs_inode *old_dir, struct path_component *old_dentry,
-		      struct fs_inode *new_dir, struct path_component *new_dentry,
-		      unsigned int flags);
+	int (*rename)(struct fs_inode *old_dir,
+		      struct path_component *old_dentry,
+		      struct fs_inode *new_dir,
+		      struct path_component *new_dentry, unsigned int flags);
 
 	/**
 	 * mknod() - create device node, fifo, etc.
@@ -405,7 +406,8 @@ struct fs_inode_ops {
 	 *
 	 * Return: %0 on success, negative errno on failure.
 	 */
-	int (*setattr)(struct path_component *dentry, struct fs_inode_attr *attr);
+	int (*setattr)(struct path_component *dentry,
+		       struct fs_inode_attr *attr);
 };
 
 struct opened_file {
@@ -415,7 +417,8 @@ struct opened_file {
 		f_path; /* open path (dentry and mount); holds refs via path_get/path_put */
 	struct fs_inode *
 		f_inode; /* cached from f_path.dentry->d_inode; no extra inode refcount */
-	const struct opened_file_ops *f_op; /* file operations; fixed after open */
+	const struct opened_file_ops
+		*f_op; /* file operations; fixed after open */
 
 	spinlock_t f_lock;
 	fmode_t f_mode; /* %FMODE_READ | %FMODE_WRITE, ...; protected by @f_lock */
@@ -471,8 +474,8 @@ struct opened_file_ops {
 	 *
 	 * Return: bytes written, or negative errno.
 	 */
-	ssize_t (*write)(struct opened_file *file, const char *buf, usize_t size,
-			 loff_t *pos);
+	ssize_t (*write)(struct opened_file *file, const char *buf,
+			 usize_t size, loff_t *pos);
 
 	/**
 	 * llseek() - reposition read/write offset
@@ -570,7 +573,8 @@ int file_stat(struct opened_file *file, struct stat *buf);
 int file_truncate(struct opened_file *file, loff_t size);
 void file_cache_init(void);
 
-struct opened_file *do_openat(int dirfd, const char *path, int flags, umode_t mode);
+struct opened_file *do_openat(int dirfd, const char *path, int flags,
+			      umode_t mode);
 int do_execve(const char *path, char **argv, char **envp);
 int do_mkdirat(int dirfd, const char *path, umode_t mode);
 int do_mknodat(int dirfd, const char *path, umode_t mode, dev_t dev);
@@ -587,8 +591,8 @@ int do_rmdir(const char *pathname);
 int fs_init(void);
 
 void pipe_fs_init(void);
-int anon_pipe_create(struct opened_file **read_file, struct opened_file **write_file,
-		     unsigned int flags);
+int anon_pipe_create(struct opened_file **read_file,
+		     struct opened_file **write_file, unsigned int flags);
 
 int do_pipe2(int *pipefd, int flags);
 

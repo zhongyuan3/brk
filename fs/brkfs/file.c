@@ -119,8 +119,8 @@ static int brkfs_file_release(struct fs_inode *inode, struct opened_file *file)
 	return 0;
 }
 
-static ssize_t brkfs_file_read(struct opened_file *file, char *buf, usize_t size,
-			       loff_t *pos)
+static ssize_t brkfs_file_read(struct opened_file *file, char *buf,
+			       usize_t size, loff_t *pos)
 {
 	struct fs_inode *inode = file->f_inode;
 
@@ -162,7 +162,8 @@ static ssize_t brkfs_file_write(struct opened_file *file, const char *buf,
 	return (ssize_t)wr;
 }
 
-static loff_t brkfs_file_llseek(struct opened_file *file, loff_t offset, int whence)
+static loff_t brkfs_file_llseek(struct opened_file *file, loff_t offset,
+				int whence)
 {
 	struct fs_inode *inode = file->f_inode;
 	loff_t new_pos = 0;

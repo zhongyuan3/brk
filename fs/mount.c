@@ -90,7 +90,8 @@ static bool mountpoint_busy(struct fs_mount_state *mp_mnt,
 	return false;
 }
 
-static int graft_tree(struct fs_mount_state *new_mnt, struct file_anchor *mountpoint)
+static int graft_tree(struct fs_mount_state *new_mnt,
+		      struct file_anchor *mountpoint)
 {
 	struct path_component *mp_dentry = mountpoint->dentry;
 	struct fs_mount_state *mp_mnt = mountpoint->mnt;
@@ -314,8 +315,9 @@ void mount_put(struct fs_mount_state *mnt)
 	free_mount(mnt);
 }
 
-struct fs_mount_state *kernel_mount(struct fs_driver *fs_type, unsigned long flags,
-			      const char *dev_name, void *data)
+struct fs_mount_state *kernel_mount(struct fs_driver *fs_type,
+				    unsigned long flags, const char *dev_name,
+				    void *data)
 {
 	struct fs_mount_state *new_mnt;
 	struct path_component *root_dentry;

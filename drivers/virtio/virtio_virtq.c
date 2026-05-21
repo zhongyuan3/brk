@@ -17,8 +17,7 @@ int virtq_alloc(struct virtq *vq, unsigned int num)
 	if (!vq->avail)
 		goto err_desc;
 
-	size = sizeof(struct virtq_used) +
-	       sizeof(struct virtq_used_elem) * num;
+	size = sizeof(struct virtq_used) + sizeof(struct virtq_used_elem) * num;
 	vq->used = kzalloc(size);
 	if (!vq->used)
 		goto err_avail;

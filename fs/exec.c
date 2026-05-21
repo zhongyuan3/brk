@@ -32,7 +32,8 @@ struct exec_strings_acc {
 	usize_t bytes;
 };
 
-static int exec_read_exact(struct opened_file *fp, u64 off, void *buf, usize_t n)
+static int exec_read_exact(struct opened_file *fp, u64 off, void *buf,
+			   usize_t n)
 {
 	loff_t ret = file_lseek(fp, off, SEEK_SET);
 
@@ -66,7 +67,8 @@ static int elf_validate_exec_hdr(const struct elf64_hdr *h)
 	return 0;
 }
 
-static int elf_read_phdr(struct opened_file *f, u64 off, struct elf64_phdr *phdr)
+static int elf_read_phdr(struct opened_file *f, u64 off,
+			 struct elf64_phdr *phdr)
 {
 	ssize_t r;
 	loff_t ret = file_lseek(f, off, SEEK_SET);
@@ -81,7 +83,8 @@ static int elf_read_phdr(struct opened_file *f, u64 off, struct elf64_phdr *phdr
 	return 0;
 }
 
-static int exec_read_elf_header(struct opened_file *f, struct elf64_hdr *elf_hdr)
+static int exec_read_elf_header(struct opened_file *f,
+				struct elf64_hdr *elf_hdr)
 {
 	ssize_t r = file_read(f, elf_hdr, sizeof(*elf_hdr));
 
