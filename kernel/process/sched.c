@@ -43,7 +43,6 @@ void proc_scheduler(void)
 	struct process *next = NULL;
 
 	cpu->handoff = NULL;
-	cpu->current = NULL;
 	for (;;) {
 		proc_sched_resume();
 
@@ -58,7 +57,7 @@ void proc_scheduler(void)
 		}
 
 		spinlock_acquire(&next->lock);
-		cpu->current = next;
+		set_current_process(next);
 		cpu->irq_enabled = next->irq_enabled;
 		switch_pgtable(next->mm->pgd);
 		write_sstatus(read_sstatus() | SSTATUS_SUM);
@@ -66,7 +65,7 @@ void proc_scheduler(void)
 		next->ktime = jiffies_get();
 		switch_context(&cpu->ctx, &next->ctx);
 
-		cpu->current = NULL;
+		set_current_process(NULL);
 	}
 }
 
@@ -99,7 +98,7 @@ void proc_sched(void)
 	struct process *next = proc_get_next();
 	if (next == curr) {
 		curr->time_slice = TIME_SLICE_MAX;
-		cpu->current = curr;
+		set_current_process(curr);
 		cpu->irq_enabled = curr->irq_enabled;
 		return;
 	}
@@ -108,14 +107,14 @@ void proc_sched(void)
 	cpu->handoff = curr;
 	if (next) {
 		spinlock_acquire(&next->lock);
-		cpu->current = next;
+		set_current_process(next);
 		cpu->irq_enabled = next->irq_enabled;
 		switch_pgtable(next->mm->pgd);
 		next->time_slice = TIME_SLICE_MAX;
 		next->ktime = jiffies_get();
 		switch_context(&curr->ctx, &next->ctx);
 	} else {
-		cpu->current = NULL;
+		set_current_process(NULL);
 		switch_context(&curr->ctx, &cpu->ctx);
 	}
 

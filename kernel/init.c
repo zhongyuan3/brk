@@ -47,7 +47,8 @@ static void smp_wake_secondary_harts(u64 init_hart_id)
 
 void boot_run_primary(usize_t hart_id, u64 dtb, usize_t load_offset)
 {
-	write_tp(hart_id);
+	set_current_cpuid(hart_id);
+	set_current_process(NULL);
 	kernel_load_offset = load_offset;
 	dtb_phys = dtb;
 	init_cpuid = hart_id;
@@ -113,7 +114,8 @@ void boot_run_primary(usize_t hart_id, u64 dtb, usize_t load_offset)
 
 void boot_run_secondary(u64 hart_id)
 {
-	write_tp(hart_id);
+	set_current_cpuid(hart_id);
+	set_current_process(NULL);
 
 	write_satp(make_satp_sv39(symbol_phys(kernel_pgdir)));
 	sfence_vma();
@@ -124,6 +126,8 @@ void boot_run_secondary(u64 hart_id)
 	trap_init_hart(hart_id);
 
 	intr_on();
+
+	klog_info("hart %lu ready\n", hart_id);
 
 	proc_scheduler();
 }
