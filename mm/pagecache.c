@@ -42,7 +42,7 @@
  *   page.
  */
 
-static struct kmem_cache cached_page_cache;
+static struct kobj_pool cached_page_cache;
 
 void pagecache_init(void)
 {

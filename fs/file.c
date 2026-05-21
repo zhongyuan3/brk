@@ -8,7 +8,7 @@
 #include <brk/slab.h>
 #include <brk/types.h>
 
-static struct kmem_cache file_cache;
+static struct kobj_pool file_cache;
 
 void file_cache_init(void)
 {

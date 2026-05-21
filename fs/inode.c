@@ -13,7 +13,7 @@
 
 static struct hlist_head inode_hash_table[INODE_HTABLE_SIZE];
 static SPINLOCK_DEFINE(inode_hash_lock);
-static struct kmem_cache inode_cache;
+static struct kobj_pool inode_cache;
 
 void inode_cache_init(void)
 {

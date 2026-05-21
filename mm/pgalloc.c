@@ -7,7 +7,11 @@
 #include <brk/pgalloc.h>
 #include <brk/string.h>
 
-static struct free_area areas[PAGE_ORDER_MAX + 1];
+struct buddy_bucket {
+	struct list_head free_list;
+};
+
+static struct buddy_bucket areas[PAGE_ORDER_MAX + 1];
 static SPINLOCK_DEFINE(areas_lock);
 
 struct page *page_alloc(unsigned int order)

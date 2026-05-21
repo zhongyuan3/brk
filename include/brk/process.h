@@ -97,7 +97,7 @@ struct process {
 	int exit_status;
 	bool killed;
 
-	struct mm_struct *mm;
+	struct uvm_space *mm;
 	struct file *ofiles[OPEN_MAX];
 	struct path cwd;
 	struct path root;

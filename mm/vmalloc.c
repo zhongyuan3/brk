@@ -12,7 +12,16 @@
 #include <brk/string.h>
 #include <brk/vmalloc.h>
 
-static struct kmem_cache vma_cache;
+struct vmalloc_region {
+	struct list_head list;
+	u64 addr;
+	usize_t size;
+	struct page **pages;
+	usize_t nr_pages;
+	bool is_free;
+};
+
+static struct kobj_pool vma_cache;
 static struct list_head vma;
 static SPINLOCK_DEFINE(vma_lock);
 
@@ -250,9 +259,24 @@ void uvunmap(pgde_t *pgd, u64 addr, usize_t size)
 	vunmap(pgd, addr, size, VMAP_MODE_FINAL);
 }
 
-static struct vm_area *find_vm_area(u64 addr)
+static struct vmalloc_region *vmalloc_region_alloc(void)
 {
-	struct vm_area *area;
+	struct vmalloc_region *vma = kmem_cache_alloc(&vma_cache);
+	if (vma) {
+		memset(vma, 0, sizeof(*vma));
+		list_init(&vma->list);
+	}
+	return vma;
+}
+
+static void vmalloc_region_free(struct vmalloc_region *area)
+{
+	kmem_cache_free(&vma_cache, area);
+}
+
+static struct vmalloc_region *find_vm_area(u64 addr)
+{
+	struct vmalloc_region *area;
 
 	list_for_each_entry(area, &vma, list)
 		if (area->addr == addr)
@@ -263,7 +287,7 @@ static struct vm_area *find_vm_area(u64 addr)
 
 static void merge_free_vm_areas(void)
 {
-	struct vm_area *curr, *next;
+	struct vmalloc_region *curr, *next;
 
 	list_for_each_entry_safe(curr, next, &vma, list) {
 		if (curr->is_free && next->is_free &&
@@ -271,15 +295,15 @@ static void merge_free_vm_areas(void)
 			next->addr = curr->addr;
 			next->size += curr->size;
 			list_del(&curr->list);
-			vm_area_free(curr);
+			vmalloc_region_free(curr);
 		}
 	}
 }
 
-static struct vm_area *find_free_vm_area(usize_t size)
+static struct vmalloc_region *find_free_vm_area(usize_t size)
 {
-	struct vm_area *area;
-	struct vm_area *new_area;
+	struct vmalloc_region *area;
+	struct vmalloc_region *new_area;
 
 	size = round_up(size, PAGE_SIZE);
 
@@ -292,7 +316,7 @@ static struct vm_area *find_free_vm_area(usize_t size)
 			area->is_free = false;
 			return area;
 		} else {
-			new_area = vm_area_alloc();
+			new_area = vmalloc_region_alloc();
 			if (!new_area)
 				return NULL;
 			new_area->addr = area->addr + size;
@@ -308,7 +332,7 @@ static struct vm_area *find_free_vm_area(usize_t size)
 	return NULL;
 }
 
-static void free_vm_area(struct vm_area *area)
+static void free_vm_area(struct vmalloc_region *area)
 {
 	area->is_free = true;
 	merge_free_vm_areas();
@@ -316,10 +340,10 @@ static void free_vm_area(struct vm_area *area)
 
 void vmalloc_init(void)
 {
-	kmem_cache_init(&vma_cache, sizeof(struct vm_area),
-			alignof(struct vm_area), "vma_cache");
+	kmem_cache_init(&vma_cache, sizeof(struct vmalloc_region),
+			alignof(struct vmalloc_region), "vma_cache");
 	list_init(&vma);
-	struct vm_area *area = vm_area_alloc();
+	struct vmalloc_region *area = vmalloc_region_alloc();
 	area->addr = VMALLOC_START;
 	area->size = VMALLOC_SIZE;
 	area->is_free = true;
@@ -332,7 +356,7 @@ void *vmalloc(usize_t size)
 
 	size = round_up(size, PAGE_SIZE);
 
-	struct vm_area *area = find_free_vm_area(size);
+	struct vmalloc_region *area = find_free_vm_area(size);
 	if (!area) {
 		spinlock_release(&vma_lock);
 		return NULL;
@@ -379,7 +403,7 @@ out_cleanup:
 
 void vfree(void *ptr)
 {
-	struct vm_area *area;
+	struct vmalloc_region *area;
 
 	spinlock_acquire(&vma_lock);
 	area = find_vm_area((u64)ptr);
@@ -400,7 +424,7 @@ void vfree(void *ptr)
 
 void *vmalloc_nomap(usize_t size)
 {
-	struct vm_area *area;
+	struct vmalloc_region *area;
 
 	spinlock_acquire(&vma_lock);
 	area = find_free_vm_area(round_up(size, PAGE_SIZE));
@@ -413,7 +437,7 @@ void *vmalloc_nomap(usize_t size)
 
 void vfree_nomap(void *ptr)
 {
-	struct vm_area *area;
+	struct vmalloc_region *area;
 
 	spinlock_acquire(&vma_lock);
 	area = find_vm_area((u64)ptr);
@@ -423,19 +447,4 @@ void vfree_nomap(void *ptr)
 	}
 	free_vm_area(area);
 	spinlock_release(&vma_lock);
-}
-
-struct vm_area *vm_area_alloc(void)
-{
-	struct vm_area *vma = kmem_cache_alloc(&vma_cache);
-	if (vma) {
-		memset(vma, 0, sizeof(*vma));
-		list_init(&vma->list);
-	}
-	return vma;
-}
-
-void vm_area_free(struct vm_area *area)
-{
-	kmem_cache_free(&vma_cache, area);
 }
