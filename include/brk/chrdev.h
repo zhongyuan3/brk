@@ -7,7 +7,7 @@
 
 struct opened_file_ops;
 
-struct chrdev {
+struct char_dev {
 	dev_t dev;
 	const struct opened_file_ops *fops;
 	struct hlist_node hlist;
@@ -15,12 +15,12 @@ struct chrdev {
 
 void chrdev_registry_init(void);
 
-struct chrdev *chrdev_alloc(void);
-void chrdev_free(struct chrdev *cd);
+struct char_dev *chrdev_alloc(void);
+void chrdev_free(struct char_dev *cd);
 
-int chrdev_register(struct chrdev *cd);
-void chrdev_unregister(struct chrdev *cd);
-struct chrdev *chrdev_get(dev_t dev);
+int chrdev_register(struct char_dev *cd);
+void chrdev_unregister(struct char_dev *cd);
+struct char_dev *chrdev_get(dev_t dev);
 
 int chrdev_alloc_major(unsigned *major_out);
 void chrdev_free_major(unsigned major);

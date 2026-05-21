@@ -13,7 +13,8 @@
 #include <brk/stat.h>
 #include <brk/string.h>
 
-static int brkfs_read_super(struct brkfs_super_block *sb, struct blkdev *bdev)
+static int brkfs_read_super(struct brkfs_super_block *sb,
+			    struct block_dev *bdev)
 {
 	u8 *page;
 	int err;
@@ -32,12 +33,12 @@ static int brkfs_read_super(struct brkfs_super_block *sb, struct blkdev *bdev)
 	return 0;
 }
 
-static struct blkdev *brkfs_get_bdev(const char *dev_name)
+static struct block_dev *brkfs_get_bdev(const char *dev_name)
 {
 	int err;
 	struct file_anchor path = { 0 };
 	struct fs_inode *inode;
-	struct blkdev *bdev;
+	struct block_dev *bdev;
 
 	err = path_lookup(dev_name, 0, &path);
 	if (err)
@@ -73,7 +74,7 @@ static int brkfs_validate_super(struct brkfs_super_block *sb)
 struct path_component *brkfs_mount(struct fs_driver *fs_type, int flags,
 				   const char *dev_name, void *data)
 {
-	struct blkdev *bdev = NULL;
+	struct block_dev *bdev = NULL;
 	int err;
 	struct brkfs_super_block brk_sb;
 	struct fs_state *sb;

@@ -12,7 +12,7 @@
 #define TTY_VIS_BACKSPACE 0x100
 
 struct opened_file;
-struct chrdev;
+struct char_dev;
 struct tty;
 struct tty_port;
 struct tty_ops;
@@ -33,7 +33,7 @@ struct tty_driver {
 	const char *name;
 	const struct tty_ops *ops;
 	struct tty_port **ports;
-	struct chrdev **cds;
+	struct char_dev **cds;
 	int num_ports;
 	unsigned major;
 	unsigned minor_start;

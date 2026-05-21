@@ -4,20 +4,20 @@
 #include <brk/device.h>
 #include <brk/types.h>
 
-struct blkdev;
+struct block_dev;
 struct page_cache;
 
-struct blkdev_operations {
-	int (*read)(struct blkdev *bd, u64 blk_id, void *buf, u32 blk_cnt);
-	int (*write)(struct blkdev *bd, u64 blk_id, const void *buf,
+struct block_dev_ops {
+	int (*read)(struct block_dev *bd, u64 blk_id, void *buf, u32 blk_cnt);
+	int (*write)(struct block_dev *bd, u64 blk_id, const void *buf,
 		     u32 blk_cnt);
 };
 
-struct blkdev {
+struct block_dev {
 	dev_t dev;
 	u32 phy_bsize;
 	u64 phy_bcnt;
-	struct blkdev_operations ops;
+	struct block_dev_ops ops;
 	void *priv;
 	struct page_cache *bd_mapping;
 	struct hlist_node hlist;
@@ -25,17 +25,17 @@ struct blkdev {
 
 void blkdev_registry_init(void);
 
-int blkdev_check_bounds(struct blkdev *bd, u64 blk_id, u32 blk_cnt);
+int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt);
 
-int bdev_read_page(struct blkdev *bd, u64 index, void *buf);
-int bdev_write_page(struct blkdev *bd, u64 index, const void *buf);
+int bdev_read_page(struct block_dev *bd, u64 index, void *buf);
+int bdev_write_page(struct block_dev *bd, u64 index, const void *buf);
 
-struct blkdev *blkdev_alloc(void);
-void blkdev_free(struct blkdev *bd);
+struct block_dev *blkdev_alloc(void);
+void blkdev_free(struct block_dev *bd);
 
-int blkdev_register(struct blkdev *bd);
-void blkdev_unregister(struct blkdev *bd);
-struct blkdev *blkdev_get(dev_t dev);
+int blkdev_register(struct block_dev *bd);
+void blkdev_unregister(struct block_dev *bd);
+struct block_dev *blkdev_get(dev_t dev);
 
 int blkdev_alloc_major(unsigned *major_out);
 void blkdev_free_major(unsigned major);

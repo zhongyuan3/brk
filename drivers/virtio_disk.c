@@ -208,8 +208,8 @@ static int virtio_blk_write(struct virtio_disk_device *bdev, u64 sector,
 	return virtio_blk_rw(bdev, sector, buf_phys, sec_count, true);
 }
 
-static int virtio_disk_rw(struct blkdev *bd, u64 blk_id, void *buf, u32 blk_cnt,
-			  bool write)
+static int virtio_disk_rw(struct block_dev *bd, u64 blk_id, void *buf,
+			  u32 blk_cnt, bool write)
 {
 	int err;
 	u64 buf_phys;
@@ -228,13 +228,13 @@ static int virtio_disk_rw(struct blkdev *bd, u64 blk_id, void *buf, u32 blk_cnt,
 	return virtio_blk_read(disk, blk_id, buf_phys, blk_cnt);
 }
 
-static int virtio_disk_read(struct blkdev *bd, u64 blk_id, void *buf,
+static int virtio_disk_read(struct block_dev *bd, u64 blk_id, void *buf,
 			    u32 blk_cnt)
 {
 	return virtio_disk_rw(bd, blk_id, buf, blk_cnt, false);
 }
 
-static int virtio_disk_write(struct blkdev *bd, u64 blk_id, const void *buf,
+static int virtio_disk_write(struct block_dev *bd, u64 blk_id, const void *buf,
 			     u32 blk_cnt)
 {
 	return virtio_disk_rw(bd, blk_id, (void *)buf, blk_cnt, true);
@@ -356,7 +356,7 @@ void virtio_disk_device_destroy(struct virtio_disk_device *disk)
 
 int virtio_disk_add_device(struct virtio_disk_device *disk)
 {
-	struct blkdev *bd;
+	struct block_dev *bd;
 	int err;
 
 	if (!vdisk_driver)
@@ -400,7 +400,7 @@ int virtio_disk_add_device(struct virtio_disk_device *disk)
 
 void virtio_disk_remove_device(struct virtio_disk_device *disk)
 {
-	struct blkdev *bdev = NULL;
+	struct block_dev *bdev = NULL;
 
 	if (!disk || !disk->vdev)
 		return;

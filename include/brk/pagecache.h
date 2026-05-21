@@ -70,7 +70,7 @@ struct page_cache_ops {
 
 /*
  * @host is opaque so a mapping can be backed by either a file inode
- * (struct fs_inode *) or a block device (struct blkdev *). Callbacks in
+ * (struct fs_inode *) or a block device (struct block_dev *). Callbacks in
  * a_ops know which one to cast to.
  */
 struct page_cache {
