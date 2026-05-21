@@ -136,8 +136,8 @@ void truncate_inode_pages(struct page_cache *mapping, loff_t new_size);
 /* Generic file I/O helpers built on top of the page cache. */
 ssize_t generic_file_read(struct opened_file *file, char *buf, usize_t size,
 			  loff_t *pos);
-ssize_t generic_file_write(struct opened_file *file, const char *buf, usize_t size,
-			   loff_t *pos);
+ssize_t generic_file_write(struct opened_file *file, const char *buf,
+			   usize_t size, loff_t *pos);
 
 static inline void *cached_page_addr(const struct cached_page *cp)
 {

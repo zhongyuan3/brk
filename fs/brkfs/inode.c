@@ -52,8 +52,8 @@ static int brkfs_init_loaded_inode(struct brkfs_sb_info *sbi,
 }
 
 static struct path_component *brkfs_lookup(struct fs_inode *dir,
-					 struct path_component *dentry,
-					 unsigned int flags)
+					   struct path_component *dentry,
+					   unsigned int flags)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
 	struct fs_state *sb = dir->i_sb;
@@ -451,7 +451,8 @@ static int brkfs_getattr(const struct file_anchor *path, struct stat *stat,
 	return 0;
 }
 
-static int brkfs_setattr(struct path_component *dentry, struct fs_inode_attr *attr)
+static int brkfs_setattr(struct path_component *dentry,
+			 struct fs_inode_attr *attr)
 {
 	struct fs_inode *inode = dentry->d_inode;
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;

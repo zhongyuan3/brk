@@ -37,7 +37,8 @@ static ssize_t brkfs_dir_write(struct opened_file *file, const char *buf,
 	return -EISDIR;
 }
 
-static loff_t brkfs_dir_llseek(struct opened_file *file, loff_t offset, int whence)
+static loff_t brkfs_dir_llseek(struct opened_file *file, loff_t offset,
+			       int whence)
 {
 	(void)file;
 	(void)offset;

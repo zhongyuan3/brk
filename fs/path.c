@@ -120,7 +120,8 @@ int path_dot_dot(struct file_anchor *path, struct file_anchor *dotdot)
 
 		if (cur.dentry == cur.mnt->mnt_root && cur.mnt->mnt_parent &&
 		    cur.mnt != cur.mnt->mnt_parent) {
-			struct fs_mount_state *pmnt = mount_dup(cur.mnt->mnt_parent);
+			struct fs_mount_state *pmnt =
+				mount_dup(cur.mnt->mnt_parent);
 			struct path_component *mp =
 				dentry_dup(cur.mnt->mnt_mountpoint);
 
@@ -252,7 +253,8 @@ int path_to_absolute(const struct file_anchor *path, char *buf, usize_t bufsz)
 
 		if (cur.dentry == cur.mnt->mnt_root && cur.mnt->mnt_parent &&
 		    cur.mnt != cur.mnt->mnt_parent) {
-			struct fs_mount_state *pmnt = mount_dup(cur.mnt->mnt_parent);
+			struct fs_mount_state *pmnt =
+				mount_dup(cur.mnt->mnt_parent);
 			struct path_component *mp =
 				dentry_dup(cur.mnt->mnt_mountpoint);
 

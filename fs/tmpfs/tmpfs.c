@@ -207,7 +207,8 @@ static struct tmpfs_inode *tmpfs_inode_alloc_dir(struct tmpfs_super_block *sb,
 	return ip;
 }
 
-static int tmpfs_inode_read(struct tmpfs_super_block *sb, struct fs_inode *inode)
+static int tmpfs_inode_read(struct tmpfs_super_block *sb,
+			    struct fs_inode *inode)
 {
 	struct tmpfs_inode *t_inode;
 
@@ -579,7 +580,7 @@ static int tmpfs_init_new_inode(struct tmpfs_super_block *sb,
 }
 
 static struct path_component *tmpfs_mount(struct fs_driver *fs_type, int flags,
-					const char *dev_name, void *data)
+					  const char *dev_name, void *data)
 {
 	(void)dev_name;
 	(void)data;
@@ -702,8 +703,8 @@ static int tmpfs_sync_fs(struct fs_state *sb, int wait)
 }
 
 static struct path_component *tmpfs_lookup(struct fs_inode *dir,
-					 struct path_component *dentry,
-					 unsigned int flags)
+					   struct path_component *dentry,
+					   unsigned int flags)
 {
 	(void)flags;
 
@@ -1167,7 +1168,8 @@ static int tmpfs_getattr(const struct file_anchor *path, struct stat *stat,
 	return 0;
 }
 
-static int tmpfs_setattr(struct path_component *dentry, struct fs_inode_attr *attr)
+static int tmpfs_setattr(struct path_component *dentry,
+			 struct fs_inode_attr *attr)
 {
 	(void)dentry;
 	(void)attr;
@@ -1182,8 +1184,8 @@ static int tmpfs_file_open(struct fs_inode *inode, struct opened_file *file)
 	return -EINVAL;
 }
 
-static ssize_t tmpfs_file_read(struct opened_file *file, char *buf, usize_t size,
-			       loff_t *pos)
+static ssize_t tmpfs_file_read(struct opened_file *file, char *buf,
+			       usize_t size, loff_t *pos)
 {
 	struct fs_inode *inode = file->f_inode;
 	struct tmpfs_inode *t_inode = inode->i_private;
@@ -1243,7 +1245,8 @@ static ssize_t tmpfs_file_write(struct opened_file *file, const char *buf,
 	return wcnt;
 }
 
-static loff_t tmpfs_file_llseek(struct opened_file *file, loff_t offset, int whence)
+static loff_t tmpfs_file_llseek(struct opened_file *file, loff_t offset,
+				int whence)
 {
 	struct fs_inode *inode = file->f_inode;
 	struct tmpfs_inode *t_inode = inode->i_private;
@@ -1332,7 +1335,8 @@ static ssize_t tmpfs_dir_write(struct opened_file *file, const char *buf,
 	return -EISDIR;
 }
 
-static loff_t tmpfs_dir_llseek(struct opened_file *file, loff_t offset, int whence)
+static loff_t tmpfs_dir_llseek(struct opened_file *file, loff_t offset,
+			       int whence)
 {
 	loff_t new_pos = 0;
 

@@ -436,9 +436,9 @@ static void procfs_init_inode(struct fs_inode *inode, umode_t mode,
 }
 
 static struct fs_inode *procfs_iget(struct fs_state *sb, unsigned long ino,
-				   umode_t mode, unsigned int nlink,
-				   const struct fs_inode_ops *iop,
-				   const struct opened_file_ops *fop)
+				    umode_t mode, unsigned int nlink,
+				    const struct fs_inode_ops *iop,
+				    const struct opened_file_ops *fop)
 {
 	struct fs_inode *inode = inode_get_locked(sb, ino);
 	if (!inode)
@@ -459,7 +459,7 @@ static struct fs_inode *procfs_iget_root(struct fs_state *sb)
 }
 
 static struct fs_inode *procfs_iget_static(struct fs_state *sb,
-					  const struct procfs_entry *e)
+					   const struct procfs_entry *e)
 {
 	return procfs_iget(sb, procfs_make_static_ino(e->idx), e->mode, 1,
 			   &procfs_file_iops, &procfs_file_fops);
@@ -472,7 +472,7 @@ static struct fs_inode *procfs_iget_pid_dir(struct fs_state *sb, pid_t pid)
 }
 
 static struct fs_inode *procfs_iget_pid_file(struct fs_state *sb, pid_t pid,
-					    const struct procfs_entry *e)
+					     const struct procfs_entry *e)
 {
 	return procfs_iget(sb, procfs_make_pid_file_ino(pid, e->idx), e->mode,
 			   1, &procfs_file_iops, &procfs_file_fops);
@@ -520,8 +520,8 @@ static const struct fs_state_ops procfs_sops = {
 /* ---------------- fs_node_ops --------------------------------- */
 
 static struct path_component *procfs_root_lookup(struct fs_inode *dir,
-					       struct path_component *dentry,
-					       unsigned int flags)
+						 struct path_component *dentry,
+						 unsigned int flags)
 {
 	(void)flags;
 	struct fs_state *sb = dir->i_sb;
@@ -551,9 +551,9 @@ static struct path_component *procfs_root_lookup(struct fs_inode *dir,
 	return NULL;
 }
 
-static struct path_component *procfs_pid_dir_lookup(struct fs_inode *dir,
-						  struct path_component *dentry,
-						  unsigned int flags)
+static struct path_component *
+procfs_pid_dir_lookup(struct fs_inode *dir, struct path_component *dentry,
+		      unsigned int flags)
 {
 	(void)flags;
 	struct fs_state *sb = dir->i_sb;
@@ -688,8 +688,8 @@ static int procfs_file_release(struct fs_inode *inode, struct opened_file *file)
 	return 0;
 }
 
-static ssize_t procfs_file_read(struct opened_file *file, char *buf, usize_t size,
-				loff_t *pos)
+static ssize_t procfs_file_read(struct opened_file *file, char *buf,
+				usize_t size, loff_t *pos)
 {
 	struct procfs_file_priv *priv = file->private_data;
 	usize_t remaining, n;
@@ -803,8 +803,8 @@ static int procfs_dir_release(struct fs_inode *inode, struct opened_file *file)
 	return 0;
 }
 
-static ssize_t procfs_dir_read(struct opened_file *file, char *buf, usize_t size,
-			       loff_t *pos)
+static ssize_t procfs_dir_read(struct opened_file *file, char *buf,
+			       usize_t size, loff_t *pos)
 {
 	(void)file;
 	(void)buf;
@@ -823,7 +823,8 @@ static ssize_t procfs_dir_write(struct opened_file *file, const char *buf,
 	return -EISDIR;
 }
 
-static loff_t procfs_dir_llseek(struct opened_file *file, loff_t offset, int whence)
+static loff_t procfs_dir_llseek(struct opened_file *file, loff_t offset,
+				int whence)
 {
 	loff_t new_pos;
 
@@ -1004,7 +1005,7 @@ static const struct opened_file_ops procfs_pid_dir_fops = {
 /* ---------------- mount / unmount ---------------------------------- */
 
 static struct path_component *procfs_mount(struct fs_driver *fs_type, int flags,
-					 const char *dev_name, void *data)
+					   const char *dev_name, void *data)
 {
 	(void)dev_name;
 	(void)data;

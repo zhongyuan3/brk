@@ -6,7 +6,7 @@
 #include <brk/path.h>
 
 struct opened_file *do_openat(int dirfd, const char *pathname, int flags,
-			  umode_t mode)
+			      umode_t mode)
 {
 	int err;
 	struct opened_file *file;

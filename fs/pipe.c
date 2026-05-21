@@ -41,8 +41,8 @@ static const struct qstr pipe_d_name = {
 };
 
 static struct path_component *pipefs_lookup(struct fs_inode *dir,
-					  struct path_component *dentry,
-					  unsigned int flags)
+					    struct path_component *dentry,
+					    unsigned int flags)
 {
 	(void)dir;
 	(void)dentry;
@@ -78,8 +78,8 @@ static int pipefs_dir_open(struct fs_inode *inode, struct opened_file *file)
 	return 0;
 }
 
-static ssize_t pipefs_dir_read(struct opened_file *file, char *buf, usize_t size,
-			       loff_t *pos)
+static ssize_t pipefs_dir_read(struct opened_file *file, char *buf,
+			       usize_t size, loff_t *pos)
 {
 	(void)file;
 	(void)buf;
@@ -98,7 +98,8 @@ static ssize_t pipefs_dir_write(struct opened_file *file, const char *buf,
 	return -EISDIR;
 }
 
-static loff_t pipefs_dir_llseek(struct opened_file *file, loff_t offset, int whence)
+static loff_t pipefs_dir_llseek(struct opened_file *file, loff_t offset,
+				int whence)
 {
 	loff_t new_pos = 0;
 
@@ -184,7 +185,7 @@ static void pipefs_kill_sb(struct fs_state *sb)
 }
 
 static struct path_component *pipefs_mount(struct fs_driver *fs_type, int flags,
-					 const char *dev_name, void *data)
+					   const char *dev_name, void *data)
 {
 	struct fs_state *sb;
 	struct fs_inode *root_inode;
@@ -336,8 +337,8 @@ static ssize_t pipe_read(struct opened_file *file, char *buf, usize_t size,
 	return total;
 }
 
-static ssize_t pipe_write(struct opened_file *file, const char *buf, usize_t size,
-			  loff_t *pos)
+static ssize_t pipe_write(struct opened_file *file, const char *buf,
+			  usize_t size, loff_t *pos)
 {
 	struct anon_pipe *pipe = file->f_inode->i_private;
 	usize_t n, first;
@@ -427,8 +428,8 @@ static unsigned long pipe_alloc_ino(void)
  *
  * Return: 0 on success, negative errno on failure.
  */
-int anon_pipe_create(struct opened_file **read_file, struct opened_file **write_file,
-		     unsigned int flags)
+int anon_pipe_create(struct opened_file **read_file,
+		     struct opened_file **write_file, unsigned int flags)
 {
 	struct fs_inode *inode;
 	struct path_component *d;

@@ -24,7 +24,7 @@ void dentry_cache_init(void)
 }
 
 static struct path_component *__alloc_dentry(struct fs_state *sb,
-					   const struct qstr *name)
+					     const struct qstr *name)
 {
 	struct path_component *d;
 
@@ -72,7 +72,7 @@ static void __free_dentry(struct path_component *dentry)
 }
 
 static struct path_component *alloc_dentry(struct path_component *parent,
-					 const struct qstr *name)
+					   const struct qstr *name)
 {
 	struct path_component *d;
 
@@ -120,7 +120,7 @@ struct path_component *dentry_make_root(struct fs_inode *root_inode)
  * Used for kernel objects such as pipes that are not reachable by path lookup.
  */
 struct path_component *dentry_alloc_anon(struct fs_inode *inode,
-				       const struct qstr *name)
+					 const struct qstr *name)
 {
 	struct path_component *d;
 
@@ -215,9 +215,9 @@ void dentry_put(struct path_component *dentry)
 	__free_dentry(dentry);
 }
 
-static struct path_component *dentry_lookup_locked(struct hlist_head *head,
-						 struct path_component *parent,
-						 const struct qstr *name)
+static struct path_component *
+dentry_lookup_locked(struct hlist_head *head, struct path_component *parent,
+		     const struct qstr *name)
 {
 	struct path_component *dentry;
 
@@ -249,7 +249,7 @@ static struct path_component *dentry_lookup_locked(struct hlist_head *head,
  * Return: The dentry on success or ERR_PTR(-errno) on failure.
  */
 struct path_component *dentry_lookup(struct path_component *parent,
-				   const struct qstr *name)
+				     const struct qstr *name)
 {
 	struct fs_inode *inode;
 	struct path_component *dentry, *tmp;
@@ -321,7 +321,7 @@ struct path_component *dentry_lookup(struct path_component *parent,
  * Return: The alias dentry on success or ERR_PTR(-errno) on failure.
  */
 struct path_component *dentry_splice_alias(struct fs_inode *inode,
-					 struct path_component *dentry)
+					   struct path_component *dentry)
 {
 	struct list_head *dentries;
 	struct path_component *d;
