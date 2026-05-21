@@ -15,21 +15,21 @@ static struct kobj_pool mm_cache;
 
 void mm_cache_init(void)
 {
-	kmem_cache_init(&mm_cache, sizeof(struct uvm_space),
-			alignof(struct uvm_space), "mm_cache");
+	kobj_pool_init(&mm_cache, sizeof(struct uvm_space),
+		       alignof(struct uvm_space), "mm_cache");
 }
 
 struct uvm_space *mm_alloc(void)
 {
 	struct uvm_space *mm;
 
-	mm = kmem_cache_alloc(&mm_cache);
+	mm = kobj_pool_alloc(&mm_cache);
 	if (!mm)
 		return NULL;
 
 	mm->pgd = create_user_pgtable();
 	if (!mm->pgd) {
-		kmem_cache_free(&mm_cache, mm);
+		kobj_pool_free(&mm_cache, mm);
 		return NULL;
 	}
 
@@ -38,7 +38,7 @@ struct uvm_space *mm_alloc(void)
 	mm->stack = uvm_region_alloc();
 	if (!mm->stack) {
 		destroy_user_pgtable(mm->pgd);
-		kmem_cache_free(&mm_cache, mm);
+		kobj_pool_free(&mm_cache, mm);
 		return NULL;
 	}
 
@@ -46,7 +46,7 @@ struct uvm_space *mm_alloc(void)
 	if (!mm->heap) {
 		uvm_region_free(mm->stack);
 		destroy_user_pgtable(mm->pgd);
-		kmem_cache_free(&mm_cache, mm);
+		kobj_pool_free(&mm_cache, mm);
 		return NULL;
 	}
 
@@ -103,7 +103,7 @@ void mm_free(struct uvm_space *mm)
 	mm_free_stack(mm);
 	mm_free_heap(mm);
 	destroy_user_pgtable(mm->pgd);
-	kmem_cache_free(&mm_cache, mm);
+	kobj_pool_free(&mm_cache, mm);
 }
 
 static int mm_copy_area(struct uvm_region *dst, struct uvm_region *src,

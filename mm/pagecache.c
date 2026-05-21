@@ -46,8 +46,8 @@ static struct kobj_pool cached_page_cache;
 
 void pagecache_init(void)
 {
-	kmem_cache_init(&cached_page_cache, sizeof(struct cached_page),
-			alignof(struct cached_page), "cached_page");
+	kobj_pool_init(&cached_page_cache, sizeof(struct cached_page),
+		       alignof(struct cached_page), "cached_page");
 }
 
 static unsigned int mapping_hash(pgoff_t index)
@@ -124,12 +124,12 @@ static struct cached_page *cached_page_alloc(struct address_space *m,
 	struct cached_page *cp;
 	struct page *pg;
 
-	cp = kmem_cache_alloc(&cached_page_cache);
+	cp = kobj_pool_alloc(&cached_page_cache);
 	if (!cp)
 		return NULL;
 	pg = page_zalloc(0);
 	if (!pg) {
-		kmem_cache_free(&cached_page_cache, cp);
+		kobj_pool_free(&cached_page_cache, cp);
 		return NULL;
 	}
 
@@ -150,7 +150,7 @@ static struct cached_page *cached_page_alloc(struct address_space *m,
 static void cached_page_destroy(struct cached_page *cp)
 {
 	page_free(cp->page, 0);
-	kmem_cache_free(&cached_page_cache, cp);
+	kobj_pool_free(&cached_page_cache, cp);
 }
 
 static struct cached_page *__lookup_locked(struct address_space *m,
