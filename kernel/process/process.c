@@ -402,22 +402,17 @@ int proc_fork(void)
 
 struct process *current_process(void)
 {
-	push_off();
-	struct cpu *cpu = current_cpu();
-	struct process *proc = cpu->current;
-	pop_off();
-	return proc;
+	return (struct process *)read_tp();
 }
 
 cpuid_t current_cpuid(void)
 {
-	return read_tp();
+	return read_sscratch();
 }
 
 struct cpu *current_cpu(void)
 {
-	cpuid_t id = current_cpuid();
-	return &cpus[id];
+	return &cpus[current_cpuid()];
 }
 
 void push_off(void)
@@ -439,4 +434,14 @@ void pop_off(void)
 	cpu->irq_nest -= 1;
 	if (cpu->irq_nest == 0 && cpu->irq_enabled)
 		intr_on();
+}
+
+void set_current_process(struct process *proc)
+{
+	write_tp((u64)proc);
+}
+
+void set_current_cpuid(cpuid_t cpuid)
+{
+	write_sscratch(cpuid);
 }

@@ -112,7 +112,6 @@ struct process {
 };
 
 struct cpu {
-	struct process *current;
 	struct process *handoff;
 	struct switch_frame ctx;
 	int irq_nest;
@@ -183,6 +182,8 @@ void pop_off(void);
 struct process *current_process(void);
 struct cpu *current_cpu(void);
 cpuid_t current_cpuid(void);
+void set_current_process(struct process *proc);
+void set_current_cpuid(cpuid_t cpuid);
 
 void switch_context(struct switch_frame *prev, struct switch_frame *next);
 

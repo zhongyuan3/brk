@@ -111,7 +111,8 @@ struct trap_frame *user_trap_handler(void)
 
 	tf = (struct trap_frame *)read_sscratch();
 	proc = container_of(tf, struct process, tf);
-	write_tp(tf->cpuid);
+	set_current_process(proc);
+	set_current_cpuid(tf->cpuid);
 	write_sstatus(read_sstatus() | SSTATUS_SUM);
 
 	jiffies = jiffies_get();
