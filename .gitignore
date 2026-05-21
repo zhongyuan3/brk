@@ -21,3 +21,5 @@ aosd.elf
 user/bin/*
 
 build/
+
+__pycache__/
