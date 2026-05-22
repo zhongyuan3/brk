@@ -1,3 +1,4 @@
+#include <brk/bitmap.h>
 #include <brk/blkdev.h>
 #include <brk/device.h>
 #include <brk/errno.h>
@@ -14,13 +15,108 @@
 #include <uapi/errno.h>
 #include <uapi/types.h>
 
-static struct dev_map bd_map;
+struct block_dev_region {
+	struct hlist_node entry;
+	unsigned minor_start;
+	unsigned minor_count;
+};
+
+static struct hlist_head bd_regs[MAJOR_MAX];
+static BITMAP_DECLARE(bd_major_pooled, MAJOR_MAX);
+static SPINLOCK_DEFINE(bd_lock);
 static struct hlist_head bd_htable[MAJOR_MAX];
 static SPINLOCK_DEFINE(bd_htable_lock);
 
+static int blkdev_alloc_major_no_lock(unsigned base_major, unsigned *major_out)
+{
+	usize_t bit = 0;
+
+	if (bitmap_alloc_bit_from(bd_major_pooled, MAJOR_MAX, base_major,
+				  &bit)) {
+		*major_out = bit;
+		return 0;
+	}
+
+	return -ENOMEM;
+}
+
+static void blkdev_free_major_no_lock(unsigned major)
+{
+	bitmap_free_bit(bd_major_pooled, MAJOR_MAX, major);
+}
+
+static int blkdev_alloc_region_no_lock(unsigned major, unsigned base_minor,
+				       unsigned count, dev_t *dev_out)
+{
+	struct block_dev_region *curr, *new_entry;
+	int err = 0;
+	bool major_allocated = false;
+	unsigned minor = base_minor;
+	struct block_dev_region *last = NULL;
+
+	if (major == 0) {
+		err = blkdev_alloc_major_no_lock(0, &major);
+		if (err)
+			return err;
+		major_allocated = true;
+	} else {
+		if (!bitmap_test_bit(bd_major_pooled, major))
+			return -EINVAL;
+	}
+
+	hlist_for_each_entry(curr, &bd_regs[major], entry) {
+		if (curr->minor_start > minor &&
+		    curr->minor_start - minor >= count) {
+			new_entry = kzalloc(sizeof(*new_entry));
+			if (!new_entry) {
+				if (major_allocated)
+					blkdev_free_major_no_lock(major);
+				return -ENOMEM;
+			}
+			new_entry->minor_start = minor;
+			new_entry->minor_count = count;
+			hlist_add_before(&new_entry->entry, &curr->entry);
+			*dev_out = MKDEV(major, minor);
+			return 0;
+		}
+		minor = curr->minor_start + curr->minor_count;
+		last = curr;
+	}
+
+	new_entry = kzalloc(sizeof(*new_entry));
+	if (!new_entry) {
+		if (major_allocated)
+			blkdev_free_major_no_lock(major);
+		return -ENOMEM;
+	}
+	new_entry->minor_start = minor;
+	new_entry->minor_count = count;
+	if (last)
+		hlist_add_behind(&new_entry->entry, &last->entry);
+	else
+		hlist_add_head(&new_entry->entry, &bd_regs[major]);
+	*dev_out = MKDEV(major, minor);
+	return 0;
+}
+
+static bool blkdev_minor_is_allocated(unsigned major, unsigned minor)
+{
+	struct block_dev_region *curr;
+
+	if (!bitmap_test_bit(bd_major_pooled, major))
+		return false;
+
+	hlist_for_each_entry(curr, &bd_regs[major], entry) {
+		if (curr->minor_start <= minor &&
+		    curr->minor_start + curr->minor_count > minor)
+			return true;
+	}
+	return false;
+}
+
 void blkdev_registry_init(void)
 {
-	dev_map_init(&bd_map, FIRST_DYNAMIC_BLKDEV_MAJOR);
+	bitmap_fill(bd_major_pooled, FIRST_DYNAMIC_BLKDEV_MAJOR);
 }
 
 int blkdev_register(struct block_dev *bd)
@@ -29,8 +125,12 @@ int blkdev_register(struct block_dev *bd)
 
 	if (!bd || !IS_BLKDEV(dev))
 		return -EINVAL;
-	if (!minor_is_allocated(&bd_map, MAJOR(dev), MINOR(dev)))
+	spinlock_acquire(&bd_lock);
+	if (!blkdev_minor_is_allocated(MAJOR(dev), MINOR(dev))) {
+		spinlock_release(&bd_lock);
 		return -EINVAL;
+	}
+	spinlock_release(&bd_lock);
 
 	klog_debug("%s: devtype=%u, major=%u, minor=%u\n", __func__,
 		   DEVTYPE(dev), MAJOR(dev), MINOR(dev));
@@ -76,33 +176,96 @@ struct block_dev *blkdev_get(dev_t dev)
 
 int blkdev_alloc_major(unsigned *major_out)
 {
-	return alloc_dev_major(&bd_map, major_out);
+	int err;
+
+	if (!major_out)
+		return -EINVAL;
+
+	spinlock_acquire(&bd_lock);
+	err = blkdev_alloc_major_no_lock(0, major_out);
+	spinlock_release(&bd_lock);
+	return err;
 }
 
 void blkdev_free_major(unsigned major)
 {
-	free_dev_major(&bd_map, major);
+	if (major >= MAJOR_MAX)
+		return;
+
+	spinlock_acquire(&bd_lock);
+	blkdev_free_major_no_lock(major);
+	spinlock_release(&bd_lock);
 }
 
 int blkdev_alloc_minor(unsigned major, unsigned *minor_out)
 {
-	return alloc_dev_minor(&bd_map, major, minor_out);
+	dev_t dev = 0;
+	int err;
+
+	if (major >= MAJOR_MAX || !minor_out)
+		return -EINVAL;
+
+	spinlock_acquire(&bd_lock);
+	if (!bitmap_test_bit(bd_major_pooled, major)) {
+		spinlock_release(&bd_lock);
+		return -EINVAL;
+	}
+	err = blkdev_alloc_region_no_lock(major, 0, 1, &dev);
+	spinlock_release(&bd_lock);
+
+	if (err)
+		return err;
+	*minor_out = MINOR(dev);
+	return 0;
 }
 
 void blkdev_free_minor(unsigned major, unsigned minor)
 {
-	free_dev_minor(&bd_map, major, minor);
+	blkdev_free_region(major, minor, 1);
 }
 
 int blkdev_alloc_region(unsigned major, unsigned base_minor, unsigned count,
 			dev_t *dev_out)
 {
-	return alloc_dev_region(&bd_map, major, base_minor, count, dev_out);
+	int ret;
+
+	if (major >= MAJOR_MAX || count == 0 || !dev_out)
+		return -EINVAL;
+
+	spinlock_acquire(&bd_lock);
+	ret = blkdev_alloc_region_no_lock(major, base_minor, count, dev_out);
+	spinlock_release(&bd_lock);
+
+	return ret;
 }
 
 void blkdev_free_region(unsigned major, unsigned minor, unsigned count)
 {
-	free_dev_region(&bd_map, major, minor, count);
+	struct block_dev_region *curr;
+
+	if (major >= MAJOR_MAX || minor + count > MINOR_MAX)
+		return;
+
+	spinlock_acquire(&bd_lock);
+	hlist_for_each_entry(curr, &bd_regs[major], entry) {
+		if (curr->minor_start + curr->minor_count <= minor)
+			continue;
+
+		if (curr->minor_start == minor && curr->minor_count == count) {
+			hlist_del_init(&curr->entry);
+			spinlock_release(&bd_lock);
+			kfree(curr);
+			return;
+		}
+
+		klog_error("%s: region %u+%u does not match %u+%u", __func__,
+			   curr->minor_start, curr->minor_count, minor, count);
+		spinlock_release(&bd_lock);
+		return;
+	}
+	spinlock_release(&bd_lock);
+	klog_error("%s: no region at minor %u count %u", __func__, minor,
+		   count);
 }
 
 int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt)

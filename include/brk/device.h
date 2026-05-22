@@ -1,8 +1,6 @@
 #ifndef BRK_DEVICE_H
 #define BRK_DEVICE_H
 
-#include <brk/bitmap.h>
-#include <brk/lock.h>
 #include <brk/types.h>
 
 /*
@@ -43,33 +41,5 @@
 #define VIRTIO_DISK_MAJOR 1
 #define VIRTIO_DISK_MINOR_START 0
 #define VIRTIO_DISK_MINOR_COUNT 4
-
-struct dev_map_entry {
-	struct hlist_node entry;
-	unsigned minor_start;
-	unsigned count;
-};
-
-struct dev_map {
-	struct hlist_head entries[MAJOR_MAX];
-	BITMAP_DECLARE(major_pooled, MAJOR_MAX);
-	spinlock_t lock;
-};
-
-void dev_map_init(struct dev_map *map, unsigned reserved);
-
-int alloc_dev_major(struct dev_map *map, unsigned *major_out);
-void free_dev_major(struct dev_map *map, unsigned major);
-
-int alloc_dev_minor(struct dev_map *map, unsigned major, unsigned *minor_out);
-void free_dev_minor(struct dev_map *map, unsigned major, unsigned minor);
-
-int alloc_dev_region(struct dev_map *map, unsigned major, unsigned base_minor,
-		     unsigned count, dev_t *dev_out);
-void free_dev_region(struct dev_map *map, unsigned major, unsigned start,
-		     unsigned count);
-
-bool major_is_allocated(struct dev_map *map, unsigned major);
-bool minor_is_allocated(struct dev_map *map, unsigned major, unsigned minor);
 
 #endif
