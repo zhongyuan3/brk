@@ -77,7 +77,7 @@ ForEachMacros:
     - "hlist_for_each_entry"
     - "for_each_mem_range"
     - "for_each_mem_pfn_range"
-    - "for_each_memblock_type"
+    - "for_each_memblock_region_set"
     - "fdt_for_each_subnode"
 
 IncludeBlocks: Preserve
