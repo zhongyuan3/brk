@@ -1,5 +1,4 @@
 #include <brk/dtb.h>
-#include <brk/errno.h>
 #include <brk/ioremap.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
@@ -7,6 +6,7 @@
 #include <brk/plic.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <uapi/brk/errno.h>
 
 static struct plic_device plic;
 static u64 mem_base;

@@ -1,7 +1,6 @@
 #define KLOG_LEVEL KLOG_INFO
 #include <brk/assert.h>
 #include <brk/dcache.h>
-#include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
@@ -12,6 +11,7 @@
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <uapi/brk/errno.h>
 
 static struct hlist_head dentry_htable[DENTRY_HTABLE_SIZE];
 static SPINLOCK_DEFINE(dentry_htable_lock);

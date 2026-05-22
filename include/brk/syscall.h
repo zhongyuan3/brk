@@ -2,7 +2,7 @@
 #define BRK_SYSCALL_H
 
 #include <brk/types.h>
-#include <uapi/syscall.h>
+#include <uapi/brk/syscall.h>
 
 struct opened_file;
 

@@ -1,10 +1,10 @@
 #ifndef BRK_KTIME_H
 #define BRK_KTIME_H
 
-#include <brk/stat.h>
-#include <brk/time.h>
 #include <brk/timeconst.h>
 #include <brk/types.h>
+#include <uapi/stat.h>
+#include <uapi/time.h>
 
 struct fs_inode;
 

@@ -1,6 +1,5 @@
 #include <brk/asm.h>
 #include <brk/assert.h>
-#include <brk/errno.h>
 #include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/lock.h>
@@ -11,6 +10,7 @@
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/vmalloc.h>
+#include <uapi/brk/errno.h>
 
 struct vmalloc_region {
 	struct list_head list;

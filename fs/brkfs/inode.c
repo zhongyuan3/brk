@@ -1,13 +1,13 @@
 #include "brkfs.h"
 #include <brk/dcache.h>
-#include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
 #include <brk/ktime.h>
 #include <brk/lock.h>
-#include <brk/stat.h>
 #include <brk/string.h>
+#include <uapi/brk/errno.h>
+#include <uapi/stat.h>
 
 #define ATTR_MODE (1u << 0)
 #define ATTR_SIZE (1u << 3)

@@ -1,9 +1,9 @@
-#include <brk/errno.h>
 #include <brk/irq.h>
 #include <brk/lock.h>
 #include <brk/panic.h>
 #include <brk/plic.h>
 #include <brk/slab.h>
+#include <uapi/brk/errno.h>
 
 static irq_handler_t *irq_handlers;
 static void **irq_handlers_ctx;

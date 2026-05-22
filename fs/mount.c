@@ -24,7 +24,6 @@
  *                mnt_parent     ──▶ root_mnt
  */
 #include <brk/dcache.h>
-#include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/hash.h>
@@ -34,9 +33,10 @@
 #include <brk/path.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
-#include <brk/stat.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <uapi/brk/errno.h>
+#include <uapi/stat.h>
 
 static struct hlist_head mount_hashtable[MOUNT_HTABLE_SIZE];
 static SPINLOCK_DEFINE(mount_hashtable_lock);

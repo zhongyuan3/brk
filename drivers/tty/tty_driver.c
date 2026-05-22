@@ -9,7 +9,7 @@
 #include <brk/string.h>
 #include <brk/tty.h>
 #include <brk/types.h>
-#include <uapi/errno.h>
+#include <uapi/brk/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/types.h>
 

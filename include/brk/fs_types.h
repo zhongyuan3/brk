@@ -1,8 +1,8 @@
 #ifndef BRK_FS_TYPES_H
 #define BRK_FS_TYPES_H
 
-#include <brk/time.h>
 #include <brk/types.h>
+#include <uapi/time.h>
 
 struct fs_driver;
 struct fs_state;

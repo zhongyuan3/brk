@@ -1,7 +1,7 @@
-#include <brk/errno.h>
 #include <brk/kernel.h>
 #include <brk/printf.h>
 #include <brk/string.h>
+#include <uapi/brk/errno.h>
 
 #define ZERO_PAD (1U << 0)
 #define LEFT_ALIGN (1U << 1)

@@ -1,9 +1,9 @@
-#include <brk/errno.h>
 #include <brk/error.h>
-#include <brk/fcntl.h>
 #include <brk/fs.h>
 #include <brk/lock.h>
 #include <brk/path.h>
+#include <uapi/brk/errno.h>
+#include <uapi/fcntl.h>
 
 struct opened_file *do_openat(int dirfd, const char *pathname, int flags,
 			      umode_t mode)

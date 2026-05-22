@@ -1,10 +1,10 @@
 #include "brkfs.h"
-#include <brk/errno.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
 #include <brk/pagecache.h>
 #include <brk/printk.h>
 #include <brk/string.h>
+#include <uapi/brk/errno.h>
 
 /*
  * Page cache backing for brkfs regular files.

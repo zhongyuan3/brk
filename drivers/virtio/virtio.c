@@ -1,4 +1,3 @@
-#include <brk/errno.h>
 #include <brk/ioremap.h>
 #include <brk/list.h>
 #include <brk/lock.h>
@@ -8,6 +7,7 @@
 #include <brk/virtio.h>
 #include <brk/virtio_disk.h>
 #include <brk/virtio_mmio.h>
+#include <uapi/brk/errno.h>
 
 static LIST_DEFINE(vdevs);
 static SPINLOCK_DEFINE(vdevs_lock);

@@ -3,13 +3,13 @@
 
 #include <brk/asm.h>
 #include <brk/fs_types.h>
-#include <brk/limits.h>
 #include <brk/lock.h>
 #include <brk/mm_types.h>
 #include <brk/path.h>
-#include <brk/resource.h>
-#include <brk/times.h>
 #include <brk/types.h>
+#include <uapi/brk/limits.h>
+#include <uapi/resource.h>
+#include <uapi/times.h>
 
 #define KSTACK_PAGE_ORDER 1
 #define KSTACK_SIZE (PAGE_SIZE * (1 << KSTACK_PAGE_ORDER))

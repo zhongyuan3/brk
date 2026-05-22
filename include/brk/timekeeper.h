@@ -1,8 +1,8 @@
 #ifndef BRK_TIMEKEEPER_H
 #define BRK_TIMEKEEPER_H
 
-#include <brk/time.h>
 #include <brk/types.h>
+#include <uapi/time.h>
 
 void timekeeper_init(void);
 void timekeeper_tick(void);

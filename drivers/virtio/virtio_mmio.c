@@ -1,10 +1,9 @@
-#include <brk/errno.h>
 #include <brk/mm.h>
 #include <brk/mmio.h>
 #include <brk/panic.h>
 #include <brk/virtio.h>
 #include <brk/virtio_mmio.h>
-#include <uapi/errno.h>
+#include <uapi/brk/errno.h>
 
 static u64 virtio_mmio_base(struct virtio_device *dev)
 {

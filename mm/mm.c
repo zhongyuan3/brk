@@ -1,5 +1,4 @@
 #include <brk/asm.h>
-#include <brk/errno.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
@@ -10,6 +9,7 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
+#include <uapi/brk/errno.h>
 
 static struct kobj_pool mm_cache;
 

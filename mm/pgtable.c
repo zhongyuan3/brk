@@ -1,5 +1,4 @@
 #include <brk/asm.h>
-#include <brk/errno.h>
 #include <brk/kernel.h>
 #include <brk/lock.h>
 #include <brk/mm.h>
@@ -8,6 +7,7 @@
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>
 #include <brk/string.h>
+#include <uapi/brk/errno.h>
 
 SPINLOCK_DEFINE(kernel_pgdir_lock);
 

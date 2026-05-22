@@ -1,8 +1,6 @@
 #include <brk/asm.h>
 #include <brk/dcache.h>
-#include <brk/errno.h>
 #include <brk/error.h>
-#include <brk/fcntl.h>
 #include <brk/fs.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
@@ -12,9 +10,11 @@
 #include <brk/path.h>
 #include <brk/process.h>
 #include <brk/slab.h>
-#include <brk/stat.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <uapi/brk/errno.h>
+#include <uapi/fcntl.h>
+#include <uapi/stat.h>
 
 #define PIPEFS_MAGIC 0x50495045 /* "PIPE" */
 #define PIPE_RING_CAP 4096

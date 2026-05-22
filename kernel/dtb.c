@@ -1,6 +1,5 @@
 #include <brk/cpu.h>
 #include <brk/dtb.h>
-#include <brk/errno.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
@@ -10,7 +9,7 @@
 #include <brk/uart.h>
 #include <brk/virtio.h>
 #include <libfdt.h>
-#include <uapi/errno.h>
+#include <uapi/brk/errno.h>
 
 u64 dtb_phys;
 

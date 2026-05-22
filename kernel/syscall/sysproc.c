@@ -1,18 +1,18 @@
 #include <brk/asm.h>
-#include <brk/errno.h>
 #include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>
 #include <brk/printk.h>
 #include <brk/process.h>
-#include <brk/resource.h>
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
-#include <brk/time.h>
 #include <brk/timer.h>
 #include <brk/vmalloc.h>
+#include <uapi/brk/errno.h>
+#include <uapi/resource.h>
+#include <uapi/time.h>
 
 u64 sys_brk(void)
 {
