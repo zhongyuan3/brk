@@ -1,5 +1,6 @@
 #include <brk/console.h>
 #include <brk/kernel.h>
+#include <brk/string.h>
 #include <brk/ktime.h>
 #include <brk/lock.h>
 #include <brk/printf.h>
@@ -22,8 +23,10 @@ void printk(char const *fmt, ...)
 static void vprintk_locked(const char *fmt, va_list ap)
 {
 	int n = vsnprintf(printk_buf, sizeof(printk_buf), fmt, ap);
+
 	if (n > 0)
-		console_write_all(printk_buf, n);
+		console_write_all(printk_buf,
+				   strnlen(printk_buf, sizeof(printk_buf)));
 }
 
 static void printk_locked(const char *fmt, ...)
