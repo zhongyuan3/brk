@@ -11,7 +11,7 @@ struct memblock_region {
 	usize_t size;
 };
 
-struct memblock_type {
+struct memblock_region_set {
 	char const *name;
 	struct memblock_region *regions;
 	usize_t max;
@@ -19,8 +19,8 @@ struct memblock_type {
 };
 
 struct memblock {
-	struct memblock_type memory;
-	struct memblock_type reserved;
+	struct memblock_region_set memory;
+	struct memblock_region_set reserved;
 };
 
 void memblock_init(void);
@@ -30,7 +30,7 @@ u64 memblock_alloc(usize_t size, u64 min_addr, usize_t align);
 void memblock_free(u64 base, usize_t size);
 u64 memblock_get_ram_base(void);
 void memblock_free_all(void);
-void memblock_dump(struct memblock_type *type);
+void memblock_dump(struct memblock_region_set *set);
 void memblock_dump_all(void);
 
 void __next_mem_range(u64 *pidx, u64 *pstart, u64 *pend);
@@ -43,9 +43,5 @@ void __next_mem_pfn_range(u32 *pidx, u64 *pstart, u64 *pend);
 #define for_each_mem_pfn_range(idx, start, end)                 \
 	for (idx = 0, __next_mem_pfn_range(&idx, &start, &end); \
 	     idx != UINT32_MAX; __next_mem_pfn_range(&idx, &start, &end))
-
-#define for_each_memblock_type(type, idx, rgn)                  \
-	for (idx = 0, rgn = &type->regions[0]; idx < type->cnt; \
-	     ++idx, rgn = &type->regions[idx])
 
 #endif
