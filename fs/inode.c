@@ -1,5 +1,4 @@
 #include <brk/assert.h>
-#include <brk/errno.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
 #include <brk/ktime.h>
@@ -10,6 +9,7 @@
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <uapi/brk/errno.h>
 
 static struct hlist_head inode_hash_table[INODE_HTABLE_SIZE];
 static SPINLOCK_DEFINE(inode_hash_lock);

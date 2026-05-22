@@ -1,11 +1,7 @@
 #include <brk/asm.h>
-#include <brk/elf.h>
-#include <brk/errno.h>
 #include <brk/error.h>
-#include <brk/fcntl.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
-#include <brk/limits.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
@@ -17,6 +13,10 @@
 #include <brk/timer.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
+#include <uapi/brk/errno.h>
+#include <uapi/brk/limits.h>
+#include <uapi/elf.h>
+#include <uapi/fcntl.h>
 
 struct exec_args {
 	char **argv;

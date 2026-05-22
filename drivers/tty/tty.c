@@ -1,5 +1,4 @@
 #include <brk/device.h>
-#include <brk/errno.h>
 #include <brk/lock.h>
 #include <brk/process.h>
 #include <brk/refcnt.h>
@@ -7,7 +6,7 @@
 #include <brk/string.h>
 #include <brk/tty.h>
 #include <brk/types.h>
-#include <uapi/errno.h>
+#include <uapi/brk/errno.h>
 #include <uapi/types.h>
 
 #define CTRL(x) ((x) - '@')

@@ -1,8 +1,8 @@
 #include <brk/assert.h>
-#include <brk/errno.h>
 #include <brk/kernel.h>
 #include <brk/slab.h>
 #include <brk/virtio_queue.h>
+#include <uapi/brk/errno.h>
 
 int virtq_alloc(struct virtq *vq, unsigned int num)
 {

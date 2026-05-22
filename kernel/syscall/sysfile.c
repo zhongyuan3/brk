@@ -1,23 +1,23 @@
 #include <brk/dcache.h>
-#include <brk/dirent.h>
-#include <brk/errno.h>
 #include <brk/error.h>
-#include <brk/fcntl.h>
 #include <brk/fs.h>
 #include <brk/fs_types.h>
 #include <brk/kernel.h>
-#include <brk/limits.h>
 #include <brk/lock.h>
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
 #include <brk/process.h>
 #include <brk/slab.h>
-#include <brk/stat.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/types.h>
-#include <brk/utsname.h>
+#include <uapi/brk/errno.h>
+#include <uapi/brk/limits.h>
+#include <uapi/dirent.h>
+#include <uapi/fcntl.h>
+#include <uapi/stat.h>
+#include <uapi/utsname.h>
 
 u64 sys_read(void)
 {

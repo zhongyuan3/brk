@@ -1,5 +1,4 @@
 #include <brk/assert.h>
-#include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
@@ -12,6 +11,7 @@
 #include <brk/refcnt.h>
 #include <brk/slab.h>
 #include <brk/string.h>
+#include <uapi/brk/errno.h>
 
 /*
  * Page cache (a.k.a. address_space) implementation.

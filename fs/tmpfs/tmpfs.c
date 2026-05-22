@@ -1,8 +1,6 @@
 #include "tmpfs.h"
 #include <brk/asm.h>
 #include <brk/dcache.h>
-#include <brk/dirent.h>
-#include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
@@ -14,10 +12,12 @@
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
-#include <brk/stat.h>
 #include <brk/string.h>
-#include <brk/time.h>
 #include <brk/types.h>
+#include <uapi/brk/errno.h>
+#include <uapi/dirent.h>
+#include <uapi/stat.h>
+#include <uapi/time.h>
 
 static void tmpfs_stamp_times(struct tmpfs_inode *ip)
 {

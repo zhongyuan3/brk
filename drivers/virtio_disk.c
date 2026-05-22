@@ -1,6 +1,5 @@
 #include <brk/assert.h>
 #include <brk/blkdev.h>
-#include <brk/errno.h>
 #include <brk/fs.h>
 #include <brk/irq.h>
 #include <brk/kernel.h>
@@ -20,7 +19,7 @@
 #include <brk/virtio_disk.h>
 #include <brk/virtio_mmio.h>
 #include <brk/virtio_queue.h>
-#include <uapi/errno.h>
+#include <uapi/brk/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/types.h>
 

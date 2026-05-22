@@ -6,8 +6,8 @@
 #include <brk/pgtable.h>
 #include <brk/printk.h>
 #include <brk/rtc.h>
-#include <brk/time.h>
 #include <brk/timeconst.h>
+#include <uapi/time.h>
 
 /* Android Goldfish RTC (QEMU virt), see QEMU hw/rtc/goldfish_rtc.c */
 #define RTC_TIME_LOW 0x00u

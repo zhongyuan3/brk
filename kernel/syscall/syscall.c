@@ -1,10 +1,10 @@
 #include <brk/cpu.h>
-#include <brk/errno.h>
 #include <brk/kernel.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/process.h>
 #include <brk/syscall.h>
+#include <uapi/brk/errno.h>
 
 static u64 (*systable[])(void) = {
 	[SYS_read] = sys_read,

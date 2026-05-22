@@ -1,5 +1,4 @@
 #include <brk/dcache.h>
-#include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
@@ -7,6 +6,7 @@
 #include <brk/path.h>
 #include <brk/slab.h>
 #include <brk/types.h>
+#include <uapi/brk/errno.h>
 
 static struct kobj_pool file_cache;
 

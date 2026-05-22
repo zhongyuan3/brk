@@ -1,5 +1,4 @@
 #include <brk/assert.h>
-#include <brk/errno.h>
 #include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/lock.h>
@@ -11,6 +10,7 @@
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <uapi/brk/errno.h>
 
 static struct kobj_pool kmalloc_caches[NR_KMALLOC_CACHES];
 

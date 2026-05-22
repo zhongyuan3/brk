@@ -1,11 +1,11 @@
 #include <brk/cpu.h>
-#include <brk/errno.h>
 #include <brk/lock.h>
 #include <brk/process.h>
 #include <brk/riscv.h>
 #include <brk/rtc.h>
 #include <brk/timeconst.h>
 #include <brk/timekeeper.h>
+#include <uapi/brk/errno.h>
 
 static u64 mono_base_cycles;
 static s64 wall_to_mono_ns;

@@ -3,16 +3,16 @@
 #include <brk/bitmap.h>
 #include <brk/blkdev.h>
 #include <brk/device.h>
-#include <brk/dirent.h>
-#include <brk/errno.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
 #include <brk/ktime.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
-#include <brk/stat.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <uapi/brk/errno.h>
+#include <uapi/dirent.h>
+#include <uapi/stat.h>
 
 struct brkfs_sb_info *brkfs_sb_info_alloc(struct block_dev *bdev,
 					  struct brkfs_super_block *sb)

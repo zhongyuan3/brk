@@ -5,9 +5,9 @@
 #include <brk/lock.h>
 #include <brk/path.h>
 #include <brk/refcnt.h>
-#include <brk/stat.h>
-#include <brk/time.h>
 #include <brk/types.h>
+#include <uapi/stat.h>
+#include <uapi/time.h>
 
 #define SEEK_SET 0
 #define SEEK_CUR 1

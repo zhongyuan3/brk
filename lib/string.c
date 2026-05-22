@@ -1,6 +1,6 @@
-#include <brk/errno.h>
 #include <brk/kernel.h>
 #include <brk/string.h>
+#include <uapi/brk/errno.h>
 
 void *memcpy(void *dst, const void *src, usize_t n)
 {

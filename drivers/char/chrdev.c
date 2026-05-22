@@ -1,7 +1,6 @@
 #include <brk/bitmap.h>
 #include <brk/chrdev.h>
 #include <brk/device.h>
-#include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/list.h>
@@ -10,7 +9,7 @@
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/types.h>
-#include <uapi/errno.h>
+#include <uapi/brk/errno.h>
 #include <uapi/types.h>
 
 struct char_dev_region {

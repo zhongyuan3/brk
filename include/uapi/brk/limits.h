@@ -1,5 +1,5 @@
-#ifndef UAPI_LIMITS_H
-#define UAPI_LIMITS_H
+#ifndef UAPI_BRK_LIMITS_H
+#define UAPI_BRK_LIMITS_H
 
 #define PATH_MAX 256
 #define NAME_MAX 14

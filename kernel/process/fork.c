@@ -1,8 +1,6 @@
 #include <brk/asm.h>
-#include <brk/errno.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
-#include <brk/limits.h>
 #include <brk/list.h>
 #include <brk/lock.h>
 #include <brk/mm.h>
@@ -19,3 +17,5 @@
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
+#include <uapi/brk/errno.h>
+#include <uapi/brk/limits.h>

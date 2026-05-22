@@ -1,18 +1,17 @@
 #include <brk/dcache.h>
 #include <brk/device.h>
-#include <brk/errno.h>
 #include <brk/error.h>
-#include <brk/fcntl.h>
 #include <brk/fs.h>
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
 #include <brk/process.h>
-#include <brk/stat.h>
 #include <brk/string.h>
 #include <brk/tty.h>
 #include <brk/virtio_disk.h>
+#include <uapi/brk/errno.h>
 #include <uapi/fcntl.h>
+#include <uapi/stat.h>
 
 static void register_builtin_filesystems(void)
 {

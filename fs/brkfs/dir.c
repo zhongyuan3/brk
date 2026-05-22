@@ -1,7 +1,7 @@
 #include "brkfs.h"
-#include <brk/errno.h>
 #include <brk/fs.h>
 #include <brk/slab.h>
+#include <uapi/brk/errno.h>
 
 static int brkfs_dir_open(struct fs_inode *inode, struct opened_file *file)
 {

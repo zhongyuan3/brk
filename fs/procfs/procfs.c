@@ -43,8 +43,6 @@
  */
 
 #include <brk/dcache.h>
-#include <brk/dirent.h>
-#include <brk/errno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
@@ -57,9 +55,11 @@
 #include <brk/printk.h>
 #include <brk/process.h>
 #include <brk/slab.h>
-#include <brk/stat.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <uapi/brk/errno.h>
+#include <uapi/dirent.h>
+#include <uapi/stat.h>
 
 #define PROCFS_MAGIC 0x9fa0
 #define PROCFS_BUF_SIZE PAGE_SIZE

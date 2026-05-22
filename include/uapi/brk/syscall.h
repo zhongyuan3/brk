@@ -1,5 +1,5 @@
-#ifndef UAPI_SYSCALL_H
-#define UAPI_SYSCALL_H
+#ifndef UAPI_BRK_SYSCALL_H
+#define UAPI_BRK_SYSCALL_H
 
 #define SYS_read 0
 #define SYS_write 1
