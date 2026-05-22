@@ -1,6 +1,8 @@
+#include <brk/compiler.h>
 #include <brk/kernel.h>
 #include <brk/printf.h>
 #include <brk/string.h>
+#include <brk/types.h>
 #include <uapi/brk/errno.h>
 
 #define ZERO_PAD (1U << 0)
@@ -15,11 +17,6 @@ union fmt_arg {
 		bool lt0;
 	};
 	void *p;
-};
-
-struct internal_display {
-	struct display *dis;
-	usize_t cnt;
 };
 
 enum {
@@ -184,17 +181,37 @@ static char *fmt_x(uintmax_t x, char *s, char const *d)
 	return s;
 }
 
-static void out(struct internal_display *dis, char const *buf, usize_t len)
+static int out(struct printf_sink *sink, char const *buf,
+	       usize_t len) __must_check;
+static int pad(struct printf_sink *sink, usize_t pad_len,
+	       char pad_ch) __must_check;
+
+static int out(struct printf_sink *sink, char const *buf, usize_t len)
 {
+	if (len == 0)
+		return 0;
+
 	usize_t n = 0;
-	dis->dis->write(dis->dis, buf, len, &n);
-	dis->cnt += n;
+	int err = sink->write(sink, buf, len, &n);
+	if (!err) {
+		sink->written += n;
+		return 0;
+	}
+	return err;
 }
 
-static void pad(struct internal_display *dis, usize_t pad_len, char pad_ch)
+static int pad(struct printf_sink *sink, usize_t pad_len, char pad_ch)
 {
-	for (usize_t i = 0; i < pad_len; ++i)
-		out(dis, &pad_ch, 1);
+	char pad_buf[32];
+
+	memset(pad_buf, pad_ch, sizeof(pad_buf));
+	for (usize_t i = 0; i < pad_len; i += sizeof(pad_buf)) {
+		usize_t n = min(pad_len - i, sizeof(pad_buf));
+		int err = out(sink, pad_buf, n);
+		if (err)
+			return err;
+	}
+	return 0;
 }
 
 static void pop_n(va_list *ap, unsigned int st, usize_t cnt)
@@ -328,19 +345,20 @@ static void pop_arg(va_list *ap, unsigned int st, union fmt_arg *arg)
 	}
 }
 
-int printf_core(struct display *dis, char const *format, va_list ap)
+int printf_core(struct printf_sink *sink, char const *format, va_list ap)
 {
 	char buf[32];
 	union fmt_arg arg = { 0 };
-	struct internal_display idis = {
-		.dis = dis,
-		.cnt = 0,
-	};
 	char const *s = format;
+	int err = 0;
+
+	sink->written = 0;
 
 	while (*s) {
 		if (*s != '%') {
-			out(&idis, s++, 1);
+			err = out(sink, s++, 1);
+			if (err)
+				goto err;
 			continue;
 		}
 
@@ -404,24 +422,30 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 		if (*s == '%') {
 			++s;
 			char pct = '%';
-			out(&idis, &pct, 1);
+			err = out(sink, &pct, 1);
+			if (err)
+				goto err;
 			continue;
 		}
 
 		unsigned int st = STATE_START;
 		char pch = 0;
 		while (st >= STATE_START && st <= STATE_STOP) {
-			if (OOB(*s))
-				goto invalid;
+			if (OOB(*s)) {
+				err = -EINVAL;
+				goto err;
+			}
 			st = states[st] S(*s);
 			pch = *s++;
 		}
 
-		if (st == STATE_INVALID)
-			goto invalid;
+		if (st == STATE_INVALID) {
+			err = -EINVAL;
+			goto err;
+		}
 
 		if (st >= STATE_N_INT && st <= STATE_N_PTRDIFF) {
-			pop_n(&ap, st, idis.cnt);
+			pop_n(&ap, st, sink->written);
 			continue;
 		}
 
@@ -484,19 +508,34 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 				arg.p = "(null)";
 				raw_len = 6;
 			}
+
 			if (has_prec && prec < raw_len)
 				raw_len = prec;
+
 			if (has_width && width > raw_len &&
-			    !(flags & LEFT_ALIGN))
-				pad(&idis, width - raw_len, ' ');
-			out(&idis, arg.p, raw_len);
+			    !(flags & LEFT_ALIGN)) {
+				err = pad(sink, width - raw_len, ' ');
+				if (err)
+					goto err;
+			}
+
+			err = out(sink, arg.p, raw_len);
+			if (err)
+				goto err;
+
 			if (has_width && width > raw_len &&
-			    (flags & LEFT_ALIGN))
-				pad(&idis, width - raw_len, ' ');
+			    (flags & LEFT_ALIGN)) {
+				err = pad(sink, width - raw_len, ' ');
+				if (err)
+					goto err;
+			}
+
 			continue;
 		case 'c':
 			pch = arg.i;
-			out(&idis, &pch, 1);
+			err = out(sink, &pch, 1);
+			if (err)
+				goto err;
 			continue;
 		}
 
@@ -508,16 +547,14 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 		if (has_prec && prec > raw_len)
 			lzero_pad = prec - raw_len;
 
-		if (flags & PAD_POS) {
-			sign = prefixes + 2;
-			sign_len = 1;
-		}
 		if (arg.lt0) {
 			sign = prefixes + 1;
 			sign_len = 1;
-		}
-		if (flags & MARK_POS) {
+		} else if (flags & MARK_POS) {
 			sign = prefixes + 0;
+			sign_len = 1;
+		} else if (flags & PAD_POS) {
+			sign = prefixes + 2;
 			sign_len = 1;
 		}
 
@@ -532,18 +569,30 @@ int printf_core(struct display *dis, char const *format, va_list ap)
 				lspace_pad = pad_extra;
 		}
 
-		pad(&idis, lspace_pad, ' ');
-		out(&idis, sign, sign_len);
-		out(&idis, radix, radix_len);
-		pad(&idis, lzero_pad, '0');
-		out(&idis, raw, raw_len);
-		pad(&idis, rspace_pad, ' ');
+		err = pad(sink, lspace_pad, ' ');
+		if (err)
+			goto err;
+		err = out(sink, sign, sign_len);
+		if (err)
+			goto err;
+		err = out(sink, radix, radix_len);
+		if (err)
+			goto err;
+		err = pad(sink, lzero_pad, '0');
+		if (err)
+			goto err;
+		err = out(sink, raw, raw_len);
+		if (err)
+			goto err;
+		err = pad(sink, rspace_pad, ' ');
+		if (err)
+			goto err;
 	}
 
-	return (int)idis.cnt;
+	return (int)sink->written;
 
-invalid:
-	return -1;
+err:
+	return err;
 }
 
 int snprintf(char *buf, usize_t size, char const *format, ...)
@@ -555,38 +604,55 @@ int snprintf(char *buf, usize_t size, char const *format, ...)
 	return ret;
 }
 
-struct string_display {
+struct string_printf_sink {
+	struct printf_sink sink;
 	char *buf;
 	usize_t size;
 	usize_t pos;
 };
 
-static int string_display_write(struct display *dis, char const *buf,
-				usize_t len, usize_t *wlen)
+static int string_printf_sink_write(struct printf_sink *sink, char const *buf,
+				    usize_t len, usize_t *written)
 {
-	struct string_display *sd = dis->priv;
-	usize_t n = min(len, sd->size - sd->pos);
+	usize_t n;
+	struct string_printf_sink *s;
+
+	s = container_of(sink, struct string_printf_sink, sink);
+	if (s->size == 0) {
+		n = 0;
+	} else {
+		usize_t limit = s->size - 1;
+
+		n = 0;
+		if (s->pos < limit)
+			n = min(len, limit - s->pos);
+	}
 	if (n > 0) {
-		memcpy(sd->buf + sd->pos, buf, n);
-		sd->pos += n;
+		memcpy(s->buf + s->pos, buf, n);
+		s->pos += n;
 	}
 
-	if (wlen)
-		*wlen = len;
+	if (written)
+		*written = len;
 
 	return 0;
 }
 
 int vsnprintf(char *buf, usize_t size, char const *format, va_list ap)
 {
-	struct string_display sd = {
+	struct string_printf_sink sink = {
+		.sink.write = string_printf_sink_write,
 		.buf = buf,
 		.size = size,
 		.pos = 0,
 	};
-	struct display dis = {
-		.write = string_display_write,
-		.priv = &sd,
-	};
-	return printf_core(&dis, format, ap);
+	int ret = printf_core(&sink.sink, format, ap);
+
+	if (size > 0) {
+		usize_t term = sink.pos < size - 1 ? sink.pos : size - 1;
+
+		buf[term] = '\0';
+	}
+
+	return ret;
 }
