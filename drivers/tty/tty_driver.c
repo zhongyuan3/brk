@@ -297,10 +297,9 @@ static int tty_file_flush(struct file *file)
 static long tty_file_ioctl(struct file *file, unsigned int cmd,
 			   unsigned long arg)
 {
-	(void)file;
-	(void)cmd;
-	(void)arg;
-	return -ENOTTY;
+	struct tty *tty = file->private_data;
+
+	return tty_ioctl(tty, cmd, arg);
 }
 
 static const struct file_ops tty_fops = {

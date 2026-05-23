@@ -4,6 +4,7 @@
 #include <brk/lock.h>
 #include <brk/refcnt.h>
 #include <brk/types.h>
+#include <uapi/ioctl.h>
 #include <uapi/types.h>
 
 #define TTY_RX_BUF_SIZE 1024
@@ -63,6 +64,7 @@ struct tty {
 	usize_t rx_r;
 	usize_t rx_w;
 	usize_t rx_e;
+	struct winsize winsize;
 	refcnt_t refcnt;
 };
 
@@ -76,5 +78,6 @@ void tty_close(struct tty *tty);
 ssize_t tty_read(struct tty *tty, void *buf, usize_t n);
 ssize_t tty_write(struct tty *tty, const void *buf, usize_t n);
 void tty_receive(struct tty *tty, int c);
+long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg);
 
 #endif
