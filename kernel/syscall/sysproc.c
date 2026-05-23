@@ -8,6 +8,7 @@
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
+#include <brk/signal.h>
 #include <brk/timer.h>
 #include <brk/vmalloc.h>
 #include <uapi/brk/errno.h>
@@ -44,13 +45,17 @@ u64 sys_fork(void)
 u64 sys_exit(void)
 {
 	int status = syscall_arg_raw(0);
-	proc_exit(status);
+
+	proc_exit_normal(status);
 	return 0;
 }
 
 u64 sys_kill(void)
 {
-	return -ENOSYS;
+	pid_t pid = syscall_arg_int(0);
+	int sig = syscall_arg_int(1);
+
+	return proc_kill(pid, sig);
 }
 
 u64 sys_sched_yield(void)

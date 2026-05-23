@@ -8,6 +8,7 @@
 #include <brk/process.h>
 #include <brk/riscv.h>
 #include <brk/sbi.h>
+#include <brk/signal.h>
 #include <brk/syscall.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
@@ -124,8 +125,7 @@ struct trap_frame *user_trap_handler(void)
 	if (TRAP_IS_INTERRUPT(scause)) {
 		if (code == 5) {
 			timer_handle_int();
-			if (proc_is_killed(proc))
-				proc_exit(1);
+			proc_deliver_fatal(proc);
 			if (--proc->time_slice <= 0)
 				proc_yield();
 		} else if (code == 9) {
@@ -137,8 +137,7 @@ struct trap_frame *user_trap_handler(void)
 		}
 	} else {
 		if (code == 8) {
-			if (proc_is_killed(proc))
-				proc_exit(1);
+			proc_deliver_fatal(proc);
 			proc->tf.epc += 4; /* skip ecall */
 			intr_on();
 			syscall();
@@ -149,8 +148,7 @@ struct trap_frame *user_trap_handler(void)
 		}
 	}
 
-	if (proc_is_killed(proc))
-		proc_exit(1);
+	proc_deliver_fatal(proc);
 
 	prepare_to_return();
 	jiffies = jiffies_get();
