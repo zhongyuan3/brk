@@ -12,7 +12,7 @@
 #define ATTR_MODE (1u << 0)
 #define ATTR_SIZE (1u << 3)
 
-static void brkfs_inode_attach_ops(struct fs_inode *inode)
+static void brkfs_inode_attach_ops(struct inode *inode)
 {
 	inode->i_op = &brkfs_iops;
 	if (S_ISDIR(inode->i_mode))
@@ -30,7 +30,7 @@ static void brkfs_inode_attach_ops(struct fs_inode *inode)
 }
 
 static int brkfs_init_loaded_inode(struct brkfs_sb_info *sbi,
-				   struct fs_inode *inode)
+				   struct inode *inode)
 {
 	int err = brkfs_inode_read(sbi, inode);
 
@@ -51,13 +51,12 @@ static int brkfs_init_loaded_inode(struct brkfs_sb_info *sbi,
 	return 0;
 }
 
-static struct path_component *brkfs_lookup(struct fs_inode *dir,
-					   struct path_component *dentry,
-					   unsigned int flags)
+static struct dentry *brkfs_lookup(struct inode *dir, struct dentry *dentry,
+				   unsigned int flags)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct fs_state *sb = dir->i_sb;
-	struct fs_inode *inode;
+	struct super_block *sb = dir->i_sb;
+	struct inode *inode;
 	u32 ino;
 	u8 type;
 	int err;
@@ -92,12 +91,12 @@ static struct path_component *brkfs_lookup(struct fs_inode *dir,
 	return dentry_splice_alias(inode, dentry);
 }
 
-static int brkfs_create(struct fs_inode *dir, struct path_component *dentry,
-			umode_t mode, bool excl)
+static int brkfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
+			bool excl)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct fs_state *sb = dir->i_sb;
-	struct fs_inode *inode = NULL;
+	struct super_block *sb = dir->i_sb;
+	struct inode *inode = NULL;
 	u32 ino = 0;
 	int err;
 
@@ -152,18 +151,18 @@ out:
 	return err;
 }
 
-static int brkfs_link(struct path_component *old_dentry, struct fs_inode *dir,
-		      struct path_component *new_dentry)
+static int brkfs_link(struct dentry *old_dentry, struct inode *dir,
+		      struct dentry *new_dentry)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct fs_inode *old_inode = old_dentry->d_inode;
+	struct inode *old_inode = old_dentry->d_inode;
 	int err;
 
 	err = brkfs_dir_add(dir, (u32)old_inode->i_ino, new_dentry->d_name.name,
 			    new_dentry->d_name.len, old_inode->i_mode);
 	if (err)
 		goto out;
-	inode_dup(old_inode);
+	inode_get(old_inode);
 	old_inode->i_nlink++;
 	inode_touch_ctime(old_inode);
 	err = brkfs_inode_write(sbi, old_inode);
@@ -179,10 +178,10 @@ out:
 	return err;
 }
 
-static int brkfs_unlink(struct fs_inode *dir, struct path_component *dentry)
+static int brkfs_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct fs_inode *inode = dentry->d_inode;
+	struct inode *inode = dentry->d_inode;
 	int err;
 
 	err = brkfs_dir_remove(dir, dentry->d_name.name, dentry->d_name.len);
@@ -202,12 +201,12 @@ static int brkfs_unlink(struct fs_inode *dir, struct path_component *dentry)
 	 */
 }
 
-static int brkfs_symlink(struct fs_inode *dir, struct path_component *dentry,
+static int brkfs_symlink(struct inode *dir, struct dentry *dentry,
 			 const char *symname)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct fs_state *sb = dir->i_sb;
-	struct fs_inode *inode = NULL;
+	struct super_block *sb = dir->i_sb;
+	struct inode *inode = NULL;
 	u32 ino = 0;
 	usize_t len = strlen(symname);
 	loff_t pos = 0;
@@ -260,9 +259,9 @@ out:
 	return err;
 }
 
-static int brkfs_readlink(struct path_component *dentry, char *buf, int bufsiz)
+static int brkfs_readlink(struct dentry *dentry, char *buf, int bufsiz)
 {
-	struct fs_inode *inode = dentry->d_inode;
+	struct inode *inode = dentry->d_inode;
 	loff_t pos = 0;
 	usize_t rd = 0;
 	int err;
@@ -278,12 +277,11 @@ static int brkfs_readlink(struct path_component *dentry, char *buf, int bufsiz)
 	return (int)rd;
 }
 
-static int brkfs_mkdir(struct fs_inode *dir, struct path_component *dentry,
-		       umode_t mode)
+static int brkfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct fs_state *sb = dir->i_sb;
-	struct fs_inode *inode = NULL;
+	struct super_block *sb = dir->i_sb;
+	struct inode *inode = NULL;
 	u32 ino = 0;
 	int err;
 
@@ -342,10 +340,10 @@ out:
 	return err;
 }
 
-static int brkfs_rmdir(struct fs_inode *dir, struct path_component *dentry)
+static int brkfs_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct fs_inode *inode = dentry->d_inode;
+	struct inode *inode = dentry->d_inode;
 	int err;
 
 	if (!S_ISDIR(inode->i_mode))
@@ -370,10 +368,9 @@ static int brkfs_rmdir(struct fs_inode *dir, struct path_component *dentry)
 	 */
 }
 
-static int brkfs_rename(struct fs_inode *old_dir,
-			struct path_component *old_dentry,
-			struct fs_inode *new_dir,
-			struct path_component *new_dentry, unsigned int flags)
+static int brkfs_rename(struct inode *old_dir, struct dentry *old_dentry,
+			struct inode *new_dir, struct dentry *new_dentry,
+			unsigned int flags)
 {
 	(void)old_dir;
 	(void)old_dentry;
@@ -383,12 +380,12 @@ static int brkfs_rename(struct fs_inode *old_dir,
 	return -EOPNOTSUPP;
 }
 
-static int brkfs_mknod(struct fs_inode *dir, struct path_component *dentry,
-		       umode_t mode, dev_t dev)
+static int brkfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
+		       dev_t dev)
 {
 	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct fs_state *sb = dir->i_sb;
-	struct fs_inode *inode;
+	struct super_block *sb = dir->i_sb;
+	struct inode *inode;
 	u32 ino;
 	int err;
 
@@ -431,10 +428,10 @@ out:
 	return err;
 }
 
-static int brkfs_getattr(const struct file_anchor *path, struct stat *stat,
-			 u32 mask, unsigned int flags)
+static int brkfs_getattr(const struct path *path, struct stat *stat, u32 mask,
+			 unsigned int flags)
 {
-	struct fs_inode *inode = path->dentry->d_inode;
+	struct inode *inode = path->dentry->d_inode;
 
 	(void)mask;
 	(void)flags;
@@ -451,10 +448,9 @@ static int brkfs_getattr(const struct file_anchor *path, struct stat *stat,
 	return 0;
 }
 
-static int brkfs_setattr(struct path_component *dentry,
-			 struct fs_inode_attr *attr)
+static int brkfs_setattr(struct dentry *dentry, struct iattr *attr)
 {
-	struct fs_inode *inode = dentry->d_inode;
+	struct inode *inode = dentry->d_inode;
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
 	int err = 0;
 
@@ -477,12 +473,12 @@ out:
 	return err;
 }
 
-void brkfs_inode_setup_ops(struct fs_inode *inode)
+void brkfs_inode_setup_ops(struct inode *inode)
 {
 	brkfs_inode_attach_ops(inode);
 }
 
-const struct fs_inode_ops brkfs_iops = {
+const struct inode_ops brkfs_iops = {
 	.lookup = brkfs_lookup,
 	.create = brkfs_create,
 	.link = brkfs_link,

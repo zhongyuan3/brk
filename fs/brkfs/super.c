@@ -4,11 +4,11 @@
 #include <brk/pagecache.h>
 #include <brk/slab.h>
 
-static struct fs_inode *brkfs_alloc_inode(struct fs_state *sb)
+static struct inode *brkfs_alloc_inode(struct super_block *sb)
 {
 	(void)sb;
 
-	struct fs_inode *inode;
+	struct inode *inode;
 	struct brkfs_inode_info *info;
 
 	inode = kzalloc(sizeof(*inode));
@@ -23,27 +23,27 @@ static struct fs_inode *brkfs_alloc_inode(struct fs_state *sb)
 	return inode;
 }
 
-static void brkfs_free_inode(struct fs_inode *inode)
+static void brkfs_free_inode(struct inode *inode)
 {
 	kfree(inode->i_private);
 	inode->i_private = NULL;
 	kfree(inode);
 }
 
-static void brkfs_dirty_inode(struct fs_inode *inode, int flags)
+static void brkfs_dirty_inode(struct inode *inode, int flags)
 {
 	(void)inode;
 	(void)flags;
 }
 
-static int brkfs_write_inode(struct fs_inode *inode, int sync)
+static int brkfs_write_inode(struct inode *inode, int sync)
 {
 	struct brkfs_sb_info *sb_info = inode->i_sb->s_fs_info;
 	(void)sync;
 	return brkfs_inode_write(sb_info, inode);
 }
 
-static void brkfs_evict_inode(struct fs_inode *inode)
+static void brkfs_evict_inode(struct inode *inode)
 {
 	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
 
@@ -64,7 +64,7 @@ static void brkfs_evict_inode(struct fs_inode *inode)
 	}
 }
 
-static void brkfs_put_super(struct fs_state *sb)
+static void brkfs_put_super(struct super_block *sb)
 {
 	struct brkfs_sb_info *sb_info = sb->s_fs_info;
 
@@ -74,14 +74,14 @@ static void brkfs_put_super(struct fs_state *sb)
 	sb->s_root = NULL;
 }
 
-static int brkfs_sync_fs(struct fs_state *sb, int wait)
+static int brkfs_sync_fs(struct super_block *sb, int wait)
 {
 	(void)sb;
 	(void)wait;
 	return 0;
 }
 
-const struct fs_state_ops brkfs_sops = {
+const struct super_block_ops brkfs_sops = {
 	.alloc_inode = brkfs_alloc_inode,
 	.free_inode = brkfs_free_inode,
 	.dirty_inode = brkfs_dirty_inode,

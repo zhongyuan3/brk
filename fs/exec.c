@@ -32,8 +32,7 @@ struct exec_strings_acc {
 	usize_t bytes;
 };
 
-static int exec_read_exact(struct opened_file *fp, u64 off, void *buf,
-			   usize_t n)
+static int exec_read_exact(struct file *fp, u64 off, void *buf, usize_t n)
 {
 	loff_t ret = file_lseek(fp, off, SEEK_SET);
 
@@ -67,8 +66,7 @@ static int elf_validate_exec_hdr(const struct elf64_hdr *h)
 	return 0;
 }
 
-static int elf_read_phdr(struct opened_file *f, u64 off,
-			 struct elf64_phdr *phdr)
+static int elf_read_phdr(struct file *f, u64 off, struct elf64_phdr *phdr)
 {
 	ssize_t r;
 	loff_t ret = file_lseek(f, off, SEEK_SET);
@@ -83,8 +81,7 @@ static int elf_read_phdr(struct opened_file *f, u64 off,
 	return 0;
 }
 
-static int exec_read_elf_header(struct opened_file *f,
-				struct elf64_hdr *elf_hdr)
+static int exec_read_elf_header(struct file *f, struct elf64_hdr *elf_hdr)
 {
 	ssize_t r = file_read(f, elf_hdr, sizeof(*elf_hdr));
 
@@ -199,7 +196,7 @@ static unsigned int flags_to_perm(unsigned int flags)
 }
 
 static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
-		   struct elf64_phdr *ph, struct opened_file *fp)
+		   struct elf64_phdr *ph, struct file *fp)
 {
 	int err = 0;
 	usize_t npgs = vma->size >> PAGE_SHIFT;
@@ -267,7 +264,7 @@ failed:
 }
 
 static int load_seg(struct uvm_space *mm, struct elf64_phdr *ph,
-		    struct opened_file *fp)
+		    struct file *fp)
 {
 	u64 start, end;
 	struct uvm_region *vma;
@@ -351,7 +348,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 	struct elf64_hdr elf_hdr = { 0 };
 	struct elf64_phdr phdr = { 0 };
 	struct process *proc = current_process();
-	struct opened_file *f = NULL;
+	struct file *f = NULL;
 	struct uvm_space *new_mm = NULL;
 	int err = 0;
 

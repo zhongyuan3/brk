@@ -5,18 +5,18 @@
 #include <uapi/time.h>
 
 struct fs_driver;
-struct fs_state;
-struct fs_state_ops;
-struct fs_inode;
-struct fs_inode_ops;
-struct opened_file;
-struct opened_file_ops;
-struct path_component;
-struct path_component_ops;
-struct fs_mount_state;
-struct file_anchor;
+struct super_block;
+struct super_block_ops;
+struct inode;
+struct inode_ops;
+struct file;
+struct file_ops;
+struct dentry;
+struct dentry_ops;
+struct mount_instance;
+struct path;
 
-struct fs_inode_attr {
+struct iattr {
 	unsigned int ia_valid;
 	umode_t ia_mode;
 	kuid_t ia_uid;
@@ -31,10 +31,10 @@ struct fs_inode_attr {
 	 * implement an ftruncate() like method.  NOTE: filesystem should
 	 * check for (ia_valid & ATTR_FILE), and not for (ia_file != NULL).
 	 */
-	struct opened_file *ia_file;
+	struct file *ia_file;
 };
 
-struct fs_dir_iterator {
+struct dir_iterator {
 	/**
 	 * actor() - emit a directory entry
 	 * @ctx: directory context
@@ -46,8 +46,8 @@ struct fs_dir_iterator {
 	 *
 	 * Return: true to continue, false to stop.
 	 */
-	bool (*actor)(struct fs_dir_iterator *ctx, const char *name,
-		      int namelen, loff_t offset, u64 ino, unsigned int d_type);
+	bool (*actor)(struct dir_iterator *ctx, const char *name, int namelen,
+		      loff_t offset, u64 ino, unsigned int d_type);
 
 	loff_t pos;
 };

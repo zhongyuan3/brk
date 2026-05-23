@@ -1,10 +1,10 @@
 #include <brk/console.h>
 #include <brk/kernel.h>
-#include <brk/string.h>
 #include <brk/ktime.h>
 #include <brk/lock.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
+#include <brk/string.h>
 #include <brk/tty.h>
 #include <uapi/brk/errno.h>
 #include <uapi/time.h>
@@ -26,7 +26,7 @@ static void vprintk_locked(const char *fmt, va_list ap)
 
 	if (n > 0)
 		console_write_all(printk_buf,
-				   strnlen(printk_buf, sizeof(printk_buf)));
+				  strnlen(printk_buf, sizeof(printk_buf)));
 }
 
 static void printk_locked(const char *fmt, ...)

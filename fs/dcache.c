@@ -19,14 +19,14 @@ static struct kobj_pool dentry_cache;
 
 void dentry_cache_init(void)
 {
-	kobj_pool_init(&dentry_cache, sizeof(struct path_component),
-		       alignof(struct path_component), "dentry_cache");
+	kobj_pool_init(&dentry_cache, sizeof(struct dentry),
+		       alignof(struct dentry), "dentry_cache");
 }
 
-static struct path_component *__alloc_dentry(struct fs_state *sb,
-					     const struct qstr *name)
+static struct dentry *__alloc_dentry(struct super_block *sb,
+				     const struct qstr *name)
 {
-	struct path_component *d;
+	struct dentry *d;
 
 	d = kobj_pool_alloc(&dentry_cache);
 	if (!d)
@@ -64,23 +64,23 @@ static struct path_component *__alloc_dentry(struct fs_state *sb,
 	return d;
 }
 
-static void __free_dentry(struct path_component *dentry)
+static void __free_dentry(struct dentry *dentry)
 {
 	if (dentry->d_name.len >= DENTRY_SHORT_NAME_SIZE)
 		kfree(dentry->d_long_name);
 	kobj_pool_free(&dentry_cache, dentry);
 }
 
-static struct path_component *alloc_dentry(struct path_component *parent,
-					   const struct qstr *name)
+static struct dentry *alloc_dentry(struct dentry *parent,
+				   const struct qstr *name)
 {
-	struct path_component *d;
+	struct dentry *d;
 
 	d = __alloc_dentry(parent->d_sb, name);
 	if (!d)
 		return NULL;
 
-	d->d_parent = dentry_dup(parent);
+	d->d_parent = dentry_get(parent);
 	spinlock_acquire(&parent->d_lock);
 	list_add(&d->d_child, &parent->d_subdirs);
 	spinlock_release(&parent->d_lock);
@@ -96,9 +96,9 @@ static struct path_component *alloc_dentry(struct path_component *parent,
   *
   * Return: The root dentry or %NULL.
   */
-struct path_component *dentry_make_root(struct fs_inode *root_inode)
+struct dentry *dentry_make_root(struct inode *root_inode)
 {
-	struct path_component *d;
+	struct dentry *d;
 
 	if (!root_inode)
 		return NULL;
@@ -119,10 +119,9 @@ struct path_component *dentry_make_root(struct fs_inode *root_inode)
  *
  * Used for kernel objects such as pipes that are not reachable by path lookup.
  */
-struct path_component *dentry_alloc_anon(struct fs_inode *inode,
-					 const struct qstr *name)
+struct dentry *dentry_alloc_anon(struct inode *inode, const struct qstr *name)
 {
-	struct path_component *d;
+	struct dentry *d;
 
 	d = __alloc_dentry(inode->i_sb, name);
 	if (!d)
@@ -137,7 +136,7 @@ struct path_component *dentry_alloc_anon(struct fs_inode *inode,
  * @dentry: dentry to attach
  * @inode: inode to attach to this dentry
  */
-void dentry_instantiate(struct path_component *dentry, struct fs_inode *inode)
+void dentry_instantiate(struct dentry *dentry, struct inode *inode)
 {
 	dentry->d_inode = inode;
 	spinlock_acquire(&inode->i_lock);
@@ -150,7 +149,7 @@ void dentry_instantiate(struct path_component *dentry, struct fs_inode *inode)
 }
 
 /* Increment the reference count of @dentry */
-struct path_component *dentry_dup(struct path_component *dentry)
+struct dentry *dentry_get(struct dentry *dentry)
 {
 	klog_debug(
 		"%s(): Duplicating dentry: name=%.*s, inode=%ld, refcnt=%d\n",
@@ -161,10 +160,10 @@ struct path_component *dentry_dup(struct path_component *dentry)
 }
 
 /* Decrement the reference count of @dentry */
-void dentry_put(struct path_component *dentry)
+void dentry_put(struct dentry *dentry)
 {
-	const struct path_component_ops *op;
-	struct fs_inode *inode;
+	const struct dentry_ops *op;
+	struct inode *inode;
 
 	klog_debug("%s(): Putting dentry: name=%.*s, inode=%ld, refcnt=%d\n",
 		   __func__, dentry->d_name.len, dentry->d_name.name,
@@ -215,11 +214,11 @@ void dentry_put(struct path_component *dentry)
 	__free_dentry(dentry);
 }
 
-static struct path_component *
-dentry_lookup_locked(struct hlist_head *head, struct path_component *parent,
-		     const struct qstr *name)
+static struct dentry *dentry_lookup_locked(struct hlist_head *head,
+					   struct dentry *parent,
+					   const struct qstr *name)
 {
-	struct path_component *dentry;
+	struct dentry *dentry;
 
 	ASSERT(spinlock_holding(&dentry_htable_lock));
 
@@ -248,11 +247,10 @@ dentry_lookup_locked(struct hlist_head *head, struct path_component *parent,
  *
  * Return: The dentry on success or ERR_PTR(-errno) on failure.
  */
-struct path_component *dentry_lookup(struct path_component *parent,
-				     const struct qstr *name)
+struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name)
 {
-	struct fs_inode *inode;
-	struct path_component *dentry, *tmp;
+	struct inode *inode;
+	struct dentry *dentry, *tmp;
 	struct hlist_head *head;
 
 	u32 idx = name->hash & (DENTRY_HTABLE_SIZE - 1);
@@ -320,11 +318,10 @@ struct path_component *dentry_lookup(struct path_component *parent,
  *
  * Return: The alias dentry on success or ERR_PTR(-errno) on failure.
  */
-struct path_component *dentry_splice_alias(struct fs_inode *inode,
-					   struct path_component *dentry)
+struct dentry *dentry_splice_alias(struct inode *inode, struct dentry *dentry)
 {
 	struct list_head *dentries;
-	struct path_component *d;
+	struct dentry *d;
 
 	if (!inode)
 		return ERR_PTR(-EINVAL);
@@ -339,7 +336,7 @@ struct path_component *dentry_splice_alias(struct fs_inode *inode,
 		    !d->d_op->compare(d, dentry->d_name.len,
 				      dentry->d_name.name, &d->d_name)) {
 			spinlock_release(&inode->i_lock);
-			dentry_dup(d);
+			dentry_get(d);
 			dentry->d_flags |= DCACHE_NEGATIVE;
 			dentry_put(dentry);
 			return d;
@@ -368,9 +365,8 @@ const struct qstr dotdot_name = {
 	.hash = DOTDOT_NAME_HASH,
 };
 
-static int generic_dop_compare(const struct path_component *dentry,
-			       unsigned int len, const char *str,
-			       const struct qstr *name)
+static int generic_dop_compare(const struct dentry *dentry, unsigned int len,
+			       const char *str, const struct qstr *name)
 {
 	(void)dentry;
 	if (len > name->len)
@@ -380,13 +376,13 @@ static int generic_dop_compare(const struct path_component *dentry,
 	return memcmp(str, name->name, len);
 }
 
-const struct path_component_ops generic_dop = {
+const struct dentry_ops generic_dop = {
 	.compare = generic_dop_compare,
 };
 
 void dcache_dump(void)
 {
-	struct path_component *d;
+	struct dentry *d;
 	struct hlist_head *head;
 
 	spinlock_acquire(&dentry_htable_lock);

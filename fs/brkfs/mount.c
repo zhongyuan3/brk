@@ -36,8 +36,8 @@ static int brkfs_read_super(struct brkfs_super_block *sb,
 static struct block_dev *brkfs_get_bdev(const char *dev_name)
 {
 	int err;
-	struct file_anchor path = { 0 };
-	struct fs_inode *inode;
+	struct path path = { 0 };
+	struct inode *inode;
 	struct block_dev *bdev;
 
 	err = path_lookup(dev_name, 0, &path);
@@ -71,16 +71,16 @@ static int brkfs_validate_super(struct brkfs_super_block *sb)
 	return 0;
 }
 
-struct path_component *brkfs_mount(struct fs_driver *fs_type, int flags,
-				   const char *dev_name, void *data)
+struct dentry *brkfs_mount(struct fs_driver *fs_type, int flags,
+			   const char *dev_name, void *data)
 {
 	struct block_dev *bdev = NULL;
 	int err;
 	struct brkfs_super_block brk_sb;
-	struct fs_state *sb;
+	struct super_block *sb;
 	struct brkfs_sb_info *sb_info;
-	struct path_component *root_dentry;
-	struct fs_inode *root_inode;
+	struct dentry *root_dentry;
+	struct inode *root_inode;
 
 	(void)data;
 
@@ -141,7 +141,7 @@ struct path_component *brkfs_mount(struct fs_driver *fs_type, int flags,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	sb->s_root = dentry_dup(root_dentry);
+	sb->s_root = dentry_get(root_dentry);
 
 	spinlock_acquire(&fs_type->fs_lock);
 	list_add_tail(&sb->s_instances, &fs_type->fs_supers);
@@ -150,7 +150,7 @@ struct path_component *brkfs_mount(struct fs_driver *fs_type, int flags,
 	return root_dentry;
 }
 
-static void brkfs_kill_sb(struct fs_state *sb)
+static void brkfs_kill_sb(struct super_block *sb)
 {
 	struct fs_driver *fs_type = sb->s_type;
 
