@@ -14,19 +14,21 @@
 #include <brk/riscv.h>
 #include <brk/slab.h>
 #include <brk/string.h>
+#include <brk/signal.h>
 #include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
 #include <uapi/brk/errno.h>
 #include <uapi/brk/limits.h>
+#include <uapi/signal.h>
 
 cpuid_t init_cpuid;
 struct process *init_proc;
 struct cpu cpus[NR_CPUS];
 
-static LIST_DEFINE(procs);
-static SPINLOCK_DEFINE(procs_lock);
+LIST_DEFINE(procs);
+SPINLOCK_DEFINE(procs_lock);
 static struct kobj_pool proc_cache;
 
 void proc_cache_init(void)
@@ -152,18 +154,17 @@ void proc_init_user(void)
 
 void proc_set_killed(struct process *proc)
 {
-	spinlock_acquire(&proc->lock);
-	proc->killed = true;
-	spinlock_release(&proc->lock);
+	proc_send_signal(proc, SIGKILL);
 }
 
 bool proc_is_killed(struct process *proc)
 {
-	bool killed;
+	bool pending;
+
 	spinlock_acquire(&proc->lock);
-	killed = proc->killed;
+	pending = proc->pending_sig != 0;
 	spinlock_release(&proc->lock);
-	return killed;
+	return pending;
 }
 
 int proc_set_brk(u64 addr)
@@ -304,7 +305,7 @@ bool proc_get_info(pid_t pid, struct process_info *info)
 	info->pid = target->pid;
 	info->state = target->state;
 	info->exit_status = target->exit_status;
-	info->killed = target->killed;
+	info->killed = target->pending_sig != 0;
 	info->utime = target->ptms.tms_utime;
 	info->ktime = target->ptms.tms_stime;
 	info->brk = target->mm ? target->mm->brk : 0;

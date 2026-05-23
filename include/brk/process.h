@@ -95,7 +95,7 @@ struct process {
 	pid_t pid;
 	enum process_state state;
 	int exit_status;
-	bool killed;
+	int pending_sig;
 
 	struct uvm_space *mm;
 	struct file *ofiles[OPEN_MAX];
@@ -125,6 +125,9 @@ struct process *proc_alloc(void);
 void proc_free(struct process *proc);
 void proc_set_killed(struct process *proc);
 bool proc_is_killed(struct process *proc);
+void proc_exit(int status);
+void proc_exit_normal(int code);
+void proc_exit_signal(int sig);
 int proc_fork(void);
 int proc_set_brk(u64 addr);
 int proc_alloc_fd(struct process *proc, struct file *fp);
@@ -134,8 +137,8 @@ void proc_yield(void);
 void proc_sleep(void *chan, spinlock_t *lock);
 void proc_wake_up(void *chan);
 void proc_wake_all(void *chan);
-void proc_exit(int status);
 pid_t proc_wait(pid_t cpid, int *status, int options, struct rusage *rus);
+void proc_wake_process(struct process *proc);
 void proc_sched(void);
 void proc_sched_resume(void);
 void proc_scheduler(void);
@@ -189,6 +192,8 @@ void switch_context(struct switch_frame *prev, struct switch_frame *next);
 
 extern cpuid_t init_cpuid;
 extern struct process *init_proc;
+extern struct list_head procs;
+extern spinlock_t procs_lock;
 extern struct cpu cpus[NR_CPUS];
 extern spinlock_t wait_lock;
 
