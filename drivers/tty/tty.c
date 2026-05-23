@@ -7,9 +7,21 @@
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
+#include <uapi/ioctl.h>
 #include <uapi/types.h>
 
 #define CTRL(x) ((x) - '@')
+
+#define TTY_DEFAULT_ROWS 24
+#define TTY_DEFAULT_COLS 80
+
+static void tty_init_winsize(struct tty *tty)
+{
+	tty->winsize.ws_row = TTY_DEFAULT_ROWS;
+	tty->winsize.ws_col = TTY_DEFAULT_COLS;
+	tty->winsize.ws_xpixel = 0;
+	tty->winsize.ws_ypixel = 0;
+}
 
 struct tty *tty_alloc(void)
 {
@@ -35,6 +47,28 @@ void tty_free(struct tty *tty)
 void tty_init(struct tty *tty, struct tty_port *port)
 {
 	tty->port = port;
+	tty_init_winsize(tty);
+}
+
+long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
+{
+	struct winsize *ws = (struct winsize *)arg;
+
+	if (!tty)
+		return -EBADF;
+	if (!ws)
+		return -EFAULT;
+
+	switch (cmd) {
+	case TIOCGWINSZ:
+		*ws = tty->winsize;
+		return 0;
+	case TIOCSWINSZ:
+		tty->winsize = *ws;
+		return 0;
+	default:
+		return -ENOTTY;
+	}
 }
 
 ssize_t tty_read(struct tty *tty, void *buf, usize_t n)
