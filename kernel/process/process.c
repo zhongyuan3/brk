@@ -12,9 +12,9 @@
 #include <brk/printk.h>
 #include <brk/process.h>
 #include <brk/riscv.h>
+#include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/string.h>
-#include <brk/signal.h>
 #include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>
@@ -65,6 +65,7 @@ struct process *proc_alloc(void)
 	list_init(&proc->child);
 	spinlock_init(&proc->lock, "proc");
 	proc->state = PROCESS_STATE_NEW;
+	proc_signal_init(proc);
 
 	proc->pid = pid_alloc();
 	if (proc->pid < 0)
@@ -159,12 +160,7 @@ void proc_set_killed(struct process *proc)
 
 bool proc_is_killed(struct process *proc)
 {
-	bool pending;
-
-	spinlock_acquire(&proc->lock);
-	pending = proc->pending_sig != 0;
-	spinlock_release(&proc->lock);
-	return pending;
+	return proc_signal_pending(proc);
 }
 
 int proc_set_brk(u64 addr)
@@ -305,7 +301,7 @@ bool proc_get_info(pid_t pid, struct process_info *info)
 	info->pid = target->pid;
 	info->state = target->state;
 	info->exit_status = target->exit_status;
-	info->killed = target->pending_sig != 0;
+	info->killed = target->pending != 0;
 	info->utime = target->ptms.tms_utime;
 	info->ktime = target->ptms.tms_stime;
 	info->brk = target->mm ? target->mm->brk : 0;
@@ -372,6 +368,7 @@ int proc_fork(void)
 	}
 
 	memcpy(&child->tf, &parent->tf, sizeof(parent->tf));
+	proc_signal_fork(child, parent);
 
 	for (int i = 0; i < OPEN_MAX; ++i) {
 		if (parent->ofiles[i])

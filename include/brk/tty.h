@@ -14,6 +14,7 @@
 
 struct file;
 struct char_dev;
+struct process;
 struct tty;
 struct tty_port;
 struct tty_ops;
@@ -28,6 +29,7 @@ struct tty_port {
 	struct tty_driver *driver;
 	spinlock_t lock;
 	void *client_data;
+	struct process *foreground;
 };
 
 struct tty_driver {

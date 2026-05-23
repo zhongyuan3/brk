@@ -5,10 +5,10 @@
 #include <brk/pgtable.h>
 #include <brk/printk.h>
 #include <brk/process.h>
+#include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
-#include <brk/signal.h>
 #include <brk/timer.h>
 #include <brk/vmalloc.h>
 #include <uapi/brk/errno.h>

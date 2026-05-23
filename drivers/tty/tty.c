@@ -2,12 +2,14 @@
 #include <brk/lock.h>
 #include <brk/process.h>
 #include <brk/refcnt.h>
+#include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
 #include <uapi/ioctl.h>
+#include <uapi/signal.h>
 #include <uapi/types.h>
 
 #define CTRL(x) ((x) - '@')
@@ -83,7 +85,7 @@ ssize_t tty_read(struct tty *tty, void *buf, usize_t n)
 		/* wait until interrupt handler has put some
 		 * input into cons.buffer. */
 		while (tty->rx_r == tty->rx_w) {
-			if (proc_is_killed(current_process())) {
+			if (proc_signal_pending(current_process())) {
 				spinlock_release(&tty->port->lock);
 				return -EINTR;
 			}
@@ -139,6 +141,10 @@ void tty_receive(struct tty *tty, int c)
 	const struct tty_ops *ops = tty->port->driver->ops;
 
 	switch (c) {
+	case CTRL('C'):
+		if (tty->port->foreground)
+			proc_send_signal(tty->port->foreground, SIGINT);
+		break;
 	case CTRL('U'): /* Kill line. */
 		while (tty->rx_e != tty->rx_w &&
 		       tty->rx_buf[(tty->rx_e - 1) % tty->rx_size] != '\n') {
