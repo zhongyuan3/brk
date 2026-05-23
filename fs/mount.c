@@ -15,7 +15,7 @@
  *     mnt_root  ──▶  root_dentry "/"
  *                        └── dentry "/mnt"  (DCACHE_MOUNTED set)
  *                                │
- *                    ┌───────────┘ lookup_mount() finds via global hash table ──▶
+ *                    ┌───────────┘ mount_instance_lookup() finds via global hash table ──▶
  *                    │
  *                    ▼
  *              new_mnt (ext4)
@@ -114,7 +114,7 @@ static int graft_tree(struct mount_instance *new_mnt, struct path *mountpoint)
 	 * Stage 2 (ownership transfer):
 	 * new_mnt starts owning references to parent mount and mountpoint dentry.
 	 */
-	new_mnt->mnt_parent = mount_get(mp_mnt);
+	new_mnt->mnt_parent = mount_instance_get(mp_mnt);
 	new_mnt->mnt_mountpoint = dentry_get(mp_dentry);
 
 	/* Stage 3 (topology linkage): parent child list + global mount hash. */
@@ -146,12 +146,12 @@ static int graft_tree(struct mount_instance *new_mnt, struct path *mountpoint)
 }
 
 /**
- * lookup_mount() - Resolve child mount mounted on @path
+ * mount_instance_lookup() - Resolve child mount mounted on @path
  * @path: Current path (mnt + dentry)
  *
  * Return: mount with reference held, or %NULL if no child mount exists.
  */
-struct mount_instance *lookup_mount(const struct path *path)
+struct mount_instance *mount_instance_lookup(const struct path *path)
 {
 	struct mount_instance *mnt = NULL;
 	struct mount_instance *mp_mnt = path->mnt;
@@ -163,7 +163,7 @@ struct mount_instance *lookup_mount(const struct path *path)
 		if (mnt->mnt_parent == mp_mnt &&
 		    mnt->mnt_mountpoint == mp_dentry) {
 			spinlock_release(&mount_hashtable_lock);
-			return mount_get(mnt);
+			return mount_instance_get(mnt);
 		}
 	}
 	spinlock_release(&mount_hashtable_lock);
@@ -189,7 +189,7 @@ int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
 	struct dentry *root_dentry;
 	int err;
 
-	type = get_filesystem(type_name);
+	type = fs_driver_lookup(type_name);
 	if (!type)
 		return -ENODEV;
 
@@ -249,19 +249,19 @@ int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
 int do_umount(struct mount_instance *mnt, int flags)
 {
 	(void)flags;
-	mount_put(mnt);
+	mount_instance_put(mnt);
 	return 0;
 }
 
 /* Returns @mnt with refcount incremented. */
-struct mount_instance *mount_get(struct mount_instance *mnt)
+struct mount_instance *mount_instance_get(struct mount_instance *mnt)
 {
 	refcnt_inc(&mnt->mnt_count);
 	return mnt;
 }
 
 /* Drops one reference and may tear down mount at zero. */
-void mount_put(struct mount_instance *mnt)
+void mount_instance_put(struct mount_instance *mnt)
 {
 	struct mount_instance *parent;
 	struct dentry *mountpoint;
@@ -306,10 +306,10 @@ void mount_put(struct mount_instance *mnt)
 	sleeplock_release(&mount_lock);
 
 	/* Unmount stage 2: release owned references and tear down sb. */
-	mount_put(parent);
+	mount_instance_put(parent);
 	dentry_put(mountpoint);
 	dentry_put(root);
-	sb->s_type->kill_sb(sb);
+	sb->s_driver->kill_sb(sb);
 
 	free_mount(mnt);
 }
@@ -338,13 +338,13 @@ struct mount_instance *kernel_mount(struct fs_driver *fs_type,
 	return new_mnt;
 }
 
-int init_mount_tree(struct path *root_path)
+int mount_tree_init(struct path *root_path)
 {
 	struct mount_instance *mnt = kernel_mount(&tmpfs_fs_type, 0, "", NULL);
 	if (IS_ERR(mnt))
 		return PTR_ERR(mnt);
 	root_mnt = mnt;
-	root_path->mnt = mount_get(root_mnt);
+	root_path->mnt = mount_instance_get(root_mnt);
 	root_path->dentry = dentry_get(root_mnt->mnt_root);
 	return 0;
 }

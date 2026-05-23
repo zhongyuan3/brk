@@ -588,7 +588,7 @@ static struct dentry *tmpfs_mount(struct fs_driver *fs_type, int flags,
 	struct inode *root_inode;
 	struct dentry *root_dentry;
 
-	sb = alloc_super(fs_type);
+	sb = super_block_alloc(fs_type);
 	if (!sb)
 		return ERR_PTR(-ENOMEM);
 
@@ -600,7 +600,7 @@ static struct dentry *tmpfs_mount(struct fs_driver *fs_type, int flags,
 
 	t_sb = tmpfs_alloc_super();
 	if (!t_sb) {
-		free_super(sb);
+		super_block_free(sb);
 		return ERR_PTR(-ENOMEM);
 	}
 	sb->s_fs_info = t_sb;
@@ -608,13 +608,13 @@ static struct dentry *tmpfs_mount(struct fs_driver *fs_type, int flags,
 	root_inode = inode_get_locked(sb, TMPFS_ROOT_INO);
 	if (!root_inode) {
 		tmpfs_free_super(t_sb);
-		free_super(sb);
+		super_block_free(sb);
 		return ERR_PTR(-ENOMEM);
 	}
 	if (tmpfs_init_new_inode(t_sb, root_inode)) {
 		inode_put(root_inode);
 		tmpfs_free_super(t_sb);
-		free_super(sb);
+		super_block_free(sb);
 		return ERR_PTR(-EIO);
 	}
 
@@ -622,7 +622,7 @@ static struct dentry *tmpfs_mount(struct fs_driver *fs_type, int flags,
 	if (!root_dentry) {
 		inode_put(root_inode);
 		tmpfs_free_super(t_sb);
-		free_super(sb);
+		super_block_free(sb);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -637,13 +637,13 @@ static struct dentry *tmpfs_mount(struct fs_driver *fs_type, int flags,
 
 static void tmpfs_kill_sb(struct super_block *sb)
 {
-	struct fs_driver *fs_type = sb->s_type;
+	struct fs_driver *fs_type = sb->s_driver;
 
 	spinlock_acquire(&fs_type->fs_lock);
 	list_del(&sb->s_instances);
 	spinlock_release(&fs_type->fs_lock);
 
-	super_put(sb);
+	super_block_put(sb);
 }
 
 static void tmpfs_dirty_inode(struct inode *inode, int flags)

@@ -15,9 +15,9 @@
 
 static void register_builtin_filesystems(void)
 {
-	register_filesystem(&tmpfs_fs_type);
-	register_filesystem(&brkfs_fs_type);
-	register_filesystem(&procfs_fs_type);
+	fs_driver_register(&tmpfs_fs_type);
+	fs_driver_register(&brkfs_fs_type);
+	fs_driver_register(&procfs_fs_type);
 	pipe_fs_init();
 }
 
@@ -27,7 +27,7 @@ int fs_init(void)
 
 	struct process *proc = current_process();
 
-	int err = init_mount_tree(&proc->root);
+	int err = mount_tree_init(&proc->root);
 	if (err)
 		return err;
 	klog_info("mount tree initialized\n");
@@ -55,7 +55,7 @@ int fs_init(void)
 		return err;
 	klog_info("/ mounted successfully\n");
 
-	struct mount_instance *root_mnt = lookup_mount(&proc->root);
+	struct mount_instance *root_mnt = mount_instance_lookup(&proc->root);
 	if (!root_mnt)
 		return -EINVAL;
 
