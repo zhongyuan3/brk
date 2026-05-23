@@ -4,13 +4,13 @@
 #include <brk/types.h>
 #include <uapi/brk/syscall.h>
 
-struct opened_file;
+struct file;
 
 void syscall(void);
 u64 syscall_arg_raw(int argno);
 void *syscall_arg_ptr(int argno);
 int syscall_arg_int(int argno);
-int syscall_arg_fd(int argno, int *pfd, struct opened_file **pfp);
+int syscall_arg_fd(int argno, int *pfd, struct file **pfp);
 
 u64 sys_read(void);
 u64 sys_write(void);

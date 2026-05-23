@@ -5,12 +5,11 @@
 #include <uapi/brk/errno.h>
 #include <uapi/fcntl.h>
 
-struct opened_file *do_openat(int dirfd, const char *pathname, int flags,
-			      umode_t mode)
+struct file *do_openat(int dirfd, const char *pathname, int flags, umode_t mode)
 {
 	int err;
-	struct opened_file *file;
-	struct file_anchor path;
+	struct file *file;
+	struct path path;
 
 	if ((flags & O_RDWR) && (flags & O_WRONLY))
 		return ERR_PTR(-EINVAL);
@@ -36,13 +35,13 @@ struct opened_file *do_openat(int dirfd, const char *pathname, int flags,
 	}
 
 	if (!exists && create) {
-		struct file_anchor parent_path;
+		struct path parent_path;
 		err = path_dot_dot(&path, &parent_path);
 		if (err) {
 			path_put(&path);
 			return ERR_PTR(err);
 		}
-		struct fs_inode *inode = parent_path.dentry->d_inode;
+		struct inode *inode = parent_path.dentry->d_inode;
 		sleeplock_acquire(&inode->i_rwsem);
 		err = inode->i_op->create(inode, path.dentry, mode, excl);
 		sleeplock_release(&inode->i_rwsem);
@@ -97,7 +96,7 @@ struct opened_file *do_openat(int dirfd, const char *pathname, int flags,
 int do_mkdirat(int dirfd, const char *pathname, umode_t mode)
 {
 	int err;
-	struct file_anchor path;
+	struct path path;
 
 	err = path_lookupat(dirfd, pathname, 0, &path);
 	if (err)
@@ -111,13 +110,13 @@ int do_mkdirat(int dirfd, const char *pathname, umode_t mode)
 	}
 	spinlock_release(&path.dentry->d_lock);
 
-	struct file_anchor parent_path;
+	struct path parent_path;
 	err = path_dot_dot(&path, &parent_path);
 	if (err) {
 		path_put(&path);
 		return err;
 	}
-	struct fs_inode *inode = parent_path.dentry->d_inode;
+	struct inode *inode = parent_path.dentry->d_inode;
 	sleeplock_acquire(&inode->i_rwsem);
 	err = inode->i_op->mkdir(inode, path.dentry, mode | S_IFDIR);
 	sleeplock_release(&inode->i_rwsem);
@@ -130,7 +129,7 @@ int do_mkdirat(int dirfd, const char *pathname, umode_t mode)
 int do_mknodat(int dirfd, const char *pathname, umode_t mode, dev_t dev)
 {
 	int err;
-	struct file_anchor path;
+	struct path path;
 
 	err = path_lookupat(dirfd, pathname, 0, &path);
 	if (err)
@@ -144,13 +143,13 @@ int do_mknodat(int dirfd, const char *pathname, umode_t mode, dev_t dev)
 	}
 	spinlock_release(&path.dentry->d_lock);
 
-	struct file_anchor parent_path;
+	struct path parent_path;
 	err = path_dot_dot(&path, &parent_path);
 	if (err) {
 		path_put(&path);
 		return err;
 	}
-	struct fs_inode *inode = parent_path.dentry->d_inode;
+	struct inode *inode = parent_path.dentry->d_inode;
 	sleeplock_acquire(&inode->i_rwsem);
 	err = inode->i_op->mknod(inode, path.dentry, mode, dev);
 	sleeplock_release(&inode->i_rwsem);
@@ -166,7 +165,7 @@ int do_linkat(int olddirfd, const char *oldpathname, int newdirfd,
 	(void)flags;
 
 	int err;
-	struct file_anchor oldpath, newpath;
+	struct path oldpath, newpath;
 
 	err = path_lookupat(olddirfd, oldpathname, 0, &oldpath);
 	if (err)
@@ -187,15 +186,15 @@ int do_linkat(int olddirfd, const char *oldpathname, int newdirfd,
 	}
 	spinlock_release(&newpath.dentry->d_lock);
 
-	struct file_anchor parent_path;
+	struct path parent_path;
 	err = path_dot_dot(&newpath, &parent_path);
 	if (err) {
 		path_put(&oldpath);
 		path_put(&newpath);
 		return err;
 	}
-	struct fs_inode *parent_inode = parent_path.dentry->d_inode;
-	struct fs_inode *old_inode = oldpath.dentry->d_inode;
+	struct inode *parent_inode = parent_path.dentry->d_inode;
+	struct inode *old_inode = oldpath.dentry->d_inode;
 	sleeplock_acquire(&parent_inode->i_rwsem);
 	sleeplock_acquire(&old_inode->i_rwsem);
 	err = parent_inode->i_op->link(oldpath.dentry, parent_inode,
@@ -212,7 +211,7 @@ int do_linkat(int olddirfd, const char *oldpathname, int newdirfd,
 int do_unlinkat(int dirfd, const char *pathname, int flags)
 {
 	int err;
-	struct file_anchor path;
+	struct path path;
 
 	(void)flags;
 
@@ -228,13 +227,13 @@ int do_unlinkat(int dirfd, const char *pathname, int flags)
 	}
 	spinlock_release(&path.dentry->d_lock);
 
-	struct file_anchor parent_path;
+	struct path parent_path;
 	err = path_dot_dot(&path, &parent_path);
 	if (err) {
 		path_put(&path);
 		return err;
 	}
-	struct fs_inode *inode = parent_path.dentry->d_inode;
+	struct inode *inode = parent_path.dentry->d_inode;
 	sleeplock_acquire(&inode->i_rwsem);
 	err = inode->i_op->unlink(inode, path.dentry);
 	sleeplock_release(&inode->i_rwsem);
@@ -247,7 +246,7 @@ int do_unlinkat(int dirfd, const char *pathname, int flags)
 int do_symlinkat(int dirfd, const char *pathname, const char *target)
 {
 	int err;
-	struct file_anchor path;
+	struct path path;
 
 	err = path_lookupat(dirfd, pathname, 0, &path);
 	if (err)
@@ -261,13 +260,13 @@ int do_symlinkat(int dirfd, const char *pathname, const char *target)
 	}
 	spinlock_release(&path.dentry->d_lock);
 
-	struct file_anchor parent_path;
+	struct path parent_path;
 	err = path_dot_dot(&path, &parent_path);
 	if (err) {
 		path_put(&path);
 		return err;
 	}
-	struct fs_inode *inode = parent_path.dentry->d_inode;
+	struct inode *inode = parent_path.dentry->d_inode;
 	sleeplock_acquire(&inode->i_rwsem);
 	err = inode->i_op->symlink(inode, path.dentry, target);
 	sleeplock_release(&inode->i_rwsem);
@@ -280,7 +279,7 @@ int do_symlinkat(int dirfd, const char *pathname, const char *target)
 int do_readlinkat(int dirfd, const char *pathname, char *buf, usize_t bufsiz)
 {
 	int err;
-	struct file_anchor path;
+	struct path path;
 
 	err = path_lookupat(dirfd, pathname, 0, &path);
 	if (err)
@@ -294,7 +293,7 @@ int do_readlinkat(int dirfd, const char *pathname, char *buf, usize_t bufsiz)
 	}
 	spinlock_release(&path.dentry->d_lock);
 
-	struct fs_inode *inode = path.dentry->d_inode;
+	struct inode *inode = path.dentry->d_inode;
 	if (!S_ISLNK(inode->i_mode)) {
 		path_put(&path);
 		return -EINVAL;
@@ -317,7 +316,7 @@ int do_readlinkat(int dirfd, const char *pathname, char *buf, usize_t bufsiz)
 int do_creat(const char *pathname, umode_t mode)
 {
 	int err;
-	struct file_anchor path;
+	struct path path;
 
 	err = path_lookup(pathname, 0, &path);
 	if (err)
@@ -331,13 +330,13 @@ int do_creat(const char *pathname, umode_t mode)
 	}
 	spinlock_release(&path.dentry->d_lock);
 
-	struct file_anchor parent_path;
+	struct path parent_path;
 	err = path_dot_dot(&path, &parent_path);
 	if (err) {
 		path_put(&path);
 		return err;
 	}
-	struct fs_inode *inode = parent_path.dentry->d_inode;
+	struct inode *inode = parent_path.dentry->d_inode;
 	sleeplock_acquire(&inode->i_rwsem);
 	err = inode->i_op->create(inode, path.dentry, mode, true);
 	sleeplock_release(&inode->i_rwsem);
@@ -351,7 +350,7 @@ int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 		const char *newpathname, unsigned int flags)
 {
 	int err;
-	struct file_anchor oldpath, newpath;
+	struct path oldpath, newpath;
 
 	err = path_lookupat(olddirfd, oldpathname, 0, &oldpath);
 	if (err)
@@ -372,15 +371,15 @@ int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 	}
 	spinlock_release(&newpath.dentry->d_lock);
 
-	struct file_anchor parent_path;
+	struct path parent_path;
 	err = path_dot_dot(&newpath, &parent_path);
 	if (err) {
 		path_put(&oldpath);
 		path_put(&newpath);
 		return err;
 	}
-	struct fs_inode *parent_inode = parent_path.dentry->d_inode;
-	struct fs_inode *old_inode = oldpath.dentry->d_inode;
+	struct inode *parent_inode = parent_path.dentry->d_inode;
+	struct inode *old_inode = oldpath.dentry->d_inode;
 	sleeplock_acquire(&parent_inode->i_rwsem);
 	sleeplock_acquire(&old_inode->i_rwsem);
 	err = parent_inode->i_op->rename(old_inode, oldpath.dentry,
@@ -397,7 +396,7 @@ int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 int do_rmdir(const char *pathname)
 {
 	int err;
-	struct file_anchor path;
+	struct path path;
 
 	err = path_lookupat(AT_FDCWD, pathname, 0, &path);
 	if (err)
@@ -411,13 +410,13 @@ int do_rmdir(const char *pathname)
 	}
 	spinlock_release(&path.dentry->d_lock);
 
-	struct file_anchor parent_path;
+	struct path parent_path;
 	err = path_dot_dot(&path, &parent_path);
 	if (err) {
 		path_put(&path);
 		return err;
 	}
-	struct fs_inode *inode = parent_path.dentry->d_inode;
+	struct inode *inode = parent_path.dentry->d_inode;
 	sleeplock_acquire(&inode->i_rwsem);
 	err = inode->i_op->rmdir(inode, path.dentry);
 	sleeplock_release(&inode->i_rwsem);

@@ -32,7 +32,7 @@ int fs_init(void)
 		return err;
 	klog_info("mount tree initialized\n");
 
-	path_dup(&proc->root);
+	path_get(&proc->root);
 	proc->cwd = proc->root;
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
@@ -55,19 +55,19 @@ int fs_init(void)
 		return err;
 	klog_info("/ mounted successfully\n");
 
-	struct fs_mount_state *root_mnt = lookup_mount(&proc->root);
+	struct mount_instance *root_mnt = lookup_mount(&proc->root);
 	if (!root_mnt)
 		return -EINVAL;
 
-	struct file_anchor root_path = {
+	struct path root_path = {
 		.mnt = root_mnt,
-		.dentry = dentry_dup(root_mnt->mnt_root),
+		.dentry = dentry_get(root_mnt->mnt_root),
 	};
 
 	path_put(&proc->root);
 	proc->root = root_path;
 	path_put(&proc->cwd);
-	path_dup(&root_path);
+	path_get(&root_path);
 	proc->cwd = root_path;
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
@@ -102,7 +102,7 @@ int fs_init(void)
 		return err;
 	klog_info("tty fs nodes created\n");
 
-	struct opened_file *f = do_openat(AT_FDCWD, "/dev/tty0", O_RDWR, 0);
+	struct file *f = do_openat(AT_FDCWD, "/dev/tty0", O_RDWR, 0);
 	if (IS_ERR(f)) {
 		err = PTR_ERR(f);
 		return err;
@@ -110,8 +110,8 @@ int fs_init(void)
 	klog_info("/dev/tty0 opened successfully\n");
 
 	proc->ofiles[0] = f;
-	proc->ofiles[1] = file_dup(f);
-	proc->ofiles[2] = file_dup(f);
+	proc->ofiles[1] = file_get(f);
+	proc->ofiles[2] = file_get(f);
 
 	return 0;
 }

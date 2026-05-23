@@ -15,9 +15,9 @@
 #define MNT_NOEXEC 0x08
 #define MNT_NOATIME 0x10
 
-struct fs_mount_state {
+struct mount_instance {
 	/* Parent mount in namespace tree; reference held while mounted. */
-	struct fs_mount_state
+	struct mount_instance
 		*mnt_parent; /* hold reference count, self if root (no ref) */
 	struct list_head mnt_child; /* protected by parent's mnt_lock */
 	struct list_head mnt_mounts; /* protected by mnt_lock */
@@ -27,11 +27,11 @@ struct fs_mount_state {
 	struct list_head mnt_instance; /* protected by mnt_sb->s_mount_lock */
 
 	/* Mountpoint dentry in parent mount; reference held while mounted. */
-	struct path_component *mnt_mountpoint;
+	struct dentry *mnt_mountpoint;
 	/* Root dentry of mounted filesystem; reference held while mounted. */
-	struct path_component *mnt_root;
+	struct dentry *mnt_root;
 	/* Superblock backing this mount; lifetime managed by mount lifecycle. */
-	struct fs_state *mnt_sb;
+	struct super_block *mnt_sb;
 
 	refcnt_t mnt_count;
 	spinlock_t mnt_lock;
@@ -43,10 +43,10 @@ struct fs_mount_state {
  * Mount API contract notes
  * ------------------------
  * 1) Ownership and lifetime:
- *    - mnt_parent/mnt_mountpoint/mnt_root are owned references of struct fs_mount_state.
+ *    - mnt_parent/mnt_mountpoint/mnt_root are owned references of struct mount_instance.
  *    - mnt_sb is owned by the mount and is torn down during final mount_put()
  *      via fs_type->kill_sb().
- *    - Implementations must keep mount_dup/mount_put and path_get/path_put
+ *    - Implementations must keep mount_get/mount_put and path_get/path_put
  *      symmetric across all success/error paths.
  *
  * 2) lookup_mount() return semantics are intentionally simple:
@@ -65,12 +65,12 @@ struct fs_mount_state {
 
 int do_mount(const char *dev_name, const char *dir_name, const char *type,
 	     unsigned long flags, void *data);
-int do_umount(struct fs_mount_state *mnt, int flags);
-struct fs_mount_state *lookup_mount(const struct file_anchor *path);
-struct fs_mount_state *mount_dup(struct fs_mount_state *mnt);
-void mount_put(struct fs_mount_state *mnt);
-int init_mount_tree(struct file_anchor *root_path);
-struct fs_mount_state *kernel_mount(struct fs_driver *fs_type,
+int do_umount(struct mount_instance *mnt, int flags);
+struct mount_instance *lookup_mount(const struct path *path);
+struct mount_instance *mount_get(struct mount_instance *mnt);
+void mount_put(struct mount_instance *mnt);
+int init_mount_tree(struct path *root_path);
+struct mount_instance *kernel_mount(struct fs_driver *fs_type,
 				    unsigned long flags, const char *dev_name,
 				    void *data);
 

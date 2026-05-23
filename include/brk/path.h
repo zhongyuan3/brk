@@ -78,16 +78,16 @@
  */
 
 /**
- * struct file_anchor - Describes a path point in the file system
+ * struct path - Describes a path point in the file system
  * @mnt: Mount point
  * @dentry: Directory entry
  *
  * A path can only be uniquely determined by holding both a mount point and a directory entry.
  * Each path holds references to both mnt and dentry (increments their respective reference counts).
  */
-struct file_anchor {
-	struct fs_mount_state *mnt;
-	struct path_component *dentry;
+struct path {
+	struct mount_instance *mnt;
+	struct dentry *dentry;
 };
 
 /**
@@ -100,7 +100,7 @@ struct file_anchor {
  * Return: 0 on success, negative errno on failure.
  */
 int path_lookupat(int dir_fd, const char *name, unsigned int flags,
-		  struct file_anchor *path);
+		  struct path *path);
 /**
  * path_lookup() - Resolve a path from current process context
  * @name: input path string
@@ -109,7 +109,7 @@ int path_lookupat(int dir_fd, const char *name, unsigned int flags,
  *
  * Return: 0 on success, negative errno on failure.
  */
-int path_lookup(const char *name, unsigned int flags, struct file_anchor *path);
+int path_lookup(const char *name, unsigned int flags, struct path *path);
 /**
  * path_parentat() - Resolve a parent path from a dirfd context
  * @dir_fd: directory fd or AT_FDCWD-style special value
@@ -119,19 +119,19 @@ int path_lookup(const char *name, unsigned int flags, struct file_anchor *path);
  *
  * Return: 0 on success, negative errno on failure.
  */
-int path_parentat(int dir_fd, const char *name, struct file_anchor *path,
+int path_parentat(int dir_fd, const char *name, struct path *path,
 		  struct qstr *last_component);
 /* Increment refs for both @path->mnt and @path->dentry. */
-void path_dup(struct file_anchor *path);
+void path_get(struct path *path);
 /* Drop refs for both @path->mnt and @path->dentry. */
-void path_put(struct file_anchor *path);
+void path_put(struct path *path);
 /*
  * Convert a resolved path object to absolute string form.
  * Returns 0 on success, negative errno on failure.
  */
-int path_to_absolute(const struct file_anchor *path, char *buf, usize_t bufsz);
+int path_to_absolute(const struct path *path, char *buf, usize_t bufsz);
 
-int path_dot(struct file_anchor *path, struct file_anchor *dot);
-int path_dot_dot(struct file_anchor *path, struct file_anchor *dotdot);
+int path_dot(struct path *path, struct path *dot);
+int path_dot_dot(struct path *path, struct path *dotdot);
 
 #endif

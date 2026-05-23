@@ -102,7 +102,7 @@ void proc_free(struct process *proc)
 	kobj_pool_free(&proc_cache, proc);
 }
 
-int proc_alloc_fd(struct process *proc, struct opened_file *fp)
+int proc_alloc_fd(struct process *proc, struct file *fp)
 {
 	for (int i = 0; i < OPEN_MAX; ++i) {
 		if (!proc->ofiles[i]) {
@@ -374,11 +374,11 @@ int proc_fork(void)
 
 	for (int i = 0; i < OPEN_MAX; ++i) {
 		if (parent->ofiles[i])
-			child->ofiles[i] = file_dup(parent->ofiles[i]);
+			child->ofiles[i] = file_get(parent->ofiles[i]);
 	}
-	path_dup(&parent->cwd);
+	path_get(&parent->cwd);
 	child->cwd = parent->cwd;
-	path_dup(&parent->root);
+	path_get(&parent->root);
 	child->root = parent->root;
 
 	child->tf.a0 = 0;

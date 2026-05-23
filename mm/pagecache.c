@@ -412,10 +412,10 @@ void truncate_inode_pages(struct page_cache *m, loff_t new_size)
 	}
 }
 
-ssize_t generic_file_read(struct opened_file *file, char *buf, usize_t size,
+ssize_t generic_file_read(struct file *file, char *buf, usize_t size,
 			  loff_t *pos)
 {
-	struct fs_inode *inode = file->f_inode;
+	struct inode *inode = file->f_inode;
 	struct page_cache *m = inode->i_mapping;
 	ssize_t total = 0;
 	loff_t isize;
@@ -464,10 +464,10 @@ ssize_t generic_file_read(struct opened_file *file, char *buf, usize_t size,
 	return total > 0 ? total : err;
 }
 
-ssize_t generic_file_write(struct opened_file *file, const char *buf,
-			   usize_t size, loff_t *pos)
+ssize_t generic_file_write(struct file *file, const char *buf, usize_t size,
+			   loff_t *pos)
 {
-	struct fs_inode *inode = file->f_inode;
+	struct inode *inode = file->f_inode;
 	struct page_cache *m = inode->i_mapping;
 	ssize_t total = 0;
 	int err = 0;
