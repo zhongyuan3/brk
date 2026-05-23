@@ -9,6 +9,7 @@
 #include <brk/types.h>
 #include <uapi/brk/limits.h>
 #include <uapi/resource.h>
+#include <uapi/signal.h>
 #include <uapi/times.h>
 
 #define KSTACK_PAGE_ORDER 1
@@ -95,7 +96,11 @@ struct process {
 	pid_t pid;
 	enum process_state state;
 	int exit_status;
-	int pending_sig;
+	u64 pending;
+	u64 blocked;
+	struct sigaction actions[NSIG];
+	bool in_handler;
+	u64 sigframe_sp;
 
 	struct uvm_space *mm;
 	struct file *ofiles[OPEN_MAX];

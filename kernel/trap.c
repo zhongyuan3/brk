@@ -125,7 +125,7 @@ struct trap_frame *user_trap_handler(void)
 	if (TRAP_IS_INTERRUPT(scause)) {
 		if (code == 5) {
 			timer_handle_int();
-			proc_deliver_fatal(proc);
+			proc_deliver_pending(proc);
 			if (--proc->time_slice <= 0)
 				proc_yield();
 		} else if (code == 9) {
@@ -137,7 +137,7 @@ struct trap_frame *user_trap_handler(void)
 		}
 	} else {
 		if (code == 8) {
-			proc_deliver_fatal(proc);
+			proc_deliver_pending(proc);
 			proc->tf.epc += 4; /* skip ecall */
 			intr_on();
 			syscall();
@@ -148,7 +148,7 @@ struct trap_frame *user_trap_handler(void)
 		}
 	}
 
-	proc_deliver_fatal(proc);
+	proc_deliver_pending(proc);
 
 	prepare_to_return();
 	jiffies = jiffies_get();
