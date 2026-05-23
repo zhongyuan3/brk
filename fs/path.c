@@ -19,7 +19,7 @@ static void follow_mount(struct path *path)
 
 	struct mount_instance *child_mnt;
 	/* May have multiple nested mounts, traverse in loop */
-	while ((child_mnt = lookup_mount(path))) {
+	while ((child_mnt = mount_instance_lookup(path))) {
 		path_put(path);
 		path->mnt = child_mnt;
 		path->dentry = dentry_get(child_mnt->mnt_root);
@@ -39,7 +39,7 @@ static int dir_lookup_entry(struct path *dir, const struct qstr *name,
 	if (IS_ERR(dentry))
 		return PTR_ERR(dentry);
 
-	result->mnt = mount_get(dir->mnt);
+	result->mnt = mount_instance_get(dir->mnt);
 	result->dentry = dentry;
 	return 0;
 }
@@ -112,7 +112,7 @@ int path_dot_dot(struct path *path, struct path *dotdot)
 	while (1) {
 		if (cur.dentry != cur.mnt->mnt_root) {
 			dotdot->dentry = dentry_get(cur.dentry->d_parent);
-			dotdot->mnt = mount_get(cur.mnt);
+			dotdot->mnt = mount_instance_get(cur.mnt);
 			path_put(&cur);
 			return 0;
 		}
@@ -120,7 +120,7 @@ int path_dot_dot(struct path *path, struct path *dotdot)
 		if (cur.dentry == cur.mnt->mnt_root && cur.mnt->mnt_parent &&
 		    cur.mnt != cur.mnt->mnt_parent) {
 			struct mount_instance *pmnt =
-				mount_get(cur.mnt->mnt_parent);
+				mount_instance_get(cur.mnt->mnt_parent);
 			struct dentry *mp = dentry_get(cur.mnt->mnt_mountpoint);
 
 			path_put(&cur);
@@ -221,13 +221,13 @@ int path_lookup(const char *name, unsigned int flags, struct path *path)
 void path_get(struct path *path)
 {
 	dentry_get(path->dentry);
-	mount_get(path->mnt);
+	mount_instance_get(path->mnt);
 }
 
 void path_put(struct path *path)
 {
 	dentry_put(path->dentry);
-	mount_put(path->mnt);
+	mount_instance_put(path->mnt);
 }
 
 int path_to_absolute(const struct path *path, char *buf, usize_t bufsz)
@@ -238,7 +238,7 @@ int path_to_absolute(const struct path *path, char *buf, usize_t bufsz)
 	if (!path || !path->mnt || !path->dentry || !buf || bufsz == 0)
 		return -EINVAL;
 
-	cur.mnt = mount_get(path->mnt);
+	cur.mnt = mount_instance_get(path->mnt);
 	cur.dentry = dentry_get(path->dentry);
 
 	pos = bufsz;
@@ -252,7 +252,7 @@ int path_to_absolute(const struct path *path, char *buf, usize_t bufsz)
 		if (cur.dentry == cur.mnt->mnt_root && cur.mnt->mnt_parent &&
 		    cur.mnt != cur.mnt->mnt_parent) {
 			struct mount_instance *pmnt =
-				mount_get(cur.mnt->mnt_parent);
+				mount_instance_get(cur.mnt->mnt_parent);
 			struct dentry *mp = dentry_get(cur.mnt->mnt_mountpoint);
 
 			path_put(&cur);
@@ -279,7 +279,8 @@ int path_to_absolute(const struct path *path, char *buf, usize_t bufsz)
 
 		parent = dentry_get(cur.dentry->d_parent);
 		{
-			struct mount_instance *same_mnt = mount_get(cur.mnt);
+			struct mount_instance *same_mnt =
+				mount_instance_get(cur.mnt);
 
 			path_put(&cur);
 			cur.mnt = same_mnt;

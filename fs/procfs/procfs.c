@@ -343,7 +343,7 @@ static int procfs_show_filesystems(const struct procfs_entry *e, pid_t pid,
 	(void)pid;
 	struct procfs_fs_iter it = { .buf = buf, .size = size, .pos = 0 };
 
-	for_each_filesystem(procfs_fs_collect, &it);
+	fs_driver_for_each(procfs_fs_collect, &it);
 	return (int)it.pos;
 }
 
@@ -1008,7 +1008,7 @@ static struct dentry *procfs_mount(struct fs_driver *fs_type, int flags,
 	struct inode *root_inode;
 	struct dentry *root_dentry;
 
-	sb = alloc_super(fs_type);
+	sb = super_block_alloc(fs_type);
 	if (!sb)
 		return ERR_PTR(-ENOMEM);
 
@@ -1021,14 +1021,14 @@ static struct dentry *procfs_mount(struct fs_driver *fs_type, int flags,
 
 	root_inode = procfs_iget_root(sb);
 	if (!root_inode) {
-		free_super(sb);
+		super_block_free(sb);
 		return ERR_PTR(-ENOMEM);
 	}
 
 	root_dentry = dentry_make_root(root_inode);
 	if (!root_dentry) {
 		inode_put(root_inode);
-		free_super(sb);
+		super_block_free(sb);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -1043,13 +1043,13 @@ static struct dentry *procfs_mount(struct fs_driver *fs_type, int flags,
 
 static void procfs_kill_sb(struct super_block *sb)
 {
-	struct fs_driver *fs_type = sb->s_type;
+	struct fs_driver *fs_type = sb->s_driver;
 
 	spinlock_acquire(&fs_type->fs_lock);
 	list_del(&sb->s_instances);
 	spinlock_release(&fs_type->fs_lock);
 
-	super_put(sb);
+	super_block_put(sb);
 }
 
 struct fs_driver procfs_fs_type = {

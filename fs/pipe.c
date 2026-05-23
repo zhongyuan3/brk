@@ -173,13 +173,13 @@ static const struct super_block_ops pipefs_sops = {
 
 static void pipefs_kill_sb(struct super_block *sb)
 {
-	struct fs_driver *fs_type = sb->s_type;
+	struct fs_driver *fs_type = sb->s_driver;
 
 	spinlock_acquire(&fs_type->fs_lock);
 	list_del(&sb->s_instances);
 	spinlock_release(&fs_type->fs_lock);
 
-	super_put(sb);
+	super_block_put(sb);
 }
 
 static struct dentry *pipefs_mount(struct fs_driver *fs_type, int flags,
@@ -192,7 +192,7 @@ static struct dentry *pipefs_mount(struct fs_driver *fs_type, int flags,
 	(void)dev_name;
 	(void)data;
 
-	sb = alloc_super(fs_type);
+	sb = super_block_alloc(fs_type);
 	if (!sb)
 		return ERR_PTR(-ENOMEM);
 
@@ -204,7 +204,7 @@ static struct dentry *pipefs_mount(struct fs_driver *fs_type, int flags,
 
 	root_inode = inode_get_locked(sb, 1);
 	if (!root_inode) {
-		free_super(sb);
+		super_block_free(sb);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -220,7 +220,7 @@ static struct dentry *pipefs_mount(struct fs_driver *fs_type, int flags,
 	root_dentry = dentry_make_root(root_inode);
 	if (!root_dentry) {
 		inode_put(root_inode);
-		free_super(sb);
+		super_block_free(sb);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -477,7 +477,7 @@ int anon_pipe_create(struct file **read_file, struct file **write_file,
 		return -ENOMEM;
 	}
 
-	path.mnt = mount_get(pipe_mnt);
+	path.mnt = mount_instance_get(pipe_mnt);
 	path.dentry = d;
 
 	rf = file_alloc(&path, FMODE_READ);
@@ -488,7 +488,7 @@ int anon_pipe_create(struct file **read_file, struct file **write_file,
 		return err;
 	}
 
-	path.mnt = mount_get(pipe_mnt);
+	path.mnt = mount_instance_get(pipe_mnt);
 	path.dentry = dentry_get(d);
 
 	wf = file_alloc(&path, FMODE_WRITE);
@@ -516,7 +516,7 @@ void pipe_fs_init(void)
 	list_init(&pipefs_fs_type.fs_supers);
 	list_init(&pipefs_fs_type.fs_list);
 
-	register_filesystem(&pipefs_fs_type);
+	fs_driver_register(&pipefs_fs_type);
 
 	pipe_mnt = kernel_mount(&pipefs_fs_type, 0, "", NULL);
 	if (IS_ERR(pipe_mnt))

@@ -44,12 +44,12 @@ struct mount_instance {
  * ------------------------
  * 1) Ownership and lifetime:
  *    - mnt_parent/mnt_mountpoint/mnt_root are owned references of struct mount_instance.
- *    - mnt_sb is owned by the mount and is torn down during final mount_put()
+ *    - mnt_sb is owned by the mount and is torn down during final mount_instance_put()
  *      via fs_type->kill_sb().
- *    - Implementations must keep mount_get/mount_put and path_get/path_put
+ *    - Implementations must keep mount_instance_get/mount_instance_put and path_get/path_put
  *      symmetric across all success/error paths.
  *
- * 2) lookup_mount() return semantics are intentionally simple:
+ * 2) mount_instance_lookup() return semantics are intentionally simple:
  *      - returns mount with ref held
  *      - returns NULL when no mount exists at @path
  *    It should not mix "not found" with ERR_PTR() unless this header is
@@ -63,13 +63,16 @@ struct mount_instance {
  *    teardown callbacks while holding global mount locks.
  */
 
+struct mount_instance *mount_instance_lookup(const struct path *path);
+struct mount_instance *mount_instance_get(struct mount_instance *mnt);
+void mount_instance_put(struct mount_instance *mnt);
+
+int mount_tree_init(struct path *root_path);
+
 int do_mount(const char *dev_name, const char *dir_name, const char *type,
 	     unsigned long flags, void *data);
 int do_umount(struct mount_instance *mnt, int flags);
-struct mount_instance *lookup_mount(const struct path *path);
-struct mount_instance *mount_get(struct mount_instance *mnt);
-void mount_put(struct mount_instance *mnt);
-int init_mount_tree(struct path *root_path);
+
 struct mount_instance *kernel_mount(struct fs_driver *fs_type,
 				    unsigned long flags, const char *dev_name,
 				    void *data);

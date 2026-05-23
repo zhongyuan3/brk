@@ -72,9 +72,9 @@ struct fs_driver {
 	 * @data: filesystem-private mount options string
 	 *
 	 * Responsibility boundary (constructor side):
-	 *   1) Allocate and initialize a new superblock (typically alloc_super()).
+	 *   1) Allocate and initialize a new superblock (typically super_block_alloc()).
 	 *   2) Fill core sb fields at least:
-	 *        - s_type/s_op/s_flags/s_blocksize/s_magic
+	 *        - s_driver/s_op/s_flags/s_blocksize/s_magic
 	 *   3) Allocate filesystem-private state and store it in @sb->s_fs_info.
 	 *   4) Build root inode and root dentry, then set @sb->s_root.
 	 *   5) Link @sb into @fs_type->fs_supers list.
@@ -104,7 +104,7 @@ struct fs_driver {
 	 *
 	 * Responsibility boundary (destructor side):
 	 *   1) Detach @sb from @fs_type->fs_supers list.
-	 *   2) Drop the superblock reference (typically super_put(sb)); ->put_super()
+	 *   2) Drop the superblock reference (typically super_block_put(sb)); ->put_super()
 	 *      runs when s_count reaches zero.
 	 *   3) Filesystem-specific teardown belongs in ->put_super():
 	 *        - free @sb->s_fs_info
@@ -126,8 +126,8 @@ struct fs_driver {
 
 struct super_block {
 	struct list_head s_list; /* protected by sb_lock */
-	struct fs_driver *s_type;
-	struct list_head s_instances; /* protected by s_type->lock */
+	struct fs_driver *s_driver;
+	struct list_head s_instances; /* protected by s_driver->lock */
 	refcnt_t s_count;
 
 	unsigned long s_blocksize;
@@ -525,22 +525,22 @@ struct file_ops {
 	long (*ioctl)(struct file *file, unsigned int cmd, unsigned long arg);
 };
 
-int register_filesystem(struct fs_driver *fs);
-int unregister_filesystem(struct fs_driver *fs);
-struct fs_driver *get_filesystem(const char *name);
+int fs_driver_register(struct fs_driver *fs);
+int fs_driver_unregister(struct fs_driver *fs);
+struct fs_driver *fs_driver_lookup(const char *name);
 
 /*
  * Iterate every registered filesystem and invoke @fn with the global
  * filesystem list lock held. @fn must be non-blocking (no allocation,
  * no sleeplock acquisition).
  */
-void for_each_filesystem(void (*fn)(const struct fs_driver *fs, void *ctx),
-			 void *ctx);
+void fs_driver_for_each(void (*fn)(const struct fs_driver *fs, void *ctx),
+			void *ctx);
 
-struct super_block *alloc_super(struct fs_driver *type);
-void free_super(struct super_block *sb);
-void super_get(struct super_block *sb);
-void super_put(struct super_block *sb);
+struct super_block *super_block_alloc(struct fs_driver *driver);
+void super_block_free(struct super_block *sb);
+void super_block_get(struct super_block *sb);
+void super_block_put(struct super_block *sb);
 
 struct inode *inode_get_locked(struct super_block *sb, unsigned long ino);
 void inode_unlock_new(struct inode *inode);

@@ -7,7 +7,7 @@
 static LIST_DEFINE(super_blocks);
 static SPINLOCK_DEFINE(sb_lock);
 
-struct super_block *alloc_super(struct fs_driver *type)
+struct super_block *super_block_alloc(struct fs_driver *driver)
 {
 	struct super_block *sb;
 
@@ -16,7 +16,7 @@ struct super_block *alloc_super(struct fs_driver *type)
 		return NULL;
 
 	list_init(&sb->s_list);
-	sb->s_type = type;
+	sb->s_driver = driver;
 	list_init(&sb->s_instances);
 	refcnt_init(&sb->s_count, 1);
 
@@ -34,7 +34,7 @@ struct super_block *alloc_super(struct fs_driver *type)
 	return sb;
 }
 
-void free_super(struct super_block *sb)
+void super_block_free(struct super_block *sb)
 {
 	spinlock_acquire(&sb_lock);
 	list_del_init(&sb->s_list);
@@ -43,17 +43,17 @@ void free_super(struct super_block *sb)
 	kfree(sb);
 }
 
-void super_get(struct super_block *sb)
+void super_block_get(struct super_block *sb)
 {
 	refcnt_inc(&sb->s_count);
 }
 
-void super_put(struct super_block *sb)
+void super_block_put(struct super_block *sb)
 {
 	if (refcnt_dec_fetch(&sb->s_count) > 0)
 		return;
 
 	if (sb->s_op->put_super)
 		sb->s_op->put_super(sb);
-	free_super(sb);
+	super_block_free(sb);
 }

@@ -508,7 +508,7 @@ u64 sys_umount2(void)
 	}
 	spinlock_release(&path.dentry->d_lock);
 
-	struct mount_instance *mnt = lookup_mount(&path);
+	struct mount_instance *mnt = mount_instance_lookup(&path);
 	if (!mnt) {
 		path_put(&path);
 		return -ENOENT;
@@ -516,7 +516,7 @@ u64 sys_umount2(void)
 
 	err = do_umount(mnt, flags);
 	if (err) {
-		mount_put(mnt);
+		mount_instance_put(mnt);
 		path_put(&path);
 		return err;
 	}
