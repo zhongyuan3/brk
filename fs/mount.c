@@ -1,28 +1,3 @@
-/*
- * mount.c - Mount mechanism core: graft_tree
- *
- * "Graft" the directory tree of a new file system onto a mount point in the original directory tree.
- *
- * State before mounting:
- *
- *   root_mnt (rootfs)
- *     mnt_root  ──▶  root_dentry "/"
- *                        └── dentry "/mnt"  (DCACHE_MOUNTED not set)
- *
- * State after mounting:
- *
- *   root_mnt (rootfs)
- *     mnt_root  ──▶  root_dentry "/"
- *                        └── dentry "/mnt"  (DCACHE_MOUNTED set)
- *                                │
- *                    ┌───────────┘ fs_mount_state_lookup() finds via global hash table ──▶
- *                    │
- *                    ▼
- *              new_mnt (ext4)
- *                mnt_mountpoint ──▶ dentry "/mnt"  (mount point in original tree)
- *                mnt_root       ──▶ dentry "/"     (ext4's own root)
- *                mnt_parent     ──▶ root_mnt
- */
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fs.h>
@@ -146,12 +121,6 @@ static int graft_tree(struct fs_mount_state *new_mnt,
 	return 0;
 }
 
-/**
- * fs_mount_state_lookup() - Resolve child mount mounted on @path
- * @path: Current path (mnt + dentry)
- *
- * Return: mount with reference held, or %NULL if no child mount exists.
- */
 struct fs_mount_state *fs_mount_state_lookup(const struct fs_path *path)
 {
 	struct fs_mount_state *mnt = NULL;
@@ -170,16 +139,6 @@ struct fs_mount_state *fs_mount_state_lookup(const struct fs_path *path)
 	return NULL;
 }
 
-/**
- * do_mount() - Top-level function for mounting file systems
- * @dev_name: Device path or special name
- * @dir_name: Mount point path (user space string)
- * @type_name: File system type name
- * @flags: MS_* mount flags
- * @data: File system private mount options
- *
- * Return: %0 on success, negative errno on failure.
- */
 int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
 	     unsigned long flags, void *data)
 {
@@ -239,13 +198,6 @@ int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
 	return 0;
 }
 
-/**
- * do_umount() - Top-level function for unmounting file systems
- * @mnt: Mount to unmount
- * @flags: Unmount flags
- *
- * Return: %0 on success, negative errno on failure.
- */
 int do_umount(struct fs_mount_state *mnt, int flags)
 {
 	(void)flags;
@@ -253,14 +205,12 @@ int do_umount(struct fs_mount_state *mnt, int flags)
 	return 0;
 }
 
-/* Returns @mnt with refcount incremented. */
 struct fs_mount_state *fs_mount_state_get(struct fs_mount_state *mnt)
 {
 	refcnt_inc(&mnt->count);
 	return mnt;
 }
 
-/* Drops one reference and may tear down mount at zero. */
 void fs_mount_state_put(struct fs_mount_state *mnt)
 {
 	struct fs_mount_state *parent;

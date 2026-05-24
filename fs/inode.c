@@ -119,18 +119,6 @@ retry:
 	return NULL;
 }
 
-/**
- * fs_inode_get_locked - Look up inode from cache, allocate new if not exists
- * @sb:  Super block
- * @ino: inode number
- *
- * The returned inode is in one of two states:
- *   A. Exists (cache hit): I_NEW not set, reference count increased, ready to use
- *   B. Newly allocated: I_NEW set, caller must read data from disk and call fs_inode_unlock_new()
- *
- * Guarantee: For the same (sb, ino), only one caller of concurrent fs_inode_get_locked()
- *       will receive an inode in I_NEW state (other callers will wait for fs_inode_unlock_new()).
- */
 struct fs_inode *fs_inode_get_locked(struct fs_super_block *sb,
 				     unsigned long ino)
 {

@@ -25,30 +25,12 @@ struct fs_iattr {
 	struct timespec ia_atime;
 	struct timespec ia_mtime;
 	struct timespec ia_ctime;
-
-	/*
-	 * Not an attribute, but an auxiliary info for filesystems wanting to
-	 * implement an ftruncate() like method.  NOTE: filesystem should
-	 * check for (ia_valid & ATTR_FILE), and not for (ia_file != NULL).
-	 */
 	struct fs_file *ia_file;
 };
 
 struct fs_dir_iterator {
-	/**
-	 * actor() - emit a directory entry
-	 * @ctx: directory context
-	 * @name: name of the entry
-	 * @namelen: length of the name
-	 * @offset: offset of the entry
-	 * @ino: inode number of the entry
-	 * @d_type: type of the entry
-	 *
-	 * Return: true to continue, false to stop.
-	 */
-	bool (*actor)(struct fs_dir_iterator *ctx, const char *name,
-		      int namelen, loff_t offset, u64 ino, unsigned int d_type);
-
+	bool (*actor)(struct fs_dir_iterator *, const char *, int, loff_t, u64,
+		      unsigned int);
 	loff_t pos;
 };
 

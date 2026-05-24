@@ -30,84 +30,30 @@ struct qstr {
 
 struct fs_dentry {
 	refcnt_t count;
-
-	unsigned int flags; /* protected by d_lock */
+	unsigned int flags;
 	spinlock_t lock;
-
-	/* Positive dentry: points to inode; negative dentry: NULL. */
 	struct fs_inode *inode;
-	struct list_head alias; /* protected by d_inode->lock */
-
-	struct fs_dentry
-		*parent; /* hold reference count, self if root (no ref) */
-	struct list_head child; /* protected by d_parent->d_lock */
-	struct list_head children; /* protected by d_lock */
-
-	struct hlist_node hash; /* protected by dentry_htable_lock */
-
+	struct list_head alias;
+	struct fs_dentry *parent;
+	struct list_head child;
+	struct list_head children;
+	struct hlist_node hash;
 	struct qstr name;
 	union {
 		char short_name[DENTRY_SHORT_NAME_SIZE];
 		char *long_name;
 	};
-
-	struct fs_super_block *sb; /* no reference count */
-
-	/*
-	 * Dentry operation table.
-	 * Recommended invariant: newly allocated dentries always have a valid
-	 * d_op (at least &generic_dop) before they are visible in lookup paths.
-	 */
+	struct fs_super_block *sb;
 	const struct fs_dentry_ops *ops;
-
 	void *private_data;
 };
 
 struct fs_dentry_ops {
-	/**
-	 * compare() - compare a candidate name with a dentry name
-	 * @dentry: cached candidate dentry being tested
-	 * @len: length of the name to compare
-	 * @str: name bytes to compare
-	 * @name: full struct qstr for the cached name
-	 *
-	 * If %NULL, byte comparison is used. Case-insensitive filesystems
-	 * override this (e.g. FAT32).
-	 *
-	 * Return: %0 if equal, non-zero if different.
-	 */
-	int (*compare)(const struct fs_dentry *dentry, unsigned int len,
-		       const char *str, const struct qstr *name);
-
-	/**
-	 * release() - dentry memory will be freed
-	 * @dentry: dentry being destroyed
-	 *
-	 * Release @private_data and similar.
-	 */
-	void (*release)(struct fs_dentry *dentry);
-
-	/**
-	 * iput() - dentry is dropping its inode reference
-	 * @dentry: the dentry that is dropping its inode reference
-	 * @inode: the inode that is about to be fs_inode_put()
-	 *
-	 * If %NULL, the VFS calls fs_inode_put() directly.
-	 */
-	void (*iput)(struct fs_dentry *dentry, struct fs_inode *inode);
+	int (*compare)(const struct fs_dentry *, unsigned int, const char *,
+		       const struct qstr *);
+	void (*release)(struct fs_dentry *);
+	void (*iput)(struct fs_dentry *, struct fs_inode *);
 };
-
-/*
- * Dcache locking guideline:
- *   dentry_htable_lock -> dentry.d_lock -> inode.lock
- *
- * Notes:
- * - dentry lookup should be lockless outside the hash critical section as much
- *   as possible; do not call filesystem lookup callbacks while holding
- *   dentry_htable_lock.
- * - Parent/child list updates should hold parent->d_lock.
- * - Alias list updates should hold inode->lock.
- */
 
 struct fs_dentry *fs_dentry_make_root(struct fs_inode *root_inode);
 struct fs_dentry *fs_dentry_alloc_anon(struct fs_inode *inode,
