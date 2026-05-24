@@ -455,16 +455,16 @@ static int brkfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	int err = 0;
 
-	if (attr->ia_valid & ATTR_MODE) {
-		inode->mode = attr->ia_mode;
+	if (attr->valid & ATTR_MODE) {
+		inode->mode = attr->mode;
 		inode_touch_ctime(inode);
 	}
-	if (attr->ia_valid & ATTR_SIZE) {
+	if (attr->valid & ATTR_SIZE) {
 		/* Drop cached pages that are beyond the new size before freeing
 		 * the on-disk blocks, otherwise stale data would be visible to
 		 * concurrent readers. */
-		truncate_inode_pages(inode->mapping, attr->ia_size);
-		err = brkfs_truncate_inode_blocks(inode, attr->ia_size);
+		truncate_inode_pages(inode->mapping, attr->size);
+		err = brkfs_truncate_inode_blocks(inode, attr->size);
 		if (err)
 			goto out;
 		inode_touch_mtime_ctime(inode);

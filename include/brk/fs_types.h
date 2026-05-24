@@ -17,15 +17,15 @@ struct fs_mount_state;
 struct fs_path;
 
 struct fs_iattr {
-	unsigned int ia_valid;
-	umode_t ia_mode;
-	kuid_t ia_uid;
-	kgid_t ia_gid;
-	loff_t ia_size;
-	struct timespec ia_atime;
-	struct timespec ia_mtime;
-	struct timespec ia_ctime;
-	struct fs_file *ia_file;
+	unsigned int valid;
+	umode_t mode;
+	kuid_t uid;
+	kgid_t gid;
+	loff_t size;
+	struct timespec atime;
+	struct timespec mtime;
+	struct timespec ctime;
+	struct fs_file *file;
 };
 
 struct fs_dir_iterator {
