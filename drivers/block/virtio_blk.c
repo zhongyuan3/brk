@@ -16,17 +16,16 @@
 #include <brk/types.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
-#include <brk/virtio_disk.h>
 #include <brk/virtio_mmio.h>
 #include <brk/virtio_queue.h>
 #include <uapi/brk/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/types.h>
 
-static struct virtio_disk_driver __vdisk_driver;
-static struct virtio_disk_driver *vdisk_driver;
+static struct virtio_blk_registry __vblk_registry;
+static struct virtio_blk_registry *vblk_registry;
 
-static int virtio_blk_status_errno(char status)
+static int virtio_blk_status_to_errno(char status)
 {
 	switch (status) {
 	case VIRTIO_BLK_S_OK:
@@ -40,16 +39,16 @@ static int virtio_blk_status_errno(char status)
 	}
 }
 
-static int virtio_blk_init_check(struct virtio_device *dev)
+static int virtio_blk_validate_dev(struct virtio_device *vdev)
 {
-	if (dev->id != VIRTIO_DEVICE_ID_BLK)
+	if (vdev->id != VIRTIO_DEVICE_ID_BLK)
 		return -EINVAL;
 	return 0;
 }
 
-static u32 virtio_blk_negotiate_features(struct virtio_device *dev)
+static u32 virtio_blk_select_features(struct virtio_device *vdev)
 {
-	u32 features = virtio_mmio_read_features(dev);
+	u32 features = virtio_mmio_read_features(vdev);
 
 	features &= ~(1u << VIRTIO_BLK_F_RO);
 	features &= ~(1u << VIRTIO_BLK_F_SCSI);
@@ -61,130 +60,130 @@ static u32 virtio_blk_negotiate_features(struct virtio_device *dev)
 	return features;
 }
 
-static int virtio_disk_init_alloc(struct virtio_disk_device *bdev,
-				  unsigned int queue_size)
+static int virtio_blk_alloc_vq(struct virtio_blk_dev *vblk,
+			       unsigned int queue_size)
 {
 	int err;
 
-	err = virtq_alloc(&bdev->vq, queue_size);
+	err = virtq_alloc(&vblk->vq, queue_size);
 	if (err)
 		return err;
 
-	bdev->reqs = kcalloc(queue_size, sizeof(struct virtio_blk_req));
-	if (!bdev->reqs)
+	vblk->reqs = kcalloc(queue_size, sizeof(struct virtio_blk_req));
+	if (!vblk->reqs)
 		goto err_reqs;
 
-	bdev->tracks = kcalloc(queue_size, sizeof(struct virtio_disk_track));
-	if (!bdev->tracks)
+	vblk->slots = kcalloc(queue_size, sizeof(struct virtio_blk_slot));
+	if (!vblk->slots)
 		goto err_tracks;
 
 	return 0;
 
 err_tracks:
-	kfree(bdev->reqs);
-	bdev->reqs = NULL;
+	kfree(vblk->reqs);
+	vblk->reqs = NULL;
 err_reqs:
-	virtq_free(&bdev->vq);
+	virtq_free(&vblk->vq);
 	return -ENOMEM;
 }
 
-static void virtio_disk_finalize_free(struct virtio_disk_device *bdev)
+static void virtio_blk_free_vq(struct virtio_blk_dev *vblk)
 {
-	kfree(bdev->tracks);
-	bdev->tracks = NULL;
-	kfree(bdev->reqs);
-	bdev->reqs = NULL;
-	virtq_free(&bdev->vq);
+	kfree(vblk->slots);
+	vblk->slots = NULL;
+	kfree(vblk->reqs);
+	vblk->reqs = NULL;
+	virtq_free(&vblk->vq);
 }
 
-static void virtio_blk_used_cb(struct virtq *vq, u32 id, void *ctx)
+static void virtio_blk_vq_used(struct virtq *vq, u32 id, void *ctx)
 {
-	struct virtio_disk_device *bdev = ctx;
-	struct virtio_disk_transaction *trans;
+	struct virtio_blk_dev *vblk = ctx;
+	struct virtio_blk_io_desc *io;
 
 	(void)vq;
 
-	if (id >= bdev->vq.num || !bdev->tracks[id].trans)
+	if (id >= vblk->vq.num || !vblk->slots[id].trans)
 		panic("%s(): invalid used id %u\n", __func__, id);
 
-	trans = bdev->tracks[id].trans;
-	trans->completed = true;
-	proc_wake_up(&trans->completed);
+	io = vblk->slots[id].trans;
+	io->completed = true;
+	proc_wake_up(&io->completed);
 }
 
-static void virtio_disk_intr(void *ctx)
+static void virtio_blk_irq_handler(void *ctx)
 {
-	struct virtio_disk_device *bdev = ctx;
+	struct virtio_blk_dev *vblk = ctx;
 
-	spinlock_acquire(&bdev->lock);
+	spinlock_acquire(&vblk->lock);
 
-	virtio_mmio_ack_interrupt(bdev->vdev);
+	virtio_mmio_ack_interrupt(vblk->vdev);
 
 	__sync_synchronize();
 
-	virtq_process_used(&bdev->vq, virtio_blk_used_cb, bdev);
+	virtq_process_used(&vblk->vq, virtio_blk_vq_used, vblk);
 
-	spinlock_release(&bdev->lock);
+	spinlock_release(&vblk->lock);
 }
 
-static int virtio_blk_transfer(struct virtio_disk_device *bdev,
-			       struct virtio_disk_transaction *trans)
+static int virtio_blk_submit(struct virtio_blk_dev *vblk,
+			     struct virtio_blk_io_desc *io)
 {
 	unsigned int idx[3];
 	struct virtio_blk_req *req;
 	char *status;
 	int err;
 
-	spinlock_acquire(&bdev->lock);
+	spinlock_acquire(&vblk->lock);
 
-	while (virtq_alloc_desc_chain(&bdev->vq, idx, 3))
-		proc_sleep(&bdev->vq.desc, &bdev->lock);
+	while (virtq_alloc_desc_chain(&vblk->vq, idx, 3))
+		proc_sleep(&vblk->vq.desc, &vblk->lock);
 
-	req = &bdev->reqs[idx[0]];
-	req->type = trans->is_write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
+	req = &vblk->reqs[idx[0]];
+	req->type = io->is_write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
 	req->reserved = 0;
-	req->sector = trans->sector;
+	req->sector = io->sector;
 
-	bdev->vq.desc[idx[0]].addr = virt_to_phys((u64)req);
-	bdev->vq.desc[idx[0]].len = sizeof(*req);
-	bdev->vq.desc[idx[0]].flags = VIRTQ_DESC_F_NEXT;
-	bdev->vq.desc[idx[0]].next = idx[1];
+	vblk->vq.desc[idx[0]].addr = virt_to_phys((u64)req);
+	vblk->vq.desc[idx[0]].len = sizeof(*req);
+	vblk->vq.desc[idx[0]].flags = VIRTQ_DESC_F_NEXT;
+	vblk->vq.desc[idx[0]].next = idx[1];
 
-	bdev->vq.desc[idx[1]].addr = trans->buf_phys;
-	bdev->vq.desc[idx[1]].len = trans->sec_count * SECTOR_SIZE;
-	bdev->vq.desc[idx[1]].flags = trans->is_write ? 0 : VIRTQ_DESC_F_WRITE;
-	bdev->vq.desc[idx[1]].flags |= VIRTQ_DESC_F_NEXT;
-	bdev->vq.desc[idx[1]].next = idx[2];
+	vblk->vq.desc[idx[1]].addr = io->buf_phys;
+	vblk->vq.desc[idx[1]].len = io->sec_count * VIRTIO_BLK_SECTOR_SIZE;
+	vblk->vq.desc[idx[1]].flags = io->is_write ? 0 : VIRTQ_DESC_F_WRITE;
+	vblk->vq.desc[idx[1]].flags |= VIRTQ_DESC_F_NEXT;
+	vblk->vq.desc[idx[1]].next = idx[2];
 
-	status = &bdev->tracks[idx[0]].status;
+	status = &vblk->slots[idx[0]].status;
 	*status = 0xff;
-	bdev->vq.desc[idx[2]].addr = virt_to_phys((u64)status);
-	bdev->vq.desc[idx[2]].len = sizeof(*status);
-	bdev->vq.desc[idx[2]].flags = VIRTQ_DESC_F_WRITE;
-	bdev->vq.desc[idx[2]].next = 0;
+	vblk->vq.desc[idx[2]].addr = virt_to_phys((u64)status);
+	vblk->vq.desc[idx[2]].len = sizeof(*status);
+	vblk->vq.desc[idx[2]].flags = VIRTQ_DESC_F_WRITE;
+	vblk->vq.desc[idx[2]].next = 0;
 
-	trans->completed = false;
-	bdev->tracks[idx[0]].trans = trans;
+	io->completed = false;
+	vblk->slots[idx[0]].trans = io;
 
-	virtq_submit(&bdev->vq, idx[0]);
-	virtio_mmio_queue_notify(bdev->vdev, 0);
+	virtq_submit(&vblk->vq, idx[0]);
+	virtio_mmio_queue_notify(vblk->vdev, 0);
 
-	while (!trans->completed)
-		proc_sleep(&trans->completed, &bdev->lock);
+	while (!io->completed)
+		proc_sleep(&io->completed, &vblk->lock);
 
-	err = virtio_blk_status_errno(bdev->tracks[idx[0]].status);
-	bdev->tracks[idx[0]].trans = NULL;
-	virtq_free_desc_chain(&bdev->vq, idx[0]);
-	proc_wake_up(&bdev->vq.desc);
+	err = virtio_blk_status_to_errno(vblk->slots[idx[0]].status);
+	vblk->slots[idx[0]].trans = NULL;
+	virtq_free_desc_chain(&vblk->vq, idx[0]);
+	proc_wake_up(&vblk->vq.desc);
 
-	spinlock_release(&bdev->lock);
+	spinlock_release(&vblk->lock);
 	return err;
 }
 
-static int virtio_blk_rw(struct virtio_disk_device *bdev, u64 sector,
-			 u64 buf_phys, usize_t sec_count, bool write)
+static int virtio_blk_io(struct virtio_blk_dev *vblk, u64 sector, u64 buf_phys,
+			 usize_t sec_count, bool write)
 {
-	struct virtio_disk_transaction trans = {
+	struct virtio_blk_io_desc trans = {
 		.buf_phys = buf_phys,
 		.sector = sector,
 		.sec_count = sec_count,
@@ -192,306 +191,294 @@ static int virtio_blk_rw(struct virtio_disk_device *bdev, u64 sector,
 		.completed = false,
 	};
 
-	return virtio_blk_transfer(bdev, &trans);
+	return virtio_blk_submit(vblk, &trans);
 }
 
-static int virtio_blk_read(struct virtio_disk_device *bdev, u64 sector,
-			   u64 buf_phys, usize_t sec_count)
-{
-	return virtio_blk_rw(bdev, sector, buf_phys, sec_count, false);
-}
-
-static int virtio_blk_write(struct virtio_disk_device *bdev, u64 sector,
-			    u64 buf_phys, usize_t sec_count)
-{
-	return virtio_blk_rw(bdev, sector, buf_phys, sec_count, true);
-}
-
-static int virtio_disk_rw(struct block_dev *bd, u64 blk_id, void *buf,
-			  u32 blk_cnt, bool write)
+static int virtio_blk_bdev_rw(struct block_dev *bdev, u64 blk_id, void *buf,
+			      u32 blk_cnt, bool write)
 {
 	int err;
 	u64 buf_phys;
-	struct virtio_disk_device *disk = bd->priv;
+	struct virtio_blk_dev *vbd = bdev->priv;
 
-	err = blkdev_check_bounds(bd, blk_id, blk_cnt);
+	err = blkdev_check_bounds(bdev, blk_id, blk_cnt);
 	if (err)
 		return err;
 
-	if (!disk)
+	if (!vbd)
 		return -EINVAL;
 
 	buf_phys = virt_to_phys((u64)buf);
-	if (write)
-		return virtio_blk_write(disk, blk_id, buf_phys, blk_cnt);
-	return virtio_blk_read(disk, blk_id, buf_phys, blk_cnt);
+	return virtio_blk_io(vbd, blk_id, buf_phys, blk_cnt, write);
 }
 
-static int virtio_disk_read(struct block_dev *bd, u64 blk_id, void *buf,
-			    u32 blk_cnt)
+static int virtio_blk_bdev_read(struct block_dev *bdev, u64 blk_id, void *buf,
+				u32 blk_cnt)
 {
-	return virtio_disk_rw(bd, blk_id, buf, blk_cnt, false);
+	return virtio_blk_bdev_rw(bdev, blk_id, buf, blk_cnt, false);
 }
 
-static int virtio_disk_write(struct block_dev *bd, u64 blk_id, const void *buf,
-			     u32 blk_cnt)
+static int virtio_blk_bdev_write(struct block_dev *bdev, u64 blk_id,
+				 const void *buf, u32 blk_cnt)
 {
-	return virtio_disk_rw(bd, blk_id, (void *)buf, blk_cnt, true);
+	return virtio_blk_bdev_rw(bdev, blk_id, (void *)buf, blk_cnt, true);
 }
 
-static struct virtio_disk_device *virtio_disk_device_alloc(unsigned queue_size)
+static struct virtio_blk_dev *virtio_blk_alloc(unsigned queue_size)
 {
-	struct virtio_disk_device *disk;
+	struct virtio_blk_dev *vblk;
 	int err;
 
-	disk = kzalloc(sizeof(*disk));
-	if (!disk)
+	vblk = kzalloc(sizeof(*vblk));
+	if (!vblk)
 		return NULL;
 
-	spinlock_init(&disk->lock, "virtio_disk");
-	disk->queue_size = queue_size;
-	err = virtio_disk_init_alloc(disk, queue_size);
+	spinlock_init(&vblk->lock, "virtio_blk_dev");
+	vblk->queue_size = queue_size;
+	err = virtio_blk_alloc_vq(vblk, queue_size);
 	if (err) {
-		kfree(disk);
+		kfree(vblk);
 		return NULL;
 	}
-	return disk;
+	return vblk;
 }
 
-static void virtio_disk_device_free(struct virtio_disk_device *bdev)
+static void virtio_blk_free(struct virtio_blk_dev *vblk)
 {
-	if (!bdev)
+	if (!vblk)
 		return;
-	virtio_disk_finalize_free(bdev);
-	kfree(bdev);
+	virtio_blk_free_vq(vblk);
+	kfree(vblk);
 }
 
-static int virtio_disk_device_init(struct virtio_disk_device *disk,
-				   struct virtio_device *dev)
+static int virtio_blk_setup(struct virtio_blk_dev *vblk,
+			    struct virtio_device *vdev)
 {
 	u32 features;
 	int err;
 
-	if (!disk || !dev)
+	if (!vblk || !vdev)
 		return -EINVAL;
 
-	if (!is_power_of_two(disk->queue_size))
+	if (!is_power_of_two(vblk->queue_size))
 		return -EINVAL;
 
-	err = virtio_blk_init_check(dev);
+	err = virtio_blk_validate_dev(vdev);
 	if (err)
 		return err;
 
-	virtio_mmio_reset(dev);
-	err = virtio_mmio_start_driver(dev);
+	virtio_mmio_reset(vdev);
+	err = virtio_mmio_start_driver(vdev);
 	if (err)
 		return err;
 
-	features = virtio_blk_negotiate_features(dev);
-	virtio_mmio_write_features(dev, features);
+	features = virtio_blk_select_features(vdev);
+	virtio_mmio_write_features(vdev, features);
 
-	err = virtio_mmio_features_ok(dev);
+	err = virtio_mmio_features_ok(vdev);
 	if (err)
 		return err;
 
-	err = virtio_mmio_setup_queue(dev, 0, &disk->vq, disk->queue_size);
+	err = virtio_mmio_setup_queue(vdev, 0, &vblk->vq, vblk->queue_size);
 	if (err)
 		return err;
 
-	err = virtio_mmio_driver_ok(dev);
+	err = virtio_mmio_driver_ok(vdev);
 	if (err)
 		return err;
 
-	disk->vdev = dev;
+	vblk->vdev = vdev;
 
-	err = virtio_mmio_read(dev, &disk->config, sizeof(disk->config),
+	err = virtio_mmio_read(vdev, &vblk->config, sizeof(vblk->config),
 			       VIRTIO_CONFIG_OFFSET);
 	if (err)
 		return err;
 
-	err = irq_register_handler(dev->irq, virtio_disk_intr, disk, NULL,
-				   NULL);
+	err = irq_register_handler(vdev->irq, virtio_blk_irq_handler, vblk,
+				   NULL, NULL);
 	if (err)
 		return err;
-	irq_set_priority(dev->irq, 1);
+	irq_set_priority(vdev->irq, 1);
 
 	return 0;
 }
 
-static void virtio_disk_device_finalize(struct virtio_disk_device *disk)
+static void virtio_blk_detach(struct virtio_blk_dev *vblk)
 {
-	irq_unregister_handler(disk->vdev->irq, NULL, NULL);
+	irq_unregister_handler(vblk->vdev->irq, NULL, NULL);
 }
 
-struct virtio_disk_device *virtio_disk_device_create(struct virtio_device *dev,
-						     unsigned queue_size)
+struct virtio_blk_dev *virtio_blk_create(struct virtio_device *vdev,
+					 unsigned queue_size)
 {
-	struct virtio_disk_device *disk;
+	struct virtio_blk_dev *vblk;
 	int err;
 
 	if (!is_power_of_two(queue_size))
 		return NULL;
 
-	disk = virtio_disk_device_alloc(queue_size);
-	if (!disk)
+	vblk = virtio_blk_alloc(queue_size);
+	if (!vblk)
 		return NULL;
 
-	err = virtio_disk_device_init(disk, dev);
+	err = virtio_blk_setup(vblk, vdev);
 	if (err) {
-		virtio_disk_device_free(disk);
+		virtio_blk_free(vblk);
 		return NULL;
 	}
 
-	return disk;
+	return vblk;
 }
 
-void virtio_disk_device_destroy(struct virtio_disk_device *disk)
+void virtio_blk_destroy(struct virtio_blk_dev *vblk)
 {
-	if (!disk)
+	if (!vblk)
 		return;
-	virtio_disk_device_finalize(disk);
-	virtio_disk_device_free(disk);
+	virtio_blk_detach(vblk);
+	virtio_blk_free(vblk);
 }
 
-int virtio_disk_add_device(struct virtio_disk_device *disk)
+int virtio_blk_register(struct virtio_blk_dev *vblk)
 {
-	struct block_dev *bd;
+	struct block_dev *bdev;
 	int err;
 
-	if (!vdisk_driver)
+	if (!vblk_registry)
 		return -EINVAL;
 
-	if (!disk || !disk->vdev)
+	if (!vblk || !vblk->vdev)
 		return -EINVAL;
 
-	bd = blkdev_alloc();
-	if (!bd)
+	bdev = blkdev_alloc();
+	if (!bdev)
 		return -ENOMEM;
 
-	klog_info("%s: capacity: %lu\n", __func__, disk->config.capacity);
+	klog_info("%s: capacity: %lu\n", __func__, vblk->config.capacity);
 
-	bd->ops.read = virtio_disk_read;
-	bd->ops.write = virtio_disk_write;
-	bd->phy_bcnt = disk->config.capacity;
-	bd->phy_bsize = SECTOR_SIZE;
-	bd->priv = disk;
+	bdev->ops.read = virtio_blk_bdev_read;
+	bdev->ops.write = virtio_blk_bdev_write;
+	bdev->phy_bcnt = vblk->config.capacity;
+	bdev->phy_bsize = VIRTIO_BLK_SECTOR_SIZE;
+	bdev->priv = vblk;
 
-	spinlock_acquire(&vdisk_driver->lock);
-	for (unsigned i = 0; i < vdisk_driver->num_disks; i++) {
-		if (vdisk_driver->disks[i] == NULL) {
-			bd->dev = MKBLKDEV(vdisk_driver->major,
-					   vdisk_driver->minor_start + i);
-			err = blkdev_register(bd);
+	spinlock_acquire(&vblk_registry->lock);
+	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
+		if (vblk_registry->vblks[i] == NULL) {
+			bdev->dev = MKBLKDEV(vblk_registry->major,
+					     vblk_registry->minor_start + i);
+			err = blkdev_register(bdev);
 			if (err) {
-				spinlock_release(&vdisk_driver->lock);
-				blkdev_free(bd);
+				spinlock_release(&vblk_registry->lock);
+				blkdev_free(bdev);
 				return err;
 			}
-			vdisk_driver->disks[i] = disk;
-			vdisk_driver->bdevs[i] = bd;
-			spinlock_release(&vdisk_driver->lock);
+			vblk_registry->vblks[i] = vblk;
+			vblk_registry->bdevs[i] = bdev;
+			spinlock_release(&vblk_registry->lock);
 			return 0;
 		}
 	}
-	spinlock_release(&vdisk_driver->lock);
+	spinlock_release(&vblk_registry->lock);
 	return -EBUSY;
 }
 
-void virtio_disk_remove_device(struct virtio_disk_device *disk)
+void virtio_blk_unregister(struct virtio_blk_dev *vblk)
 {
 	struct block_dev *bdev = NULL;
 
-	if (!disk || !disk->vdev)
+	if (!vblk || !vblk->vdev)
 		return;
 
-	spinlock_acquire(&vdisk_driver->lock);
-	for (unsigned i = 0; i < vdisk_driver->num_disks; i++) {
-		if (vdisk_driver->disks[i] == disk) {
-			vdisk_driver->disks[i] = NULL;
-			bdev = vdisk_driver->bdevs[i];
-			vdisk_driver->bdevs[i] = NULL;
-			spinlock_release(&vdisk_driver->lock);
+	spinlock_acquire(&vblk_registry->lock);
+	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
+		if (vblk_registry->vblks[i] == vblk) {
+			vblk_registry->vblks[i] = NULL;
+			bdev = vblk_registry->bdevs[i];
+			vblk_registry->bdevs[i] = NULL;
+			spinlock_release(&vblk_registry->lock);
 			blkdev_unregister(bdev);
 			blkdev_free(bdev);
 			return;
 		}
 	}
-	spinlock_release(&vdisk_driver->lock);
+	spinlock_release(&vblk_registry->lock);
 }
 
-int virtio_disk_driver_init(void)
+int virtio_blk_init(void)
 {
 	dev_t dev = 0;
 	int err;
 
-	vdisk_driver = &__vdisk_driver;
-	spinlock_init(&vdisk_driver->lock, "vdisk_driver");
-	vdisk_driver->disks = kcalloc(VIRTIO_DISK_MINOR_COUNT,
-				      sizeof(vdisk_driver->disks[0]));
-	if (!vdisk_driver->disks)
+	vblk_registry = &__vblk_registry;
+	spinlock_init(&vblk_registry->lock, "virtio_blk_driver");
+	vblk_registry->vblks = kcalloc(VIRTIO_BLK_MINOR_COUNT,
+				       sizeof(vblk_registry->vblks[0]));
+	if (!vblk_registry->vblks)
 		return -ENOMEM;
-	vdisk_driver->bdevs = kcalloc(VIRTIO_DISK_MINOR_COUNT,
-				      sizeof(vdisk_driver->bdevs[0]));
-	if (!vdisk_driver->bdevs)
+	vblk_registry->bdevs = kcalloc(VIRTIO_BLK_MINOR_COUNT,
+				       sizeof(vblk_registry->bdevs[0]));
+	if (!vblk_registry->bdevs)
 		return -ENOMEM;
-	vdisk_driver->num_disks = VIRTIO_DISK_MINOR_COUNT;
+	vblk_registry->num_vblks = VIRTIO_BLK_MINOR_COUNT;
 
-	err = blkdev_alloc_region(VIRTIO_DISK_MAJOR, VIRTIO_DISK_MINOR_START,
-				  VIRTIO_DISK_MINOR_COUNT, &dev);
+	err = blkdev_alloc_region(VIRTIO_BLK_MAJOR, VIRTIO_BLK_MINOR_START,
+				  VIRTIO_BLK_MINOR_COUNT, &dev);
 	if (err)
 		return err;
-	vdisk_driver->major = MAJOR(dev);
-	vdisk_driver->minor_start = MINOR(dev);
+	vblk_registry->major = MAJOR(dev);
+	vblk_registry->minor_start = MINOR(dev);
 
-	klog_info("%s: major: %u\n", __func__, vdisk_driver->major);
-	klog_info("%s: minor: %u\n", __func__, vdisk_driver->minor_start);
+	klog_info("%s: major: %u\n", __func__, vblk_registry->major);
+	klog_info("%s: minor: %u\n", __func__, vblk_registry->minor_start);
 
 	return 0;
 }
 
-int virtio_disk_enable_irq(u32 hart_id)
+int virtio_blk_enable_irq(u32 hart_id)
 {
 	int err = 0;
 
-	if (!vdisk_driver)
+	if (!vblk_registry)
 		return -EINVAL;
 
-	spinlock_acquire(&vdisk_driver->lock);
-	for (unsigned i = 0; i < vdisk_driver->num_disks; i++) {
-		if (vdisk_driver->disks[i]) {
+	spinlock_acquire(&vblk_registry->lock);
+	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
+		if (vblk_registry->vblks[i]) {
 			err = irq_enable_source(
-				hart_id, vdisk_driver->disks[i]->vdev->irq);
+				hart_id, vblk_registry->vblks[i]->vdev->irq);
 			if (err)
 				break;
 		}
 	}
-	spinlock_release(&vdisk_driver->lock);
+	spinlock_release(&vblk_registry->lock);
 	return err;
 }
 
-int virtio_disk_create_fs_nodes(void)
+int virtio_blk_mknod(void)
 {
 	int err = 0;
 	char name[32];
 
-	if (!vdisk_driver)
+	if (!vblk_registry)
 		return -EINVAL;
 
-	spinlock_acquire(&vdisk_driver->lock);
-	for (unsigned i = 0; i < vdisk_driver->num_disks; i++) {
-		if (vdisk_driver->disks[i]) {
+	spinlock_acquire(&vblk_registry->lock);
+	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
+		if (vblk_registry->vblks[i]) {
 			memset(name, 0, sizeof(name));
-			snprintf(name, sizeof(name) - 1, "/dev/vdisk%u", i);
+			snprintf(name, sizeof(name) - 1, "/dev/virtio_blk%u",
+				 i);
 			err = do_mknodat(
 				AT_FDCWD, name, S_IFBLK,
-				MKBLKDEV(vdisk_driver->major,
-					 vdisk_driver->minor_start + i));
+				MKBLKDEV(vblk_registry->major,
+					 vblk_registry->minor_start + i));
 			if (err)
 				break;
-			klog_info("/dev/vdisk%u created successfully\n", i);
+			klog_info("/dev/virtio_blk%u created successfully\n",
+				  i);
 		}
 	}
-	spinlock_release(&vdisk_driver->lock);
+	spinlock_release(&vblk_registry->lock);
 
 	return err;
 }

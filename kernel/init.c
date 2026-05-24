@@ -26,7 +26,6 @@
 #include <brk/uart.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
-#include <brk/virtio_disk.h>
 #include <brk/vmalloc.h>
 #include <libfdt.h>
 
@@ -85,13 +84,13 @@ void boot_run_primary(usize_t hart_id, u64 dtb, usize_t load_offset)
 	chrdev_registry_init();
 	blkdev_registry_init();
 	ns16550a_driver_init();
-	virtio_disk_driver_init();
+	virtio_blk_init();
 	dtb_init_scan_serial();
 	virtio_init_scan();
 
 	irq_init_hart(hart_id);
 	ns16550a_enable_irq(hart_id);
-	virtio_disk_enable_irq(hart_id);
+	virtio_blk_enable_irq(hart_id);
 	trap_init_hart(hart_id);
 
 	pagecache_init();
@@ -122,7 +121,7 @@ void boot_run_secondary(u64 hart_id)
 
 	irq_init_hart(hart_id);
 	ns16550a_enable_irq(hart_id);
-	virtio_disk_enable_irq(hart_id);
+	virtio_blk_enable_irq(hart_id);
 	trap_init_hart(hart_id);
 
 	intr_on();

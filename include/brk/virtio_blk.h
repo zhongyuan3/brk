@@ -1,7 +1,9 @@
 #ifndef BRK_VIRTIO_BLK_H
 #define BRK_VIRTIO_BLK_H
 
+#include <brk/lock.h>
 #include <brk/types.h>
+#include <brk/virtio_queue.h>
 
 #define VIRTIO_BLK_F_SIZE_MAX 1
 #define VIRTIO_BLK_F_SEG_MAX 2
@@ -32,8 +34,6 @@
 #define VIRTIO_BLK_S_OK 0
 #define VIRTIO_BLK_S_IOERR 1
 #define VIRTIO_BLK_S_UNSUPP 2
-
-#define SECTOR_SIZE 512
 
 struct virtio_blk_req {
 	u32 type;
@@ -134,6 +134,48 @@ struct virtio_blk_config {
 	} zoned;
 } __attribute__((packed));
 
+#define VIRTIO_BLK_SECTOR_SIZE 512
 #define VIRTIO_BLK_DEFAULT_QUEUE_SIZE 16
+
+struct virtio_blk_io_desc {
+	u64 buf_phys;
+	u64 sector;
+	usize_t sec_count;
+	bool is_write;
+	bool completed;
+};
+
+struct virtio_blk_slot {
+	struct virtio_blk_io_desc *trans;
+	char status;
+};
+
+struct virtio_blk_dev {
+	struct virtio_device *vdev;
+	struct virtq vq;
+	struct virtio_blk_req *reqs;
+	struct virtio_blk_slot *slots;
+	unsigned queue_size;
+	spinlock_t lock;
+	struct virtio_blk_config config;
+};
+
+struct virtio_blk_registry {
+	struct virtio_blk_dev **vblks;
+	struct block_dev **bdevs;
+	unsigned num_vblks;
+	spinlock_t lock;
+	unsigned major;
+	unsigned minor_start;
+};
+
+int virtio_blk_init(void);
+struct virtio_blk_dev *virtio_blk_create(struct virtio_device *vdev,
+					 unsigned queue_size);
+void virtio_blk_destroy(struct virtio_blk_dev *vblk);
+int virtio_blk_register(struct virtio_blk_dev *vblk);
+void virtio_blk_unregister(struct virtio_blk_dev *vblk);
+int virtio_blk_enable_irq(u32 hart_id);
+int virtio_blk_mknod(void);
 
 #endif
