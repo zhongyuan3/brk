@@ -53,12 +53,28 @@ void proc_signal_fork(struct process *child, struct process *parent)
 		child->actions[i] = parent->actions[i];
 }
 
+void proc_signal_exec(struct process *proc)
+{
+	proc_signal_init(proc);
+}
+
 static int proc_next_signal(struct process *proc)
 {
 	u64 deliver = proc->pending & ~proc->blocked;
 
-	if (proc->in_handler)
+	if (proc->in_handler) {
+		u64 nodfer = 0;
+		int sig;
+
 		deliver &= (1ULL << SIGKILL);
+		for (sig = 1; sig < NSIG; ++sig) {
+			if (!(proc->pending & (1ULL << sig)))
+				continue;
+			if (proc->actions[sig].sa_flags & SA_NODEFER)
+				nodfer |= (1ULL << sig);
+		}
+		deliver |= nodfer & ~proc->blocked;
+	}
 
 	if (!deliver)
 		return 0;
@@ -161,7 +177,9 @@ static bool proc_setup_signal_frame(struct process *proc, int sig, u64 handler)
 	frame->signo = sig;
 
 	proc->sigframe_sp = sp;
-	proc->blocked |= (1ULL << sig) | proc->actions[sig].sa_mask;
+	if (!(proc->actions[sig].sa_flags & SA_NODEFER))
+		proc->blocked |= (1ULL << sig);
+	proc->blocked |= proc->actions[sig].sa_mask;
 	proc_clear_pending(proc, sig);
 	proc->in_handler = true;
 

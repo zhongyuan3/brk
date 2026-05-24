@@ -8,6 +8,7 @@
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>
 #include <brk/process.h>
+#include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/timer.h>
@@ -411,6 +412,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 
 		proc->mm = new_mm;
 		mm_free(old_mm);
+		proc_signal_exec(proc);
 		proc->tf.epc = elf_hdr.e_entry;
 		proc->tf.sp = sp;
 	}

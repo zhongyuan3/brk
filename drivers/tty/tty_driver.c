@@ -229,7 +229,6 @@ static int tty_file_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 
 	file->private_data = tty;
-	port->foreground = current_process();
 	return 0;
 }
 

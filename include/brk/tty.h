@@ -80,6 +80,7 @@ void tty_close(struct tty *tty);
 ssize_t tty_read(struct tty *tty, void *buf, usize_t n);
 ssize_t tty_write(struct tty *tty, const void *buf, usize_t n);
 void tty_receive(struct tty *tty, int c);
+void tty_set_foreground(struct tty *tty, struct process *proc);
 long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg);
 
 #endif
