@@ -227,12 +227,12 @@ void proc_exit(int status)
 
 	for (int i = 0; i < OPEN_MAX; ++i) {
 		if (parent->ofiles[i]) {
-			file_put(parent->ofiles[i]);
+			fs_file_put(parent->ofiles[i]);
 			parent->ofiles[i] = NULL;
 		}
 	}
-	path_put(&parent->cwd);
-	path_put(&parent->root);
+	fs_path_put(&parent->cwd);
+	fs_path_put(&parent->root);
 
 	spinlock_acquire(&wait_lock);
 	list_for_each_entry(child, &parent->children, child) {

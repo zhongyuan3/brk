@@ -412,11 +412,11 @@ void truncate_inode_pages(struct page_cache *m, loff_t new_size)
 	}
 }
 
-ssize_t generic_file_read(struct file *file, char *buf, usize_t size,
+ssize_t generic_file_read(struct fs_file *file, char *buf, usize_t size,
 			  loff_t *pos)
 {
-	struct inode *inode = file->f_inode;
-	struct page_cache *m = inode->i_mapping;
+	struct fs_inode *inode = file->inode;
+	struct page_cache *m = inode->mapping;
 	ssize_t total = 0;
 	loff_t isize;
 	loff_t end;
@@ -425,11 +425,11 @@ ssize_t generic_file_read(struct file *file, char *buf, usize_t size,
 	if (!m)
 		return -EIO;
 
-	sleeplock_acquire(&inode->i_rwsem);
+	sleeplock_acquire(&inode->rwsem);
 
-	isize = inode->i_size;
+	isize = inode->size;
 	if (*pos >= isize) {
-		sleeplock_release(&inode->i_rwsem);
+		sleeplock_release(&inode->rwsem);
 		return 0;
 	}
 	end = *pos + (loff_t)size;
@@ -460,22 +460,22 @@ ssize_t generic_file_read(struct file *file, char *buf, usize_t size,
 		total += (ssize_t)nr;
 	}
 
-	sleeplock_release(&inode->i_rwsem);
+	sleeplock_release(&inode->rwsem);
 	return total > 0 ? total : err;
 }
 
-ssize_t generic_file_write(struct file *file, const char *buf, usize_t size,
+ssize_t generic_file_write(struct fs_file *file, const char *buf, usize_t size,
 			   loff_t *pos)
 {
-	struct inode *inode = file->f_inode;
-	struct page_cache *m = inode->i_mapping;
+	struct fs_inode *inode = file->inode;
+	struct page_cache *m = inode->mapping;
 	ssize_t total = 0;
 	int err = 0;
 
 	if (!m)
 		return -EIO;
 
-	sleeplock_acquire(&inode->i_rwsem);
+	sleeplock_acquire(&inode->rwsem);
 
 	while (size > 0) {
 		pgoff_t index = (pgoff_t)(*pos >> PAGE_SHIFT);
@@ -520,15 +520,15 @@ ssize_t generic_file_write(struct file *file, const char *buf, usize_t size,
 		size -= nr;
 		total += (ssize_t)nr;
 
-		if (*pos > inode->i_size)
-			inode->i_size = *pos;
+		if (*pos > inode->size)
+			inode->size = *pos;
 	}
 
 	if (total > 0) {
 		inode_touch_mtime(inode);
-		inode_mark_dirty(inode);
+		fs_inode_mark_dirty(inode);
 	}
 
-	sleeplock_release(&inode->i_rwsem);
+	sleeplock_release(&inode->rwsem);
 	return total > 0 ? total : err;
 }

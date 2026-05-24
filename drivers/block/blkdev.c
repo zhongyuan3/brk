@@ -392,20 +392,20 @@ void blkdev_free(struct block_dev *bd)
 	kfree(bd);
 }
 
-static int blkdev_open(struct inode *inode, struct file *file)
+static int blkdev_open(struct fs_inode *inode, struct fs_file *file)
 {
 	struct block_dev *bd;
 
-	bd = blkdev_get(inode->i_rdev);
+	bd = blkdev_get(inode->rdev);
 	if (!bd)
 		return -ENODEV;
 
-	file->f_op = &blkdev_fops;
+	file->ops = &blkdev_fops;
 	file->private_data = bd;
 	return 0;
 }
 
-static ssize_t blkdev_read(struct file *file, char *buf, usize_t size,
+static ssize_t blkdev_read(struct fs_file *file, char *buf, usize_t size,
 			   loff_t *pos)
 {
 	(void)file;
@@ -415,7 +415,7 @@ static ssize_t blkdev_read(struct file *file, char *buf, usize_t size,
 	return -EOPNOTSUPP;
 }
 
-static ssize_t blkdev_write(struct file *file, const char *buf, usize_t size,
+static ssize_t blkdev_write(struct fs_file *file, const char *buf, usize_t size,
 			    loff_t *pos)
 {
 	(void)file;
@@ -425,7 +425,7 @@ static ssize_t blkdev_write(struct file *file, const char *buf, usize_t size,
 	return -EOPNOTSUPP;
 }
 
-static loff_t blkdev_llseek(struct file *file, loff_t offset, int whence)
+static loff_t blkdev_llseek(struct fs_file *file, loff_t offset, int whence)
 {
 	(void)file;
 	(void)offset;
@@ -433,14 +433,15 @@ static loff_t blkdev_llseek(struct file *file, loff_t offset, int whence)
 	return -EOPNOTSUPP;
 }
 
-static int blkdev_iterate_shared(struct file *file, struct dir_iterator *ctx)
+static int blkdev_iterate_shared(struct fs_file *file,
+				 struct fs_dir_iterator *ctx)
 {
 	(void)file;
 	(void)ctx;
 	return -EOPNOTSUPP;
 }
 
-static int blkdev_fsync(struct file *file, loff_t start, loff_t end,
+static int blkdev_fsync(struct fs_file *file, loff_t start, loff_t end,
 			int datasync)
 {
 	(void)file;
@@ -450,13 +451,14 @@ static int blkdev_fsync(struct file *file, loff_t start, loff_t end,
 	return -EOPNOTSUPP;
 }
 
-static int blkdev_flush(struct file *file)
+static int blkdev_flush(struct fs_file *file)
 {
 	(void)file;
 	return -EOPNOTSUPP;
 }
 
-static long blkdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+static long blkdev_ioctl(struct fs_file *file, unsigned int cmd,
+			 unsigned long arg)
 {
 	(void)file;
 	(void)cmd;
@@ -464,7 +466,7 @@ static long blkdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	return -ENOTTY;
 }
 
-const struct file_ops blkdev_fops = {
+const struct fs_file_ops blkdev_fops = {
 	.open = blkdev_open,
 	.read = blkdev_read,
 	.write = blkdev_write,

@@ -12,58 +12,58 @@
 #include <uapi/fcntl.h>
 #include <uapi/stat.h>
 
-static void follow_mount(struct path *path)
+static void follow_mount(struct fs_path *path)
 {
-	if (!(path->dentry->d_flags & DCACHE_MOUNTED))
+	if (!(path->dentry->flags & DCACHE_MOUNTED))
 		return;
 
-	struct mount_instance *child_mnt;
+	struct fs_mount_state *child_mnt;
 	/* May have multiple nested mounts, traverse in loop */
-	while ((child_mnt = mount_instance_lookup(path))) {
-		path_put(path);
+	while ((child_mnt = fs_mount_state_lookup(path))) {
+		fs_path_put(path);
 		path->mnt = child_mnt;
-		path->dentry = dentry_get(child_mnt->mnt_root);
+		path->dentry = fs_dentry_get(child_mnt->root);
 
-		if (!(path->dentry->d_flags & DCACHE_MOUNTED))
+		if (!(path->dentry->flags & DCACHE_MOUNTED))
 			break;
 	}
 }
 
-static int dir_lookup_entry(struct path *dir, const struct qstr *name,
-			    struct path *result)
+static int dir_lookup_entry(struct fs_path *dir, const struct qstr *name,
+			    struct fs_path *result)
 {
-	struct dentry *parent = dir->dentry;
-	struct dentry *dentry;
+	struct fs_dentry *parent = dir->dentry;
+	struct fs_dentry *dentry;
 
-	dentry = dentry_lookup(parent, name);
+	dentry = fs_dentry_lookup(parent, name);
 	if (IS_ERR(dentry))
 		return PTR_ERR(dentry);
 
-	result->mnt = mount_instance_get(dir->mnt);
+	result->mnt = fs_mount_state_get(dir->mnt);
 	result->dentry = dentry;
 	return 0;
 }
 
-static int path_init(int dir_fd, const char **pathname, struct path *path)
+static int path_init(int dir_fd, const char **pathname, struct fs_path *path)
 {
 	struct process *proc = current_process();
 
 	if ((*pathname)[0] == '/') {
-		path_get(&proc->root);
+		fs_path_get(&proc->root);
 		*path = proc->root;
 		*pathname += 1;
 		return 0;
 	}
 
 	if (dir_fd == AT_FDCWD) {
-		path_get(&proc->cwd);
+		fs_path_get(&proc->cwd);
 		*path = proc->cwd;
 		return 0;
 	}
 
 	if (0 <= dir_fd && dir_fd < OPEN_MAX && proc->ofiles[dir_fd]) {
-		path_get(&proc->ofiles[dir_fd]->f_path);
-		*path = proc->ofiles[dir_fd]->f_path;
+		fs_path_get(&proc->ofiles[dir_fd]->path);
+		*path = proc->ofiles[dir_fd]->path;
 		return 0;
 	}
 
@@ -95,41 +95,42 @@ static const char *skip_component(const char *pathname,
 	return p;
 }
 
-int path_dot(struct path *path, struct path *dot)
+int fs_path_dot(struct fs_path *path, struct fs_path *dot)
 {
-	path_get(path);
+	fs_path_get(path);
 	*dot = *path;
 	return 0;
 }
 
-int path_dot_dot(struct path *path, struct path *dotdot)
+int fs_path_dot_dot(struct fs_path *path, struct fs_path *dotdot)
 {
-	struct path cur;
+	struct fs_path cur;
 
-	path_get(path);
+	fs_path_get(path);
 	cur = *path;
 
 	while (1) {
-		if (cur.dentry != cur.mnt->mnt_root) {
-			dotdot->dentry = dentry_get(cur.dentry->d_parent);
-			dotdot->mnt = mount_instance_get(cur.mnt);
-			path_put(&cur);
+		if (cur.dentry != cur.mnt->root) {
+			dotdot->dentry = fs_dentry_get(cur.dentry->parent);
+			dotdot->mnt = fs_mount_state_get(cur.mnt);
+			fs_path_put(&cur);
 			return 0;
 		}
 
-		if (cur.dentry == cur.mnt->mnt_root && cur.mnt->mnt_parent &&
-		    cur.mnt != cur.mnt->mnt_parent) {
-			struct mount_instance *pmnt =
-				mount_instance_get(cur.mnt->mnt_parent);
-			struct dentry *mp = dentry_get(cur.mnt->mnt_mountpoint);
+		if (cur.dentry == cur.mnt->root && cur.mnt->parent &&
+		    cur.mnt != cur.mnt->parent) {
+			struct fs_mount_state *pmnt =
+				fs_mount_state_get(cur.mnt->parent);
+			struct fs_dentry *mp =
+				fs_dentry_get(cur.mnt->mount_point);
 
-			path_put(&cur);
+			fs_path_put(&cur);
 			cur.mnt = pmnt;
 			cur.dentry = mp;
 			continue;
 		}
 
-		if (!cur.dentry->d_parent || cur.dentry == cur.dentry->d_parent)
+		if (!cur.dentry->parent || cur.dentry == cur.dentry->parent)
 			break;
 	}
 
@@ -139,7 +140,7 @@ int path_dot_dot(struct path *path, struct path *dotdot)
 }
 
 static int __path_lookup(int dirfd, const char *name, unsigned int flags,
-			 struct path *path, struct qstr *component_name)
+			 struct fs_path *path, struct qstr *component_name)
 {
 	int err = path_init(dirfd, &name, path);
 	if (err)
@@ -148,12 +149,12 @@ static int __path_lookup(int dirfd, const char *name, unsigned int flags,
 	const char *p = name;
 
 	while ((p = skip_component(p, component_name))) {
-		if (path->dentry->d_flags & DCACHE_NEGATIVE) {
+		if (path->dentry->flags & DCACHE_NEGATIVE) {
 			err = -ENOENT;
 			goto lookup_error;
 		}
 
-		if (!S_ISDIR(path->dentry->d_inode->i_mode)) {
+		if (!S_ISDIR(path->dentry->inode->mode)) {
 			err = -ENOTDIR;
 			goto lookup_error;
 		}
@@ -169,16 +170,16 @@ static int __path_lookup(int dirfd, const char *name, unsigned int flags,
 			return 0;
 		}
 
-		struct path component_path;
+		struct fs_path component_path;
 		if (component_name->len == 1 &&
 		    component_name->name[0] == '.') {
 			klog_debug("%s(): Dot\n", __func__);
-			err = path_dot(path, &component_path);
+			err = fs_path_dot(path, &component_path);
 		} else if (component_name->len == 2 &&
 			   component_name->name[0] == '.' &&
 			   component_name->name[1] == '.') {
 			klog_debug("%s(): Dot dot\n", __func__);
-			err = path_dot_dot(path, &component_path);
+			err = fs_path_dot_dot(path, &component_path);
 		} else {
 			err = dir_lookup_entry(path, component_name,
 					       &component_path);
@@ -186,7 +187,7 @@ static int __path_lookup(int dirfd, const char *name, unsigned int flags,
 		if (err)
 			goto lookup_error;
 
-		path_put(path);
+		fs_path_put(path);
 		*path = component_path;
 
 		follow_mount(path);
@@ -200,46 +201,46 @@ static int __path_lookup(int dirfd, const char *name, unsigned int flags,
 	return 0;
 
 lookup_error:
-	path_put(path);
+	fs_path_put(path);
 	memset(path, 0, sizeof(*path));
 	memset(component_name, 0, sizeof(*component_name));
 	return err;
 }
 
-int path_lookupat(int dir_fd, const char *name, unsigned int flags,
-		  struct path *path)
+int fs_path_lookup_at(int dir_fd, const char *name, unsigned int flags,
+		      struct fs_path *path)
 {
 	struct qstr component_name = { 0 };
 	return __path_lookup(dir_fd, name, flags, path, &component_name);
 }
 
-int path_lookup(const char *name, unsigned int flags, struct path *path)
+int fs_path_lookup(const char *name, unsigned int flags, struct fs_path *path)
 {
-	return path_lookupat(AT_FDCWD, name, flags, path);
+	return fs_path_lookup_at(AT_FDCWD, name, flags, path);
 }
 
-void path_get(struct path *path)
+void fs_path_get(struct fs_path *path)
 {
-	dentry_get(path->dentry);
-	mount_instance_get(path->mnt);
+	fs_dentry_get(path->dentry);
+	fs_mount_state_get(path->mnt);
 }
 
-void path_put(struct path *path)
+void fs_path_put(struct fs_path *path)
 {
-	dentry_put(path->dentry);
-	mount_instance_put(path->mnt);
+	fs_dentry_put(path->dentry);
+	fs_mount_state_put(path->mnt);
 }
 
-int path_to_absolute(const struct path *path, char *buf, usize_t bufsz)
+int fs_path_to_absolute(const struct fs_path *path, char *buf, usize_t bufsz)
 {
-	struct path cur;
+	struct fs_path cur;
 	usize_t pos;
 
 	if (!path || !path->mnt || !path->dentry || !buf || bufsz == 0)
 		return -EINVAL;
 
-	cur.mnt = mount_instance_get(path->mnt);
-	cur.dentry = dentry_get(path->dentry);
+	cur.mnt = fs_mount_state_get(path->mnt);
+	cur.dentry = fs_dentry_get(path->dentry);
 
 	pos = bufsz;
 	buf[--pos] = '\0';
@@ -247,29 +248,30 @@ int path_to_absolute(const struct path *path, char *buf, usize_t bufsz)
 	while (1) {
 		const char *name;
 		usize_t len;
-		struct dentry *parent;
+		struct fs_dentry *parent;
 
-		if (cur.dentry == cur.mnt->mnt_root && cur.mnt->mnt_parent &&
-		    cur.mnt != cur.mnt->mnt_parent) {
-			struct mount_instance *pmnt =
-				mount_instance_get(cur.mnt->mnt_parent);
-			struct dentry *mp = dentry_get(cur.mnt->mnt_mountpoint);
+		if (cur.dentry == cur.mnt->root && cur.mnt->parent &&
+		    cur.mnt != cur.mnt->parent) {
+			struct fs_mount_state *pmnt =
+				fs_mount_state_get(cur.mnt->parent);
+			struct fs_dentry *mp =
+				fs_dentry_get(cur.mnt->mount_point);
 
-			path_put(&cur);
+			fs_path_put(&cur);
 			cur.mnt = pmnt;
 			cur.dentry = mp;
 			continue;
 		}
 
-		if (!cur.dentry->d_parent || cur.dentry == cur.dentry->d_parent)
+		if (!cur.dentry->parent || cur.dentry == cur.dentry->parent)
 			break;
 
-		name = cur.dentry->d_name.name;
-		len = cur.dentry->d_name.len;
+		name = cur.dentry->name.name;
+		len = cur.dentry->name.len;
 		if (len == 0)
 			break;
 		if (pos < len + 1) {
-			path_put(&cur);
+			fs_path_put(&cur);
 			return -ENAMETOOLONG;
 		}
 
@@ -277,18 +279,18 @@ int path_to_absolute(const struct path *path, char *buf, usize_t bufsz)
 		memcpy(buf + pos, name, len);
 		buf[--pos] = '/';
 
-		parent = dentry_get(cur.dentry->d_parent);
+		parent = fs_dentry_get(cur.dentry->parent);
 		{
-			struct mount_instance *same_mnt =
-				mount_instance_get(cur.mnt);
+			struct fs_mount_state *same_mnt =
+				fs_mount_state_get(cur.mnt);
 
-			path_put(&cur);
+			fs_path_put(&cur);
 			cur.mnt = same_mnt;
 			cur.dentry = parent;
 		}
 	}
 
-	path_put(&cur);
+	fs_path_put(&cur);
 
 	if (pos == bufsz - 1) {
 		if (bufsz < 2)
@@ -302,8 +304,8 @@ int path_to_absolute(const struct path *path, char *buf, usize_t bufsz)
 	return 0;
 }
 
-int path_parentat(int dir_fd, const char *name, struct path *path,
-		  struct qstr *last_component)
+int fs_path_parent_at(int dir_fd, const char *name, struct fs_path *path,
+		      struct qstr *last_component)
 {
 	return __path_lookup(dir_fd, name, LOOKUP_PARENT, path, last_component);
 }

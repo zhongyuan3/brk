@@ -267,17 +267,17 @@ void chrdev_free_region(unsigned major, unsigned minor, unsigned count)
 		   count);
 }
 
-static int chrdev_open(struct inode *inode, struct file *file)
+static int chrdev_open(struct fs_inode *inode, struct fs_file *file)
 {
 	struct char_dev *cd;
 
-	cd = chrdev_get(inode->i_rdev);
+	cd = chrdev_get(inode->rdev);
 	if (!cd || !cd->fops || !cd->fops->open)
 		return -ENODEV;
 
 	return cd->fops->open(inode, file);
 }
 
-const struct file_ops chrdev_fops = {
+const struct fs_file_ops chrdev_fops = {
 	.open = chrdev_open,
 };

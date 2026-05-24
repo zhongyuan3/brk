@@ -45,10 +45,10 @@
  *    is insufficient in the presence of mount namespaces / stacked mounts.
  *
  * 2) Reference ownership:
- *      - successful path_lookup/path_lookupat returns with one ref held on
+ *      - successful fs_path_lookup/fs_path_lookup_at returns with one ref held on
  *        both path->mnt and path->dentry.
- *      - callers must eventually call path_put() exactly once.
- *      - path_get()/path_put() are strict pair operations.
+ *      - callers must eventually call fs_path_put() exactly once.
+ *      - fs_path_get()/fs_path_put() are strict pair operations.
  *
  * 3) Name component handling (recommended semantics for implementation):
  *      - absolute paths start from process root.
@@ -78,20 +78,20 @@
  */
 
 /**
- * struct path - Describes a path point in the file system
+ * struct fs_path - Describes a path point in the file system
  * @mnt: Mount point
  * @dentry: Directory entry
  *
  * A path can only be uniquely determined by holding both a mount point and a directory entry.
  * Each path holds references to both mnt and dentry (increments their respective reference counts).
  */
-struct path {
-	struct mount_instance *mnt;
-	struct dentry *dentry;
+struct fs_path {
+	struct fs_mount_state *mnt;
+	struct fs_dentry *dentry;
 };
 
 /**
- * path_lookupat() - Resolve a path from a dirfd context
+ * fs_path_lookup_at() - Resolve a path from a dirfd context
  * @dir_fd: directory fd or AT_FDCWD-style special value
  * @name: input path string
  * @flags: LOOKUP_* flags
@@ -99,19 +99,19 @@ struct path {
  *
  * Return: 0 on success, negative errno on failure.
  */
-int path_lookupat(int dir_fd, const char *name, unsigned int flags,
-		  struct path *path);
+int fs_path_lookup_at(int dir_fd, const char *name, unsigned int flags,
+		      struct fs_path *path);
 /**
- * path_lookup() - Resolve a path from current process context
+ * fs_path_lookup() - Resolve a path from current process context
  * @name: input path string
  * @flags: LOOKUP_* flags
  * @path: output resolved path (refcounted on success)
  *
  * Return: 0 on success, negative errno on failure.
  */
-int path_lookup(const char *name, unsigned int flags, struct path *path);
+int fs_path_lookup(const char *name, unsigned int flags, struct fs_path *path);
 /**
- * path_parentat() - Resolve a parent path from a dirfd context
+ * fs_path_parent_at() - Resolve a parent path from a dirfd context
  * @dir_fd: directory fd or AT_FDCWD-style special value
  * @name: input path string
  * @path: output resolved path (refcounted on success)
@@ -119,19 +119,19 @@ int path_lookup(const char *name, unsigned int flags, struct path *path);
  *
  * Return: 0 on success, negative errno on failure.
  */
-int path_parentat(int dir_fd, const char *name, struct path *path,
-		  struct qstr *last_component);
+int fs_path_parent_at(int dir_fd, const char *name, struct fs_path *path,
+		      struct qstr *last_component);
 /* Increment refs for both @path->mnt and @path->dentry. */
-void path_get(struct path *path);
+void fs_path_get(struct fs_path *path);
 /* Drop refs for both @path->mnt and @path->dentry. */
-void path_put(struct path *path);
+void fs_path_put(struct fs_path *path);
 /*
  * Convert a resolved path object to absolute string form.
  * Returns 0 on success, negative errno on failure.
  */
-int path_to_absolute(const struct path *path, char *buf, usize_t bufsz);
+int fs_path_to_absolute(const struct fs_path *path, char *buf, usize_t bufsz);
 
-int path_dot(struct path *path, struct path *dot);
-int path_dot_dot(struct path *path, struct path *dotdot);
+int fs_path_dot(struct fs_path *path, struct fs_path *dot);
+int fs_path_dot_dot(struct fs_path *path, struct fs_path *dotdot);
 
 #endif

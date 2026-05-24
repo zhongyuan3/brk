@@ -17,218 +17,218 @@ static struct hlist_head dentry_htable[DENTRY_HTABLE_SIZE];
 static SPINLOCK_DEFINE(dentry_htable_lock);
 static struct kobj_pool dentry_cache;
 
-void dentry_cache_init(void)
+void fs_dentry_cache_init(void)
 {
-	kobj_pool_init(&dentry_cache, sizeof(struct dentry),
-		       alignof(struct dentry), "dentry_cache");
+	kobj_pool_init(&dentry_cache, sizeof(struct fs_dentry),
+		       alignof(struct fs_dentry), "dentry_cache");
 }
 
-static struct dentry *__alloc_dentry(struct super_block *sb,
-				     const struct qstr *name)
+static struct fs_dentry *__dentry_alloc(struct fs_super_block *sb,
+					const struct qstr *name)
 {
-	struct dentry *d;
+	struct fs_dentry *d;
 
 	d = kobj_pool_alloc(&dentry_cache);
 	if (!d)
 		return NULL;
 
-	refcnt_init(&d->d_count, 1);
-	d->d_flags = DCACHE_UNHASHED;
-	spinlock_init(&d->d_lock, "dentry.d_lock");
-	d->d_inode = NULL;
-	list_init(&d->d_alias);
-	d->d_parent = d;
-	list_init(&d->d_child);
-	list_init(&d->d_subdirs);
-	hlist_node_init(&d->d_hash);
+	refcnt_init(&d->count, 1);
+	d->flags = DCACHE_UNHASHED;
+	spinlock_init(&d->lock, "dentry.d_lock");
+	d->inode = NULL;
+	list_init(&d->alias);
+	d->parent = d;
+	list_init(&d->child);
+	list_init(&d->children);
+	hlist_node_init(&d->hash);
 	if (name->len < DENTRY_SHORT_NAME_SIZE) {
-		d->d_name.name = d->d_short_name;
-		d->d_short_name[DENTRY_SHORT_NAME_SIZE - 1] = '\0';
-		memcpy(d->d_short_name, name->name, name->len);
-		d->d_short_name[name->len] = '\0';
+		d->name.name = d->short_name;
+		d->short_name[DENTRY_SHORT_NAME_SIZE - 1] = '\0';
+		memcpy(d->short_name, name->name, name->len);
+		d->short_name[name->len] = '\0';
 	} else {
-		d->d_long_name = kmalloc(name->len + 1);
-		if (!d->d_long_name) {
+		d->long_name = kmalloc(name->len + 1);
+		if (!d->long_name) {
 			kobj_pool_free(&dentry_cache, d);
 			return NULL;
 		}
-		d->d_name.name = d->d_long_name;
-		memcpy(d->d_long_name, name->name, name->len);
-		d->d_long_name[name->len] = '\0';
+		d->name.name = d->long_name;
+		memcpy(d->long_name, name->name, name->len);
+		d->long_name[name->len] = '\0';
 	}
-	d->d_name.len = name->len;
-	d->d_name.hash = name->hash;
-	d->d_sb = sb;
-	d->d_op = sb->s_d_op;
-	d->d_fsdata = NULL;
+	d->name.len = name->len;
+	d->name.hash = name->hash;
+	d->sb = sb;
+	d->ops = sb->default_dops;
+	d->private_data = NULL;
 	return d;
 }
 
-static void __free_dentry(struct dentry *dentry)
+static void __dentry_free(struct fs_dentry *dentry)
 {
-	if (dentry->d_name.len >= DENTRY_SHORT_NAME_SIZE)
-		kfree(dentry->d_long_name);
+	if (dentry->name.len >= DENTRY_SHORT_NAME_SIZE)
+		kfree(dentry->long_name);
 	kobj_pool_free(&dentry_cache, dentry);
 }
 
-static struct dentry *alloc_dentry(struct dentry *parent,
-				   const struct qstr *name)
+static struct fs_dentry *fs_dentry_alloc(struct fs_dentry *parent,
+					 const struct qstr *name)
 {
-	struct dentry *d;
+	struct fs_dentry *d;
 
-	d = __alloc_dentry(parent->d_sb, name);
+	d = __dentry_alloc(parent->sb, name);
 	if (!d)
 		return NULL;
 
-	d->d_parent = dentry_get(parent);
-	spinlock_acquire(&parent->d_lock);
-	list_add(&d->d_child, &parent->d_subdirs);
-	spinlock_release(&parent->d_lock);
+	d->parent = fs_dentry_get(parent);
+	spinlock_acquire(&parent->lock);
+	list_add(&d->child, &parent->children);
+	spinlock_release(&parent->lock);
 
 	return d;
 }
 
 /**
-  * dentry_make_root() - Make a root dentry
+  * fs_dentry_make_root() - Make a root dentry
   * @root_inode: root inode
   *
   * Only used for file system mounting operations.
   *
   * Return: The root dentry or %NULL.
   */
-struct dentry *dentry_make_root(struct inode *root_inode)
+struct fs_dentry *fs_dentry_make_root(struct fs_inode *root_inode)
 {
-	struct dentry *d;
+	struct fs_dentry *d;
 
 	if (!root_inode)
 		return NULL;
 
-	d = __alloc_dentry(root_inode->i_sb, &slash_name);
+	d = __dentry_alloc(root_inode->sb, &slash_name);
 	if (!d)
 		return NULL;
 
-	dentry_instantiate(d, root_inode);
+	fs_dentry_instantiate(d, root_inode);
 
 	return d;
 }
 
 /**
- * dentry_alloc_anon() - Allocate an unhashed positive dentry for a given inode
+ * fs_dentry_alloc_anon() - Allocate an unhashed positive dentry for a given inode
  * @inode: inode to attach (caller holds inode lifetime)
  * @name: dentry name (for debugging / generic compare)
  *
  * Used for kernel objects such as pipes that are not reachable by path lookup.
  */
-struct dentry *dentry_alloc_anon(struct inode *inode, const struct qstr *name)
+struct fs_dentry *fs_dentry_alloc_anon(struct fs_inode *inode,
+				       const struct qstr *name)
 {
-	struct dentry *d;
+	struct fs_dentry *d;
 
-	d = __alloc_dentry(inode->i_sb, name);
+	d = __dentry_alloc(inode->sb, name);
 	if (!d)
 		return NULL;
 
-	dentry_instantiate(d, inode);
+	fs_dentry_instantiate(d, inode);
 	return d;
 }
 
 /**
- * dentry_instantiate() - Attach @inode to @dentry
+ * fs_dentry_instantiate() - Attach @inode to @dentry
  * @dentry: dentry to attach
  * @inode: inode to attach to this dentry
  */
-void dentry_instantiate(struct dentry *dentry, struct inode *inode)
+void fs_dentry_instantiate(struct fs_dentry *dentry, struct fs_inode *inode)
 {
-	dentry->d_inode = inode;
-	spinlock_acquire(&inode->i_lock);
-	list_add(&dentry->d_alias, &inode->i_dentry);
-	spinlock_release(&inode->i_lock);
+	dentry->inode = inode;
+	spinlock_acquire(&inode->lock);
+	list_add(&dentry->alias, &inode->dentries);
+	spinlock_release(&inode->lock);
 
-	spinlock_acquire(&dentry->d_lock);
-	dentry->d_flags &= ~DCACHE_NEGATIVE;
-	spinlock_release(&dentry->d_lock);
+	spinlock_acquire(&dentry->lock);
+	dentry->flags &= ~DCACHE_NEGATIVE;
+	spinlock_release(&dentry->lock);
 }
 
 /* Increment the reference count of @dentry */
-struct dentry *dentry_get(struct dentry *dentry)
+struct fs_dentry *fs_dentry_get(struct fs_dentry *dentry)
 {
 	klog_debug(
 		"%s(): Duplicating dentry: name=%.*s, inode=%ld, refcnt=%d\n",
-		__func__, dentry->d_name.len, dentry->d_name.name,
-		dentry->d_inode->i_ino, arc_get(&dentry->d_count));
-	refcnt_inc(&dentry->d_count);
+		__func__, dentry->name.len, dentry->name.name,
+		dentry->inode->ino, arc_get(&dentry->count));
+	refcnt_inc(&dentry->count);
 	return dentry;
 }
 
 /* Decrement the reference count of @dentry */
-void dentry_put(struct dentry *dentry)
+void fs_dentry_put(struct fs_dentry *dentry)
 {
-	const struct dentry_ops *op;
-	struct inode *inode;
+	const struct fs_dentry_ops *op;
+	struct fs_inode *inode;
 
 	klog_debug("%s(): Putting dentry: name=%.*s, inode=%ld, refcnt=%d\n",
-		   __func__, dentry->d_name.len, dentry->d_name.name,
-		   dentry->d_inode->i_ino, arc_get(&dentry->d_count));
+		   __func__, dentry->name.len, dentry->name.name,
+		   dentry->inode->ino, arc_get(&dentry->count));
 
-	if (refcnt_dec_fetch(&dentry->d_count) > 0)
+	if (refcnt_dec_fetch(&dentry->count) > 0)
 		return;
 
 	klog_debug("%s(): Freeing dentry: name=%.*s, inode=%ld\n", __func__,
-		   dentry->d_name.len, dentry->d_name.name,
-		   dentry->d_inode->i_ino);
+		   dentry->name.len, dentry->name.name, dentry->inode->ino);
 
-	if (dentry->d_parent != dentry) {
-		spinlock_acquire(&dentry->d_parent->d_lock);
-		list_del(&dentry->d_child);
-		spinlock_release(&dentry->d_parent->d_lock);
-		dentry_put(dentry->d_parent);
+	if (dentry->parent != dentry) {
+		spinlock_acquire(&dentry->parent->lock);
+		list_del(&dentry->child);
+		spinlock_release(&dentry->parent->lock);
+		fs_dentry_put(dentry->parent);
 	}
 
-	if (!(dentry->d_flags & DCACHE_UNHASHED)) {
+	if (!(dentry->flags & DCACHE_UNHASHED)) {
 		klog_debug(
 			"%s(): Removing dentry from hash table: name=%.*s, inode=%ld\n",
-			__func__, dentry->d_name.len, dentry->d_name.name,
-			dentry->d_inode->i_ino);
+			__func__, dentry->name.len, dentry->name.name,
+			dentry->inode->ino);
 		spinlock_acquire(&dentry_htable_lock);
-		ASSERT(!hlist_unhashed(&dentry->d_hash));
-		hlist_del_init(&dentry->d_hash);
+		ASSERT(!hlist_unhashed(&dentry->hash));
+		hlist_del_init(&dentry->hash);
 		spinlock_release(&dentry_htable_lock);
 	}
 
-	if (!(dentry->d_flags & DCACHE_NEGATIVE)) {
-		inode = dentry->d_inode;
+	if (!(dentry->flags & DCACHE_NEGATIVE)) {
+		inode = dentry->inode;
 
-		spinlock_acquire(&inode->i_lock);
-		list_del(&dentry->d_alias);
-		spinlock_release(&inode->i_lock);
+		spinlock_acquire(&inode->lock);
+		list_del(&dentry->alias);
+		spinlock_release(&inode->lock);
 
-		op = dentry->d_op;
+		op = dentry->ops;
 		if (op->release)
 			op->release(dentry);
 
 		if (op->iput)
 			op->iput(dentry, inode);
 		else
-			inode_put(inode);
+			fs_inode_put(inode);
 	}
 
-	__free_dentry(dentry);
+	__dentry_free(dentry);
 }
 
-static struct dentry *dentry_lookup_locked(struct hlist_head *head,
-					   struct dentry *parent,
-					   const struct qstr *name)
+static struct fs_dentry *__dentry_lookup(struct hlist_head *head,
+					 struct fs_dentry *parent,
+					 const struct qstr *name)
 {
-	struct dentry *dentry;
+	struct fs_dentry *dentry;
 
 	ASSERT(spinlock_holding(&dentry_htable_lock));
 
-	hlist_for_each_entry(dentry, head, d_hash) {
-		if (dentry->d_parent == parent &&
-		    dentry->d_name.hash == name->hash &&
-		    dentry->d_name.len == name->len &&
-		    !dentry->d_op->compare(dentry, name->len, name->name,
-					   &dentry->d_name)) {
-			refcnt_inc(&dentry->d_count);
+	hlist_for_each_entry(dentry, head, hash) {
+		if (dentry->parent == parent &&
+		    dentry->name.hash == name->hash &&
+		    dentry->name.len == name->len &&
+		    !dentry->ops->compare(dentry, name->len, name->name,
+					  &dentry->name)) {
+			refcnt_inc(&dentry->count);
 			return dentry;
 		}
 	}
@@ -237,7 +237,7 @@ static struct dentry *dentry_lookup_locked(struct hlist_head *head,
 }
 
 /**
- * dentry_lookup() - Resolve one path component under @parent
+ * fs_dentry_lookup() - Resolve one path component under @parent
  * @parent: parent dentry
  * @name: component name with hash prepared by caller
  *
@@ -247,20 +247,21 @@ static struct dentry *dentry_lookup_locked(struct hlist_head *head,
  *
  * Return: The dentry on success or ERR_PTR(-errno) on failure.
  */
-struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name)
+struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
+				   const struct qstr *name)
 {
-	struct inode *inode;
-	struct dentry *dentry, *tmp;
+	struct fs_inode *inode;
+	struct fs_dentry *dentry, *tmp;
 	struct hlist_head *head;
 
 	u32 idx = name->hash & (DENTRY_HTABLE_SIZE - 1);
 	head = &dentry_htable[idx];
 
 	klog_debug("%s(): Looking up %.*s in %.*s\n", __func__, name->len,
-		   name->name, parent->d_name.len, parent->d_name.name);
+		   name->name, parent->name.len, parent->name.name);
 
 	spinlock_acquire(&dentry_htable_lock);
-	dentry = dentry_lookup_locked(head, parent, name);
+	dentry = __dentry_lookup(head, parent, name);
 	spinlock_release(&dentry_htable_lock);
 	if (dentry) {
 		klog_debug("%s(): Cache hit for %.*s\n", __func__, name->len,
@@ -270,81 +271,82 @@ struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name)
 	klog_debug("%s(): Cache miss for %.*s\n", __func__, name->len,
 		   name->name);
 
-	dentry = alloc_dentry(parent, name);
+	dentry = fs_dentry_alloc(parent, name);
 	if (!dentry)
 		return ERR_PTR(-ENOMEM);
 
-	inode = parent->d_inode;
-	sleeplock_acquire(&inode->i_rwsem);
-	tmp = inode->i_op->lookup(inode, dentry, 0);
-	sleeplock_release(&inode->i_rwsem);
+	inode = parent->inode;
+	sleeplock_acquire(&inode->rwsem);
+	tmp = inode->ops->lookup(inode, dentry, 0);
+	sleeplock_release(&inode->rwsem);
 	if (IS_ERR(tmp)) {
-		dentry->d_flags |= DCACHE_NEGATIVE;
-		dentry_put(dentry);
+		dentry->flags |= DCACHE_NEGATIVE;
+		fs_dentry_put(dentry);
 		return ERR_CAST(tmp);
 	}
 
 	if (!tmp)
-		dentry->d_flags |= DCACHE_NEGATIVE;
+		dentry->flags |= DCACHE_NEGATIVE;
 	else
 		dentry = tmp;
 
-	spinlock_acquire(&dentry->d_lock);
-	if (dentry->d_parent != dentry && dentry->d_flags & DCACHE_UNHASHED) {
-		dentry->d_flags &= ~DCACHE_UNHASHED;
+	spinlock_acquire(&dentry->lock);
+	if (dentry->parent != dentry && dentry->flags & DCACHE_UNHASHED) {
+		dentry->flags &= ~DCACHE_UNHASHED;
 		spinlock_acquire(&dentry_htable_lock);
-		hlist_add_head(&dentry->d_hash, &dentry_htable[idx]);
+		hlist_add_head(&dentry->hash, &dentry_htable[idx]);
 		spinlock_release(&dentry_htable_lock);
-		spinlock_release(&dentry->d_lock);
+		spinlock_release(&dentry->lock);
 		klog_debug(
 			"%s(): Added dentry to hash table: name=%.*s, inode=%ld\n",
-			__func__, dentry->d_name.len, dentry->d_name.name,
-			dentry->d_inode->i_ino);
+			__func__, dentry->name.len, dentry->name.name,
+			dentry->inode->ino);
 	} else {
-		spinlock_release(&dentry->d_lock);
+		spinlock_release(&dentry->lock);
 		klog_debug(
 			"%s(): Dentry already in hash table: name=%.*s, inode=%ld\n",
-			__func__, dentry->d_name.len, dentry->d_name.name,
-			dentry->d_inode->i_ino);
+			__func__, dentry->name.len, dentry->name.name,
+			dentry->inode->ino);
 	}
 
 	return dentry;
 }
 
 /**
- * dentry_splice_alias() - Attach @inode to @dentry or reuse existing alias
+ * fs_dentry_splice_alias() - Attach @inode to @dentry or reuse existing alias
  * @inode: inode to splice the dentry into
  * @dentry: dentry to splice
  *
  * Return: The alias dentry on success or ERR_PTR(-errno) on failure.
  */
-struct dentry *dentry_splice_alias(struct inode *inode, struct dentry *dentry)
+struct fs_dentry *fs_dentry_splice_alias(struct fs_inode *inode,
+					 struct fs_dentry *dentry)
 {
 	struct list_head *dentries;
-	struct dentry *d;
+	struct fs_dentry *d;
 
 	if (!inode)
 		return ERR_PTR(-EINVAL);
 
-	dentries = &inode->i_dentry;
+	dentries = &inode->dentries;
 
-	spinlock_acquire(&inode->i_lock);
-	list_for_each_entry(d, dentries, d_alias) {
-		if (d->d_parent == dentry->d_parent &&
-		    d->d_name.hash == dentry->d_name.hash &&
-		    d->d_name.len == dentry->d_name.len &&
-		    !d->d_op->compare(d, dentry->d_name.len,
-				      dentry->d_name.name, &d->d_name)) {
-			spinlock_release(&inode->i_lock);
-			dentry_get(d);
-			dentry->d_flags |= DCACHE_NEGATIVE;
-			dentry_put(dentry);
+	spinlock_acquire(&inode->lock);
+	list_for_each_entry(d, dentries, alias) {
+		if (d->parent == dentry->parent &&
+		    d->name.hash == dentry->name.hash &&
+		    d->name.len == dentry->name.len &&
+		    !d->ops->compare(d, dentry->name.len, dentry->name.name,
+				     &d->name)) {
+			spinlock_release(&inode->lock);
+			fs_dentry_get(d);
+			dentry->flags |= DCACHE_NEGATIVE;
+			fs_dentry_put(dentry);
 			return d;
 		}
 	}
-	list_add(&dentry->d_alias, dentries);
-	dentry->d_inode = inode;
-	spinlock_release(&inode->i_lock);
+	list_add(&dentry->alias, dentries);
+	dentry->inode = inode;
+	spinlock_release(&inode->lock);
 
 	return dentry;
 }
@@ -365,8 +367,8 @@ const struct qstr dotdot_name = {
 	.hash = DOTDOT_NAME_HASH,
 };
 
-static int generic_dop_compare(const struct dentry *dentry, unsigned int len,
-			       const char *str, const struct qstr *name)
+static int generic_compare(const struct fs_dentry *dentry, unsigned int len,
+			   const char *str, const struct qstr *name)
 {
 	(void)dentry;
 	if (len > name->len)
@@ -376,13 +378,13 @@ static int generic_dop_compare(const struct dentry *dentry, unsigned int len,
 	return memcmp(str, name->name, len);
 }
 
-const struct dentry_ops generic_dop = {
-	.compare = generic_dop_compare,
+const struct fs_dentry_ops generic_dop = {
+	.compare = generic_compare,
 };
 
-void dcache_dump(void)
+void fs_dcache_dump(void)
 {
-	struct dentry *d;
+	struct fs_dentry *d;
 	struct hlist_head *head;
 
 	spinlock_acquire(&dentry_htable_lock);
@@ -392,12 +394,12 @@ void dcache_dump(void)
 		if (hlist_empty(head))
 			continue;
 		printk("Bucket %zu:\n", i);
-		hlist_for_each_entry(d, head, d_hash) {
+		hlist_for_each_entry(d, head, hash) {
 			printk("  Name: %s, Inode: %ld, Refcnt: %d, Negative: %s, Mounted: %s\n",
-			       d->d_name.name, d->d_inode->i_ino,
-			       refcnt_read(&d->d_count),
-			       d->d_flags & DCACHE_NEGATIVE ? "true" : "false",
-			       d->d_flags & DCACHE_MOUNTED ? "true" : "false");
+			       d->name.name, d->inode->ino,
+			       refcnt_read(&d->count),
+			       d->flags & DCACHE_NEGATIVE ? "true" : "false",
+			       d->flags & DCACHE_MOUNTED ? "true" : "false");
 		}
 	}
 	spinlock_release(&dentry_htable_lock);

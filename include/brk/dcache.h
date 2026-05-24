@@ -28,41 +28,42 @@ struct qstr {
 		.name = n, .hash = fnv1a_32(n, l), .len = l \
 	}
 
-struct dentry {
-	refcnt_t d_count;
+struct fs_dentry {
+	refcnt_t count;
 
-	unsigned int d_flags; /* protected by d_lock */
-	spinlock_t d_lock;
+	unsigned int flags; /* protected by d_lock */
+	spinlock_t lock;
 
 	/* Positive dentry: points to inode; negative dentry: NULL. */
-	struct inode *d_inode;
-	struct list_head d_alias; /* protected by d_inode->i_lock */
+	struct fs_inode *inode;
+	struct list_head alias; /* protected by d_inode->lock */
 
-	struct dentry *d_parent; /* hold reference count, self if root (no ref) */
-	struct list_head d_child; /* protected by d_parent->d_lock */
-	struct list_head d_subdirs; /* protected by d_lock */
+	struct fs_dentry
+		*parent; /* hold reference count, self if root (no ref) */
+	struct list_head child; /* protected by d_parent->d_lock */
+	struct list_head children; /* protected by d_lock */
 
-	struct hlist_node d_hash; /* protected by dentry_htable_lock */
+	struct hlist_node hash; /* protected by dentry_htable_lock */
 
-	struct qstr d_name;
+	struct qstr name;
 	union {
-		char d_short_name[DENTRY_SHORT_NAME_SIZE];
-		char *d_long_name;
+		char short_name[DENTRY_SHORT_NAME_SIZE];
+		char *long_name;
 	};
 
-	struct super_block *d_sb; /* no reference count */
+	struct fs_super_block *sb; /* no reference count */
 
 	/*
 	 * Dentry operation table.
 	 * Recommended invariant: newly allocated dentries always have a valid
 	 * d_op (at least &generic_dop) before they are visible in lookup paths.
 	 */
-	const struct dentry_ops *d_op;
+	const struct fs_dentry_ops *ops;
 
-	void *d_fsdata;
+	void *private_data;
 };
 
-struct dentry_ops {
+struct fs_dentry_ops {
 	/**
 	 * compare() - compare a candidate name with a dentry name
 	 * @dentry: cached candidate dentry being tested
@@ -75,47 +76,50 @@ struct dentry_ops {
 	 *
 	 * Return: %0 if equal, non-zero if different.
 	 */
-	int (*compare)(const struct dentry *dentry, unsigned int len,
+	int (*compare)(const struct fs_dentry *dentry, unsigned int len,
 		       const char *str, const struct qstr *name);
 
 	/**
 	 * release() - dentry memory will be freed
 	 * @dentry: dentry being destroyed
 	 *
-	 * Release @d_fsdata and similar.
+	 * Release @private_data and similar.
 	 */
-	void (*release)(struct dentry *dentry);
+	void (*release)(struct fs_dentry *dentry);
 
 	/**
 	 * iput() - dentry is dropping its inode reference
 	 * @dentry: the dentry that is dropping its inode reference
-	 * @inode: the inode that is about to be inode_put()
+	 * @inode: the inode that is about to be fs_inode_put()
 	 *
-	 * If %NULL, the VFS calls inode_put() directly.
+	 * If %NULL, the VFS calls fs_inode_put() directly.
 	 */
-	void (*iput)(struct dentry *dentry, struct inode *inode);
+	void (*iput)(struct fs_dentry *dentry, struct fs_inode *inode);
 };
 
 /*
  * Dcache locking guideline:
- *   dentry_htable_lock -> dentry.d_lock -> inode.i_lock
+ *   dentry_htable_lock -> dentry.d_lock -> inode.lock
  *
  * Notes:
  * - dentry lookup should be lockless outside the hash critical section as much
  *   as possible; do not call filesystem lookup callbacks while holding
  *   dentry_htable_lock.
  * - Parent/child list updates should hold parent->d_lock.
- * - Alias list updates should hold inode->i_lock.
+ * - Alias list updates should hold inode->lock.
  */
 
-struct dentry *dentry_make_root(struct inode *root_inode);
-struct dentry *dentry_alloc_anon(struct inode *inode, const struct qstr *name);
-void dentry_instantiate(struct dentry *dentry, struct inode *inode);
-struct dentry *dentry_get(struct dentry *dentry);
-void dentry_put(struct dentry *dentry);
-struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name);
-struct dentry *dentry_splice_alias(struct inode *inode, struct dentry *dentry);
-void dentry_cache_init(void);
+struct fs_dentry *fs_dentry_make_root(struct fs_inode *root_inode);
+struct fs_dentry *fs_dentry_alloc_anon(struct fs_inode *inode,
+				       const struct qstr *name);
+void fs_dentry_instantiate(struct fs_dentry *dentry, struct fs_inode *inode);
+struct fs_dentry *fs_dentry_get(struct fs_dentry *dentry);
+void fs_dentry_put(struct fs_dentry *dentry);
+struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
+				   const struct qstr *name);
+struct fs_dentry *fs_dentry_splice_alias(struct fs_inode *inode,
+					 struct fs_dentry *dentry);
+void fs_dentry_cache_init(void);
 
 extern const struct qstr slash_name;
 extern const struct qstr dot_name;
@@ -125,8 +129,8 @@ extern const struct qstr dotdot_name;
 #define DOT_NAME_HASH 0x2b0c98f1
 #define DOTDOT_NAME_HASH 0xa3d4a70d
 
-extern const struct dentry_ops generic_dop;
+extern const struct fs_dentry_ops generic_dop;
 
-void dcache_dump(void);
+void fs_dcache_dump(void);
 
 #endif

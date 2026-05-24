@@ -32,7 +32,7 @@ int fs_init(void)
 		return err;
 	klog_info("mount tree initialized\n");
 
-	path_get(&proc->root);
+	fs_path_get(&proc->root);
 	proc->cwd = proc->root;
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
@@ -53,19 +53,19 @@ int fs_init(void)
 		return err;
 	klog_info("/ mounted successfully\n");
 
-	struct mount_instance *root_mnt = mount_instance_lookup(&proc->root);
+	struct fs_mount_state *root_mnt = fs_mount_state_lookup(&proc->root);
 	if (!root_mnt)
 		return -EINVAL;
 
-	struct path root_path = {
+	struct fs_path root_path = {
 		.mnt = root_mnt,
-		.dentry = dentry_get(root_mnt->mnt_root),
+		.dentry = fs_dentry_get(root_mnt->root),
 	};
 
-	path_put(&proc->root);
+	fs_path_put(&proc->root);
 	proc->root = root_path;
-	path_put(&proc->cwd);
-	path_get(&root_path);
+	fs_path_put(&proc->cwd);
+	fs_path_get(&root_path);
 	proc->cwd = root_path;
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
@@ -94,15 +94,15 @@ int fs_init(void)
 	if (err)
 		return err;
 
-	struct file *f = do_openat(AT_FDCWD, "/dev/tty0", O_RDWR, 0);
+	struct fs_file *f = do_openat(AT_FDCWD, "/dev/tty0", O_RDWR, 0);
 	if (IS_ERR(f)) {
 		err = PTR_ERR(f);
 		return err;
 	}
 
 	proc->ofiles[0] = f;
-	proc->ofiles[1] = file_get(f);
-	proc->ofiles[2] = file_get(f);
+	proc->ofiles[1] = fs_file_get(f);
+	proc->ofiles[2] = fs_file_get(f);
 
 	return 0;
 }

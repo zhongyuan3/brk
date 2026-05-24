@@ -5,52 +5,53 @@
 #include <uapi/brk/errno.h>
 #include <uapi/fcntl.h>
 
-struct file *do_openat(int dirfd, const char *pathname, int flags, umode_t mode)
+struct fs_file *do_openat(int dirfd, const char *pathname, int flags,
+			  umode_t mode)
 {
 	int err;
-	struct file *file;
-	struct path path;
+	struct fs_file *file;
+	struct fs_path path;
 
 	if ((flags & O_RDWR) && (flags & O_WRONLY))
 		return ERR_PTR(-EINVAL);
 
-	err = path_lookupat(dirfd, pathname, 0, &path);
+	err = fs_path_lookup_at(dirfd, pathname, 0, &path);
 	if (err)
 		return ERR_PTR(err);
 
-	spinlock_acquire(&path.dentry->d_lock);
-	bool exists = !(path.dentry->d_flags & DCACHE_NEGATIVE);
-	spinlock_release(&path.dentry->d_lock);
+	spinlock_acquire(&path.dentry->lock);
+	bool exists = !(path.dentry->flags & DCACHE_NEGATIVE);
+	spinlock_release(&path.dentry->lock);
 
 	bool create = (flags & O_CREAT) != 0;
 	if (!exists && !create) {
-		path_put(&path);
+		fs_path_put(&path);
 		return ERR_PTR(-ENOENT);
 	}
 
 	bool excl = (flags & O_EXCL) != 0;
 	if (exists && excl) {
-		path_put(&path);
+		fs_path_put(&path);
 		return ERR_PTR(-EEXIST);
 	}
 
 	if (!exists && create) {
-		struct path parent_path;
-		err = path_dot_dot(&path, &parent_path);
+		struct fs_path parent_path;
+		err = fs_path_dot_dot(&path, &parent_path);
 		if (err) {
-			path_put(&path);
+			fs_path_put(&path);
 			return ERR_PTR(err);
 		}
-		struct inode *inode = parent_path.dentry->d_inode;
-		sleeplock_acquire(&inode->i_rwsem);
-		err = inode->i_op->create(inode, path.dentry, mode, excl);
-		sleeplock_release(&inode->i_rwsem);
+		struct fs_inode *inode = parent_path.dentry->inode;
+		sleeplock_acquire(&inode->rwsem);
+		err = inode->ops->create(inode, path.dentry, mode, excl);
+		sleeplock_release(&inode->rwsem);
 		if (err) {
-			path_put(&parent_path);
-			path_put(&path);
+			fs_path_put(&parent_path);
+			fs_path_put(&path);
 			return ERR_PTR(err);
 		}
-		path_put(&parent_path);
+		fs_path_put(&parent_path);
 	}
 
 	fmode_t fmode = 0;
@@ -64,28 +65,28 @@ struct file *do_openat(int dirfd, const char *pathname, int flags, umode_t mode)
 	if (flags & O_RDWR)
 		fmode = FMODE_READ | FMODE_WRITE;
 
-	if (S_ISDIR(path.dentry->d_inode->i_mode))
+	if (S_ISDIR(path.dentry->inode->mode))
 		fmode |= FMODE_DIR;
 
-	file = file_alloc(&path, fmode);
+	file = fs_file_alloc(&path, fmode);
 	if (IS_ERR(file)) {
-		path_put(&path);
+		fs_path_put(&path);
 		return ERR_CAST(file);
 	}
-	path_put(&path);
+	fs_path_put(&path);
 
 	if (flags & O_TRUNC) {
-		err = file_truncate(file, 0);
+		err = fs_file_truncate(file, 0);
 		if (err) {
-			file_put(file);
+			fs_file_put(file);
 			return ERR_PTR(err);
 		}
 	}
 
 	if (flags & O_APPEND) {
-		off_t ret = file_lseek(file, 0, SEEK_END);
+		off_t ret = fs_file_lseek(file, 0, SEEK_END);
 		if (ret < 0) {
-			file_put(file);
+			fs_file_put(file);
 			return ERR_PTR(ret);
 		}
 	}
@@ -96,66 +97,66 @@ struct file *do_openat(int dirfd, const char *pathname, int flags, umode_t mode)
 int do_mkdirat(int dirfd, const char *pathname, umode_t mode)
 {
 	int err;
-	struct path path;
+	struct fs_path path;
 
-	err = path_lookupat(dirfd, pathname, 0, &path);
+	err = fs_path_lookup_at(dirfd, pathname, 0, &path);
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->d_lock);
-	if (!(path.dentry->d_flags & DCACHE_NEGATIVE)) {
-		spinlock_release(&path.dentry->d_lock);
-		path_put(&path);
+	spinlock_acquire(&path.dentry->lock);
+	if (!(path.dentry->flags & DCACHE_NEGATIVE)) {
+		spinlock_release(&path.dentry->lock);
+		fs_path_put(&path);
 		return -EEXIST;
 	}
-	spinlock_release(&path.dentry->d_lock);
+	spinlock_release(&path.dentry->lock);
 
-	struct path parent_path;
-	err = path_dot_dot(&path, &parent_path);
+	struct fs_path parent_path;
+	err = fs_path_dot_dot(&path, &parent_path);
 	if (err) {
-		path_put(&path);
+		fs_path_put(&path);
 		return err;
 	}
-	struct inode *inode = parent_path.dentry->d_inode;
-	sleeplock_acquire(&inode->i_rwsem);
-	err = inode->i_op->mkdir(inode, path.dentry, mode | S_IFDIR);
-	sleeplock_release(&inode->i_rwsem);
+	struct fs_inode *inode = parent_path.dentry->inode;
+	sleeplock_acquire(&inode->rwsem);
+	err = inode->ops->mkdir(inode, path.dentry, mode | S_IFDIR);
+	sleeplock_release(&inode->rwsem);
 
-	path_put(&parent_path);
-	path_put(&path);
+	fs_path_put(&parent_path);
+	fs_path_put(&path);
 	return err;
 }
 
 int do_mknodat(int dirfd, const char *pathname, umode_t mode, dev_t dev)
 {
 	int err;
-	struct path path;
+	struct fs_path path;
 
-	err = path_lookupat(dirfd, pathname, 0, &path);
+	err = fs_path_lookup_at(dirfd, pathname, 0, &path);
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->d_lock);
-	if (!(path.dentry->d_flags & DCACHE_NEGATIVE)) {
-		spinlock_release(&path.dentry->d_lock);
-		path_put(&path);
+	spinlock_acquire(&path.dentry->lock);
+	if (!(path.dentry->flags & DCACHE_NEGATIVE)) {
+		spinlock_release(&path.dentry->lock);
+		fs_path_put(&path);
 		return -EEXIST;
 	}
-	spinlock_release(&path.dentry->d_lock);
+	spinlock_release(&path.dentry->lock);
 
-	struct path parent_path;
-	err = path_dot_dot(&path, &parent_path);
+	struct fs_path parent_path;
+	err = fs_path_dot_dot(&path, &parent_path);
 	if (err) {
-		path_put(&path);
+		fs_path_put(&path);
 		return err;
 	}
-	struct inode *inode = parent_path.dentry->d_inode;
-	sleeplock_acquire(&inode->i_rwsem);
-	err = inode->i_op->mknod(inode, path.dentry, mode, dev);
-	sleeplock_release(&inode->i_rwsem);
+	struct fs_inode *inode = parent_path.dentry->inode;
+	sleeplock_acquire(&inode->rwsem);
+	err = inode->ops->mknod(inode, path.dentry, mode, dev);
+	sleeplock_release(&inode->rwsem);
 
-	path_put(&parent_path);
-	path_put(&path);
+	fs_path_put(&parent_path);
+	fs_path_put(&path);
 	return err;
 }
 
@@ -165,150 +166,150 @@ int do_linkat(int olddirfd, const char *oldpathname, int newdirfd,
 	(void)flags;
 
 	int err;
-	struct path oldpath, newpath;
+	struct fs_path oldpath, newpath;
 
-	err = path_lookupat(olddirfd, oldpathname, 0, &oldpath);
+	err = fs_path_lookup_at(olddirfd, oldpathname, 0, &oldpath);
 	if (err)
 		return err;
 
-	err = path_lookupat(newdirfd, newpathname, 0, &newpath);
+	err = fs_path_lookup_at(newdirfd, newpathname, 0, &newpath);
 	if (err) {
-		path_put(&oldpath);
+		fs_path_put(&oldpath);
 		return err;
 	}
 
-	spinlock_acquire(&newpath.dentry->d_lock);
-	if (!(newpath.dentry->d_flags & DCACHE_NEGATIVE)) {
-		spinlock_release(&newpath.dentry->d_lock);
-		path_put(&oldpath);
-		path_put(&newpath);
+	spinlock_acquire(&newpath.dentry->lock);
+	if (!(newpath.dentry->flags & DCACHE_NEGATIVE)) {
+		spinlock_release(&newpath.dentry->lock);
+		fs_path_put(&oldpath);
+		fs_path_put(&newpath);
 		return -EEXIST;
 	}
-	spinlock_release(&newpath.dentry->d_lock);
+	spinlock_release(&newpath.dentry->lock);
 
-	struct path parent_path;
-	err = path_dot_dot(&newpath, &parent_path);
+	struct fs_path parent_path;
+	err = fs_path_dot_dot(&newpath, &parent_path);
 	if (err) {
-		path_put(&oldpath);
-		path_put(&newpath);
+		fs_path_put(&oldpath);
+		fs_path_put(&newpath);
 		return err;
 	}
-	struct inode *parent_inode = parent_path.dentry->d_inode;
-	struct inode *old_inode = oldpath.dentry->d_inode;
-	sleeplock_acquire(&parent_inode->i_rwsem);
-	sleeplock_acquire(&old_inode->i_rwsem);
-	err = parent_inode->i_op->link(oldpath.dentry, parent_inode,
-				       newpath.dentry);
-	sleeplock_release(&old_inode->i_rwsem);
-	sleeplock_release(&parent_inode->i_rwsem);
+	struct fs_inode *parent_inode = parent_path.dentry->inode;
+	struct fs_inode *old_inode = oldpath.dentry->inode;
+	sleeplock_acquire(&parent_inode->rwsem);
+	sleeplock_acquire(&old_inode->rwsem);
+	err = parent_inode->ops->link(oldpath.dentry, parent_inode,
+				      newpath.dentry);
+	sleeplock_release(&old_inode->rwsem);
+	sleeplock_release(&parent_inode->rwsem);
 
-	path_put(&parent_path);
-	path_put(&oldpath);
-	path_put(&newpath);
+	fs_path_put(&parent_path);
+	fs_path_put(&oldpath);
+	fs_path_put(&newpath);
 	return err;
 }
 
 int do_unlinkat(int dirfd, const char *pathname, int flags)
 {
 	int err;
-	struct path path;
+	struct fs_path path;
 
 	(void)flags;
 
-	err = path_lookupat(dirfd, pathname, 0, &path);
+	err = fs_path_lookup_at(dirfd, pathname, 0, &path);
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->d_lock);
-	if (path.dentry->d_flags & DCACHE_NEGATIVE) {
-		spinlock_release(&path.dentry->d_lock);
-		path_put(&path);
+	spinlock_acquire(&path.dentry->lock);
+	if (path.dentry->flags & DCACHE_NEGATIVE) {
+		spinlock_release(&path.dentry->lock);
+		fs_path_put(&path);
 		return -ENOENT;
 	}
-	spinlock_release(&path.dentry->d_lock);
+	spinlock_release(&path.dentry->lock);
 
-	struct path parent_path;
-	err = path_dot_dot(&path, &parent_path);
+	struct fs_path parent_path;
+	err = fs_path_dot_dot(&path, &parent_path);
 	if (err) {
-		path_put(&path);
+		fs_path_put(&path);
 		return err;
 	}
-	struct inode *inode = parent_path.dentry->d_inode;
-	sleeplock_acquire(&inode->i_rwsem);
-	err = inode->i_op->unlink(inode, path.dentry);
-	sleeplock_release(&inode->i_rwsem);
+	struct fs_inode *inode = parent_path.dentry->inode;
+	sleeplock_acquire(&inode->rwsem);
+	err = inode->ops->unlink(inode, path.dentry);
+	sleeplock_release(&inode->rwsem);
 
-	path_put(&parent_path);
-	path_put(&path);
+	fs_path_put(&parent_path);
+	fs_path_put(&path);
 	return err;
 }
 
 int do_symlinkat(int dirfd, const char *pathname, const char *target)
 {
 	int err;
-	struct path path;
+	struct fs_path path;
 
-	err = path_lookupat(dirfd, pathname, 0, &path);
+	err = fs_path_lookup_at(dirfd, pathname, 0, &path);
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->d_lock);
-	if (!(path.dentry->d_flags & DCACHE_NEGATIVE)) {
-		spinlock_release(&path.dentry->d_lock);
-		path_put(&path);
+	spinlock_acquire(&path.dentry->lock);
+	if (!(path.dentry->flags & DCACHE_NEGATIVE)) {
+		spinlock_release(&path.dentry->lock);
+		fs_path_put(&path);
 		return -EEXIST;
 	}
-	spinlock_release(&path.dentry->d_lock);
+	spinlock_release(&path.dentry->lock);
 
-	struct path parent_path;
-	err = path_dot_dot(&path, &parent_path);
+	struct fs_path parent_path;
+	err = fs_path_dot_dot(&path, &parent_path);
 	if (err) {
-		path_put(&path);
+		fs_path_put(&path);
 		return err;
 	}
-	struct inode *inode = parent_path.dentry->d_inode;
-	sleeplock_acquire(&inode->i_rwsem);
-	err = inode->i_op->symlink(inode, path.dentry, target);
-	sleeplock_release(&inode->i_rwsem);
+	struct fs_inode *inode = parent_path.dentry->inode;
+	sleeplock_acquire(&inode->rwsem);
+	err = inode->ops->symlink(inode, path.dentry, target);
+	sleeplock_release(&inode->rwsem);
 
-	path_put(&parent_path);
-	path_put(&path);
+	fs_path_put(&parent_path);
+	fs_path_put(&path);
 	return err;
 }
 
 int do_readlinkat(int dirfd, const char *pathname, char *buf, usize_t bufsiz)
 {
 	int err;
-	struct path path;
+	struct fs_path path;
 
-	err = path_lookupat(dirfd, pathname, 0, &path);
+	err = fs_path_lookup_at(dirfd, pathname, 0, &path);
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->d_lock);
-	if (path.dentry->d_flags & DCACHE_NEGATIVE) {
-		spinlock_release(&path.dentry->d_lock);
-		path_put(&path);
+	spinlock_acquire(&path.dentry->lock);
+	if (path.dentry->flags & DCACHE_NEGATIVE) {
+		spinlock_release(&path.dentry->lock);
+		fs_path_put(&path);
 		return -ENOENT;
 	}
-	spinlock_release(&path.dentry->d_lock);
+	spinlock_release(&path.dentry->lock);
 
-	struct inode *inode = path.dentry->d_inode;
-	if (!S_ISLNK(inode->i_mode)) {
-		path_put(&path);
+	struct fs_inode *inode = path.dentry->inode;
+	if (!S_ISLNK(inode->mode)) {
+		fs_path_put(&path);
 		return -EINVAL;
 	}
 
-	if (!inode->i_op->readlink) {
-		path_put(&path);
+	if (!inode->ops->readlink) {
+		fs_path_put(&path);
 		return -EOPNOTSUPP;
 	}
 
-	sleeplock_acquire(&inode->i_rwsem);
-	err = inode->i_op->readlink(path.dentry, buf, bufsiz);
-	sleeplock_release(&inode->i_rwsem);
+	sleeplock_acquire(&inode->rwsem);
+	err = inode->ops->readlink(path.dentry, buf, bufsiz);
+	sleeplock_release(&inode->rwsem);
 
-	path_put(&path);
+	fs_path_put(&path);
 
 	return err;
 }
@@ -316,33 +317,33 @@ int do_readlinkat(int dirfd, const char *pathname, char *buf, usize_t bufsiz)
 int do_creat(const char *pathname, umode_t mode)
 {
 	int err;
-	struct path path;
+	struct fs_path path;
 
-	err = path_lookup(pathname, 0, &path);
+	err = fs_path_lookup(pathname, 0, &path);
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->d_lock);
-	if (!(path.dentry->d_flags & DCACHE_NEGATIVE)) {
-		spinlock_release(&path.dentry->d_lock);
-		path_put(&path);
+	spinlock_acquire(&path.dentry->lock);
+	if (!(path.dentry->flags & DCACHE_NEGATIVE)) {
+		spinlock_release(&path.dentry->lock);
+		fs_path_put(&path);
 		return -EEXIST;
 	}
-	spinlock_release(&path.dentry->d_lock);
+	spinlock_release(&path.dentry->lock);
 
-	struct path parent_path;
-	err = path_dot_dot(&path, &parent_path);
+	struct fs_path parent_path;
+	err = fs_path_dot_dot(&path, &parent_path);
 	if (err) {
-		path_put(&path);
+		fs_path_put(&path);
 		return err;
 	}
-	struct inode *inode = parent_path.dentry->d_inode;
-	sleeplock_acquire(&inode->i_rwsem);
-	err = inode->i_op->create(inode, path.dentry, mode, true);
-	sleeplock_release(&inode->i_rwsem);
+	struct fs_inode *inode = parent_path.dentry->inode;
+	sleeplock_acquire(&inode->rwsem);
+	err = inode->ops->create(inode, path.dentry, mode, true);
+	sleeplock_release(&inode->rwsem);
 
-	path_put(&parent_path);
-	path_put(&path);
+	fs_path_put(&parent_path);
+	fs_path_put(&path);
 	return err;
 }
 
@@ -350,78 +351,78 @@ int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 		const char *newpathname, unsigned int flags)
 {
 	int err;
-	struct path oldpath, newpath;
+	struct fs_path oldpath, newpath;
 
-	err = path_lookupat(olddirfd, oldpathname, 0, &oldpath);
+	err = fs_path_lookup_at(olddirfd, oldpathname, 0, &oldpath);
 	if (err)
 		return err;
 
-	err = path_lookupat(newdirfd, newpathname, 0, &newpath);
+	err = fs_path_lookup_at(newdirfd, newpathname, 0, &newpath);
 	if (err) {
-		path_put(&oldpath);
+		fs_path_put(&oldpath);
 		return err;
 	}
 
-	spinlock_acquire(&newpath.dentry->d_lock);
-	if (!(newpath.dentry->d_flags & DCACHE_NEGATIVE)) {
-		spinlock_release(&newpath.dentry->d_lock);
-		path_put(&oldpath);
-		path_put(&newpath);
+	spinlock_acquire(&newpath.dentry->lock);
+	if (!(newpath.dentry->flags & DCACHE_NEGATIVE)) {
+		spinlock_release(&newpath.dentry->lock);
+		fs_path_put(&oldpath);
+		fs_path_put(&newpath);
 		return -EEXIST;
 	}
-	spinlock_release(&newpath.dentry->d_lock);
+	spinlock_release(&newpath.dentry->lock);
 
-	struct path parent_path;
-	err = path_dot_dot(&newpath, &parent_path);
+	struct fs_path parent_path;
+	err = fs_path_dot_dot(&newpath, &parent_path);
 	if (err) {
-		path_put(&oldpath);
-		path_put(&newpath);
+		fs_path_put(&oldpath);
+		fs_path_put(&newpath);
 		return err;
 	}
-	struct inode *parent_inode = parent_path.dentry->d_inode;
-	struct inode *old_inode = oldpath.dentry->d_inode;
-	sleeplock_acquire(&parent_inode->i_rwsem);
-	sleeplock_acquire(&old_inode->i_rwsem);
-	err = parent_inode->i_op->rename(old_inode, oldpath.dentry,
-					 parent_inode, newpath.dentry, flags);
-	sleeplock_release(&old_inode->i_rwsem);
-	sleeplock_release(&parent_inode->i_rwsem);
+	struct fs_inode *parent_inode = parent_path.dentry->inode;
+	struct fs_inode *old_inode = oldpath.dentry->inode;
+	sleeplock_acquire(&parent_inode->rwsem);
+	sleeplock_acquire(&old_inode->rwsem);
+	err = parent_inode->ops->rename(old_inode, oldpath.dentry, parent_inode,
+					newpath.dentry, flags);
+	sleeplock_release(&old_inode->rwsem);
+	sleeplock_release(&parent_inode->rwsem);
 
-	path_put(&parent_path);
-	path_put(&oldpath);
-	path_put(&newpath);
+	fs_path_put(&parent_path);
+	fs_path_put(&oldpath);
+	fs_path_put(&newpath);
 	return err;
 }
 
 int do_rmdir(const char *pathname)
 {
 	int err;
-	struct path path;
+	struct fs_path path;
 
-	err = path_lookupat(AT_FDCWD, pathname, 0, &path);
+	err = fs_path_lookup_at(AT_FDCWD, pathname, 0, &path);
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->d_lock);
-	if (path.dentry->d_flags & DCACHE_NEGATIVE) {
-		spinlock_release(&path.dentry->d_lock);
-		path_put(&path);
+	spinlock_acquire(&path.dentry->lock);
+	if (path.dentry->flags & DCACHE_NEGATIVE) {
+		spinlock_release(&path.dentry->lock);
+		fs_path_put(&path);
 		return -ENOENT;
 	}
-	spinlock_release(&path.dentry->d_lock);
+	spinlock_release(&path.dentry->lock);
 
-	struct path parent_path;
-	err = path_dot_dot(&path, &parent_path);
+	struct fs_path parent_path;
+	err = fs_path_dot_dot(&path, &parent_path);
 	if (err) {
-		path_put(&path);
+		fs_path_put(&path);
 		return err;
 	}
-	struct inode *inode = parent_path.dentry->d_inode;
-	sleeplock_acquire(&inode->i_rwsem);
-	err = inode->i_op->rmdir(inode, path.dentry);
-	sleeplock_release(&inode->i_rwsem);
+	struct fs_inode *inode = parent_path.dentry->inode;
+	sleeplock_acquire(&inode->rwsem);
+	err = inode->ops->rmdir(inode, path.dentry);
+	sleeplock_release(&inode->rwsem);
 
-	path_put(&parent_path);
-	path_put(&path);
+	fs_path_put(&parent_path);
+	fs_path_put(&path);
 	return err;
 }

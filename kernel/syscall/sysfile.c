@@ -24,17 +24,17 @@ u64 sys_read(void)
 	int fd;
 	void *buf;
 	usize_t n;
-	struct file *fp;
+	struct fs_file *fp;
 	int err;
 
 	err = syscall_arg_fd(0, &fd, &fp);
 	if (err)
 		return err;
-	if (fp->f_mode & FMODE_DIR)
+	if (fp->mode & FMODE_DIR)
 		return -EISDIR;
 	buf = syscall_arg_ptr(1);
 	n = syscall_arg_raw(2);
-	return file_read(fp, buf, n);
+	return fs_file_read(fp, buf, n);
 }
 
 u64 sys_write(void)
@@ -42,23 +42,23 @@ u64 sys_write(void)
 	int fd;
 	const void *buf;
 	usize_t n;
-	struct file *fp;
+	struct fs_file *fp;
 	int err;
 
 	err = syscall_arg_fd(0, &fd, &fp);
 	if (err)
 		return err;
-	if (fp->f_mode & FMODE_DIR)
+	if (fp->mode & FMODE_DIR)
 		return -EISDIR;
 	buf = syscall_arg_ptr(1);
 	n = syscall_arg_raw(2);
-	return file_write(fp, buf, n);
+	return fs_file_write(fp, buf, n);
 }
 
 u64 sys_open(void)
 {
 	int fd;
-	struct file *fp = NULL;
+	struct fs_file *fp = NULL;
 	char *path = syscall_arg_ptr(0);
 	int flags = syscall_arg_raw(1);
 	umode_t mode = syscall_arg_raw(2);
@@ -69,7 +69,7 @@ u64 sys_open(void)
 
 	fd = proc_alloc_fd(current_process(), fp);
 	if (fd < 0) {
-		file_put(fp);
+		fs_file_put(fp);
 		return -EMFILE;
 	}
 	return fd;
@@ -78,7 +78,7 @@ u64 sys_open(void)
 u64 sys_openat(void)
 {
 	int fd;
-	struct file *fp = NULL;
+	struct fs_file *fp = NULL;
 	int dirfd = syscall_arg_raw(0);
 	char *path = syscall_arg_ptr(1);
 	int flags = syscall_arg_raw(2);
@@ -90,7 +90,7 @@ u64 sys_openat(void)
 
 	fd = proc_alloc_fd(current_process(), fp);
 	if (fd < 0) {
-		file_put(fp);
+		fs_file_put(fp);
 		return -EMFILE;
 	}
 	return fd;
@@ -99,7 +99,7 @@ u64 sys_openat(void)
 u64 sys_close(void)
 {
 	int err;
-	struct file *fp = NULL;
+	struct fs_file *fp = NULL;
 	int fd = 0;
 
 	err = syscall_arg_fd(0, &fd, &fp);
@@ -107,7 +107,7 @@ u64 sys_close(void)
 		return err;
 
 	current_process()->ofiles[fd] = NULL;
-	file_put(fp);
+	fs_file_put(fp);
 	return 0;
 }
 
@@ -146,7 +146,7 @@ u64 sys_mremap(void)
 
 u64 sys_fstat(void)
 {
-	struct file *fp = NULL;
+	struct fs_file *fp = NULL;
 	struct stat *buf;
 	int err;
 
@@ -154,12 +154,12 @@ u64 sys_fstat(void)
 	if (err)
 		return err;
 	buf = syscall_arg_ptr(1);
-	return file_stat(fp, buf);
+	return fs_file_stat(fp, buf);
 }
 
 u64 sys_lstat(void)
 {
-	struct file *fp = NULL;
+	struct fs_file *fp = NULL;
 	struct stat *buf;
 	int err;
 
@@ -167,7 +167,7 @@ u64 sys_lstat(void)
 	if (err)
 		return err;
 	buf = syscall_arg_ptr(1);
-	return file_stat(fp, buf);
+	return fs_file_stat(fp, buf);
 }
 
 u64 sys_stat(void)
@@ -175,14 +175,14 @@ u64 sys_stat(void)
 	int err;
 	const char *path = syscall_arg_ptr(0);
 	struct stat *buf = syscall_arg_ptr(1);
-	struct file *fp = NULL;
+	struct fs_file *fp = NULL;
 
 	fp = do_openat(AT_FDCWD, path, O_RDONLY, 0);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
-	err = file_stat(fp, buf);
-	file_put(fp);
+	err = fs_file_stat(fp, buf);
+	fs_file_put(fp);
 	return err;
 }
 
@@ -272,7 +272,7 @@ u64 sys_getcwd(void)
 	struct process *proc = current_process();
 	char *buf = syscall_arg_ptr(0);
 	usize_t size = syscall_arg_raw(1);
-	int err = path_to_absolute(&proc->cwd, buf, size);
+	int err = fs_path_to_absolute(&proc->cwd, buf, size);
 	if (err) {
 		klog_warn("%s(): %s\n", __func__, strerror(err));
 		return err;
@@ -284,23 +284,23 @@ u64 sys_chdir(void)
 {
 	char *pathname = syscall_arg_ptr(0);
 	struct process *proc = current_process();
-	struct path new_path;
+	struct fs_path new_path;
 
-	int err = path_lookup(pathname, 0, &new_path);
+	int err = fs_path_lookup(pathname, 0, &new_path);
 	if (err)
 		return err;
 
-	if (!new_path.dentry->d_inode) {
-		path_put(&new_path);
+	if (!new_path.dentry->inode) {
+		fs_path_put(&new_path);
 		return -ENOENT;
 	}
 
-	if (!S_ISDIR(new_path.dentry->d_inode->i_mode)) {
-		path_put(&new_path);
+	if (!S_ISDIR(new_path.dentry->inode->mode)) {
+		fs_path_put(&new_path);
 		return -ENOTDIR;
 	}
 
-	path_put(&proc->cwd);
+	fs_path_put(&proc->cwd);
 	proc->cwd = new_path;
 	return 0;
 }
@@ -309,19 +309,19 @@ u64 sys_fchdir(void)
 {
 	int err;
 	int fd = 0;
-	struct file *fp = NULL;
+	struct fs_file *fp = NULL;
 	struct process *proc = current_process();
 
 	err = syscall_arg_fd(0, &fd, &fp);
 	if (err)
 		return err;
 
-	if (!(fp->f_mode & FMODE_DIR))
+	if (!(fp->mode & FMODE_DIR))
 		return -ENOTDIR;
 
-	path_get(&fp->f_path);
-	path_put(&proc->cwd);
-	proc->cwd = fp->f_path;
+	fs_path_get(&fp->path);
+	fs_path_put(&proc->cwd);
+	proc->cwd = fp->path;
 	return 0;
 }
 
@@ -434,18 +434,18 @@ u64 sys_dup(void)
 	int oldfd;
 	int newfd;
 	int err;
-	struct file *fp = NULL;
+	struct fs_file *fp = NULL;
 
 	err = syscall_arg_fd(0, &oldfd, &fp);
 	if (err)
 		return err;
 
-	fp = file_get(fp);
+	fp = fs_file_get(fp);
 	newfd = proc_alloc_fd(current_process(), fp);
 	if (newfd >= 0) {
 		return newfd;
 	} else {
-		file_put(fp);
+		fs_file_put(fp);
 		return -EMFILE;
 	}
 }
@@ -456,7 +456,7 @@ u64 sys_dup2(void)
 	int newfd;
 	int err;
 	struct process *proc = current_process();
-	struct file *f = NULL;
+	struct fs_file *f = NULL;
 
 	err = syscall_arg_fd(0, &oldfd, &f);
 	if (err)
@@ -470,12 +470,12 @@ u64 sys_dup2(void)
 		return newfd;
 
 	if (proc->ofiles[newfd] && proc->ofiles[newfd] != f) {
-		file_put(proc->ofiles[newfd]);
-		proc->ofiles[newfd] = file_get(f);
+		fs_file_put(proc->ofiles[newfd]);
+		proc->ofiles[newfd] = fs_file_get(f);
 		return newfd;
 	}
 
-	proc->ofiles[newfd] = file_get(f);
+	proc->ofiles[newfd] = fs_file_get(f);
 	return newfd;
 }
 
@@ -493,42 +493,42 @@ u64 sys_umount2(void)
 {
 	const char *target = syscall_arg_ptr(0);
 	int flags = syscall_arg_int(1);
-	struct path path;
+	struct fs_path path;
 	int err;
 
-	err = path_lookup(target, 0, &path);
+	err = fs_path_lookup(target, 0, &path);
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->d_lock);
-	if (path.dentry->d_flags & DCACHE_NEGATIVE) {
-		spinlock_release(&path.dentry->d_lock);
-		path_put(&path);
+	spinlock_acquire(&path.dentry->lock);
+	if (path.dentry->flags & DCACHE_NEGATIVE) {
+		spinlock_release(&path.dentry->lock);
+		fs_path_put(&path);
 		return -ENOENT;
 	}
-	spinlock_release(&path.dentry->d_lock);
+	spinlock_release(&path.dentry->lock);
 
-	struct mount_instance *mnt = mount_instance_lookup(&path);
+	struct fs_mount_state *mnt = fs_mount_state_lookup(&path);
 	if (!mnt) {
-		path_put(&path);
+		fs_path_put(&path);
 		return -ENOENT;
 	}
 
 	err = do_umount(mnt, flags);
 	if (err) {
-		mount_instance_put(mnt);
-		path_put(&path);
+		fs_mount_state_put(mnt);
+		fs_path_put(&path);
 		return err;
 	}
 
-	path_put(&path);
+	fs_path_put(&path);
 	return 0;
 }
 
 u64 sys_lseek(void)
 {
 	int fd = 0;
-	struct file *fp = NULL;
+	struct fs_file *fp = NULL;
 	int err;
 	off_t off;
 	int whence;
@@ -539,17 +539,17 @@ u64 sys_lseek(void)
 	off = syscall_arg_raw(1);
 	whence = syscall_arg_int(2);
 
-	return file_lseek(fp, off, whence);
+	return fs_file_lseek(fp, off, whence);
 }
 
 struct getdents_context {
-	struct dir_iterator ctx;
+	struct fs_dir_iterator ctx;
 	u8 *buf;
 	usize_t size;
 	usize_t pos;
 };
 
-static bool getdents_filldir(struct dir_iterator *ctx, const char *name,
+static bool getdents_filldir(struct fs_dir_iterator *ctx, const char *name,
 			     int namelen, loff_t offset, u64 ino,
 			     unsigned int d_type)
 {
@@ -581,7 +581,7 @@ static bool getdents_filldir(struct dir_iterator *ctx, const char *name,
 u64 sys_getdents(void)
 {
 	int fd = -1;
-	struct file *fp = NULL;
+	struct fs_file *fp = NULL;
 	void *buf;
 	usize_t size;
 	int err;
@@ -590,50 +590,50 @@ u64 sys_getdents(void)
 	if (err)
 		return err;
 
-	if (!(fp->f_mode & FMODE_DIR))
+	if (!(fp->mode & FMODE_DIR))
 		return -ENOTDIR;
 
 	buf = syscall_arg_ptr(1);
 	size = syscall_arg_raw(2);
 
-	struct inode *inode = fp->f_path.dentry->d_inode;
-	const struct file_ops *fop = fp->f_op;
+	struct fs_inode *inode = fp->path.dentry->inode;
+	const struct fs_file_ops *fop = fp->ops;
 
 	if (!fop->iterate_shared)
 		return -EOPNOTSUPP;
 
-	sleeplock_acquire(&fp->f_pos_lock);
+	sleeplock_acquire(&fp->pos_lock);
 
 	struct getdents_context ctx = {
 		.ctx.actor = getdents_filldir,
-		.ctx.pos = fp->f_pos,
+		.ctx.pos = fp->pos,
 		.buf = buf,
 		.size = size,
 		.pos = 0,
 	};
 
-	sleeplock_acquire(&inode->i_rwsem);
+	sleeplock_acquire(&inode->rwsem);
 	err = fop->iterate_shared(fp, &ctx.ctx);
-	sleeplock_release(&inode->i_rwsem);
+	sleeplock_release(&inode->rwsem);
 	if (err) {
-		sleeplock_release(&fp->f_pos_lock);
+		sleeplock_release(&fp->pos_lock);
 		return err;
 	}
 
-	fp->f_pos = ctx.pos;
-	sleeplock_release(&fp->f_pos_lock);
+	fp->pos = ctx.pos;
+	sleeplock_release(&fp->pos_lock);
 
 	return ctx.pos;
 }
 
 struct getdents64_context {
-	struct dir_iterator ctx;
+	struct fs_dir_iterator ctx;
 	u8 *buf;
 	usize_t size;
 	usize_t pos;
 };
 
-static bool getdents64_filldir(struct dir_iterator *ctx, const char *name,
+static bool getdents64_filldir(struct fs_dir_iterator *ctx, const char *name,
 			       int namelen, loff_t offset, u64 ino,
 			       unsigned int d_type)
 {
@@ -665,7 +665,7 @@ static bool getdents64_filldir(struct dir_iterator *ctx, const char *name,
 u64 sys_getdents64(void)
 {
 	int fd = -1;
-	struct file *fp = NULL;
+	struct fs_file *fp = NULL;
 	void *buf;
 	usize_t size;
 	int err;
@@ -674,7 +674,7 @@ u64 sys_getdents64(void)
 	if (err)
 		return err;
 
-	if (!(fp->f_mode & FMODE_DIR)) {
+	if (!(fp->mode & FMODE_DIR)) {
 		klog_info("%s(): Not a directory\n", __func__);
 		return -ENOTDIR;
 	}
@@ -682,39 +682,39 @@ u64 sys_getdents64(void)
 	buf = syscall_arg_ptr(1);
 	size = syscall_arg_raw(2);
 
-	struct inode *inode = fp->f_path.dentry->d_inode;
-	const struct file_ops *fop = fp->f_op;
+	struct fs_inode *inode = fp->path.dentry->inode;
+	const struct fs_file_ops *fop = fp->ops;
 
 	if (!fop->iterate_shared)
 		return -EOPNOTSUPP;
 
-	sleeplock_acquire(&fp->f_pos_lock);
+	sleeplock_acquire(&fp->pos_lock);
 
 	struct getdents64_context ctx = {
 		.ctx.actor = getdents64_filldir,
-		.ctx.pos = fp->f_pos,
+		.ctx.pos = fp->pos,
 		.buf = buf,
 		.size = size,
 		.pos = 0,
 	};
 
-	sleeplock_acquire(&inode->i_rwsem);
+	sleeplock_acquire(&inode->rwsem);
 	err = fop->iterate_shared(fp, &ctx.ctx);
-	sleeplock_release(&inode->i_rwsem);
+	sleeplock_release(&inode->rwsem);
 	if (err) {
-		sleeplock_release(&fp->f_pos_lock);
+		sleeplock_release(&fp->pos_lock);
 		return err;
 	}
 
-	fp->f_pos = ctx.pos;
-	sleeplock_release(&fp->f_pos_lock);
+	fp->pos = ctx.pos;
+	sleeplock_release(&fp->pos_lock);
 
 	return ctx.pos;
 }
 
 u64 sys_ioctl(void)
 {
-	struct file *fp;
+	struct fs_file *fp;
 	int err;
 
 	err = syscall_arg_fd(0, NULL, &fp);
@@ -723,6 +723,6 @@ u64 sys_ioctl(void)
 
 	unsigned int cmd = (unsigned int)syscall_arg_raw(1);
 	unsigned long arg = (unsigned long)syscall_arg_raw(2);
-	long ret = file_ioctl(fp, cmd, arg);
+	long ret = fs_file_ioctl(fp, cmd, arg);
 	return (u64)(long)ret;
 }

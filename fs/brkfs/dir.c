@@ -3,21 +3,21 @@
 #include <brk/slab.h>
 #include <uapi/brk/errno.h>
 
-static int brkfs_dir_open(struct inode *inode, struct file *file)
+static int brkfs_dir_open(struct fs_inode *inode, struct fs_file *file)
 {
-	file->f_op = &brkfs_dir_fops;
+	file->ops = &brkfs_dir_fops;
 	(void)inode;
 	return 0;
 }
 
-static int brkfs_dir_release(struct inode *inode, struct file *file)
+static int brkfs_dir_release(struct fs_inode *inode, struct fs_file *file)
 {
 	(void)inode;
 	(void)file;
 	return 0;
 }
 
-static ssize_t brkfs_dir_read(struct file *file, char *buf, usize_t size,
+static ssize_t brkfs_dir_read(struct fs_file *file, char *buf, usize_t size,
 			      loff_t *pos)
 {
 	(void)file;
@@ -27,8 +27,8 @@ static ssize_t brkfs_dir_read(struct file *file, char *buf, usize_t size,
 	return -EISDIR;
 }
 
-static ssize_t brkfs_dir_write(struct file *file, const char *buf, usize_t size,
-			       loff_t *pos)
+static ssize_t brkfs_dir_write(struct fs_file *file, const char *buf,
+			       usize_t size, loff_t *pos)
 {
 	(void)file;
 	(void)buf;
@@ -37,7 +37,7 @@ static ssize_t brkfs_dir_write(struct file *file, const char *buf, usize_t size,
 	return -EISDIR;
 }
 
-static loff_t brkfs_dir_llseek(struct file *file, loff_t offset, int whence)
+static loff_t brkfs_dir_llseek(struct fs_file *file, loff_t offset, int whence)
 {
 	(void)file;
 	(void)offset;
@@ -45,18 +45,19 @@ static loff_t brkfs_dir_llseek(struct file *file, loff_t offset, int whence)
 	return -EISDIR;
 }
 
-static int brkfs_dir_iterate_shared(struct file *file, struct dir_iterator *ctx)
+static int brkfs_dir_iterate_shared(struct fs_file *file,
+				    struct fs_dir_iterator *ctx)
 {
-	struct inode *inode = file->f_inode;
-	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
-	struct brkfs_inode_info *di = inode->i_private;
+	struct fs_inode *inode = file->inode;
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
+	struct brkfs_inode_info *di = inode->private_data;
 	usize_t bsz = sbi->s_sb.s_blocksize;
 	loff_t off = ctx->pos;
 	u8 *blk;
 	unsigned int bi;
 	int err = 0;
 
-	if (!S_ISDIR(inode->i_mode))
+	if (!S_ISDIR(inode->mode))
 		return -ENOTDIR;
 
 	blk = kmalloc(bsz);
@@ -69,7 +70,7 @@ static int brkfs_dir_iterate_shared(struct file *file, struct dir_iterator *ctx)
 		struct brkfs_dir_entry *ent;
 		usize_t left;
 
-		if (blk_base >= inode->i_size)
+		if (blk_base >= inode->size)
 			break;
 		if (pblk == 0)
 			continue;
@@ -105,14 +106,14 @@ static int brkfs_dir_iterate_shared(struct file *file, struct dir_iterator *ctx)
 			left -= el;
 		}
 	}
-	ctx->pos = inode->i_size;
+	ctx->pos = inode->size;
 
 out:
 	kfree(blk);
 	return err;
 }
 
-static int brkfs_dir_fsync(struct file *file, loff_t start, loff_t end,
+static int brkfs_dir_fsync(struct fs_file *file, loff_t start, loff_t end,
 			   int datasync)
 {
 	(void)file;
@@ -122,13 +123,13 @@ static int brkfs_dir_fsync(struct file *file, loff_t start, loff_t end,
 	return -EISDIR;
 }
 
-static int brkfs_dir_flush(struct file *file)
+static int brkfs_dir_flush(struct fs_file *file)
 {
 	(void)file;
 	return -EISDIR;
 }
 
-static long brkfs_dir_ioctl(struct file *file, unsigned int cmd,
+static long brkfs_dir_ioctl(struct fs_file *file, unsigned int cmd,
 			    unsigned long arg)
 {
 	(void)file;
@@ -137,7 +138,7 @@ static long brkfs_dir_ioctl(struct file *file, unsigned int cmd,
 	return -EISDIR;
 }
 
-const struct file_ops brkfs_dir_fops = {
+const struct fs_file_ops brkfs_dir_fops = {
 	.open = brkfs_dir_open,
 	.release = brkfs_dir_release,
 	.read = brkfs_dir_read,

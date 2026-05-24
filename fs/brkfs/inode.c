@@ -12,25 +12,25 @@
 #define ATTR_MODE (1u << 0)
 #define ATTR_SIZE (1u << 3)
 
-static void brkfs_inode_attach_ops(struct inode *inode)
+static void brkfs_inode_attach_ops(struct fs_inode *inode)
 {
-	inode->i_op = &brkfs_iops;
-	if (S_ISDIR(inode->i_mode))
-		inode->i_fop = &brkfs_dir_fops;
-	else if (S_ISREG(inode->i_mode))
-		inode->i_fop = &brkfs_file_fops;
-	else if (S_ISLNK(inode->i_mode))
-		inode->i_fop = &brkfs_file_fops;
-	else if (S_ISCHR(inode->i_mode))
-		inode->i_fop = &chrdev_fops;
-	else if (S_ISBLK(inode->i_mode))
-		inode->i_fop = &blkdev_fops;
+	inode->ops = &brkfs_iops;
+	if (S_ISDIR(inode->mode))
+		inode->fops = &brkfs_dir_fops;
+	else if (S_ISREG(inode->mode))
+		inode->fops = &brkfs_file_fops;
+	else if (S_ISLNK(inode->mode))
+		inode->fops = &brkfs_file_fops;
+	else if (S_ISCHR(inode->mode))
+		inode->fops = &chrdev_fops;
+	else if (S_ISBLK(inode->mode))
+		inode->fops = &blkdev_fops;
 	else
-		inode->i_fop = &brkfs_file_fops;
+		inode->fops = &brkfs_file_fops;
 }
 
 static int brkfs_init_loaded_inode(struct brkfs_sb_info *sbi,
-				   struct inode *inode)
+				   struct fs_inode *inode)
 {
 	int err = brkfs_inode_read(sbi, inode);
 
@@ -42,68 +42,68 @@ static int brkfs_init_loaded_inode(struct brkfs_sb_info *sbi,
 	 * types use bespoke paths (directory entries / symlink targets are
 	 * handled directly via brkfs_block_read|write).
 	 */
-	if (S_ISREG(inode->i_mode)) {
-		err = inode_attach_pagecache(inode, &brkfs_aops);
+	if (S_ISREG(inode->mode)) {
+		err = fs_inode_attach_page_cache(inode, &brkfs_aops);
 		if (err)
 			return err;
 	}
-	inode_unlock_new(inode);
+	fs_inode_unlock_new(inode);
 	return 0;
 }
 
-static struct dentry *brkfs_lookup(struct inode *dir, struct dentry *dentry,
-				   unsigned int flags)
+static struct fs_dentry *
+brkfs_lookup(struct fs_inode *dir, struct fs_dentry *dentry, unsigned int flags)
 {
-	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct super_block *sb = dir->i_sb;
-	struct inode *inode;
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct fs_super_block *sb = dir->sb;
+	struct fs_inode *inode;
 	u32 ino;
 	u8 type;
 	int err;
 
 	(void)flags;
 
-	if (!S_ISDIR(dir->i_mode))
+	if (!S_ISDIR(dir->mode))
 		return ERR_PTR(-ENOTDIR);
 
-	err = brkfs_dir_lookup(dir, dentry->d_name.name, dentry->d_name.len,
-			       &ino, &type);
+	err = brkfs_dir_lookup(dir, dentry->name.name, dentry->name.len, &ino,
+			       &type);
 	if (err == -ENOENT)
 		return NULL;
 	if (err)
 		return ERR_PTR(err);
 
-	inode = inode_get_locked(sb, ino);
+	inode = fs_inode_get_locked(sb, ino);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 
-	spinlock_acquire(&inode->i_lock);
-	bool is_new = (inode->i_state & I_NEW) != 0;
-	spinlock_release(&inode->i_lock);
+	spinlock_acquire(&inode->lock);
+	bool is_new = (inode->state & I_NEW) != 0;
+	spinlock_release(&inode->lock);
 	if (is_new) {
 		err = brkfs_init_loaded_inode(sbi, inode);
 		if (err) {
-			inode_put(inode);
+			fs_inode_put(inode);
 			return ERR_PTR(err);
 		}
 	}
 
-	return dentry_splice_alias(inode, dentry);
+	return fs_dentry_splice_alias(inode, dentry);
 }
 
-static int brkfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
-			bool excl)
+static int brkfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
+			umode_t mode, bool excl)
 {
-	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct super_block *sb = dir->i_sb;
-	struct inode *inode = NULL;
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct fs_super_block *sb = dir->sb;
+	struct fs_inode *inode = NULL;
 	u32 ino = 0;
 	int err;
 
 	(void)excl;
 
-	err = brkfs_dir_lookup(dir, dentry->d_name.name, dentry->d_name.len,
-			       &ino, NULL);
+	err = brkfs_dir_lookup(dir, dentry->name.name, dentry->name.len, &ino,
+			       NULL);
 	if (err == 0) {
 		err = -EEXIST;
 		goto out;
@@ -119,25 +119,25 @@ static int brkfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (err)
 		goto undo_alloc;
 
-	inode = inode_get_locked(sb, ino);
+	inode = fs_inode_get_locked(sb, ino);
 	if (!inode) {
 		err = -ENOMEM;
 		goto undo_alloc;
 	}
 	err = brkfs_init_loaded_inode(sbi, inode);
 	if (err) {
-		inode_put(inode);
+		fs_inode_put(inode);
 		goto out;
 	}
 
-	err = brkfs_dir_add(dir, ino, dentry->d_name.name, dentry->d_name.len,
+	err = brkfs_dir_add(dir, ino, dentry->name.name, dentry->name.len,
 			    (umode_t)(S_IFREG | mode));
 	if (err) {
-		inode_put(inode);
+		fs_inode_put(inode);
 		goto out;
 	}
 
-	dentry_instantiate(dentry, inode);
+	fs_dentry_instantiate(dentry, inode);
 	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
@@ -151,43 +151,43 @@ out:
 	return err;
 }
 
-static int brkfs_link(struct dentry *old_dentry, struct inode *dir,
-		      struct dentry *new_dentry)
+static int brkfs_link(struct fs_dentry *old_dentry, struct fs_inode *dir,
+		      struct fs_dentry *new_dentry)
 {
-	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct inode *old_inode = old_dentry->d_inode;
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct fs_inode *old_inode = old_dentry->inode;
 	int err;
 
-	err = brkfs_dir_add(dir, (u32)old_inode->i_ino, new_dentry->d_name.name,
-			    new_dentry->d_name.len, old_inode->i_mode);
+	err = brkfs_dir_add(dir, (u32)old_inode->ino, new_dentry->name.name,
+			    new_dentry->name.len, old_inode->mode);
 	if (err)
 		goto out;
-	inode_get(old_inode);
-	old_inode->i_nlink++;
+	fs_inode_get(old_inode);
+	old_inode->nlink++;
 	inode_touch_ctime(old_inode);
 	err = brkfs_inode_write(sbi, old_inode);
 	if (err) {
-		old_inode->i_nlink--;
-		inode_put(old_inode);
+		old_inode->nlink--;
+		fs_inode_put(old_inode);
 		goto out;
 	}
-	dentry_instantiate(new_dentry, old_inode);
+	fs_dentry_instantiate(new_dentry, old_inode);
 	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 out:
 	return err;
 }
 
-static int brkfs_unlink(struct inode *dir, struct dentry *dentry)
+static int brkfs_unlink(struct fs_inode *dir, struct fs_dentry *dentry)
 {
-	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct inode *inode = dentry->d_inode;
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct fs_inode *inode = dentry->inode;
 	int err;
 
-	err = brkfs_dir_remove(dir, dentry->d_name.name, dentry->d_name.len);
+	err = brkfs_dir_remove(dir, dentry->name.name, dentry->name.len);
 	if (err)
 		return err;
-	inode->i_nlink--;
+	inode->nlink--;
 	inode_touch_ctime(inode);
 	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
@@ -195,18 +195,18 @@ static int brkfs_unlink(struct inode *dir, struct dentry *dentry)
 		return err;
 	return brkfs_inode_write(sbi, inode);
 	/*
-	 * Do NOT inode_put(inode) here: the inode reference belongs to the
-	 * dentry. The eventual dentry_put() will drop it and trigger
+	 * Do NOT fs_inode_put(inode) here: the inode reference belongs to the
+	 * dentry. The eventual fs_dentry_put() will drop it and trigger
 	 * eviction (which now also runs the page cache teardown).
 	 */
 }
 
-static int brkfs_symlink(struct inode *dir, struct dentry *dentry,
+static int brkfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 			 const char *symname)
 {
-	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct super_block *sb = dir->i_sb;
-	struct inode *inode = NULL;
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct fs_super_block *sb = dir->sb;
+	struct fs_inode *inode = NULL;
 	u32 ino = 0;
 	usize_t len = strlen(symname);
 	loff_t pos = 0;
@@ -220,32 +220,32 @@ static int brkfs_symlink(struct inode *dir, struct dentry *dentry,
 	if (err)
 		goto undo_alloc;
 
-	inode = inode_get_locked(sb, ino);
+	inode = fs_inode_get_locked(sb, ino);
 	if (!inode) {
 		err = -ENOMEM;
 		goto undo_alloc;
 	}
 	err = brkfs_init_loaded_inode(sbi, inode);
 	if (err) {
-		inode_put(inode);
+		fs_inode_put(inode);
 		goto out;
 	}
 
 	err = brkfs_file_write_at(inode, &pos, symname, len, &w);
 	if (err || w != len) {
-		inode_put(inode);
+		fs_inode_put(inode);
 		err = err ? err : -EIO;
 		goto out;
 	}
 
-	err = brkfs_dir_add(dir, ino, dentry->d_name.name, dentry->d_name.len,
+	err = brkfs_dir_add(dir, ino, dentry->name.name, dentry->name.len,
 			    S_IFLNK | 0777);
 	if (err) {
-		inode_put(inode);
+		fs_inode_put(inode);
 		goto out;
 	}
 
-	dentry_instantiate(dentry, inode);
+	fs_dentry_instantiate(dentry, inode);
 	err = brkfs_inode_write(sbi, inode);
 	if (err)
 		goto out;
@@ -259,14 +259,14 @@ out:
 	return err;
 }
 
-static int brkfs_readlink(struct dentry *dentry, char *buf, int bufsiz)
+static int brkfs_readlink(struct fs_dentry *dentry, char *buf, int bufsiz)
 {
-	struct inode *inode = dentry->d_inode;
+	struct fs_inode *inode = dentry->inode;
 	loff_t pos = 0;
 	usize_t rd = 0;
 	int err;
 
-	if (!S_ISLNK(inode->i_mode))
+	if (!S_ISLNK(inode->mode))
 		return -EINVAL;
 	if (bufsiz <= 0)
 		return -EINVAL;
@@ -277,11 +277,12 @@ static int brkfs_readlink(struct dentry *dentry, char *buf, int bufsiz)
 	return (int)rd;
 }
 
-static int brkfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
+static int brkfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
+		       umode_t mode)
 {
-	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct super_block *sb = dir->i_sb;
-	struct inode *inode = NULL;
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct fs_super_block *sb = dir->sb;
+	struct fs_inode *inode = NULL;
 	u32 ino = 0;
 	int err;
 
@@ -292,45 +293,45 @@ static int brkfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (err)
 		goto undo_alloc;
 
-	inode = inode_get_locked(sb, ino);
+	inode = fs_inode_get_locked(sb, ino);
 	if (!inode) {
 		err = -ENOMEM;
 		goto undo_alloc;
 	}
 	err = brkfs_init_loaded_inode(sbi, inode);
 	if (err) {
-		inode_put(inode);
+		fs_inode_put(inode);
 		goto out;
 	}
 
-	err = brkfs_new_dir_body(inode, (u32)dir->i_ino);
+	err = brkfs_new_dir_body(inode, (u32)dir->ino);
 	if (err) {
-		inode_put(inode);
+		fs_inode_put(inode);
 		goto out;
 	}
 	err = brkfs_inode_write(sbi, inode);
 	if (err) {
-		inode_put(inode);
+		fs_inode_put(inode);
 		goto out;
 	}
 
-	err = brkfs_dir_add(dir, ino, dentry->d_name.name, dentry->d_name.len,
+	err = brkfs_dir_add(dir, ino, dentry->name.name, dentry->name.len,
 			    (umode_t)(S_IFDIR | mode));
 	if (err) {
-		inode_put(inode);
+		fs_inode_put(inode);
 		goto out;
 	}
 
-	dir->i_nlink++;
+	dir->nlink++;
 	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err) {
-		dir->i_nlink--;
-		inode_put(inode);
+		dir->nlink--;
+		fs_inode_put(inode);
 		goto out;
 	}
 
-	dentry_instantiate(dentry, inode);
+	fs_dentry_instantiate(dentry, inode);
 	err = 0;
 	goto out;
 
@@ -340,36 +341,36 @@ out:
 	return err;
 }
 
-static int brkfs_rmdir(struct inode *dir, struct dentry *dentry)
+static int brkfs_rmdir(struct fs_inode *dir, struct fs_dentry *dentry)
 {
-	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct inode *inode = dentry->d_inode;
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct fs_inode *inode = dentry->inode;
 	int err;
 
-	if (!S_ISDIR(inode->i_mode))
+	if (!S_ISDIR(inode->mode))
 		return -ENOTDIR;
-	if (inode->i_nlink > 2)
+	if (inode->nlink > 2)
 		return -ENOTEMPTY;
 
-	err = brkfs_dir_remove(dir, dentry->d_name.name, dentry->d_name.len);
+	err = brkfs_dir_remove(dir, dentry->name.name, dentry->name.len);
 	if (err)
 		return err;
-	dir->i_nlink--;
+	dir->nlink--;
 	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
 		return err;
-	inode->i_nlink = 0;
+	inode->nlink = 0;
 	inode_touch_ctime(inode);
 	return brkfs_inode_write(sbi, inode);
 	/*
-	 * Do NOT inode_put(inode) here. The inode reference belongs to the
-	 * dentry; dentry_put() will trigger the final eviction.
+	 * Do NOT fs_inode_put(inode) here. The inode reference belongs to the
+	 * dentry; fs_dentry_put() will trigger the final eviction.
 	 */
 }
 
-static int brkfs_rename(struct inode *old_dir, struct dentry *old_dentry,
-			struct inode *new_dir, struct dentry *new_dentry,
+static int brkfs_rename(struct fs_inode *old_dir, struct fs_dentry *old_dentry,
+			struct fs_inode *new_dir, struct fs_dentry *new_dentry,
 			unsigned int flags)
 {
 	(void)old_dir;
@@ -380,12 +381,12 @@ static int brkfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	return -EOPNOTSUPP;
 }
 
-static int brkfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
-		       dev_t dev)
+static int brkfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
+		       umode_t mode, dev_t dev)
 {
-	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct super_block *sb = dir->i_sb;
-	struct inode *inode;
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct fs_super_block *sb = dir->sb;
+	struct fs_inode *inode;
 	u32 ino;
 	int err;
 
@@ -396,25 +397,25 @@ static int brkfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	if (err)
 		goto undo_alloc;
 
-	inode = inode_get_locked(sb, ino);
+	inode = fs_inode_get_locked(sb, ino);
 	if (!inode) {
 		err = -ENOMEM;
 		goto undo_alloc;
 	}
 	err = brkfs_init_loaded_inode(sbi, inode);
 	if (err) {
-		inode_put(inode);
+		fs_inode_put(inode);
 		goto out;
 	}
 
-	err = brkfs_dir_add(dir, ino, dentry->d_name.name, dentry->d_name.len,
+	err = brkfs_dir_add(dir, ino, dentry->name.name, dentry->name.len,
 			    mode);
 	if (err) {
-		inode_put(inode);
+		fs_inode_put(inode);
 		goto out;
 	}
 
-	dentry_instantiate(dentry, inode);
+	fs_dentry_instantiate(dentry, inode);
 	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
@@ -428,41 +429,41 @@ out:
 	return err;
 }
 
-static int brkfs_getattr(const struct path *path, struct stat *stat, u32 mask,
-			 unsigned int flags)
+static int brkfs_getattr(const struct fs_path *path, struct stat *stat,
+			 u32 mask, unsigned int flags)
 {
-	struct inode *inode = path->dentry->d_inode;
+	struct fs_inode *inode = path->dentry->inode;
 
 	(void)mask;
 	(void)flags;
 
 	memset(stat, 0, sizeof(*stat));
-	stat->st_ino = inode->i_ino;
-	stat->st_mode = inode->i_mode;
-	stat->st_nlink = inode->i_nlink;
-	stat->st_rdev = inode->i_rdev;
-	stat->st_size = inode->i_size;
-	stat->st_blksize = (int)inode->i_sb->s_blocksize;
-	stat->st_blocks = div_ceil(inode->i_size, inode->i_sb->s_blocksize);
+	stat->st_ino = inode->ino;
+	stat->st_mode = inode->mode;
+	stat->st_nlink = inode->nlink;
+	stat->st_rdev = inode->rdev;
+	stat->st_size = inode->size;
+	stat->st_blksize = (int)inode->sb->block_size;
+	stat->st_blocks = div_ceil(inode->size, inode->sb->block_size);
 	inode_times_to_stat(inode, stat);
 	return 0;
 }
 
-static int brkfs_setattr(struct dentry *dentry, struct iattr *attr)
+static int brkfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 {
-	struct inode *inode = dentry->d_inode;
-	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
+	struct fs_inode *inode = dentry->inode;
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	int err = 0;
 
 	if (attr->ia_valid & ATTR_MODE) {
-		inode->i_mode = attr->ia_mode;
+		inode->mode = attr->ia_mode;
 		inode_touch_ctime(inode);
 	}
 	if (attr->ia_valid & ATTR_SIZE) {
 		/* Drop cached pages that are beyond the new size before freeing
 		 * the on-disk blocks, otherwise stale data would be visible to
 		 * concurrent readers. */
-		truncate_inode_pages(inode->i_mapping, attr->ia_size);
+		truncate_inode_pages(inode->mapping, attr->ia_size);
 		err = brkfs_truncate_inode_blocks(inode, attr->ia_size);
 		if (err)
 			goto out;
@@ -473,12 +474,12 @@ out:
 	return err;
 }
 
-void brkfs_inode_setup_ops(struct inode *inode)
+void brkfs_inode_setup_ops(struct fs_inode *inode)
 {
 	brkfs_inode_attach_ops(inode);
 }
 
-const struct inode_ops brkfs_iops = {
+const struct fs_inode_ops brkfs_iops = {
 	.lookup = brkfs_lookup,
 	.create = brkfs_create,
 	.link = brkfs_link,
