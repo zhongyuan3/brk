@@ -1,8 +1,9 @@
 BRK_SRC := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BRK_TOP_MAKEFILE := $(BRK_SRC)/Makefile
 
-# Suppress "make[N]: Entering/Leaving directory ..." from recursive makes.
-MAKEFLAGS += --no-print-directory
+# Suppress recursive-make noise: directory banners and "is up to date" messages.
+# @echo in recipes (CC/LD/AS) still prints when something is actually built.
+MAKEFLAGS += --no-print-directory --silent
 
 include $(BRK_SRC)/scripts/toolchain.mk
 
