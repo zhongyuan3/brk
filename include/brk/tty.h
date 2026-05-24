@@ -57,7 +57,7 @@ int tty_driver_remove_port(struct tty_driver *driver, struct tty_port *port);
 struct tty_port *tty_port_alloc(void);
 void tty_port_free(struct tty_port *port);
 
-int tty_create_fs_nodes(void);
+int tty_mknod(void);
 
 struct tty {
 	struct tty_port *port;
