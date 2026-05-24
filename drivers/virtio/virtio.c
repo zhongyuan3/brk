@@ -5,7 +5,7 @@
 #include <brk/pgtable.h>
 #include <brk/slab.h>
 #include <brk/virtio.h>
-#include <brk/virtio_disk.h>
+#include <brk/virtio_blk.h>
 #include <brk/virtio_mmio.h>
 #include <uapi/brk/errno.h>
 
@@ -84,19 +84,19 @@ struct virtio_device *virtio_dev_get(u32 id)
 void virtio_init_scan(void)
 {
 	struct virtio_device *dev;
-	struct virtio_disk_device *disk;
+	struct virtio_blk_dev *vblk;
 	int err = 0;
 
 	spinlock_acquire(&vdevs_lock);
 	list_for_each_entry(dev, &vdevs, list) {
 		if (dev->id == VIRTIO_DEVICE_ID_BLK) {
-			disk = virtio_disk_device_create(
-				dev, VIRTIO_BLK_DEFAULT_QUEUE_SIZE);
-			if (!disk)
+			vblk = virtio_blk_create(dev,
+						 VIRTIO_BLK_DEFAULT_QUEUE_SIZE);
+			if (!vblk)
 				continue;
-			err = virtio_disk_add_device(disk);
+			err = virtio_blk_register(vblk);
 			if (err) {
-				virtio_disk_device_destroy(disk);
+				virtio_blk_destroy(vblk);
 				continue;
 			}
 		}

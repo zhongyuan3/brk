@@ -8,7 +8,7 @@
 #include <brk/process.h>
 #include <brk/string.h>
 #include <brk/tty.h>
-#include <brk/virtio_disk.h>
+#include <brk/virtio_blk.h>
 #include <uapi/brk/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/stat.h>
@@ -40,17 +40,15 @@ int fs_init(void)
 		return err;
 	klog_info("/dev directory created\n");
 
-	err = virtio_disk_create_fs_nodes();
+	err = virtio_blk_mknod();
 	if (err)
 		return err;
-	klog_info("virtio disk fs nodes created\n");
 
 	err = tty_create_fs_nodes();
 	if (err)
 		return err;
-	klog_info("tty fs nodes created\n");
 
-	err = do_mount("/dev/vdisk0", "/", "brkfs", 0, NULL);
+	err = do_mount("/dev/virtio_blk0", "/", "brkfs", 0, NULL);
 	if (err)
 		return err;
 	klog_info("/ mounted successfully\n");
@@ -92,22 +90,15 @@ int fs_init(void)
 		return err;
 	klog_info("/proc mounted successfully\n");
 
-	err = virtio_disk_create_fs_nodes();
-	if (err)
-		return err;
-	klog_info("virtio disk fs nodes created\n");
-
 	err = tty_create_fs_nodes();
 	if (err)
 		return err;
-	klog_info("tty fs nodes created\n");
 
 	struct file *f = do_openat(AT_FDCWD, "/dev/tty0", O_RDWR, 0);
 	if (IS_ERR(f)) {
 		err = PTR_ERR(f);
 		return err;
 	}
-	klog_info("/dev/tty0 opened successfully\n");
 
 	proc->ofiles[0] = f;
 	proc->ofiles[1] = file_get(f);
