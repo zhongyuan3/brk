@@ -315,7 +315,7 @@ static const struct file_ops tty_fops = {
 	.ioctl = tty_file_ioctl,
 };
 
-int tty_create_fs_nodes(void)
+int tty_mknod(void)
 {
 	int err = 0;
 	struct tty_driver *driver;

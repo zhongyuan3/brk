@@ -44,7 +44,7 @@ int fs_init(void)
 	if (err)
 		return err;
 
-	err = tty_create_fs_nodes();
+	err = tty_mknod();
 	if (err)
 		return err;
 
@@ -90,7 +90,7 @@ int fs_init(void)
 		return err;
 	klog_info("/proc mounted successfully\n");
 
-	err = tty_create_fs_nodes();
+	err = tty_mknod();
 	if (err)
 		return err;
 
