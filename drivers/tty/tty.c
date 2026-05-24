@@ -52,14 +52,26 @@ void tty_init(struct tty *tty, struct tty_port *port)
 	tty_init_winsize(tty);
 }
 
+void tty_set_foreground(struct tty *tty, struct process *proc)
+{
+	if (!tty || !tty->port)
+		return;
+	spinlock_acquire(&tty->port->lock);
+	tty->port->foreground = proc;
+	spinlock_release(&tty->port->lock);
+}
+
 long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 {
 	struct winsize *ws = (struct winsize *)arg;
+	struct process *fg;
 
 	if (!tty)
 		return -EBADF;
 	if (!ws)
 		return -EFAULT;
+
+	tty_set_foreground(tty, current_process());
 
 	switch (cmd) {
 	case TIOCGWINSZ:
@@ -67,6 +79,11 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 		return 0;
 	case TIOCSWINSZ:
 		tty->winsize = *ws;
+		spinlock_acquire(&tty->port->lock);
+		fg = tty->port->foreground;
+		spinlock_release(&tty->port->lock);
+		if (fg)
+			proc_send_signal(fg, SIGWINCH);
 		return 0;
 	default:
 		return -ENOTTY;
@@ -78,6 +95,8 @@ ssize_t tty_read(struct tty *tty, void *buf, usize_t n)
 	usize_t target;
 	int c;
 	char *dst = buf;
+
+	tty_set_foreground(tty, current_process());
 
 	target = n;
 	spinlock_acquire(&tty->port->lock);
