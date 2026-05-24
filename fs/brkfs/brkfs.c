@@ -157,7 +157,7 @@ int brkfs_data_free(struct brkfs_sb_info *sbi, u32 bno)
 				 sbi->s_sb.s_data_blocks_count, bit);
 }
 
-int brkfs_inode_read(struct brkfs_sb_info *sbi, struct inode *inode)
+int brkfs_inode_read(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 {
 	struct brkfs_inode *disk_i;
 	struct brkfs_inode_info *info;
@@ -165,7 +165,7 @@ int brkfs_inode_read(struct brkfs_sb_info *sbi, struct inode *inode)
 	usize_t bs = sbi->s_sb.s_blocksize;
 	u8 *blk;
 	int err;
-	u32 ino = inode->i_ino;
+	u32 ino = inode->ino;
 	u32 isize = sbi->s_sb.s_inode_size;
 
 	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
@@ -185,31 +185,31 @@ int brkfs_inode_read(struct brkfs_sb_info *sbi, struct inode *inode)
 	u32 idx = (ino - 1) % sbi->s_inodes_per_block;
 	disk_i = (struct brkfs_inode *)(blk + idx * isize);
 
-	info = inode->i_private;
+	info = inode->private_data;
 
-	inode->i_mode = disk_i->i_mode;
-	inode->i_rdev = disk_i->i_rdev;
-	inode->i_nlink = disk_i->i_nlink;
-	inode->i_size = disk_i->i_size;
+	inode->mode = disk_i->i_mode;
+	inode->rdev = disk_i->i_rdev;
+	inode->nlink = disk_i->i_nlink;
+	inode->size = disk_i->i_size;
 	memcpy(info->i_block, disk_i->i_block, sizeof(disk_i->i_block));
-	inode->i_atime.tv_sec = disk_i->i_atime;
-	inode->i_atime.tv_nsec = disk_i->i_atime_nsec;
-	inode->i_mtime.tv_sec = disk_i->i_mtime;
-	inode->i_mtime.tv_nsec = disk_i->i_mtime_nsec;
-	inode->i_ctime.tv_sec = disk_i->i_ctime;
-	inode->i_ctime.tv_nsec = disk_i->i_ctime_nsec;
-	inode->i_uid = disk_i->i_uid;
-	inode->i_gid = disk_i->i_gid;
+	inode->atime.tv_sec = disk_i->i_atime;
+	inode->atime.tv_nsec = disk_i->i_atime_nsec;
+	inode->mtime.tv_sec = disk_i->i_mtime;
+	inode->mtime.tv_nsec = disk_i->i_mtime_nsec;
+	inode->ctime.tv_sec = disk_i->i_ctime;
+	inode->ctime.tv_nsec = disk_i->i_ctime_nsec;
+	inode->uid = disk_i->i_uid;
+	inode->gid = disk_i->i_gid;
 
 out:
 	kfree(blk);
 	return err;
 }
 
-int brkfs_inode_write(struct brkfs_sb_info *sbi, struct inode *inode)
+int brkfs_inode_write(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 {
 	u32 bno;
-	u32 ino = inode->i_ino;
+	u32 ino = inode->ino;
 	usize_t bs = sbi->s_sb.s_blocksize;
 	u8 *blk;
 	int err;
@@ -234,21 +234,21 @@ int brkfs_inode_write(struct brkfs_sb_info *sbi, struct inode *inode)
 	u32 idx = (ino - 1) % sbi->s_inodes_per_block;
 	disk_i = (struct brkfs_inode *)(blk + idx * isize);
 
-	info = inode->i_private;
+	info = inode->private_data;
 
-	disk_i->i_mode = inode->i_mode;
-	disk_i->i_rdev = inode->i_rdev;
-	disk_i->i_nlink = inode->i_nlink;
-	disk_i->i_size = inode->i_size;
+	disk_i->i_mode = inode->mode;
+	disk_i->i_rdev = inode->rdev;
+	disk_i->i_nlink = inode->nlink;
+	disk_i->i_size = inode->size;
 	memcpy(disk_i->i_block, info->i_block, sizeof(disk_i->i_block));
-	disk_i->i_atime = inode->i_atime.tv_sec;
-	disk_i->i_atime_nsec = inode->i_atime.tv_nsec;
-	disk_i->i_mtime = inode->i_mtime.tv_sec;
-	disk_i->i_mtime_nsec = inode->i_mtime.tv_nsec;
-	disk_i->i_ctime = inode->i_ctime.tv_sec;
-	disk_i->i_ctime_nsec = inode->i_ctime.tv_nsec;
-	disk_i->i_uid = inode->i_uid;
-	disk_i->i_gid = inode->i_gid;
+	disk_i->i_atime = inode->atime.tv_sec;
+	disk_i->i_atime_nsec = inode->atime.tv_nsec;
+	disk_i->i_mtime = inode->mtime.tv_sec;
+	disk_i->i_mtime_nsec = inode->mtime.tv_nsec;
+	disk_i->i_ctime = inode->ctime.tv_sec;
+	disk_i->i_ctime_nsec = inode->ctime.tv_nsec;
+	disk_i->i_uid = inode->uid;
+	disk_i->i_gid = inode->gid;
 
 	err = brkfs_block_write(sbi, bno, blk);
 out:
@@ -281,24 +281,24 @@ int brkfs_inode_free(struct brkfs_sb_info *sbi, u32 ino)
 int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, u32 ino, umode_t mode,
 			  unsigned int nlink, dev_t rdev)
 {
-	struct inode stub = { 0 };
+	struct fs_inode stub = { 0 };
 	struct brkfs_inode_info info;
 
 	memset(&info, 0, sizeof(info));
-	stub.i_ino = ino;
-	stub.i_mode = mode;
-	stub.i_nlink = nlink;
-	stub.i_size = 0;
-	stub.i_rdev = rdev;
-	stub.i_private = &info;
+	stub.ino = ino;
+	stub.mode = mode;
+	stub.nlink = nlink;
+	stub.size = 0;
+	stub.rdev = rdev;
+	stub.private_data = &info;
 	inode_times_set_all_now(&stub);
 	return brkfs_inode_write(sbi, &stub);
 }
 
-int brkfs_inode_getblk(struct inode *inode, loff_t off, u32 *bno,
+int brkfs_inode_getblk(struct fs_inode *inode, loff_t off, u32 *bno,
 		       unsigned flags, struct brkfs_sb_info *sbi)
 {
-	struct brkfs_inode_info *inf = inode->i_private;
+	struct brkfs_inode_info *inf = inode->private_data;
 	u32 *blk_ptrs = inf->i_block;
 	bool create = (flags & BRKFS_GETBLK_CREATE) != 0;
 	int err = 0;
@@ -411,16 +411,16 @@ static usize_t brkfs_dirent_reclen(unsigned int name_len)
 	return round_up(offsetof(struct brkfs_dir_entry, name) + name_len, 4u);
 }
 
-static int brkfs_dir_ensure_first_block(struct inode *dir)
+static int brkfs_dir_ensure_first_block(struct fs_inode *dir)
 {
-	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct brkfs_inode_info *info = dir->i_private;
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct brkfs_inode_info *info = dir->private_data;
 	u32 bno;
 	u8 *blk;
 	usize_t bs = sbi->s_sb.s_blocksize;
 	int err;
 
-	if (dir->i_size > 0)
+	if (dir->size > 0)
 		return 0;
 
 	blk = kmalloc(bs);
@@ -440,7 +440,7 @@ static int brkfs_dir_ensure_first_block(struct inode *dir)
 	e->entry_len = (u16)bs;
 
 	info->i_block[0] = bno;
-	dir->i_size = (loff_t)bs;
+	dir->size = (loff_t)bs;
 	err = brkfs_block_write(sbi, bno, blk);
 	kfree(blk);
 	return err;
@@ -500,11 +500,11 @@ static int __brkfs_dir_add_in_block(u8 *blk, usize_t bs, u32 ino,
 	return -ENOSPC;
 }
 
-int brkfs_dir_add(struct inode *dir, u32 child_ino, const char *name,
+int brkfs_dir_add(struct fs_inode *dir, u32 child_ino, const char *name,
 		  unsigned int name_len, umode_t child_mode)
 {
-	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct brkfs_inode_info *di = dir->i_private;
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct brkfs_inode_info *di = dir->private_data;
 	usize_t bs = sbi->s_sb.s_blocksize;
 	u8 ftype = brkfs_mode_to_dt(child_mode);
 	u8 *blk;
@@ -527,7 +527,7 @@ int brkfs_dir_add(struct inode *dir, u32 child_ino, const char *name,
 		u32 bno = di->i_block[bi];
 		loff_t blk_base = bi * bs;
 
-		if (blk_base >= dir->i_size)
+		if (blk_base >= dir->size)
 			break;
 		if (bno == 0)
 			continue;
@@ -558,7 +558,7 @@ int brkfs_dir_add(struct inode *dir, u32 child_ino, const char *name,
 		e->entry_len = bs;
 
 		di->i_block[bi] = bno;
-		dir->i_size = (bi + 1) * bs;
+		dir->size = (bi + 1) * bs;
 		walk = bi * bs;
 		if (__brkfs_dir_add_in_block(blk, bs, child_ino, name, name_len,
 					     ftype, &walk) == 0)
@@ -603,12 +603,12 @@ static int __brkfs_dir_remove_in_block(u8 *blk, usize_t bs,
 	return -ENOENT;
 }
 
-int brkfs_new_dir_body(struct inode *inode, u32 parent_ino)
+int brkfs_new_dir_body(struct fs_inode *inode, u32 parent_ino)
 {
-	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
-	struct brkfs_inode_info *di = inode->i_private;
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
+	struct brkfs_inode_info *di = inode->private_data;
 	usize_t bs = sbi->s_sb.s_blocksize;
-	u32 self_ino = inode->i_ino;
+	u32 self_ino = inode->ino;
 	u32 bno;
 	u8 *blk;
 	struct brkfs_dir_entry *e;
@@ -617,9 +617,9 @@ int brkfs_new_dir_body(struct inode *inode, u32 parent_ino)
 	usize_t r1, r2, rest;
 	int err;
 
-	if (!di || !S_ISDIR(inode->i_mode))
+	if (!di || !S_ISDIR(inode->mode))
 		return -EINVAL;
-	if (inode->i_size != 0)
+	if (inode->size != 0)
 		return 0;
 
 	blk = kmalloc(bs);
@@ -662,16 +662,17 @@ int brkfs_new_dir_body(struct inode *inode, u32 parent_ino)
 		return err;
 	}
 	di->i_block[0] = bno;
-	inode->i_size = bs;
+	inode->size = bs;
 	err = brkfs_block_write(sbi, bno, blk);
 	kfree(blk);
 	return err;
 }
 
-int brkfs_dir_remove(struct inode *dir, const char *name, unsigned int name_len)
+int brkfs_dir_remove(struct fs_inode *dir, const char *name,
+		     unsigned int name_len)
 {
-	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct brkfs_inode_info *di = dir->i_private;
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct brkfs_inode_info *di = dir->private_data;
 	usize_t bs = sbi->s_sb.s_blocksize;
 	u8 *blk;
 	unsigned int bi;
@@ -685,7 +686,7 @@ int brkfs_dir_remove(struct inode *dir, const char *name, unsigned int name_len)
 		u32 bno = di->i_block[bi];
 		loff_t blk_base = bi * bs;
 
-		if (blk_base >= dir->i_size)
+		if (blk_base >= dir->size)
 			break;
 		if (bno == 0)
 			continue;
@@ -704,16 +705,16 @@ out:
 	return err;
 }
 
-int brkfs_dir_lookup(struct inode *dir, const char *name, unsigned int name_len,
-		     u32 *ino_out, u8 *type_out)
+int brkfs_dir_lookup(struct fs_inode *dir, const char *name,
+		     unsigned int name_len, u32 *ino_out, u8 *type_out)
 {
-	struct brkfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct brkfs_inode_info *di = dir->i_private;
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct brkfs_inode_info *di = dir->private_data;
 	usize_t bs = sbi->s_sb.s_blocksize;
 	u8 *blk;
 	unsigned int bi;
 
-	if (!S_ISDIR(dir->i_mode))
+	if (!S_ISDIR(dir->mode))
 		return -ENOTDIR;
 
 	blk = kmalloc(bs);
@@ -726,7 +727,7 @@ int brkfs_dir_lookup(struct inode *dir, const char *name, unsigned int name_len,
 		struct brkfs_dir_entry *ent;
 		usize_t left;
 
-		if (blk_base >= dir->i_size)
+		if (blk_base >= dir->size)
 			break;
 		if (bno == 0)
 			continue;
@@ -761,26 +762,26 @@ int brkfs_dir_lookup(struct inode *dir, const char *name, unsigned int name_len,
 	return -ENOENT;
 }
 
-int brkfs_file_read_at(struct inode *inode, loff_t *pos, void *buf,
+int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
 		       usize_t size, usize_t *read_out)
 {
-	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
-	struct brkfs_inode_info *inf = inode->i_private;
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
+	struct brkfs_inode_info *inf = inode->private_data;
 	u32 bs = sbi->s_sb.s_blocksize;
 	loff_t off = *pos;
 	int err = 0;
 	u8 *blk = NULL;
 
-	if (!inf || (!S_ISREG(inode->i_mode) && !S_ISLNK(inode->i_mode))) {
+	if (!inf || (!S_ISREG(inode->mode) && !S_ISLNK(inode->mode))) {
 		*read_out = 0;
 		return -EINVAL;
 	}
-	if (off >= inode->i_size) {
+	if (off >= inode->size) {
 		*read_out = 0;
 		return 0;
 	}
-	if ((loff_t)(off + size) > inode->i_size)
-		size = (usize_t)(inode->i_size - off);
+	if ((loff_t)(off + size) > inode->size)
+		size = (usize_t)(inode->size - off);
 
 	blk = kmalloc(bs);
 	if (!blk) {
@@ -819,17 +820,17 @@ int brkfs_file_read_at(struct inode *inode, loff_t *pos, void *buf,
 	return err;
 }
 
-int brkfs_file_write_at(struct inode *inode, loff_t *pos, const void *buf,
+int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
 			usize_t size, usize_t *written_out)
 {
-	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
-	struct brkfs_inode_info *inf = inode->i_private;
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
+	struct brkfs_inode_info *inf = inode->private_data;
 	u32 bs = sbi->s_sb.s_blocksize;
 	loff_t off = *pos;
 	int err = 0;
 	u8 *blk = NULL;
 
-	if (!inf || (!S_ISREG(inode->i_mode) && !S_ISLNK(inode->i_mode))) {
+	if (!inf || (!S_ISREG(inode->mode) && !S_ISLNK(inode->mode))) {
 		*written_out = 0;
 		return -EINVAL;
 	}
@@ -873,8 +874,8 @@ int brkfs_file_write_at(struct inode *inode, loff_t *pos, const void *buf,
 		off += chunk;
 		p += chunk;
 		size -= chunk;
-		if (off > inode->i_size)
-			inode->i_size = off;
+		if (off > inode->size)
+			inode->size = off;
 	}
 
 	*written_out = p - (const u8 *)buf;
@@ -885,12 +886,12 @@ int brkfs_file_write_at(struct inode *inode, loff_t *pos, const void *buf,
 	return err;
 }
 
-int brkfs_truncate_inode_blocks(struct inode *inode, loff_t new_size)
+int brkfs_truncate_inode_blocks(struct fs_inode *inode, loff_t new_size)
 {
-	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
-	struct brkfs_inode_info *inf = inode->i_private;
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
+	struct brkfs_inode_info *inf = inode->private_data;
 	u32 bs = sbi->s_sb.s_blocksize;
-	loff_t old_size = inode->i_size;
+	loff_t old_size = inode->size;
 	u32 old_n;
 	u32 new_n;
 	u32 bi;
@@ -900,7 +901,7 @@ int brkfs_truncate_inode_blocks(struct inode *inode, loff_t new_size)
 	if (new_size < 0)
 		return -EINVAL;
 	if (new_size >= old_size) {
-		inode->i_size = new_size;
+		inode->size = new_size;
 		return 0;
 	}
 
@@ -913,6 +914,6 @@ int brkfs_truncate_inode_blocks(struct inode *inode, loff_t new_size)
 			inf->i_block[bi] = 0;
 		}
 	}
-	inode->i_size = new_size;
+	inode->size = new_size;
 	return 0;
 }

@@ -70,7 +70,7 @@ struct page_cache_ops {
 
 /*
  * @host is opaque so a mapping can be backed by either a file inode
- * (struct inode *) or a block device (struct block_dev *). Callbacks in
+ * (struct fs_inode *) or a block device (struct block_dev *). Callbacks in
  * a_ops know which one to cast to.
  */
 struct page_cache {
@@ -134,9 +134,9 @@ int filemap_writeback(struct page_cache *mapping);
 void truncate_inode_pages(struct page_cache *mapping, loff_t new_size);
 
 /* Generic file I/O helpers built on top of the page cache. */
-ssize_t generic_file_read(struct file *file, char *buf, usize_t size,
+ssize_t generic_file_read(struct fs_file *file, char *buf, usize_t size,
 			  loff_t *pos);
-ssize_t generic_file_write(struct file *file, const char *buf, usize_t size,
+ssize_t generic_file_write(struct fs_file *file, const char *buf, usize_t size,
 			   loff_t *pos);
 
 static inline void *cached_page_addr(const struct cached_page *cp)

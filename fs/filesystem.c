@@ -8,7 +8,7 @@ static SPINLOCK_DEFINE(filesystems_lock);
 int fs_driver_register(struct fs_driver *fs)
 {
 	spinlock_acquire(&filesystems_lock);
-	list_add_tail(&fs->fs_list, &filesystems);
+	list_add_tail(&fs->list, &filesystems);
 	spinlock_release(&filesystems_lock);
 	return 0;
 }
@@ -16,7 +16,7 @@ int fs_driver_register(struct fs_driver *fs)
 int fs_driver_unregister(struct fs_driver *fs)
 {
 	spinlock_acquire(&filesystems_lock);
-	list_del_init(&fs->fs_list);
+	list_del_init(&fs->list);
 	spinlock_release(&filesystems_lock);
 	return 0;
 }
@@ -25,7 +25,7 @@ struct fs_driver *fs_driver_lookup(const char *name)
 {
 	struct fs_driver *fs;
 	spinlock_acquire(&filesystems_lock);
-	list_for_each_entry(fs, &filesystems, fs_list) {
+	list_for_each_entry(fs, &filesystems, list) {
 		if (!strcmp(fs->name, name)) {
 			spinlock_release(&filesystems_lock);
 			return fs;
@@ -42,7 +42,7 @@ void fs_driver_for_each(void (*fn)(const struct fs_driver *, void *), void *ctx)
 	if (!fn)
 		return;
 	spinlock_acquire(&filesystems_lock);
-	list_for_each_entry(fs, &filesystems, fs_list)
+	list_for_each_entry(fs, &filesystems, list)
 		fn(fs, ctx);
 	spinlock_release(&filesystems_lock);
 }

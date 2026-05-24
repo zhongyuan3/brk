@@ -5,11 +5,11 @@
 #include <brk/types.h>
 #include <uapi/types.h>
 
-struct file_ops;
+struct fs_file_ops;
 
 struct char_dev {
 	dev_t dev;
-	const struct file_ops *fops;
+	const struct fs_file_ops *fops;
 	struct hlist_node hlist;
 };
 

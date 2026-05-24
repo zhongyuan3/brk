@@ -33,9 +33,9 @@ struct exec_strings_acc {
 	usize_t bytes;
 };
 
-static int exec_read_exact(struct file *fp, u64 off, void *buf, usize_t n)
+static int exec_read_exact(struct fs_file *fp, u64 off, void *buf, usize_t n)
 {
-	loff_t ret = file_lseek(fp, off, SEEK_SET);
+	loff_t ret = fs_file_lseek(fp, off, SEEK_SET);
 
 	if (ret < 0) {
 		klog_error("%s(): Failed to lseek file: %s\n", __func__,
@@ -43,7 +43,7 @@ static int exec_read_exact(struct file *fp, u64 off, void *buf, usize_t n)
 		return -EIO;
 	}
 
-	ssize_t rcnt = file_read(fp, buf, n);
+	ssize_t rcnt = fs_file_read(fp, buf, n);
 
 	if (rcnt < 0) {
 		klog_error("%s(): Failed to read file: %s\n", __func__,
@@ -67,14 +67,14 @@ static int elf_validate_exec_hdr(const struct elf64_hdr *h)
 	return 0;
 }
 
-static int elf_read_phdr(struct file *f, u64 off, struct elf64_phdr *phdr)
+static int elf_read_phdr(struct fs_file *f, u64 off, struct elf64_phdr *phdr)
 {
 	ssize_t r;
-	loff_t ret = file_lseek(f, off, SEEK_SET);
+	loff_t ret = fs_file_lseek(f, off, SEEK_SET);
 
 	if (ret < 0)
 		return -EIO;
-	r = file_read(f, phdr, sizeof(*phdr));
+	r = fs_file_read(f, phdr, sizeof(*phdr));
 	if (r < 0)
 		return -EIO;
 	if ((usize_t)r != sizeof(*phdr))
@@ -82,9 +82,9 @@ static int elf_read_phdr(struct file *f, u64 off, struct elf64_phdr *phdr)
 	return 0;
 }
 
-static int exec_read_elf_header(struct file *f, struct elf64_hdr *elf_hdr)
+static int exec_read_elf_header(struct fs_file *f, struct elf64_hdr *elf_hdr)
 {
-	ssize_t r = file_read(f, elf_hdr, sizeof(*elf_hdr));
+	ssize_t r = fs_file_read(f, elf_hdr, sizeof(*elf_hdr));
 
 	if (r < 0)
 		return -EIO;
@@ -197,7 +197,7 @@ static unsigned int flags_to_perm(unsigned int flags)
 }
 
 static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
-		   struct elf64_phdr *ph, struct file *fp)
+		   struct elf64_phdr *ph, struct fs_file *fp)
 {
 	int err = 0;
 	usize_t npgs = vma->size >> PAGE_SHIFT;
@@ -265,7 +265,7 @@ failed:
 }
 
 static int load_seg(struct uvm_space *mm, struct elf64_phdr *ph,
-		    struct file *fp)
+		    struct fs_file *fp)
 {
 	u64 start, end;
 	struct uvm_region *vma;
@@ -349,7 +349,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 	struct elf64_hdr elf_hdr = { 0 };
 	struct elf64_phdr phdr = { 0 };
 	struct process *proc = current_process();
-	struct file *f = NULL;
+	struct fs_file *f = NULL;
 	struct uvm_space *new_mm = NULL;
 	int err = 0;
 
@@ -385,7 +385,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 		}
 	}
 
-	file_put(f);
+	fs_file_put(f);
 	f = NULL;
 
 	new_mm->heap->addr = find_brk(new_mm);
@@ -423,7 +423,7 @@ err:
 	if (new_mm)
 		mm_free(new_mm);
 	if (!IS_ERR(f) && f)
-		file_put(f);
+		fs_file_put(f);
 	return err;
 }
 

@@ -10,34 +10,34 @@
 
 static struct kobj_pool file_cache;
 
-void file_cache_init(void)
+void fs_file_cache_init(void)
 {
-	kobj_pool_init(&file_cache, sizeof(struct file), alignof(struct file),
-		       "file_cache");
+	kobj_pool_init(&file_cache, sizeof(struct fs_file),
+		       alignof(struct fs_file), "file_cache");
 }
 
-struct file *file_alloc(struct path *path, fmode_t mode)
+struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode)
 {
-	struct file *file;
+	struct fs_file *file;
 
 	file = kobj_pool_alloc(&file_cache);
 	if (!file)
 		return ERR_PTR(-ENOMEM);
 
-	refcnt_init(&file->f_count, 1);
-	path_get(path);
-	file->f_path = *path;
-	file->f_inode = path->dentry->d_inode;
-	file->f_op = file->f_inode->i_fop;
+	refcnt_init(&file->count, 1);
+	fs_path_get(path);
+	file->path = *path;
+	file->inode = path->dentry->inode;
+	file->ops = file->inode->fops;
 
-	spinlock_init(&file->f_lock, "file.f_lock");
-	file->f_mode = mode;
-	sleeplock_init(&file->f_pos_lock, "file.f_pos_lock");
-	file->f_pos = 0;
+	spinlock_init(&file->lock, "file.f_lock");
+	file->mode = mode;
+	sleeplock_init(&file->pos_lock, "file.f_pos_lock");
+	file->pos = 0;
 
-	int err = file->f_op->open(file->f_inode, file);
+	int err = file->ops->open(file->inode, file);
 	if (err) {
-		path_put(&file->f_path);
+		fs_path_put(&file->path);
 		kobj_pool_free(&file_cache, file);
 		return ERR_PTR(err);
 	}
@@ -45,68 +45,68 @@ struct file *file_alloc(struct path *path, fmode_t mode)
 	return file;
 }
 
-struct file *file_get(struct file *file)
+struct fs_file *fs_file_get(struct fs_file *file)
 {
-	refcnt_inc(&file->f_count);
+	refcnt_inc(&file->count);
 	return file;
 }
 
-void file_put(struct file *file)
+void fs_file_put(struct fs_file *file)
 {
-	const struct file_ops *fop;
+	const struct fs_file_ops *fop;
 
-	if (refcnt_dec_fetch(&file->f_count) > 0)
+	if (refcnt_dec_fetch(&file->count) > 0)
 		return;
 
-	fop = file->f_op;
+	fop = file->ops;
 	if (fop->release)
-		fop->release(file->f_inode, file);
+		fop->release(file->inode, file);
 
-	path_put(&file->f_path);
+	fs_path_put(&file->path);
 
 	kobj_pool_free(&file_cache, file);
 }
 
-loff_t file_lseek(struct file *file, loff_t len, int whence)
+loff_t fs_file_lseek(struct fs_file *file, loff_t len, int whence)
 {
-	loff_t ret = file->f_op->llseek(file, len, whence);
+	loff_t ret = file->ops->llseek(file, len, whence);
 	if (ret >= 0)
-		file->f_pos = ret;
+		file->pos = ret;
 	return ret;
 }
 
-ssize_t file_read(struct file *file, void *buf, usize_t size)
+ssize_t fs_file_read(struct fs_file *file, void *buf, usize_t size)
 {
-	loff_t *pos = &file->f_pos;
-	sleeplock_acquire(&file->f_pos_lock);
-	ssize_t ret = file->f_op->read(file, buf, size, pos);
-	sleeplock_release(&file->f_pos_lock);
+	loff_t *pos = &file->pos;
+	sleeplock_acquire(&file->pos_lock);
+	ssize_t ret = file->ops->read(file, buf, size, pos);
+	sleeplock_release(&file->pos_lock);
 	return ret;
 }
 
-ssize_t file_write(struct file *file, const void *buf, usize_t size)
+ssize_t fs_file_write(struct fs_file *file, const void *buf, usize_t size)
 {
-	loff_t *pos = &file->f_pos;
-	sleeplock_acquire(&file->f_pos_lock);
-	ssize_t ret = file->f_op->write(file, buf, size, pos);
-	sleeplock_release(&file->f_pos_lock);
+	loff_t *pos = &file->pos;
+	sleeplock_acquire(&file->pos_lock);
+	ssize_t ret = file->ops->write(file, buf, size, pos);
+	sleeplock_release(&file->pos_lock);
 	return ret;
 }
 
-long file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+long fs_file_ioctl(struct fs_file *file, unsigned int cmd, unsigned long arg)
 {
-	if (!file->f_op->ioctl)
+	if (!file->ops->ioctl)
 		return -ENOTTY;
-	return file->f_op->ioctl(file, cmd, arg);
+	return file->ops->ioctl(file, cmd, arg);
 }
 
-int file_stat(struct file *file, struct stat *buf)
+int fs_file_stat(struct fs_file *file, struct stat *buf)
 {
-	const struct inode_ops *i_op = file->f_inode->i_op;
-	return i_op->getattr(&file->f_path, buf, 0, 0);
+	const struct fs_inode_ops *i_op = file->inode->ops;
+	return i_op->getattr(&file->path, buf, 0, 0);
 }
 
-int file_truncate(struct file *file, loff_t size)
+int fs_file_truncate(struct fs_file *file, loff_t size)
 {
 	(void)file;
 	(void)size;

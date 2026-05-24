@@ -103,9 +103,9 @@ struct process {
 	u64 sigframe_sp;
 
 	struct uvm_space *mm;
-	struct file *ofiles[OPEN_MAX];
-	struct path cwd;
-	struct path root;
+	struct fs_file *ofiles[OPEN_MAX];
+	struct fs_path cwd;
+	struct fs_path root;
 	struct tms ptms;
 	struct trap_frame tf;
 	u64 kstack;
@@ -135,7 +135,7 @@ void proc_exit_normal(int code);
 void proc_exit_signal(int sig);
 int proc_fork(void);
 int proc_set_brk(u64 addr);
-int proc_alloc_fd(struct process *proc, struct file *fp);
+int proc_alloc_fd(struct process *proc, struct fs_file *fp);
 void proc_dump(void);
 
 void proc_yield(void);

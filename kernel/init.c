@@ -94,9 +94,9 @@ void boot_run_primary(usize_t hart_id, u64 dtb, usize_t load_offset)
 	trap_init_hart(hart_id);
 
 	pagecache_init();
-	dentry_cache_init();
-	inode_cache_init();
-	file_cache_init();
+	fs_dentry_cache_init();
+	fs_inode_cache_init();
+	fs_file_cache_init();
 	proc_cache_init();
 	proc_init_user();
 

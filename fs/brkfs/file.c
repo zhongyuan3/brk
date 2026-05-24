@@ -16,8 +16,8 @@
 
 static int brkfs_readpage(struct page_cache *m, struct cached_page *cp)
 {
-	struct inode *inode = m->host;
-	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
+	struct fs_inode *inode = m->host;
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	u32 bs = sbi->s_sb.s_blocksize;
 	loff_t off = (loff_t)cp->index << PAGE_SHIFT;
 	u8 *data = cached_page_addr(cp);
@@ -49,8 +49,8 @@ static int brkfs_readpage(struct page_cache *m, struct cached_page *cp)
 
 static int brkfs_writepage(struct page_cache *m, struct cached_page *cp)
 {
-	struct inode *inode = m->host;
-	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
+	struct fs_inode *inode = m->host;
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	u32 bs = sbi->s_sb.s_blocksize;
 	loff_t off = (loff_t)cp->index << PAGE_SHIFT;
 	u8 *data = cached_page_addr(cp);
@@ -90,41 +90,41 @@ const struct page_cache_ops brkfs_aops = {
 	.writepage = brkfs_writepage,
 };
 
-static int brkfs_file_open(struct inode *inode, struct file *file)
+static int brkfs_file_open(struct fs_inode *inode, struct fs_file *file)
 {
 	int ret = 0;
-	umode_t imode = inode->i_mode;
+	umode_t imode = inode->mode;
 
-	sleeplock_acquire(&inode->i_rwsem);
+	sleeplock_acquire(&inode->rwsem);
 	if (S_ISCHR(imode))
-		file->f_op = &chrdev_fops;
+		file->ops = &chrdev_fops;
 	else if (S_ISBLK(imode))
-		file->f_op = &blkdev_fops;
+		file->ops = &blkdev_fops;
 	else if (S_ISREG(imode))
-		file->f_op = &brkfs_file_fops;
+		file->ops = &brkfs_file_fops;
 	else if (S_ISDIR(imode))
-		file->f_op = &brkfs_dir_fops;
+		file->ops = &brkfs_dir_fops;
 	else if (S_ISLNK(imode))
-		file->f_op = &brkfs_file_fops;
+		file->ops = &brkfs_file_fops;
 	else
 		ret = -EINVAL;
-	sleeplock_release(&inode->i_rwsem);
+	sleeplock_release(&inode->rwsem);
 	return ret;
 }
 
-static int brkfs_file_release(struct inode *inode, struct file *file)
+static int brkfs_file_release(struct fs_inode *inode, struct fs_file *file)
 {
 	(void)inode;
 	(void)file;
 	return 0;
 }
 
-static ssize_t brkfs_file_read(struct file *file, char *buf, usize_t size,
+static ssize_t brkfs_file_read(struct fs_file *file, char *buf, usize_t size,
 			       loff_t *pos)
 {
-	struct inode *inode = file->f_inode;
+	struct fs_inode *inode = file->inode;
 
-	if (inode->i_mapping)
+	if (inode->mapping)
 		return generic_file_read(file, buf, size, pos);
 
 	/* Fallback path (no page cache attached, e.g. for symlinks read via
@@ -132,47 +132,47 @@ static ssize_t brkfs_file_read(struct file *file, char *buf, usize_t size,
 	usize_t rd = 0;
 	int err;
 
-	sleeplock_acquire(&inode->i_rwsem);
+	sleeplock_acquire(&inode->rwsem);
 	err = brkfs_file_read_at(inode, pos, buf, size, &rd);
-	sleeplock_release(&inode->i_rwsem);
+	sleeplock_release(&inode->rwsem);
 	if (err)
 		return err;
 	return (ssize_t)rd;
 }
 
-static ssize_t brkfs_file_write(struct file *file, const char *buf,
+static ssize_t brkfs_file_write(struct fs_file *file, const char *buf,
 				usize_t size, loff_t *pos)
 {
-	struct inode *inode = file->f_inode;
+	struct fs_inode *inode = file->inode;
 
-	if (inode->i_mapping)
+	if (inode->mapping)
 		return generic_file_write(file, buf, size, pos);
 
-	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	usize_t wr = 0;
 	int err;
 
-	sleeplock_acquire(&inode->i_rwsem);
+	sleeplock_acquire(&inode->rwsem);
 	err = brkfs_file_write_at(inode, pos, buf, size, &wr);
 	if (!err)
 		err = brkfs_inode_write(sbi, inode);
-	sleeplock_release(&inode->i_rwsem);
+	sleeplock_release(&inode->rwsem);
 	if (err)
 		return err;
 	return (ssize_t)wr;
 }
 
-static loff_t brkfs_file_llseek(struct file *file, loff_t offset, int whence)
+static loff_t brkfs_file_llseek(struct fs_file *file, loff_t offset, int whence)
 {
-	struct inode *inode = file->f_inode;
+	struct fs_inode *inode = file->inode;
 	loff_t new_pos = 0;
 
 	if (whence == SEEK_SET)
 		new_pos = offset;
 	else if (whence == SEEK_CUR)
-		new_pos = file->f_pos + offset;
+		new_pos = file->pos + offset;
 	else if (whence == SEEK_END)
-		new_pos = inode->i_size + offset;
+		new_pos = inode->size + offset;
 	else
 		return -EINVAL;
 	if (new_pos < 0)
@@ -180,40 +180,40 @@ static loff_t brkfs_file_llseek(struct file *file, loff_t offset, int whence)
 	return new_pos;
 }
 
-static int brkfs_file_iterate_shared(struct file *file,
-				     struct dir_iterator *ctx)
+static int brkfs_file_iterate_shared(struct fs_file *file,
+				     struct fs_dir_iterator *ctx)
 {
 	(void)file;
 	(void)ctx;
 	return -ENOTDIR;
 }
 
-static int brkfs_file_fsync(struct file *file, loff_t start, loff_t end,
+static int brkfs_file_fsync(struct fs_file *file, loff_t start, loff_t end,
 			    int datasync)
 {
-	struct inode *inode = file->f_inode;
-	struct brkfs_sb_info *sbi = inode->i_sb->s_fs_info;
+	struct fs_inode *inode = file->inode;
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	int err;
 
 	(void)start;
 	(void)end;
 	(void)datasync;
 
-	sleeplock_acquire(&inode->i_rwsem);
-	err = filemap_writeback(inode->i_mapping);
+	sleeplock_acquire(&inode->rwsem);
+	err = filemap_writeback(inode->mapping);
 	if (!err)
 		err = brkfs_inode_write(sbi, inode);
-	sleeplock_release(&inode->i_rwsem);
+	sleeplock_release(&inode->rwsem);
 	return err;
 }
 
-static int brkfs_file_flush(struct file *file)
+static int brkfs_file_flush(struct fs_file *file)
 {
 	(void)file;
 	return 0;
 }
 
-static long brkfs_file_ioctl(struct file *file, unsigned int cmd,
+static long brkfs_file_ioctl(struct fs_file *file, unsigned int cmd,
 			     unsigned long arg)
 {
 	(void)file;
@@ -222,7 +222,7 @@ static long brkfs_file_ioctl(struct file *file, unsigned int cmd,
 	return -ENOTTY;
 }
 
-const struct file_ops brkfs_file_fops = {
+const struct fs_file_ops brkfs_file_fops = {
 	.open = brkfs_file_open,
 	.release = brkfs_file_release,
 	.read = brkfs_file_read,
