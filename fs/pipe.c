@@ -141,6 +141,10 @@ static void pipefs_evict_inode(struct fs_inode *inode)
 
 static void pipefs_put_super(struct fs_super_block *sb)
 {
+	struct fs_driver *driver = sb->driver;
+	spinlock_acquire(&driver->lock);
+	list_del(&sb->instance);
+	spinlock_release(&driver->lock);
 	fs_dentry_put(sb->root);
 }
 
@@ -151,62 +155,32 @@ static int pipefs_write_inode(struct fs_inode *inode, int sync)
 	return 0;
 }
 
-static void pipefs_dirty_inode(struct fs_inode *inode, int flags)
-{
-	(void)inode;
-	(void)flags;
-}
-
-static int pipefs_sync_fs(struct fs_super_block *sb, int wait)
-{
-	(void)sb;
-	(void)wait;
-	return 0;
-}
-
 static const struct fs_super_block_ops pipefs_sops = {
 	.put_super = pipefs_put_super,
 	.evict_inode = pipefs_evict_inode,
 	.write_inode = pipefs_write_inode,
-	.dirty_inode = pipefs_dirty_inode,
-	.sync_fs = pipefs_sync_fs,
 };
 
-static void pipefs_kill_sb(struct fs_super_block *sb)
-{
-	struct fs_driver *fs_type = sb->driver;
-
-	spinlock_acquire(&fs_type->lock);
-	list_del(&sb->instance);
-	spinlock_release(&fs_type->lock);
-
-	fs_super_block_put(sb);
-}
-
-static struct fs_dentry *pipefs_mount(struct fs_driver *fs_type, int flags,
-				      const char *dev_name, void *data)
+int pipefs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 {
 	struct fs_super_block *sb;
 	struct fs_inode *root_inode;
 	struct fs_dentry *root_dentry;
 
-	(void)dev_name;
-	(void)data;
-
-	sb = fs_super_block_alloc(fs_type);
+	sb = fs_super_block_alloc(args->driver);
 	if (!sb)
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 
 	sb->block_size = PAGE_SIZE;
 	sb->magic = PIPEFS_MAGIC;
-	sb->flags = (unsigned long)flags;
+	sb->flags = args->flags;
 	sb->ops = &pipefs_sops;
 	sb->default_dops = &generic_dop;
 
 	root_inode = fs_inode_get_locked(sb, 1);
 	if (!root_inode) {
 		fs_super_block_free(sb);
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 	}
 
 	if (root_inode->state & I_NEW) {
@@ -222,16 +196,19 @@ static struct fs_dentry *pipefs_mount(struct fs_driver *fs_type, int flags,
 	if (!root_dentry) {
 		fs_inode_put(root_inode);
 		fs_super_block_free(sb);
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 	}
 
 	sb->root = fs_dentry_get(root_dentry);
 
-	spinlock_acquire(&fs_type->lock);
-	list_add_tail(&sb->instance, &fs_type->super_blocks);
-	spinlock_release(&fs_type->lock);
+	spinlock_acquire(&args->driver->lock);
+	list_add_tail(&sb->instance, &args->driver->super_blocks);
+	spinlock_release(&args->driver->lock);
 
-	return root_dentry;
+	result->root = root_dentry;
+	result->sb = sb;
+
+	return 0;
 }
 
 static int pipe_getattr(const struct fs_path *path, struct stat *st, u32 mask,
@@ -512,7 +489,6 @@ void pipe_fs_init(void)
 {
 	pipefs_fs_type.name = "pipefs";
 	pipefs_fs_type.mount = pipefs_mount;
-	pipefs_fs_type.kill_sb = pipefs_kill_sb;
 	spinlock_init(&pipefs_fs_type.lock, "pipefs.lock");
 	list_init(&pipefs_fs_type.super_blocks);
 	list_init(&pipefs_fs_type.list);

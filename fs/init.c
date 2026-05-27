@@ -23,17 +23,24 @@ static void register_builtin_filesystems(void)
 
 int fs_init(void)
 {
+	struct process *proc;
+	struct fs_mount_state *mnt;
+	struct fs_mount_state *new_root_mnt;
+	struct fs_path new_root_path;
+	int err;
+
 	register_builtin_filesystems();
 
-	struct process *proc = current_process();
+	mnt = kernel_mount(&tmpfs_fs_type, 0, NULL, NULL);
+	if (IS_ERR(mnt))
+		return PTR_ERR(mnt);
 
-	int err = mount_tree_init(&proc->root);
-	if (err)
-		return err;
-	klog_info("mount tree initialized\n");
-
+	proc = current_process();
+	proc->root.mnt = mnt;
+	proc->root.dentry = fs_dentry_get(mnt->root);
 	fs_path_get(&proc->root);
 	proc->cwd = proc->root;
+	klog_info("root mount point initialized\n");
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
 	if (err)
@@ -53,20 +60,18 @@ int fs_init(void)
 		return err;
 	klog_info("/ mounted successfully\n");
 
-	struct fs_mount_state *root_mnt = fs_mount_state_lookup(&proc->root);
-	if (!root_mnt)
+	new_root_mnt = fs_mount_state_lookup(&proc->root);
+	if (!new_root_mnt)
 		return -EINVAL;
 
-	struct fs_path root_path = {
-		.mnt = root_mnt,
-		.dentry = fs_dentry_get(root_mnt->root),
-	};
+	new_root_path.mnt = new_root_mnt;
+	new_root_path.dentry = fs_dentry_get(new_root_mnt->root);
 
 	fs_path_put(&proc->root);
-	proc->root = root_path;
 	fs_path_put(&proc->cwd);
-	fs_path_get(&root_path);
-	proc->cwd = root_path;
+	proc->root = new_root_path;
+	fs_path_get(&new_root_path);
+	proc->cwd = new_root_path;
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
 	if (err && err != -EEXIST)

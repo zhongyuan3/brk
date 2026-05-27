@@ -79,12 +79,6 @@ enum proc_kind {
 	PROC_KIND_PID_FILE = 3,
 };
 
-/*
- * Forward declarations for ops tables and per-entry show callbacks.
- *
- * show() callbacks always format into a fixed-size buffer. They return
- * the number of bytes actually written (>= 0) or a negative errno.
- */
 struct procfs_entry;
 
 typedef int (*procfs_show_fn)(const struct procfs_entry *entry, pid_t pid,
@@ -164,8 +158,6 @@ static const struct procfs_entry procfs_pid_entries[] = {
 };
 #define PROCFS_PID_ENTRIES_NR countof(procfs_pid_entries)
 
-/* ---------------- inode encoding helpers --------------------------- */
-
 static inline enum proc_kind procfs_ino_kind(unsigned long ino)
 {
 	if (ino == PROC_INO_ROOT)
@@ -225,8 +217,6 @@ static const struct procfs_entry *procfs_pid_by_idx(int idx)
 			return &procfs_pid_entries[i];
 	return NULL;
 }
-
-/* ---------------- show callbacks ----------------------------------- */
 
 static const char *procfs_state_name(enum process_state state)
 {
@@ -414,8 +404,6 @@ static int procfs_show_pid_cmdline(const struct procfs_entry *e, pid_t pid,
 	return (int)(n + (size > n ? 1 : 0));
 }
 
-/* ---------------- inode helpers ------------------------------------ */
-
 static const struct fs_file_ops procfs_root_dir_fops;
 static const struct fs_file_ops procfs_pid_dir_fops;
 static const struct fs_file_ops procfs_file_fops;
@@ -481,8 +469,6 @@ static struct fs_inode *procfs_iget_pid_file(struct fs_super_block *sb,
 			   1, &procfs_file_iops, &procfs_file_fops);
 }
 
-/* ---------------- name <-> pid parsing ----------------------------- */
-
 static bool procfs_parse_pid(const char *name, int len, pid_t *out)
 {
 	pid_t v = 0;
@@ -501,8 +487,6 @@ static bool procfs_parse_pid(const char *name, int len, pid_t *out)
 	return true;
 }
 
-/* ---------------- fs_volume_ops --------------------------------- */
-
 static void procfs_evict_inode(struct fs_inode *inode)
 {
 	(void)inode;
@@ -511,6 +495,10 @@ static void procfs_evict_inode(struct fs_inode *inode)
 
 static void procfs_put_super(struct fs_super_block *sb)
 {
+	struct fs_driver *driver = sb->driver;
+	spinlock_acquire(&driver->lock);
+	list_del(&sb->instance);
+	spinlock_release(&driver->lock);
 	if (sb->root)
 		fs_dentry_put(sb->root);
 }
@@ -519,8 +507,6 @@ static const struct fs_super_block_ops procfs_sops = {
 	.evict_inode = procfs_evict_inode,
 	.put_super = procfs_put_super,
 };
-
-/* ---------------- fs_node_ops --------------------------------- */
 
 static struct fs_dentry *procfs_root_lookup(struct fs_inode *dir,
 					    struct fs_dentry *dentry,
@@ -622,8 +608,6 @@ static const struct fs_inode_ops procfs_file_iops = {
 	.getattr = procfs_getattr,
 	.setattr = procfs_setattr,
 };
-
-/* ---------------- fs_file_ops ---------------------------------- */
 
 struct procfs_file_priv {
 	char *buf;
@@ -788,8 +772,6 @@ static const struct fs_file_ops procfs_file_fops = {
 	.flush = procfs_file_flush,
 	.ioctl = procfs_file_ioctl,
 };
-
-/* ---------------- directory fs_file_ops ------------------------ */
 
 static int procfs_dir_open(struct fs_inode *inode, struct fs_file *file)
 {
@@ -1003,24 +985,18 @@ static const struct fs_file_ops procfs_pid_dir_fops = {
 	.ioctl = procfs_dir_ioctl,
 };
 
-/* ---------------- mount / unmount ---------------------------------- */
-
-static struct fs_dentry *procfs_mount(struct fs_driver *fs_type, int flags,
-				      const char *dev_name, void *data)
+int procfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 {
-	(void)dev_name;
-	(void)data;
 	struct fs_super_block *sb;
 	struct fs_inode *root_inode;
 	struct fs_dentry *root_dentry;
-
-	sb = fs_super_block_alloc(fs_type);
+	sb = fs_super_block_alloc(args->driver);
 	if (!sb)
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 
 	sb->block_size = PAGE_SIZE;
 	sb->magic = PROCFS_MAGIC;
-	sb->flags = flags;
+	sb->flags = args->flags;
 	sb->ops = &procfs_sops;
 	sb->default_dops = &generic_dop;
 	sb->private_data = NULL;
@@ -1028,40 +1004,31 @@ static struct fs_dentry *procfs_mount(struct fs_driver *fs_type, int flags,
 	root_inode = procfs_iget_root(sb);
 	if (!root_inode) {
 		fs_super_block_free(sb);
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 	}
 
 	root_dentry = fs_dentry_make_root(root_inode);
 	if (!root_dentry) {
 		fs_inode_put(root_inode);
 		fs_super_block_free(sb);
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 	}
 
 	sb->root = fs_dentry_get(root_dentry);
 
-	spinlock_acquire(&fs_type->lock);
-	list_add_tail(&sb->instance, &fs_type->super_blocks);
-	spinlock_release(&fs_type->lock);
+	spinlock_acquire(&args->driver->lock);
+	list_add_tail(&sb->instance, &args->driver->super_blocks);
+	spinlock_release(&args->driver->lock);
 
-	return root_dentry;
-}
+	result->root = root_dentry;
+	result->sb = sb;
 
-static void procfs_kill_sb(struct fs_super_block *sb)
-{
-	struct fs_driver *fs_type = sb->driver;
-
-	spinlock_acquire(&fs_type->lock);
-	list_del(&sb->instance);
-	spinlock_release(&fs_type->lock);
-
-	fs_super_block_put(sb);
+	return 0;
 }
 
 struct fs_driver procfs_fs_type = {
 	.name = "procfs",
 	.mount = procfs_mount,
-	.kill_sb = procfs_kill_sb,
 	.lock = SPINLOCK_INITIALIZER("procfs_fs_lock"),
 	.super_blocks = LIST_INITIALIZER(procfs_fs_type.super_blocks),
 	.list = LIST_INITIALIZER(procfs_fs_type.list),
