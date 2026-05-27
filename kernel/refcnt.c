@@ -1,49 +1,49 @@
 #include <brk/refcnt.h>
 
-void refcnt_init(refcnt_t *rc, int val)
+void refcnt_init(refcnt_t *rc, refcnt_value_t val)
 {
 	spinlock_init(&rc->lock, "refcnt");
 	rc->counter = val;
 }
 
-int refcnt_read(refcnt_t *rc)
+refcnt_value_t refcnt_read(refcnt_t *rc)
 {
 	spinlock_acquire(&rc->lock);
-	int c = rc->counter;
+	refcnt_value_t val = rc->counter;
 	spinlock_release(&rc->lock);
-	return c;
+	return val;
 }
 
-int refcnt_fetch_inc(refcnt_t *rc)
+refcnt_value_t refcnt_fetch_inc(refcnt_t *rc)
 {
 	spinlock_acquire(&rc->lock);
-	int old = rc->counter++;
+	refcnt_value_t old_val = rc->counter++;
 	spinlock_release(&rc->lock);
-	return old;
+	return old_val;
 }
 
-int refcnt_fetch_dec(refcnt_t *rc)
+refcnt_value_t refcnt_fetch_dec(refcnt_t *rc)
 {
 	spinlock_acquire(&rc->lock);
-	int old = rc->counter--;
+	refcnt_value_t old_val = rc->counter > 0 ? rc->counter-- : 0;
 	spinlock_release(&rc->lock);
-	return old;
+	return old_val;
 }
 
-int refcnt_inc_fetch(refcnt_t *rc)
+refcnt_value_t refcnt_inc_fetch(refcnt_t *rc)
 {
 	spinlock_acquire(&rc->lock);
-	int new = ++rc->counter;
+	refcnt_value_t new_val = ++rc->counter;
 	spinlock_release(&rc->lock);
-	return new;
+	return new_val;
 }
 
-int refcnt_dec_fetch(refcnt_t *rc)
+refcnt_value_t refcnt_dec_fetch(refcnt_t *rc)
 {
 	spinlock_acquire(&rc->lock);
-	int new = --rc->counter;
+	refcnt_value_t new_val = rc->counter > 0 ? --rc->counter : 0;
 	spinlock_release(&rc->lock);
-	return new;
+	return new_val;
 }
 
 void refcnt_inc(refcnt_t *rc)
