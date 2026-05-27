@@ -30,12 +30,6 @@ static void brkfs_free_inode(struct fs_inode *inode)
 	kfree(inode);
 }
 
-static void brkfs_dirty_inode(struct fs_inode *inode, int flags)
-{
-	(void)inode;
-	(void)flags;
-}
-
 static int brkfs_write_inode(struct fs_inode *inode, int sync)
 {
 	struct brkfs_sb_info *sb_info = inode->sb->private_data;
@@ -67,26 +61,23 @@ static void brkfs_evict_inode(struct fs_inode *inode)
 static void brkfs_put_super(struct fs_super_block *sb)
 {
 	struct brkfs_sb_info *sb_info = sb->private_data;
+	struct fs_driver *driver = sb->driver;
+
+	spinlock_acquire(&driver->lock);
+	list_del(&sb->instance);
+	spinlock_release(&driver->lock);
+
+	fs_dentry_put(sb->root);
+	sb->root = NULL;
 
 	brkfs_sb_info_free(sb_info);
 	sb->private_data = NULL;
-	fs_dentry_put(sb->root);
-	sb->root = NULL;
-}
-
-static int brkfs_sync_fs(struct fs_super_block *sb, int wait)
-{
-	(void)sb;
-	(void)wait;
-	return 0;
 }
 
 const struct fs_super_block_ops brkfs_sops = {
 	.alloc_inode = brkfs_alloc_inode,
 	.free_inode = brkfs_free_inode,
-	.dirty_inode = brkfs_dirty_inode,
 	.write_inode = brkfs_write_inode,
 	.evict_inode = brkfs_evict_inode,
 	.put_super = brkfs_put_super,
-	.sync_fs = brkfs_sync_fs,
 };

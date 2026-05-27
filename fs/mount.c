@@ -6,6 +6,7 @@
 #include <brk/lock.h>
 #include <brk/mount.h>
 #include <brk/path.h>
+#include <brk/printk.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
 #include <brk/string.h>
@@ -16,7 +17,8 @@
 static struct hlist_head mount_hashtable[MOUNT_HTABLE_SIZE];
 static SPINLOCK_DEFINE(mount_hashtable_lock);
 static SLEEPLOCK_DEFINE(mount_lock);
-static struct fs_mount_state *root_mnt;
+static HLIST_HEAD_DEFINE(kernel_mounts);
+static SPINLOCK_DEFINE(kernel_mounts_lock);
 
 static u32 __mount_state_hash(struct fs_mount_state *mnt,
 			      struct fs_dentry *dentry)
@@ -30,6 +32,8 @@ static struct fs_mount_state *__mount_state_alloc(unsigned long flags)
 {
 	struct fs_mount_state *mnt;
 
+	(void)flags;
+
 	mnt = kzalloc(sizeof(struct fs_mount_state));
 	if (!mnt)
 		return NULL;
@@ -38,10 +42,9 @@ static struct fs_mount_state *__mount_state_alloc(unsigned long flags)
 	list_init(&mnt->child);
 	list_init(&mnt->children);
 	refcnt_init(&mnt->count, 1);
-	spinlock_init(&mnt->lock, "mount.mnt_lock");
+	spinlock_init(&mnt->lock, "mount_state->lock");
 	hlist_node_init(&mnt->hash);
 	list_init(&mnt->instance);
-	mnt->flags = flags;
 
 	return mnt;
 }
@@ -142,14 +145,15 @@ struct fs_mount_state *fs_mount_state_lookup(const struct fs_path *path)
 int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
 	     unsigned long flags, void *data)
 {
-	struct fs_driver *type;
+	struct fs_driver *driver;
 	struct fs_mount_state *new_mnt;
 	struct fs_path mp_path;
-	struct fs_dentry *root_dentry;
 	int err;
+	struct fs_mount_args args;
+	struct fs_mount_result result;
 
-	type = fs_driver_lookup(type_name);
-	if (!type)
+	driver = fs_driver_lookup(type_name);
+	if (!driver)
 		return -ENODEV;
 
 	err = fs_path_lookup(dir_name, 0, &mp_path);
@@ -167,27 +171,25 @@ int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
 		return -ENOMEM;
 	}
 
-	root_dentry = type->mount(type, flags, dev_name, data);
-	if (IS_ERR(root_dentry)) {
-		err = PTR_ERR(root_dentry);
+	args.driver = driver;
+	args.dev_name = dev_name;
+	args.data = data;
+	args.flags = flags;
+	err = driver->mount(&args, &result);
+	if (err) {
 		__mount_state_free(new_mnt);
 		fs_path_put(&mp_path);
 		return err;
 	}
 
-	new_mnt->root = root_dentry;
-	new_mnt->sb = root_dentry->sb;
+	new_mnt->root = result.root;
+	new_mnt->sb = result.sb;
 
 	/* Stage 3: graft vfsmount into namespace topology. */
 	err = graft_tree(new_mnt, &mp_path);
 	if (err) {
-		/*
-		 * type->mount() returns the root dentry by move semantics.
-		 * graft failure means mount not published, so drop mnt_root ref
-		 * explicitly before tearing down the superblock.
-		 */
 		fs_dentry_put(new_mnt->root);
-		type->kill_sb(new_mnt->sb);
+		fs_super_block_put(new_mnt->sb);
 		__mount_state_free(new_mnt);
 		fs_path_put(&mp_path);
 		return err;
@@ -200,26 +202,23 @@ int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
 
 int do_umount(struct fs_mount_state *mnt, int flags)
 {
-	(void)flags;
-	fs_mount_state_put(mnt);
-	return 0;
-}
-
-struct fs_mount_state *fs_mount_state_get(struct fs_mount_state *mnt)
-{
-	refcnt_inc(&mnt->count);
-	return mnt;
-}
-
-void fs_mount_state_put(struct fs_mount_state *mnt)
-{
 	struct fs_mount_state *parent;
 	struct fs_dentry *mountpoint;
-	struct fs_dentry *root;
 	struct fs_super_block *sb;
+	refcnt_value_t refcnt;
 
-	if (refcnt_dec_fetch(&mnt->count) > 0)
-		return;
+	(void)flags;
+
+	/*
+	 * The VFS held one reference to the mount state, @mnt itself holds one
+	 * reference, so if the reference count is greater than 2, the mount
+	 * state is still in use.
+	 */
+	refcnt = fs_mount_state_get_refcnt(mnt);
+	if (refcnt > 2)
+		return -EBUSY;
+	if (refcnt < 2)
+		return -EINVAL;
 
 	/*
 	 * Unmount stage 1: detach from global topology while serialized by
@@ -229,7 +228,6 @@ void fs_mount_state_put(struct fs_mount_state *mnt)
 
 	parent = mnt->parent;
 	mountpoint = mnt->mount_point;
-	root = mnt->root;
 	sb = mnt->sb;
 
 	/*
@@ -241,9 +239,117 @@ void fs_mount_state_put(struct fs_mount_state *mnt)
 	hlist_del_init(&mnt->hash);
 	spinlock_release(&mount_hashtable_lock);
 
-	spinlock_acquire(&mnt->mount_point->lock);
-	mnt->mount_point->flags &= ~DCACHE_MOUNTED;
-	spinlock_release(&mnt->mount_point->lock);
+	spinlock_acquire(&mountpoint->lock);
+	mountpoint->flags &= ~DCACHE_MOUNTED;
+	spinlock_release(&mountpoint->lock);
+
+	spinlock_acquire(&parent->lock);
+	list_del(&mnt->child);
+	spinlock_release(&parent->lock);
+
+	spinlock_acquire(&sb->mnt_states_lock);
+	list_del(&mnt->instance);
+	spinlock_release(&sb->mnt_states_lock);
+
+	sleeplock_release(&mount_lock);
+
+	fs_mount_state_put(parent);
+	fs_dentry_put(mountpoint);
+
+	/*
+	 * Now the reference count should be 1, when the caller calls
+	 * fs_mount_state_put(), the reference count will be decremented to 0,
+	 * and the mount state will be freed.
+	 *
+	 * This is a critical point, because if the reference count is not 1,
+	 * the mount state will be freed prematurely, and the filesystem will
+	 * be corrupted.
+	 */
+	fs_mount_state_put(mnt);
+
+	return 0;
+}
+
+struct fs_mount_state *fs_mount_state_get(struct fs_mount_state *mnt)
+{
+	refcnt_inc(&mnt->count);
+	return mnt;
+}
+
+void fs_mount_state_put(struct fs_mount_state *mnt)
+{
+	if (refcnt_dec_fetch(&mnt->count) > 0)
+		return;
+
+	fs_dentry_put(mnt->root);
+	fs_super_block_put(mnt->sb);
+
+	__mount_state_free(mnt);
+}
+
+struct fs_mount_state *kernel_mount(struct fs_driver *driver,
+				    unsigned long flags, const char *dev_name,
+				    void *data)
+{
+	struct fs_mount_state *new_mnt;
+	int err;
+	struct fs_mount_args args;
+	struct fs_mount_result result;
+
+	new_mnt = __mount_state_alloc(0);
+	if (!new_mnt)
+		return ERR_PTR(-ENOMEM);
+	new_mnt->flags |= MOUNT_STATE_INTERNAL;
+
+	args.driver = driver;
+	args.dev_name = dev_name;
+	args.data = data;
+	args.flags = flags;
+	err = driver->mount(&args, &result);
+	if (err) {
+		__mount_state_free(new_mnt);
+		return ERR_PTR(err);
+	}
+
+	new_mnt->root = result.root;
+	new_mnt->sb = result.sb;
+
+	new_mnt->mount_point = result.root;
+	new_mnt->parent = new_mnt;
+
+	spinlock_acquire(&new_mnt->lock);
+	list_add_tail(&new_mnt->child, &new_mnt->children);
+	spinlock_release(&new_mnt->lock);
+
+	spinlock_acquire(&kernel_mounts_lock);
+	hlist_add_head(&new_mnt->hash, &kernel_mounts);
+	spinlock_release(&kernel_mounts_lock);
+
+	spinlock_acquire(&new_mnt->sb->mnt_states_lock);
+	list_add(&new_mnt->instance, &new_mnt->sb->mnt_states);
+	spinlock_release(&new_mnt->sb->mnt_states_lock);
+
+	return fs_mount_state_get(new_mnt);
+}
+
+int kernel_umount(struct fs_mount_state *mnt)
+{
+	refcnt_value_t refcnt;
+
+	if (!(mnt->flags & MOUNT_STATE_INTERNAL))
+		return -EINVAL;
+
+	refcnt = fs_mount_state_get_refcnt(mnt);
+	if (refcnt > 2) {
+		klog_warn("%s(): %p is busy: %u\n", __func__, mnt, refcnt);
+		return -EBUSY;
+	}
+	if (refcnt < 2)
+		return -EINVAL;
+
+	spinlock_acquire(&kernel_mounts_lock);
+	hlist_del_init(&mnt->hash);
+	spinlock_release(&kernel_mounts_lock);
 
 	spinlock_acquire(&mnt->parent->lock);
 	list_del(&mnt->child);
@@ -253,48 +359,12 @@ void fs_mount_state_put(struct fs_mount_state *mnt)
 	list_del(&mnt->instance);
 	spinlock_release(&mnt->sb->mnt_states_lock);
 
-	sleeplock_release(&mount_lock);
+	fs_mount_state_put(mnt);
 
-	/* Unmount stage 2: release owned references and tear down sb. */
-	fs_mount_state_put(parent);
-	fs_dentry_put(mountpoint);
-	fs_dentry_put(root);
-	sb->driver->kill_sb(sb);
-
-	__mount_state_free(mnt);
-}
-
-struct fs_mount_state *kernel_mount(struct fs_driver *fs_type,
-				    unsigned long flags, const char *dev_name,
-				    void *data)
-{
-	struct fs_mount_state *new_mnt;
-	struct fs_dentry *root_dentry;
-
-	new_mnt = __mount_state_alloc(0);
-	if (!new_mnt)
-		return ERR_PTR(-ENOMEM);
-
-	root_dentry = fs_type->mount(fs_type, flags, dev_name, data);
-	if (IS_ERR(root_dentry)) {
-		__mount_state_free(new_mnt);
-		return ERR_CAST(root_dentry);
-	}
-
-	new_mnt->mount_point = root_dentry;
-	new_mnt->root = root_dentry;
-	new_mnt->sb = root_dentry->sb;
-
-	return new_mnt;
-}
-
-int mount_tree_init(struct fs_path *root_path)
-{
-	struct fs_mount_state *mnt = kernel_mount(&tmpfs_fs_type, 0, "", NULL);
-	if (IS_ERR(mnt))
-		return PTR_ERR(mnt);
-	root_mnt = mnt;
-	root_path->mnt = fs_mount_state_get(root_mnt);
-	root_path->dentry = fs_dentry_get(root_mnt->root);
 	return 0;
+}
+
+refcnt_value_t fs_mount_state_get_refcnt(struct fs_mount_state *mnt)
+{
+	return refcnt_read(&mnt->count);
 }

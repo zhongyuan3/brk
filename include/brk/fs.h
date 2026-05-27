@@ -36,12 +36,22 @@
 struct page_cache;
 struct page_cache_ops;
 
+struct fs_mount_args {
+	struct fs_driver *driver;
+	const char *dev_name;
+	void *data;
+	unsigned long flags;
+};
+
+struct fs_mount_result {
+	struct fs_super_block *sb;
+	struct fs_dentry *root;
+};
+
 struct fs_driver {
 	const char *name;
 	unsigned int flags;
-	struct fs_dentry *(*mount)(struct fs_driver *, int, const char *,
-				   void *);
-	void (*kill_sb)(struct fs_super_block *sb);
+	int (*mount)(struct fs_mount_args *, struct fs_mount_result *);
 	spinlock_t lock;
 	struct list_head super_blocks;
 	struct list_head list;
@@ -69,11 +79,9 @@ struct fs_super_block {
 struct fs_super_block_ops {
 	struct fs_inode *(*alloc_inode)(struct fs_super_block *);
 	void (*free_inode)(struct fs_inode *);
-	void (*dirty_inode)(struct fs_inode *, int);
 	int (*write_inode)(struct fs_inode *, int);
 	void (*evict_inode)(struct fs_inode *);
 	void (*put_super)(struct fs_super_block *);
-	int (*sync_fs)(struct fs_super_block *, int);
 };
 
 struct fs_inode {

@@ -71,8 +71,7 @@ static int brkfs_validate_super(struct brkfs_super_block *sb)
 	return 0;
 }
 
-struct fs_dentry *brkfs_mount(struct fs_driver *fs_type, int flags,
-			      const char *dev_name, void *data)
+int brkfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 {
 	struct block_dev *bdev = NULL;
 	int err;
@@ -82,33 +81,31 @@ struct fs_dentry *brkfs_mount(struct fs_driver *fs_type, int flags,
 	struct fs_dentry *root_dentry;
 	struct fs_inode *root_inode;
 
-	(void)data;
-
-	bdev = brkfs_get_bdev(dev_name);
+	bdev = brkfs_get_bdev(args->dev_name);
 	if (IS_ERR(bdev))
-		return ERR_CAST(bdev);
+		return PTR_ERR(bdev);
 
 	err = brkfs_read_super(&brk_sb, bdev);
 	if (err)
-		return ERR_PTR(err);
+		return err;
 
 	err = brkfs_validate_super(&brk_sb);
 	if (err)
-		return ERR_PTR(err);
+		return err;
 
 	sb_info = brkfs_sb_info_alloc(bdev, &brk_sb);
 	if (!sb_info)
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 
-	sb = fs_super_block_alloc(fs_type);
+	sb = fs_super_block_alloc(args->driver);
 	if (!sb) {
 		brkfs_sb_info_free(sb_info);
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 	}
 
 	sb->block_size = brk_sb.s_blocksize;
 	sb->magic = BRKFS_MAGIC;
-	sb->flags = flags;
+	sb->flags = args->flags;
 	sb->ops = &brkfs_sops;
 	sb->default_dops = &generic_dop;
 
@@ -118,7 +115,7 @@ struct fs_dentry *brkfs_mount(struct fs_driver *fs_type, int flags,
 	if (!root_inode) {
 		fs_super_block_free(sb);
 		brkfs_sb_info_free(sb_info);
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 	}
 
 	sleeplock_acquire(&root_inode->rwsem);
@@ -128,7 +125,7 @@ struct fs_dentry *brkfs_mount(struct fs_driver *fs_type, int flags,
 		fs_inode_put(root_inode);
 		fs_super_block_free(sb);
 		brkfs_sb_info_free(sb_info);
-		return ERR_PTR(err);
+		return err;
 	}
 	brkfs_inode_setup_ops(root_inode);
 	fs_inode_unlock_new(root_inode);
@@ -138,33 +135,24 @@ struct fs_dentry *brkfs_mount(struct fs_driver *fs_type, int flags,
 		fs_inode_put(root_inode);
 		fs_super_block_free(sb);
 		brkfs_sb_info_free(sb_info);
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 	}
 
 	sb->root = fs_dentry_get(root_dentry);
 
-	spinlock_acquire(&fs_type->lock);
-	list_add_tail(&sb->instance, &fs_type->super_blocks);
-	spinlock_release(&fs_type->lock);
+	spinlock_acquire(&args->driver->lock);
+	list_add_tail(&sb->instance, &args->driver->super_blocks);
+	spinlock_release(&args->driver->lock);
 
-	return root_dentry;
-}
+	result->root = root_dentry;
+	result->sb = sb;
 
-static void brkfs_kill_sb(struct fs_super_block *sb)
-{
-	struct fs_driver *fs_type = sb->driver;
-
-	spinlock_acquire(&fs_type->lock);
-	list_del(&sb->instance);
-	spinlock_release(&fs_type->lock);
-
-	fs_super_block_put(sb);
+	return 0;
 }
 
 struct fs_driver brkfs_fs_type = {
 	.name = "brkfs",
 	.mount = brkfs_mount,
-	.kill_sb = brkfs_kill_sb,
 	.lock = SPINLOCK_INITIALIZER("brkfs_fs_lock"),
 	.super_blocks = LIST_INITIALIZER(brkfs_fs_type.super_blocks),
 	.list = LIST_INITIALIZER(brkfs_fs_type.list),

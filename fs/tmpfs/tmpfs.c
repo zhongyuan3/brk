@@ -579,30 +579,27 @@ static int tmpfs_init_new_inode(struct tmpfs_super_block *sb,
 	return 0;
 }
 
-static struct fs_dentry *tmpfs_mount(struct fs_driver *fs_type, int flags,
-				     const char *dev_name, void *data)
+int tmpfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 {
-	(void)dev_name;
-	(void)data;
 	struct fs_super_block *sb;
 	struct tmpfs_super_block *t_sb;
 	struct fs_inode *root_inode;
 	struct fs_dentry *root_dentry;
 
-	sb = fs_super_block_alloc(fs_type);
+	sb = fs_super_block_alloc(args->driver);
 	if (!sb)
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 
 	sb->block_size = PAGE_SIZE;
 	sb->magic = TMPFS_MAGIC;
-	sb->flags = flags;
+	sb->flags = args->flags;
 	sb->ops = &tmpfs_sops;
 	sb->default_dops = &generic_dop;
 
 	t_sb = tmpfs_alloc_super();
 	if (!t_sb) {
 		fs_super_block_free(sb);
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 	}
 	sb->private_data = t_sb;
 
@@ -610,13 +607,13 @@ static struct fs_dentry *tmpfs_mount(struct fs_driver *fs_type, int flags,
 	if (!root_inode) {
 		tmpfs_free_super(t_sb);
 		fs_super_block_free(sb);
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 	}
 	if (tmpfs_init_new_inode(t_sb, root_inode)) {
 		fs_inode_put(root_inode);
 		tmpfs_free_super(t_sb);
 		fs_super_block_free(sb);
-		return ERR_PTR(-EIO);
+		return -EIO;
 	}
 
 	root_dentry = fs_dentry_make_root(root_inode);
@@ -624,33 +621,19 @@ static struct fs_dentry *tmpfs_mount(struct fs_driver *fs_type, int flags,
 		fs_inode_put(root_inode);
 		tmpfs_free_super(t_sb);
 		fs_super_block_free(sb);
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 	}
 
 	sb->root = fs_dentry_get(root_dentry);
 
-	spinlock_acquire(&fs_type->lock);
-	list_add_tail(&sb->instance, &fs_type->super_blocks);
-	spinlock_release(&fs_type->lock);
+	spinlock_acquire(&args->driver->lock);
+	list_add_tail(&sb->instance, &args->driver->super_blocks);
+	spinlock_release(&args->driver->lock);
 
-	return root_dentry;
-}
+	result->root = root_dentry;
+	result->sb = sb;
 
-static void tmpfs_kill_sb(struct fs_super_block *sb)
-{
-	struct fs_driver *fs_type = sb->driver;
-
-	spinlock_acquire(&fs_type->lock);
-	list_del(&sb->instance);
-	spinlock_release(&fs_type->lock);
-
-	fs_super_block_put(sb);
-}
-
-static void tmpfs_dirty_inode(struct fs_inode *inode, int flags)
-{
-	(void)inode;
-	(void)flags;
+	return 0;
 }
 
 static int tmpfs_write_inode(struct fs_inode *inode, int sync)
@@ -690,16 +673,17 @@ static void tmpfs_evict_inode(struct fs_inode *inode)
 static void tmpfs_put_super(struct fs_super_block *sb)
 {
 	struct tmpfs_super_block *t_sb = sb->private_data;
-	tmpfs_free_super(t_sb);
+	struct fs_driver *driver = sb->driver;
+
+	spinlock_acquire(&driver->lock);
+	list_del(&sb->instance);
+	spinlock_release(&driver->lock);
+
 	fs_dentry_put(sb->root);
-}
+	sb->root = NULL;
 
-static int tmpfs_sync_fs(struct fs_super_block *sb, int wait)
-{
-	(void)sb;
-	(void)wait;
-
-	return 0;
+	tmpfs_free_super(t_sb);
+	sb->private_data = NULL;
 }
 
 static struct fs_dentry *
@@ -1418,18 +1402,15 @@ static long tmpfs_dir_ioctl(struct fs_file *file, unsigned int cmd,
 struct fs_driver tmpfs_fs_type = {
 	.name = "tmpfs",
 	.mount = tmpfs_mount,
-	.kill_sb = tmpfs_kill_sb,
 	.lock = SPINLOCK_INITIALIZER("tmpfs_fs_lock"),
 	.super_blocks = LIST_INITIALIZER(tmpfs_fs_type.super_blocks),
 	.list = LIST_INITIALIZER(tmpfs_fs_type.list),
 };
 
 const struct fs_super_block_ops tmpfs_sops = {
-	.dirty_inode = tmpfs_dirty_inode,
 	.write_inode = tmpfs_write_inode,
 	.evict_inode = tmpfs_evict_inode,
 	.put_super = tmpfs_put_super,
-	.sync_fs = tmpfs_sync_fs,
 };
 
 const struct fs_inode_ops tmpfs_iops = {
