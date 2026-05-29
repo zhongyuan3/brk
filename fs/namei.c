@@ -1,7 +1,8 @@
 #include <brk/error.h>
 #include <brk/fs.h>
-#include <brk/lock.h>
 #include <brk/path.h>
+#include <brk/sleeplock.h>
+#include <brk/spinlock.h>
 #include <uapi/brk/errno.h>
 #include <uapi/fcntl.h>
 

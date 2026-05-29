@@ -1,8 +1,8 @@
 #ifndef BRK_TTY_H
 #define BRK_TTY_H
 
-#include <brk/lock.h>
-#include <brk/refcnt.h>
+#include <brk/refcnt_types.h>
+#include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <uapi/ioctl.h>
 #include <uapi/types.h>

@@ -1,5 +1,6 @@
 #include <brk/fs.h>
 #include <brk/list.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 
 static LIST_DEFINE(filesystems);

@@ -2,11 +2,12 @@
 #include <brk/device.h>
 #include <brk/fs.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/process.h>
+#include <brk/refcnt.h>
 #include <brk/slab.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/tty.h>
 #include <brk/types.h>

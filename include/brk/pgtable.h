@@ -2,9 +2,9 @@
 #define BRK_PGTABLE_H
 
 #include <brk/asm.h>
-#include <brk/lock.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
+#include <brk/spinlock_types.h>
 #include <brk/types.h>
 
 #define PTE_V 1 /* Valid */

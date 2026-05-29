@@ -1,8 +1,8 @@
 #include <brk/irq.h>
-#include <brk/lock.h>
 #include <brk/panic.h>
 #include <brk/plic.h>
 #include <brk/slab.h>
+#include <brk/spinlock.h>
 #include <uapi/brk/errno.h>
 
 static irq_handler_t *irq_handlers;

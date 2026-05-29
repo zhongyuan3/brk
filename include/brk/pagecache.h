@@ -3,10 +3,11 @@
 
 #include <brk/fs_types.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
-#include <brk/refcnt.h>
+#include <brk/refcnt_types.h>
+#include <brk/sleeplock_types.h>
+#include <brk/spinlock_types.h>
 #include <brk/types.h>
 
 typedef unsigned long pgoff_t;

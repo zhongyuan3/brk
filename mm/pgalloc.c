@@ -1,10 +1,10 @@
 #include <brk/asm.h>
 #include <brk/assert.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/mm_types.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 
 struct buddy_bucket {

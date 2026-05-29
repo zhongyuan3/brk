@@ -1,11 +1,11 @@
 #include <brk/fs.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/pgtable.h>
 #include <brk/process.h>
 #include <brk/riscv.h>
+#include <brk/spinlock.h>
 #include <brk/timekeeper.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>

@@ -3,9 +3,9 @@
 
 #include <brk/asm.h>
 #include <brk/fs_types.h>
-#include <brk/lock.h>
 #include <brk/mm_types.h>
 #include <brk/path.h>
+#include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <uapi/brk/limits.h>
 #include <uapi/resource.h>

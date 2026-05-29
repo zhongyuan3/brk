@@ -4,12 +4,12 @@
 #include <brk/fs.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/mount.h>
 #include <brk/panic.h>
 #include <brk/path.h>
 #include <brk/process.h>
 #include <brk/slab.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>

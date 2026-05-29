@@ -1,7 +1,7 @@
 #ifndef BRK_VIRTIO_BLK_H
 #define BRK_VIRTIO_BLK_H
 
-#include <brk/lock.h>
+#include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <brk/virtio_queue.h>
 

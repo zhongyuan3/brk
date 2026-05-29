@@ -3,7 +3,6 @@
 #include <brk/fs.h>
 #include <brk/kernel.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
 #include <brk/panic.h>
@@ -14,6 +13,7 @@
 #include <brk/riscv.h>
 #include <brk/signal.h>
 #include <brk/slab.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/timer.h>
 #include <brk/trap.h>

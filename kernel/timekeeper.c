@@ -1,8 +1,8 @@
 #include <brk/cpu.h>
-#include <brk/lock.h>
 #include <brk/process.h>
 #include <brk/riscv.h>
 #include <brk/rtc.h>
+#include <brk/spinlock.h>
 #include <brk/timeconst.h>
 #include <brk/timekeeper.h>
 #include <uapi/brk/errno.h>

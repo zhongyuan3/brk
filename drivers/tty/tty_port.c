@@ -1,5 +1,5 @@
-#include <brk/lock.h>
 #include <brk/slab.h>
+#include <brk/spinlock.h>
 #include <brk/tty.h>
 #include <brk/types.h>
 

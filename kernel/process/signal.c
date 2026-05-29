@@ -1,9 +1,9 @@
 #include <brk/asm.h>
 #include <brk/kernel.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/process.h>
 #include <brk/signal.h>
+#include <brk/spinlock.h>
 #include <uapi/brk/errno.h>
 #include <uapi/signal.h>
 

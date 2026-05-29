@@ -1,11 +1,11 @@
 #include <brk/dtb.h>
 #include <brk/ioremap.h>
-#include <brk/lock.h>
 #include <brk/mm.h>
 #include <brk/mmio.h>
 #include <brk/pgtable.h>
 #include <brk/printk.h>
 #include <brk/rtc.h>
+#include <brk/spinlock.h>
 #include <brk/timeconst.h>
 #include <uapi/time.h>
 

@@ -4,11 +4,12 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/path.h>
 #include <brk/pgtable.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
+#include <brk/sleeplock.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <uapi/brk/errno.h>
 #include <uapi/stat.h>

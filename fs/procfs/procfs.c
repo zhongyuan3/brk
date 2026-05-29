@@ -48,13 +48,13 @@
 #include <brk/kernel.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/path.h>
 #include <brk/pgalloc.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/process.h>
 #include <brk/slab.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>

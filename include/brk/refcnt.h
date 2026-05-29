@@ -1,14 +1,7 @@
 #ifndef BRK_REFCNT_H
 #define BRK_REFCNT_H
 
-#include <brk/lock.h>
-
-typedef unsigned int refcnt_value_t;
-
-typedef struct __refcnt {
-	refcnt_value_t counter;
-	spinlock_t lock;
-} refcnt_t;
+#include <brk/refcnt_types.h>
 
 void refcnt_init(refcnt_t *rc, refcnt_value_t val);
 refcnt_value_t refcnt_read(refcnt_t *rc);
