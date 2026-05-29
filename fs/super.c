@@ -1,8 +1,8 @@
 #include <brk/fs.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
+#include <brk/spinlock.h>
 
 static LIST_DEFINE(super_blocks);
 static SPINLOCK_DEFINE(sb_lock);

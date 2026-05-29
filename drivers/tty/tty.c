@@ -1,9 +1,9 @@
 #include <brk/device.h>
-#include <brk/lock.h>
 #include <brk/process.h>
 #include <brk/refcnt.h>
 #include <brk/signal.h>
 #include <brk/slab.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/tty.h>
 #include <brk/types.h>

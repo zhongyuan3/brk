@@ -3,6 +3,7 @@
 #include <brk/fs.h>
 #include <brk/pagecache.h>
 #include <brk/slab.h>
+#include <brk/spinlock.h>
 
 static struct fs_inode *brkfs_alloc_inode(struct fs_super_block *sb)
 {

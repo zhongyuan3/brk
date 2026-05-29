@@ -3,8 +3,8 @@
 
 #include <brk/bits.h>
 #include <brk/fs_types.h>
-#include <brk/lock.h>
-#include <brk/refcnt.h>
+#include <brk/refcnt_types.h>
+#include <brk/spinlock_types.h>
 #include <brk/types.h>
 
 #define MOUNT_HTABLE_BITS 5

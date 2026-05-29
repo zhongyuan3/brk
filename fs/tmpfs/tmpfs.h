@@ -2,8 +2,8 @@
 #define TMPFS_H
 
 #include <brk/asm.h>
-#include <brk/lock.h>
 #include <brk/mm_types.h>
+#include <brk/sleeplock_types.h>
 #include <brk/types.h>
 
 struct tmpfs_dir_entry {

@@ -1,4 +1,5 @@
 #include <brk/process.h>
+#include <brk/spinlock.h>
 
 static SPINLOCK_DEFINE(pid_lock);
 static pid_t curr_pid = 1;

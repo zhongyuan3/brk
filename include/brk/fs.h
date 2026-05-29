@@ -2,9 +2,9 @@
 #define BRK_FS_H
 
 #include <brk/fs_types.h>
-#include <brk/lock.h>
 #include <brk/path.h>
-#include <brk/refcnt.h>
+#include <brk/refcnt_types.h>
+#include <brk/sleeplock_types.h>
 #include <brk/types.h>
 #include <uapi/stat.h>
 #include <uapi/time.h>

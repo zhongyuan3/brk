@@ -1,9 +1,9 @@
 #include <brk/ioremap.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/mmio.h>
 #include <brk/pgtable.h>
 #include <brk/slab.h>
+#include <brk/spinlock.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
 #include <brk/virtio_mmio.h>

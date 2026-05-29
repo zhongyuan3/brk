@@ -4,7 +4,7 @@
 #include <brk/fs.h>
 #include <brk/kernel.h>
 #include <brk/ktime.h>
-#include <brk/lock.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <uapi/brk/errno.h>
 #include <uapi/stat.h>

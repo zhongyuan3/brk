@@ -1,13 +1,13 @@
 #include <brk/assert.h>
 #include <brk/kernel.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>

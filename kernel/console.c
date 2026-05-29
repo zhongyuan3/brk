@@ -1,8 +1,8 @@
 #include <brk/console.h>
 #include <brk/device.h>
 #include <brk/list.h>
-#include <brk/lock.h>
 #include <brk/sbi.h>
+#include <brk/spinlock.h>
 #include <brk/tty.h>
 #include <brk/uart.h>
 

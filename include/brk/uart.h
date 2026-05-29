@@ -2,7 +2,7 @@
 #define BRK_UART_H
 
 #include <brk/device.h>
-#include <brk/lock.h>
+#include <brk/spinlock_types.h>
 #include <brk/types.h>
 
 #define NS16550A_NUM_PORTS NS16550A_MINOR_COUNT

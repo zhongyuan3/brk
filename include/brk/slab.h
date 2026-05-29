@@ -1,8 +1,8 @@
 #ifndef BRK_SLAB_H
 #define BRK_SLAB_H
 
-#include <brk/lock.h>
 #include <brk/mm_types.h>
+#include <brk/spinlock_types.h>
 
 #define NR_KMALLOC_CACHES 10
 
