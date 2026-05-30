@@ -73,5 +73,9 @@ u64 sys_renameat(void);
 u64 sys_renameat2(void);
 u64 sys_symlinkat(void);
 u64 sys_readlinkat(void);
+u64 sys_fsync(void);
+u64 sys_fdatasync(void);
+u64 sys_sync(void);
+u64 sys_syncfs(void);
 
 #endif

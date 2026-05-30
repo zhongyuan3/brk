@@ -727,3 +727,49 @@ u64 sys_ioctl(void)
 	long ret = fs_file_ioctl(fp, cmd, arg);
 	return (u64)(long)ret;
 }
+
+static u64 do_fsync(int datasync)
+{
+	struct fs_file *fp = NULL;
+	int err;
+
+	err = syscall_arg_fd(0, NULL, &fp);
+	if (err)
+		return err;
+
+	/* Filesystems with nothing to persist (pipes, tmpfs, ...) have no
+	 * ->fsync; treat the request as a successful no-op. */
+	if (!fp->ops || !fp->ops->fsync)
+		return 0;
+
+	return fp->ops->fsync(fp, 0, -1, datasync);
+}
+
+u64 sys_fsync(void)
+{
+	return do_fsync(0);
+}
+
+u64 sys_fdatasync(void)
+{
+	return do_fsync(1);
+}
+
+u64 sys_sync(void)
+{
+	sync_all_filesystems();
+	return 0;
+}
+
+u64 sys_syncfs(void)
+{
+	struct fs_file *fp = NULL;
+	int err;
+
+	err = syscall_arg_fd(0, NULL, &fp);
+	if (err)
+		return err;
+	if (!fp->inode)
+		return -EINVAL;
+	return sync_filesystem(fp->inode->sb);
+}

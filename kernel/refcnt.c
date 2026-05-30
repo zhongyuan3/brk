@@ -56,3 +56,15 @@ void refcnt_dec(refcnt_t *rc)
 {
 	refcnt_dec_fetch(rc);
 }
+
+bool refcnt_inc_unless_zero(refcnt_t *rc)
+{
+	bool taken;
+
+	spinlock_acquire(&rc->lock);
+	taken = rc->counter > 0;
+	if (taken)
+		rc->counter++;
+	spinlock_release(&rc->lock);
+	return taken;
+}
