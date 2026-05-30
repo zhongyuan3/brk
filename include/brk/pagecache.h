@@ -15,6 +15,7 @@ typedef unsigned long pgoff_t;
 #define PCP_UPTODATE (1u << 0) /* page contents are valid */
 #define PCP_DIRTY (1u << 1) /* page is on the mapping's dirty list */
 #define PCP_ERROR (1u << 2) /* last IO returned an error */
+#define PCP_WRITEBACK (1u << 3) /* writeback IO is currently in flight */
 
 #define PAGE_CACHE_HBITS 6
 #define PAGE_CACHE_HSIZE (1u << PAGE_CACHE_HBITS)
@@ -95,12 +96,29 @@ void cached_page_mark_dirty(struct cached_page *cp);
 void cached_page_mark_uptodate(struct cached_page *cp);
 bool cached_page_uptodate(struct cached_page *cp);
 bool cached_page_dirty(struct cached_page *cp);
+bool cached_page_writeback(struct cached_page *cp);
+
+/*
+ * page_cache_flush_range() - write back dirty pages overlapping a byte range.
+ *
+ * Flushes every dirty page whose contents intersect the inclusive byte range
+ * [@start, @end]. A negative @end means "up to the end of the mapping".
+ *
+ * The set of pages to write is snapshotted under the mapping lock before any
+ * IO is issued, so the call is guaranteed to terminate even if other threads
+ * keep dirtying pages concurrently; such pages are simply left for a later
+ * flush. Pages remain in the cache after a successful writeback.
+ *
+ * Return: 0 on success, or the first negative errno encountered (pages that
+ * failed to write are left dirty so a subsequent flush retries them).
+ */
+int page_cache_flush_range(struct page_cache *mapping, loff_t start,
+			   loff_t end);
 
 /*
  * page_cache_flush() - flush every dirty page in @mapping.
  *
- * Pages remain in the cache after a successful writeback. Returns 0 on
- * success or the first negative errno encountered.
+ * Equivalent to page_cache_flush_range() over the whole mapping.
  */
 int page_cache_flush(struct page_cache *mapping);
 

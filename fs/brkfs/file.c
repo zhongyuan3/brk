@@ -168,12 +168,10 @@ static int brkfs_file_fsync(struct fs_file *file, loff_t start, loff_t end,
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	int err;
 
-	(void)start;
-	(void)end;
 	(void)datasync;
 
 	sleeplock_acquire(&inode->rwsem);
-	err = page_cache_flush(inode->mapping);
+	err = page_cache_flush_range(inode->mapping, start, end);
 	if (!err)
 		err = brkfs_inode_write(sbi, inode);
 	sleeplock_release(&inode->rwsem);
