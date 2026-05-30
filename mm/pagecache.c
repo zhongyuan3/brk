@@ -227,6 +227,15 @@ bool cached_page_dirty(struct cached_page *cp)
 	return ret;
 }
 
+bool cached_page_writeback(struct cached_page *cp)
+{
+	bool ret;
+	spinlock_acquire(&cp->lock);
+	ret = (cp->flags & PCP_WRITEBACK) != 0;
+	spinlock_release(&cp->lock);
+	return ret;
+}
+
 void cached_page_mark_uptodate(struct cached_page *cp)
 {
 	spinlock_acquire(&cp->lock);
@@ -282,51 +291,111 @@ struct cached_page *read_mapping_page(struct page_cache *m, pgoff_t index)
 	return cp;
 }
 
-int page_cache_flush(struct page_cache *m)
+/*
+ * Snapshot the dirty pages that overlap [first, last] onto @batch.
+ *
+ * Matching pages are moved off the mapping's dirty list and given an extra
+ * reference (released by the writeback loop). They intentionally keep their
+ * PCP_DIRTY marker while parked on @batch: cached_page_mark_dirty() only links
+ * a page when PCP_DIRTY is clear, so a concurrent writer that re-dirties one
+ * of these pages will not corrupt @batch by trying to re-link an already
+ * linked node. Caller must hold @m->lock.
+ */
+static void collect_dirty_batch(struct page_cache *m, pgoff_t first,
+				pgoff_t last, struct list_head *batch)
 {
+	struct cached_page *cp, *n;
+
+	list_for_each_entry_safe(cp, n, &m->dirty_pages, dirty_list) {
+		if (cp->index < first || cp->index > last)
+			continue;
+		refcnt_inc(&cp->refcnt);
+		list_move_tail(&cp->dirty_list, batch);
+	}
+}
+
+/*
+ * Write a single page that was collected onto a writeback batch back to its
+ * backing store, transitioning it dirty -> writeback -> clean.
+ *
+ * Clearing PCP_DIRTY (under both locks) is what lets a racing writer re-dirty
+ * the page: once the flag is clear its dirty_list node is free again, so the
+ * writer re-links it onto the mapping and a later flush will pick it up. This
+ * is the standard "clear dirty before starting IO" ordering that avoids losing
+ * an update that lands while writeback is in flight.
+ */
+static int writeback_one(struct page_cache *m, struct cached_page *cp)
+{
+	bool do_write;
+	int err = 0;
+
+	spinlock_acquire(&m->lock);
+	list_del_init(&cp->dirty_list);
+	spinlock_acquire(&cp->lock);
+	do_write = (cp->flags & PCP_UPTODATE) != 0;
+	cp->flags &= ~PCP_DIRTY;
+	if (do_write)
+		cp->flags |= PCP_WRITEBACK;
+	spinlock_release(&cp->lock);
+	spinlock_release(&m->lock);
+
+	if (!do_write)
+		return 0;
+
+	cached_page_lock(cp);
+	err = m->ops->write_page(m, cp);
+	cached_page_unlock(cp);
+
+	spinlock_acquire(&cp->lock);
+	cp->flags &= ~PCP_WRITEBACK;
+	if (err)
+		cp->flags |= PCP_ERROR;
+	spinlock_release(&cp->lock);
+
+	/* Re-dirty so a later flush retries the page that failed to write. */
+	if (err)
+		cached_page_mark_dirty(cp);
+
+	return err;
+}
+
+int page_cache_flush_range(struct page_cache *m, loff_t start, loff_t end)
+{
+	LIST_DEFINE(batch);
+	pgoff_t first, last;
 	int first_err = 0;
 
 	if (!m || !m->ops || !m->ops->write_page)
 		return 0;
 
-	while (1) {
-		struct cached_page *cp = NULL;
-		bool was_dirty = false;
-		bool was_uptodate = false;
-		int err = 0;
+	if (start < 0)
+		start = 0;
+	first = (pgoff_t)(start >> PAGE_SHIFT);
+	last = (end < 0) ? ~(pgoff_t)0 : (pgoff_t)(end >> PAGE_SHIFT);
 
-		spinlock_acquire(&m->lock);
-		if (!list_empty(&m->dirty_pages)) {
-			cp = list_first_entry(&m->dirty_pages,
-					      struct cached_page, dirty_list);
-			refcnt_inc(&cp->refcnt);
-			list_del_init(&cp->dirty_list);
-			spinlock_acquire(&cp->lock);
-			was_dirty = (cp->flags & PCP_DIRTY) != 0;
-			was_uptodate = (cp->flags & PCP_UPTODATE) != 0;
-			cp->flags &= ~PCP_DIRTY;
-			spinlock_release(&cp->lock);
-		}
-		spinlock_release(&m->lock);
+	spinlock_acquire(&m->lock);
+	collect_dirty_batch(m, first, last, &batch);
+	spinlock_release(&m->lock);
 
-		if (!cp)
-			break;
+	while (!list_empty(&batch)) {
+		struct cached_page *cp = list_first_entry(&batch,
+							  struct cached_page,
+							  dirty_list);
+		int err;
 
-		if (was_dirty && was_uptodate) {
-			cached_page_lock(cp);
-			err = m->ops->write_page(m, cp);
-			cached_page_unlock(cp);
-		}
-
-		if (err) {
-			cached_page_mark_dirty(cp);
-			if (!first_err)
-				first_err = err;
-		}
+		/* writeback_one() unlinks @cp from @batch. */
+		err = writeback_one(m, cp);
+		if (err && !first_err)
+			first_err = err;
 		cached_page_put(cp);
 	}
 
 	return first_err;
+}
+
+int page_cache_flush(struct page_cache *m)
+{
+	return page_cache_flush_range(m, 0, -1);
 }
 
 int truncate_inode_pages(struct page_cache *m, loff_t new_size)
