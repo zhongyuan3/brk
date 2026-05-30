@@ -41,11 +41,11 @@ static int brkfs_init_loaded_inode(struct brkfs_sb_info *sbi,
 		return err;
 	brkfs_inode_attach_ops(inode);
 	/*
-	 * Regular files are read/written through the page cache. Other inode
-	 * types use bespoke paths (directory entries / symlink targets are
-	 * handled directly via brkfs_block_read|write).
+	 * Regular files and symlinks store their data through the same block
+	 * structure and are read/written through the page cache. Directories
+	 * and device nodes use bespoke paths and do not need a mapping.
 	 */
-	if (S_ISREG(inode->mode)) {
+	if (S_ISREG(inode->mode) || S_ISLNK(inode->mode)) {
 		err = fs_inode_attach_page_cache(inode, &brkfs_file_pc_ops);
 		if (err)
 			return err;
