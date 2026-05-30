@@ -329,7 +329,7 @@ int page_cache_flush(struct page_cache *m)
 	return first_err;
 }
 
-void truncate_inode_pages(struct page_cache *m, loff_t new_size)
+int truncate_inode_pages(struct page_cache *m, loff_t new_size)
 {
 	pgoff_t first_full;
 	pgoff_t partial_idx;
@@ -339,7 +339,7 @@ void truncate_inode_pages(struct page_cache *m, loff_t new_size)
 	struct cached_page *partial = NULL;
 
 	if (!m)
-		return;
+		return 0;
 	if (new_size < 0)
 		new_size = 0;
 
@@ -361,26 +361,23 @@ void truncate_inode_pages(struct page_cache *m, loff_t new_size)
 			spinlock_acquire(&m->lock);
 		}
 	}
-	if (partial_off) {
-		partial = __lookup_locked(m, partial_idx);
-		if (partial)
-			refcnt_inc(&partial->refcnt);
-	}
 	spinlock_release(&m->lock);
 
-	/* Phase 2: zero the tail of the last (partial) page if any. */
-	if (partial) {
+	/* Phase 2: zero the tail of the page that straddles new_size. */
+	if (partial_off) {
+		partial = read_mapping_page(m, partial_idx);
+		if (IS_ERR(partial))
+			return PTR_ERR(partial);
+
 		cached_page_lock(partial);
-		if (cached_page_uptodate(partial)) {
-			u8 *base = cached_page_addr(partial);
-			memset(base + partial_off, 0, PAGE_SIZE - partial_off);
-			cached_page_unlock(partial);
-			cached_page_mark_dirty(partial);
-		} else {
-			cached_page_unlock(partial);
-		}
+		memset((u8 *)cached_page_addr(partial) + partial_off, 0,
+		       PAGE_SIZE - partial_off);
+		cached_page_unlock(partial);
+		cached_page_mark_dirty(partial);
 		cached_page_put(partial);
 	}
+
+	return 0;
 }
 
 ssize_t generic_file_read(struct fs_file *file, char *buf, usize_t size,

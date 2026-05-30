@@ -6,6 +6,7 @@
 #include <brk/ktime.h>
 #include <brk/pagecache.h>
 #include <brk/slab.h>
+#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
@@ -461,11 +462,20 @@ static int brkfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 		inode_touch_ctime(inode);
 	}
 	if (attr->valid & ATTR_SIZE) {
-		/* Drop cached pages that are beyond the new size before freeing
-		 * the on-disk blocks, otherwise stale data would be visible to
-		 * concurrent readers. */
-		truncate_inode_pages(inode->mapping, attr->size);
-		err = brkfs_truncate_inode_blocks(inode, attr->size);
+		/*
+		 * Shrink: drop cache pages past the new EOF, zero the partial
+		 * tail page, flush dirty data, then free on-disk blocks. The
+		 * inode rwsem excludes concurrent generic_file I/O.
+		 */
+		sleeplock_acquire(&inode->rwsem);
+		if (inode->mapping) {
+			err = truncate_inode_pages(inode->mapping, attr->size);
+			if (!err)
+				err = page_cache_flush(inode->mapping);
+		}
+		if (!err)
+			err = brkfs_truncate_inode_blocks(inode, attr->size);
+		sleeplock_release(&inode->rwsem);
 		if (err)
 			goto out;
 		inode_touch_mtime_ctime(inode);

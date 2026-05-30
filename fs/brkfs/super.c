@@ -72,7 +72,7 @@ static void brkfs_evict_inode(struct fs_inode *inode)
 	} else {
 		/* Drop the cache wholesale: pages would be invalid once the
 		 * underlying disk blocks are freed below. */
-		truncate_inode_pages(inode->mapping, 0);
+		(void)truncate_inode_pages(inode->mapping, 0);
 		brkfs_truncate_inode_blocks(inode, 0);
 		inode->size = 0;
 		inode->nlink = 0;
