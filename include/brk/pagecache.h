@@ -16,23 +16,12 @@ typedef unsigned long pgoff_t;
 #define PCP_DIRTY (1u << 1) /* page is on the mapping's dirty list */
 #define PCP_ERROR (1u << 2) /* last IO returned an error */
 
-#define ADDRESS_SPACE_HBITS 6
-#define ADDRESS_SPACE_HSIZE (1u << ADDRESS_SPACE_HBITS)
+#define PAGE_CACHE_HBITS 6
+#define PAGE_CACHE_HSIZE (1u << PAGE_CACHE_HBITS)
 
 struct page_cache;
 struct page_cache_ops;
 
-/*
- * A cached page lives in exactly one address_space at a time.
- *
- * Lifetime / locking:
- *   - @refcnt is the user reference count. The cache itself does NOT take
- *     a reference. When @refcnt drops to zero and the page is not dirty,
- *     the page is detached from the mapping and freed.
- *   - @flags is protected by @lock.
- *   - @io_lock serializes ->readpage / ->writepage on the page.
- *   - @ht_node / @dirty_list are protected by mapping->lock.
- */
 struct cached_page {
 	refcnt_t refcnt;
 	struct page *page;
@@ -47,7 +36,7 @@ struct cached_page {
 
 struct page_cache_ops {
 	/**
-	 * readpage() - populate @cp->page from backing store
+	 * read_page() - populate @cp->page from backing store
 	 *
 	 * Called with @cp->io_lock held. On success the implementation must
 	 * leave the page contents valid (zero-filling holes is acceptable);
@@ -55,10 +44,10 @@ struct page_cache_ops {
 	 *
 	 * Return: 0 on success, negative errno on failure.
 	 */
-	int (*readpage)(struct page_cache *mapping, struct cached_page *cp);
+	int (*read_page)(struct page_cache *mapping, struct cached_page *cp);
 
 	/**
-	 * writepage() - persist @cp->page to backing store
+	 * write_page() - persist @cp->page to backing store
 	 *
 	 * Called with @cp->io_lock held. The implementation should write the
 	 * entire page to the appropriate disk block, allocating one on demand
@@ -66,38 +55,29 @@ struct page_cache_ops {
 	 *
 	 * Return: 0 on success, negative errno on failure.
 	 */
-	int (*writepage)(struct page_cache *mapping, struct cached_page *cp);
+	int (*write_page)(struct page_cache *mapping, struct cached_page *cp);
 };
 
-/*
- * @host is opaque so a mapping can be backed by either a file inode
- * (struct fs_inode *) or a block device (struct block_dev *). Callbacks in
- * a_ops know which one to cast to.
- */
 struct page_cache {
 	void *host;
-	const struct page_cache_ops *a_ops;
+	const struct page_cache_ops *ops;
 
 	spinlock_t lock;
-	struct hlist_head pages[ADDRESS_SPACE_HSIZE];
+	struct hlist_head pages[PAGE_CACHE_HSIZE];
 	struct list_head dirty_pages;
 	unsigned long nrpages;
 };
 
-void pagecache_init(void);
+void page_cache_init(void);
 
-struct page_cache *address_space_alloc(void *host,
-				       const struct page_cache_ops *a_ops);
-void address_space_free(struct page_cache *mapping);
+struct page_cache *page_cache_create(void *host,
+				     const struct page_cache_ops *ops);
+void page_cache_destroy(struct page_cache *mapping);
 
-/* Lookup helpers — each returns the page with @refcnt incremented. */
-struct cached_page *find_get_page(struct page_cache *mapping, pgoff_t index);
-struct cached_page *find_or_create_page(struct page_cache *mapping,
-					pgoff_t index);
 /*
- * read_mapping_page - return a fully populated cached page.
+ * read_mapping_page() - return a fully populated cached page.
  *
- * Locks the page, invokes ->readpage if necessary, marks it up-to-date,
+ * Locks the page, invokes ->read_page if necessary, marks it up-to-date,
  * unlocks it and returns with an extra reference held.
  *
  * Return: cached_page on success, ERR_PTR(-errno) on failure.
@@ -117,12 +97,12 @@ bool cached_page_uptodate(struct cached_page *cp);
 bool cached_page_dirty(struct cached_page *cp);
 
 /*
- * filemap_writeback - flush every dirty page in @mapping via ->writepage.
+ * page_cache_flush() - flush every dirty page in @mapping.
  *
  * Pages remain in the cache after a successful writeback. Returns 0 on
  * success or the first negative errno encountered.
  */
-int filemap_writeback(struct page_cache *mapping);
+int page_cache_flush(struct page_cache *mapping);
 
 /*
  * truncate_inode_pages - drop cached pages at or beyond @new_size.

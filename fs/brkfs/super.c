@@ -5,6 +5,28 @@
 #include <brk/slab.h>
 #include <brk/spinlock.h>
 
+struct brkfs_sb_info *brkfs_sb_info_alloc(struct block_dev *bdev,
+					  struct brkfs_super_block *sb)
+{
+	struct brkfs_sb_info *sbi;
+
+	sbi = kmalloc(sizeof(*sbi));
+	if (!sbi)
+		return NULL;
+
+	sbi->s_bdev = bdev;
+	sbi->s_sb = *sb;
+	sbi->s_inodes_per_block = sb->s_blocksize / sb->s_inode_size;
+	sbi->s_bits_per_block = sb->s_blocksize * 8;
+
+	return sbi;
+}
+
+void brkfs_sb_info_free(struct brkfs_sb_info *sbi)
+{
+	kfree(sbi);
+}
+
 static struct fs_inode *brkfs_alloc_inode(struct fs_super_block *sb)
 {
 	(void)sb;
@@ -45,7 +67,7 @@ static void brkfs_evict_inode(struct fs_inode *inode)
 	if (inode->nlink > 0) {
 		/* Flush dirty cached data before the VFS releases the mapping.
 		 * filemap_writeback is a no-op when ->i_mapping is NULL. */
-		(void)filemap_writeback(inode->mapping);
+		(void)page_cache_flush(inode->mapping);
 		brkfs_inode_write(sbi, inode);
 	} else {
 		/* Drop the cache wholesale: pages would be invalid once the
