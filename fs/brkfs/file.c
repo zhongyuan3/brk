@@ -126,44 +126,13 @@ static int brkfs_file_release(struct fs_inode *inode, struct fs_file *file)
 static ssize_t brkfs_file_read(struct fs_file *file, char *buf, usize_t size,
 			       loff_t *pos)
 {
-	struct fs_inode *inode = file->inode;
-
-	if (inode->mapping)
-		return generic_file_read(file, buf, size, pos);
-
-	/* Fallback path (no page cache attached, e.g. for symlinks read via
-	 * brkfs_readlink that does not go through the fs_file_ops). */
-	usize_t rd = 0;
-	int err;
-
-	sleeplock_acquire(&inode->rwsem);
-	err = brkfs_file_read_at(inode, pos, buf, size, &rd);
-	sleeplock_release(&inode->rwsem);
-	if (err)
-		return err;
-	return (ssize_t)rd;
+	return generic_file_read(file, buf, size, pos);
 }
 
 static ssize_t brkfs_file_write(struct fs_file *file, const char *buf,
 				usize_t size, loff_t *pos)
 {
-	struct fs_inode *inode = file->inode;
-
-	if (inode->mapping)
-		return generic_file_write(file, buf, size, pos);
-
-	struct brkfs_sb_info *sbi = inode->sb->private_data;
-	usize_t wr = 0;
-	int err;
-
-	sleeplock_acquire(&inode->rwsem);
-	err = brkfs_file_write_at(inode, pos, buf, size, &wr);
-	if (!err)
-		err = brkfs_inode_write(sbi, inode);
-	sleeplock_release(&inode->rwsem);
-	if (err)
-		return err;
-	return (ssize_t)wr;
+	return generic_file_write(file, buf, size, pos);
 }
 
 static loff_t brkfs_file_llseek(struct fs_file *file, loff_t offset, int whence)
