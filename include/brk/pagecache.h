@@ -108,11 +108,14 @@ int page_cache_flush(struct page_cache *mapping);
  * truncate_inode_pages - drop cached pages at or beyond @new_size.
  *
  * Pages strictly past @new_size are removed from the cache without
- * writeback. The page that straddles @new_size (partial tail) is
- * zero-filled past the truncation point and marked dirty, so that a
- * later writeback persists the truncation.
+ * writeback. When @new_size falls inside a page, that page is read in if
+ * needed, zero-filled from the truncation point to the end of the page,
+ * and marked dirty. The caller must run page_cache_flush() before freeing
+ * on-disk blocks so the partial tail and other dirty pages are persisted.
+ *
+ * Return: 0 on success, negative errno on failure.
  */
-void truncate_inode_pages(struct page_cache *mapping, loff_t new_size);
+int truncate_inode_pages(struct page_cache *mapping, loff_t new_size);
 
 /* Generic file I/O helpers built on top of the page cache. */
 ssize_t generic_file_read(struct fs_file *file, char *buf, usize_t size,
