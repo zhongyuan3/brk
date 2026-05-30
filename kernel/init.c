@@ -93,7 +93,7 @@ void boot_run_primary(usize_t hart_id, u64 dtb, usize_t load_offset)
 	virtio_blk_enable_irq(hart_id);
 	trap_init_hart(hart_id);
 
-	pagecache_init();
+	page_cache_init();
 	fs_dentry_cache_init();
 	fs_inode_cache_init();
 	fs_file_cache_init();

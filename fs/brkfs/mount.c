@@ -1,9 +1,11 @@
 #include "brkfs.h"
+#include <brk/asm.h>
 #include <brk/dcache.h>
 #include <brk/device.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/list.h>
+#include <brk/pagecache.h>
 #include <brk/path.h>
 #include <brk/pgtable.h>
 #include <brk/printk.h>
@@ -11,26 +13,24 @@
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/types.h>
 #include <uapi/brk/errno.h>
 #include <uapi/stat.h>
 
 static int brkfs_read_super(struct brkfs_super_block *sb,
 			    struct block_dev *bdev)
 {
-	u8 *page;
-	int err;
+	struct cached_page *cp;
+	u8 *buf;
 
-	page = kmalloc(PAGE_SIZE);
-	if (!page)
-		return -ENOMEM;
+	cp = read_mapping_page(bdev->bd_mapping, 0);
+	if (IS_ERR(cp))
+		return PTR_ERR(cp);
 
-	err = bdev_read_page(bdev, 0, page);
-	if (err) {
-		kfree(page);
-		return err;
-	}
-	memcpy(sb, page + BRKFS_SUPER_OFFSET, sizeof(*sb));
-	kfree(page);
+	buf = cached_page_addr(cp);
+	memcpy(sb, buf + BRKFS_SUPER_OFFSET, sizeof(*sb));
+	cached_page_put(cp);
+
 	return 0;
 }
 
@@ -67,6 +67,9 @@ static int brkfs_validate_super(struct brkfs_super_block *sb)
 		return -EINVAL;
 
 	if (sb->s_inode_size < sizeof(struct brkfs_inode))
+		return -EINVAL;
+
+	if (sb->s_blocksize > PAGE_SIZE || PAGE_SIZE % sb->s_blocksize != 0)
 		return -EINVAL;
 
 	return 0;

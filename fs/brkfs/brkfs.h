@@ -5,6 +5,7 @@
 #include <brk/fs_types.h>
 #include <brk/pagecache.h>
 #include <brk/types.h>
+#include <uapi/types.h>
 
 #define BRKFS_DIRECT_BLOCKS 7 /* Total number of direct block pointers */
 #define BRKFS_INDIRECT_BLOCK \
@@ -79,6 +80,14 @@ struct brkfs_inode_info {
 	u32 i_block[BRKFS_BLOCKS];
 };
 
+struct brkfs_block {
+	struct cached_page *cp;
+	void *data;
+};
+
+int brkfs_get_block(struct brkfs_sb_info *sbi, u32 bno, struct brkfs_block *bb);
+void brkfs_put_block(struct brkfs_block *bb);
+
 struct brkfs_sb_info *brkfs_sb_info_alloc(struct block_dev *bdev,
 					  struct brkfs_super_block *sb);
 void brkfs_sb_info_free(struct brkfs_sb_info *sbi);
@@ -91,6 +100,11 @@ int brkfs_data_alloc(struct brkfs_sb_info *sbi, u32 *bno);
 int brkfs_data_free(struct brkfs_sb_info *sbi, u32 bno);
 int brkfs_block_read(struct brkfs_sb_info *sb, u32 bno, void *buf);
 int brkfs_block_write(struct brkfs_sb_info *sb, u32 bno, const void *buf);
+
+int brkfs_bitmap_alloc(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
+		       u32 *out_bit);
+int brkfs_bitmap_free(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
+		      u32 bit);
 
 int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, u32 ino, umode_t mode,
 			  unsigned int nlink, dev_t rdev);
@@ -114,6 +128,6 @@ int brkfs_truncate_inode_blocks(struct fs_inode *inode, loff_t new_size);
 int brkfs_inode_getblk(struct fs_inode *inode, loff_t off, u32 *bno,
 		       unsigned flags, struct brkfs_sb_info *sbi);
 
-extern const struct page_cache_ops brkfs_aops;
+extern const struct page_cache_ops brkfs_file_pc_ops;
 
 #endif

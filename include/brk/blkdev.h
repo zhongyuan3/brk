@@ -6,6 +6,7 @@
 
 struct block_dev;
 struct page_cache;
+struct cached_page;
 
 struct block_dev_ops {
 	int (*read)(struct block_dev *bd, u64 blk_id, void *buf, u32 blk_cnt);
@@ -26,9 +27,9 @@ struct block_dev {
 void blkdev_registry_init(void);
 
 int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt);
-
-int bdev_read_page(struct block_dev *bd, u64 index, void *buf);
-int bdev_write_page(struct block_dev *bd, u64 index, const void *buf);
+int blkdev_read(struct block_dev *bd, u64 blk_id, void *buf, u32 blk_cnt);
+int blkdev_write(struct block_dev *bd, u64 blk_id, const void *buf,
+		 u32 blk_cnt);
 
 struct block_dev *blkdev_alloc(void);
 void blkdev_free(struct block_dev *bd);

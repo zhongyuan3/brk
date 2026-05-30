@@ -12,40 +12,12 @@
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/types.h>
 #include <uapi/brk/errno.h>
-
-/*
- * Page cache (a.k.a. address_space) implementation.
- *
- * Locking summary
- * ---------------
- *   mapping->lock      protects mapping->pages[] (hash buckets),
- *                      mapping->dirty_pages and mapping->nrpages.
- *   cached_page->lock  protects cached_page->flags.
- *   cached_page->io_lock  serializes ->readpage / ->writepage on a single
- *                      page (held while talking to the backing store).
- *
- * Lock ordering: mapping->lock -> cached_page->lock. The io_lock is a
- * sleeplock and is never held while taking either of the spinlocks.
- *
- * Refcount rules
- * --------------
- *   While a cached_page is reachable from the cache (i.e. linked into the
- *   hash) it holds one implicit reference (the "cache reference"). Each
- *   successful find_get_page() / find_or_create_page() returns a fresh
- *   user reference on top of that.
- *
- *   The cache reference is dropped by the code path that removes the page
- *   from the hash (truncate_inode_pages() and address_space_free()). When
- *   the last user reference is then released, cached_page_put() frees the
- *   page. Because removal from the hash always happens before the cache's
- *   ref is dropped, no concurrent lookup can resurrect an already-detached
- *   page.
- */
 
 static struct kobj_pool cached_page_cache;
 
-void pagecache_init(void)
+void page_cache_init(void)
 {
 	kobj_pool_init(&cached_page_cache, sizeof(struct cached_page),
 		       alignof(struct cached_page), "cached_page");
@@ -56,11 +28,11 @@ static unsigned int mapping_hash(pgoff_t index)
 	u64 h = (u64)index;
 	h *= 0x9E3779B97F4A7C15ULL;
 	h ^= h >> 32;
-	return (unsigned int)(h & (ADDRESS_SPACE_HSIZE - 1));
+	return (unsigned int)(h & (PAGE_CACHE_HSIZE - 1));
 }
 
-struct page_cache *address_space_alloc(void *host,
-				       const struct page_cache_ops *a_ops)
+struct page_cache *page_cache_create(void *host,
+				     const struct page_cache_ops *ops)
 {
 	struct page_cache *m;
 
@@ -69,9 +41,9 @@ struct page_cache *address_space_alloc(void *host,
 		return NULL;
 
 	m->host = host;
-	m->a_ops = a_ops;
-	spinlock_init(&m->lock, "address_space.lock");
-	for (usize_t i = 0; i < ADDRESS_SPACE_HSIZE; ++i)
+	m->ops = ops;
+	spinlock_init(&m->lock, "page_cache.lock");
+	for (usize_t i = 0; i < PAGE_CACHE_HSIZE; ++i)
 		hlist_head_init(&m->pages[i]);
 	list_init(&m->dirty_pages);
 	m->nrpages = 0;
@@ -96,18 +68,17 @@ static void detach_and_put(struct cached_page *cp)
 	cached_page_put(cp);
 }
 
-void address_space_free(struct page_cache *m)
+void page_cache_destroy(struct page_cache *m)
 {
 	struct cached_page *cp;
-	struct hlist_node *n;
+	struct hlist_node *next;
 
 	if (!m)
 		return;
 
 	spinlock_acquire(&m->lock);
-	for (usize_t i = 0; i < ADDRESS_SPACE_HSIZE; ++i) {
-		hlist_for_each_entry_safe(cp, n, &m->pages[i], ht_node)
-		{
+	for (usize_t i = 0; i < PAGE_CACHE_HSIZE; ++i) {
+		hlist_for_each_entry_safe(cp, next, &m->pages[i], ht_node) {
 			__detach_locked(m, cp);
 			spinlock_release(&m->lock);
 			detach_and_put(cp);
@@ -166,7 +137,7 @@ static struct cached_page *__lookup_locked(struct page_cache *m, pgoff_t index)
 	return NULL;
 }
 
-struct cached_page *find_get_page(struct page_cache *m, pgoff_t index)
+static struct cached_page *find_page(struct page_cache *m, pgoff_t index)
 {
 	struct cached_page *cp;
 
@@ -178,11 +149,12 @@ struct cached_page *find_get_page(struct page_cache *m, pgoff_t index)
 	return cp;
 }
 
-struct cached_page *find_or_create_page(struct page_cache *m, pgoff_t index)
+static struct cached_page *find_or_create_page(struct page_cache *m,
+					       pgoff_t index)
 {
 	struct cached_page *cp, *existing;
 
-	cp = find_get_page(m, index);
+	cp = find_page(m, index);
 	if (cp)
 		return cp;
 
@@ -296,7 +268,7 @@ struct cached_page *read_mapping_page(struct page_cache *m, pgoff_t index)
 		return cp;
 	}
 
-	err = m->a_ops->readpage(m, cp);
+	err = m->ops->read_page(m, cp);
 	if (err) {
 		spinlock_acquire(&cp->lock);
 		cp->flags |= PCP_ERROR;
@@ -310,11 +282,11 @@ struct cached_page *read_mapping_page(struct page_cache *m, pgoff_t index)
 	return cp;
 }
 
-int filemap_writeback(struct page_cache *m)
+int page_cache_flush(struct page_cache *m)
 {
 	int first_err = 0;
 
-	if (!m || !m->a_ops || !m->a_ops->writepage)
+	if (!m || !m->ops || !m->ops->write_page)
 		return 0;
 
 	while (1) {
@@ -342,7 +314,7 @@ int filemap_writeback(struct page_cache *m)
 
 		if (was_dirty && was_uptodate) {
 			cached_page_lock(cp);
-			err = m->a_ops->writepage(m, cp);
+			err = m->ops->write_page(m, cp);
 			cached_page_unlock(cp);
 		}
 
@@ -379,9 +351,8 @@ void truncate_inode_pages(struct page_cache *m, loff_t new_size)
 	 * Detaching drops the cache's implicit reference; any user references
 	 * still outstanding will keep the page alive until their put. */
 	spinlock_acquire(&m->lock);
-	for (usize_t i = 0; i < ADDRESS_SPACE_HSIZE; ++i) {
-		hlist_for_each_entry_safe(cp, n, &m->pages[i], ht_node)
-		{
+	for (usize_t i = 0; i < PAGE_CACHE_HSIZE; ++i) {
+		hlist_for_each_entry_safe(cp, n, &m->pages[i], ht_node) {
 			if (cp->index < first_full)
 				continue;
 			__detach_locked(m, cp);
@@ -401,9 +372,8 @@ void truncate_inode_pages(struct page_cache *m, loff_t new_size)
 	if (partial) {
 		cached_page_lock(partial);
 		if (cached_page_uptodate(partial)) {
-			void *base = cached_page_addr(partial);
-			memset((char *)base + partial_off, 0,
-			       PAGE_SIZE - partial_off);
+			u8 *base = cached_page_addr(partial);
+			memset(base + partial_off, 0, PAGE_SIZE - partial_off);
 			cached_page_unlock(partial);
 			cached_page_mark_dirty(partial);
 		} else {
@@ -452,7 +422,9 @@ ssize_t generic_file_read(struct fs_file *file, char *buf, usize_t size,
 			break;
 		}
 
-		memcpy(buf, (char *)cached_page_addr(cp) + off, nr);
+		cached_page_lock(cp);
+		memcpy(buf, (u8 *)cached_page_addr(cp) + off, nr);
+		cached_page_unlock(cp);
 		cached_page_put(cp);
 
 		buf += nr;

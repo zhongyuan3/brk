@@ -209,7 +209,7 @@ void fs_inode_put(struct fs_inode *inode)
 	 * are dropped without writeback.
 	 */
 	if (inode->mapping) {
-		address_space_free(inode->mapping);
+		page_cache_destroy(inode->mapping);
 		inode->mapping = NULL;
 	}
 
@@ -227,13 +227,13 @@ void fs_inode_put(struct fs_inode *inode)
 }
 
 int fs_inode_attach_page_cache(struct fs_inode *inode,
-			       const struct page_cache_ops *a_ops)
+			       const struct page_cache_ops *ops)
 {
 	struct page_cache *m;
 
 	if (inode->mapping)
 		return 0;
-	m = address_space_alloc(inode, a_ops);
+	m = page_cache_create(inode, ops);
 	if (!m)
 		return -ENOMEM;
 	inode->mapping = m;

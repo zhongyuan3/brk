@@ -4,8 +4,11 @@
 #include <brk/fs.h>
 #include <brk/kernel.h>
 #include <brk/ktime.h>
+#include <brk/pagecache.h>
+#include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/types.h>
 #include <uapi/brk/errno.h>
 #include <uapi/stat.h>
 
@@ -43,7 +46,7 @@ static int brkfs_init_loaded_inode(struct brkfs_sb_info *sbi,
 	 * handled directly via brkfs_block_read|write).
 	 */
 	if (S_ISREG(inode->mode)) {
-		err = fs_inode_attach_page_cache(inode, &brkfs_aops);
+		err = fs_inode_attach_page_cache(inode, &brkfs_file_pc_ops);
 		if (err)
 			return err;
 	}
@@ -100,11 +103,9 @@ static int brkfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	u32 ino = 0;
 	int err;
 
-	(void)excl;
-
 	err = brkfs_dir_lookup(dir, dentry->name.name, dentry->name.len, &ino,
 			       NULL);
-	if (err == 0) {
+	if (!err && excl) {
 		err = -EEXIST;
 		goto out;
 	}
@@ -115,7 +116,7 @@ static int brkfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	err = brkfs_inode_alloc(sbi, &ino);
 	if (err)
 		goto out;
-	err = brkfs_disk_inode_init(sbi, ino, (umode_t)(S_IFREG | mode), 1, 0);
+	err = brkfs_disk_inode_init(sbi, ino, S_IFREG | mode, 1, 0);
 	if (err)
 		goto undo_alloc;
 
@@ -131,7 +132,7 @@ static int brkfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	}
 
 	err = brkfs_dir_add(dir, ino, dentry->name.name, dentry->name.len,
-			    (umode_t)(S_IFREG | mode));
+			    S_IFREG | mode);
 	if (err) {
 		fs_inode_put(inode);
 		goto out;
@@ -477,6 +478,272 @@ out:
 void brkfs_inode_setup_ops(struct fs_inode *inode)
 {
 	brkfs_inode_attach_ops(inode);
+}
+
+int brkfs_inode_read(struct brkfs_sb_info *sbi, struct fs_inode *inode)
+{
+	struct brkfs_inode *disk_i;
+	struct brkfs_inode_info *info;
+	u32 bno;
+	int err;
+	u32 ino = inode->ino;
+	u32 isize = sbi->s_sb.s_inode_size;
+	struct brkfs_block bb;
+
+	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
+		klog_warn("%s(): Invalid ino: %u\n", __func__, ino);
+		return -EINVAL;
+	}
+
+	bno = sbi->s_sb.s_inode_table + (ino - 1) / sbi->s_inodes_per_block;
+
+	err = brkfs_get_block(sbi, bno, &bb);
+	if (err)
+		return err;
+
+	cached_page_lock(bb.cp);
+
+	u32 idx = (ino - 1) % sbi->s_inodes_per_block;
+	disk_i = (struct brkfs_inode *)((u8 *)bb.data + idx * isize);
+
+	info = inode->private_data;
+
+	inode->mode = disk_i->i_mode;
+	inode->rdev = disk_i->i_rdev;
+	inode->nlink = disk_i->i_nlink;
+	inode->size = disk_i->i_size;
+	memcpy(info->i_block, disk_i->i_block, sizeof(disk_i->i_block));
+	inode->atime.tv_sec = disk_i->i_atime;
+	inode->atime.tv_nsec = disk_i->i_atime_nsec;
+	inode->mtime.tv_sec = disk_i->i_mtime;
+	inode->mtime.tv_nsec = disk_i->i_mtime_nsec;
+	inode->ctime.tv_sec = disk_i->i_ctime;
+	inode->ctime.tv_nsec = disk_i->i_ctime_nsec;
+	inode->uid = disk_i->i_uid;
+	inode->gid = disk_i->i_gid;
+
+	cached_page_unlock(bb.cp);
+	brkfs_put_block(&bb);
+	return 0;
+}
+
+int brkfs_inode_write(struct brkfs_sb_info *sbi, struct fs_inode *inode)
+{
+	u32 bno;
+	u32 ino = inode->ino;
+	int err;
+	struct brkfs_inode *disk_i;
+	struct brkfs_inode_info *info;
+	u32 isize = sbi->s_sb.s_inode_size;
+	struct brkfs_block bb;
+
+	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
+		klog_warn("%s(): Invalid ino: %u\n", __func__, ino);
+		return -EINVAL;
+	}
+
+	bno = sbi->s_sb.s_inode_table + (ino - 1) / sbi->s_inodes_per_block;
+
+	err = brkfs_get_block(sbi, bno, &bb);
+	if (err)
+		return err;
+
+	cached_page_lock(bb.cp);
+
+	u32 idx = (ino - 1) % sbi->s_inodes_per_block;
+	disk_i = (struct brkfs_inode *)((u8 *)bb.data + idx * isize);
+
+	info = inode->private_data;
+
+	disk_i->i_mode = inode->mode;
+	disk_i->i_rdev = inode->rdev;
+	disk_i->i_nlink = inode->nlink;
+	disk_i->i_size = inode->size;
+	memcpy(disk_i->i_block, info->i_block, sizeof(disk_i->i_block));
+	disk_i->i_atime = inode->atime.tv_sec;
+	disk_i->i_atime_nsec = inode->atime.tv_nsec;
+	disk_i->i_mtime = inode->mtime.tv_sec;
+	disk_i->i_mtime_nsec = inode->mtime.tv_nsec;
+	disk_i->i_ctime = inode->ctime.tv_sec;
+	disk_i->i_ctime_nsec = inode->ctime.tv_nsec;
+	disk_i->i_uid = inode->uid;
+	disk_i->i_gid = inode->gid;
+
+	cached_page_mark_dirty(bb.cp);
+	cached_page_unlock(bb.cp);
+	brkfs_put_block(&bb);
+	return 0;
+}
+
+int brkfs_inode_alloc(struct brkfs_sb_info *sbi, u32 *ino)
+{
+	u32 bit = 0;
+	int err;
+
+	err = brkfs_bitmap_alloc(sbi, sbi->s_sb.s_inode_bitmap,
+				 sbi->s_sb.s_inodes_count, &bit);
+	if (err)
+		return err;
+	*ino = bit + 1;
+	return 0;
+}
+
+int brkfs_inode_free(struct brkfs_sb_info *sbi, u32 ino)
+{
+	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
+		klog_warn("%s(): Invalid ino: %u\n", __func__, ino);
+		return -EINVAL;
+	}
+	ino -= 1;
+	return brkfs_bitmap_free(sbi, sbi->s_sb.s_inode_bitmap,
+				 sbi->s_sb.s_inodes_count, ino);
+}
+
+int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, u32 ino, umode_t mode,
+			  unsigned int nlink, dev_t rdev)
+{
+	struct fs_inode stub = { 0 };
+	struct brkfs_inode_info info;
+
+	memset(&info, 0, sizeof(info));
+	stub.ino = ino;
+	stub.mode = mode;
+	stub.nlink = nlink;
+	stub.size = 0;
+	stub.rdev = rdev;
+	stub.private_data = &info;
+	inode_times_set_all_now(&stub);
+	return brkfs_inode_write(sbi, &stub);
+}
+
+int brkfs_inode_getblk(struct fs_inode *inode, loff_t off, u32 *bno,
+		       unsigned flags, struct brkfs_sb_info *sbi)
+{
+	struct brkfs_inode_info *inf = inode->private_data;
+	u32 *blk_ptrs = inf->i_block;
+	bool create = (flags & BRKFS_GETBLK_CREATE) != 0;
+	int ret = 0;
+	u32 bs = sbi->s_sb.s_blocksize;
+	u32 ptrs_per_blk = sbi->s_sb.s_blocksize / sizeof(u32);
+	struct brkfs_block bb;
+
+	u32 blk_idx = off / sbi->s_sb.s_blocksize;
+	if (blk_idx < BRKFS_DIRECT_BLOCKS) {
+		if (blk_ptrs[blk_idx] == 0) {
+			if (!create) { /* read of a hole or sparse region */
+				*bno = 0;
+				return 0;
+			}
+			u32 new_bno = 0;
+			ret = brkfs_data_alloc(sbi, &new_bno);
+			if (ret != 0)
+				return ret;
+			blk_ptrs[blk_idx] = new_bno;
+			*bno = new_bno;
+			return 0;
+		}
+		*bno = blk_ptrs[blk_idx];
+		return 0;
+	}
+
+	blk_idx -= BRKFS_DIRECT_BLOCKS;
+	if (blk_idx < ptrs_per_blk) {
+		u32 idb = blk_ptrs[BRKFS_INDIRECT_BLOCK];
+		bool new_idb = false;
+
+		if (idb == 0) {
+			if (!create) {
+				*bno = 0;
+				return 0;
+			}
+
+			ret = brkfs_data_alloc(sbi, &idb);
+			if (ret)
+				return ret;
+
+			blk_ptrs[BRKFS_INDIRECT_BLOCK] = idb;
+			new_idb = true;
+		}
+
+		ret = brkfs_get_block(sbi, idb, &bb);
+		if (ret != 0)
+			return ret;
+
+		cached_page_lock(bb.cp);
+
+		if (new_idb) {
+			memset(bb.data, 0, bs);
+			cached_page_mark_dirty(bb.cp);
+		}
+
+		u32 *idb_ptrs = bb.data;
+
+		if (idb_ptrs[blk_idx] == 0) {
+			if (!create) {
+				*bno = 0;
+				ret = 0;
+				goto idb_out_unlock_and_put;
+			}
+
+			/* Unlock the inode block before allocating a new data block
+			 * to avoid deadlocking with the page cache. */
+			cached_page_unlock(bb.cp);
+			u32 new_bno = 0;
+			ret = brkfs_data_alloc(sbi, &new_bno);
+			if (ret != 0)
+				goto idb_out_put;
+
+			cached_page_lock(bb.cp);
+			idb_ptrs[blk_idx] = new_bno;
+			cached_page_mark_dirty(bb.cp);
+			*bno = new_bno;
+		} else {
+			*bno = idb_ptrs[blk_idx];
+			ret = 0;
+		}
+
+idb_out_unlock_and_put:
+		cached_page_unlock(bb.cp);
+idb_out_put:
+		brkfs_put_block(&bb);
+		return ret;
+	}
+
+	klog_warn("%s(): Double indirect block not implemented\n", __func__);
+
+	return -ENOSPC;
+}
+
+int brkfs_truncate_inode_blocks(struct fs_inode *inode, loff_t new_size)
+{
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
+	struct brkfs_inode_info *inf = inode->private_data;
+	u32 bs = sbi->s_sb.s_blocksize;
+	loff_t old_size = inode->size;
+	u32 old_n;
+	u32 new_n;
+	u32 bi;
+
+	if (!inf)
+		return -EINVAL;
+	if (new_size < 0)
+		return -EINVAL;
+	if (new_size >= old_size) {
+		inode->size = new_size;
+		return 0;
+	}
+
+	old_n = (u32)((old_size + (loff_t)bs - 1) / (loff_t)bs);
+	new_n = (u32)((new_size + (loff_t)bs - 1) / (loff_t)bs);
+
+	for (bi = new_n; bi < old_n && bi < BRKFS_DIRECT_BLOCKS; bi++) {
+		if (inf->i_block[bi]) {
+			brkfs_data_free(sbi, inf->i_block[bi]);
+			inf->i_block[bi] = 0;
+		}
+	}
+	inode->size = new_size;
+	return 0;
 }
 
 const struct fs_inode_ops brkfs_iops = {

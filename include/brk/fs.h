@@ -172,7 +172,7 @@ void fs_inode_mark_dirty(struct fs_inode *inode);
 void fs_inode_clear(struct fs_inode *inode);
 void fs_inode_cache_init(void);
 int fs_inode_attach_page_cache(struct fs_inode *inode,
-			       const struct page_cache_ops *a_ops);
+			       const struct page_cache_ops *ops);
 
 struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode);
 struct fs_file *fs_file_get(struct fs_file *file);
