@@ -68,6 +68,10 @@ static u64 (*systable[])(void) = {
 	[SYS_lseek] = sys_lseek,
 	[SYS_rmdir] = sys_rmdir,
 	[SYS_creat] = sys_creat,
+	[SYS_fsync] = sys_fsync,
+	[SYS_fdatasync] = sys_fdatasync,
+	[SYS_sync] = sys_sync,
+	[SYS_syncfs] = sys_syncfs,
 };
 
 void syscall(void)

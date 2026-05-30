@@ -163,6 +163,15 @@ void fs_super_block_free(struct fs_super_block *sb);
 void fs_super_block_get(struct fs_super_block *sb);
 void fs_super_block_put(struct fs_super_block *sb);
 
+/*
+ * sync_filesystem() - write back every dirty inode of @sb (data + metadata).
+ * sync_all_filesystems() - run sync_filesystem() over all mounted filesystems.
+ *
+ * Return: 0 on success, or the first negative errno encountered.
+ */
+int sync_filesystem(struct fs_super_block *sb);
+int sync_all_filesystems(void);
+
 struct fs_inode *fs_inode_get_locked(struct fs_super_block *sb,
 				     unsigned long ino);
 void fs_inode_unlock_new(struct fs_inode *inode);
