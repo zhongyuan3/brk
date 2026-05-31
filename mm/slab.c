@@ -293,6 +293,15 @@ retry:
 	goto retry;
 }
 
+void *kobj_pool_alloc_zero(struct kobj_pool *pool)
+{
+	void *obj = kobj_pool_alloc(pool);
+	if (!obj)
+		return NULL;
+	memset(obj, 0, pool->size);
+	return obj;
+}
+
 void kobj_pool_free(struct kobj_pool *pool, void *obj)
 {
 	struct page *curr;
