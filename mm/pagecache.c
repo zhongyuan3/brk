@@ -17,8 +17,39 @@
 
 static struct kobj_pool cached_page_cache;
 
+static LIST_DEFINE(pagecache_lru);
+static SPINLOCK_DEFINE(pagecache_lru_lock);
+static unsigned long pagecache_nrpages;
+
+static void pagecache_lru_add(struct cached_page *cp)
+{
+	spinlock_acquire(&pagecache_lru_lock);
+	if (list_empty(&cp->lru_list))
+		list_add_tail(&cp->lru_list, &pagecache_lru);
+	spinlock_release(&pagecache_lru_lock);
+}
+
+static void pagecache_lru_del(struct cached_page *cp)
+{
+	spinlock_acquire(&pagecache_lru_lock);
+	if (!list_empty(&cp->lru_list))
+		list_del_init(&cp->lru_list);
+	spinlock_release(&pagecache_lru_lock);
+}
+
+static void pagecache_lru_touch(struct cached_page *cp)
+{
+	spinlock_acquire(&pagecache_lru_lock);
+	if (!list_empty(&cp->lru_list)) {
+		list_del(&cp->lru_list);
+		list_add_tail(&cp->lru_list, &pagecache_lru);
+	}
+	spinlock_release(&pagecache_lru_lock);
+}
+
 void page_cache_init(void)
 {
+	list_init(&pagecache_lru);
 	kobj_pool_init(&cached_page_cache, sizeof(struct cached_page),
 		       alignof(struct cached_page), "cached_page");
 }
@@ -58,7 +89,9 @@ static void __detach_locked(struct page_cache *m, struct cached_page *cp)
 		list_del_init(&cp->dirty_list);
 		cp->flags &= ~PCP_DIRTY;
 	}
+	pagecache_lru_del(cp);
 	m->nrpages--;
+	pagecache_nrpages--;
 }
 
 /* Drop the implicit cache reference for a page that has just been removed
@@ -116,6 +149,7 @@ static struct cached_page *cached_page_alloc(struct page_cache *m,
 	sleeplock_init(&cp->io_lock, "cached_page.io_lock");
 	hlist_node_init(&cp->ht_node);
 	list_init(&cp->dirty_list);
+	list_init(&cp->lru_list);
 	return cp;
 }
 
@@ -146,6 +180,8 @@ static struct cached_page *find_page(struct page_cache *m, pgoff_t index)
 	if (cp)
 		refcnt_inc(&cp->refcnt);
 	spinlock_release(&m->lock);
+	if (cp)
+		pagecache_lru_touch(cp);
 	return cp;
 }
 
@@ -172,9 +208,11 @@ static struct cached_page *find_or_create_page(struct page_cache *m,
 	}
 	hlist_add_head(&cp->ht_node, &m->pages[mapping_hash(index)]);
 	m->nrpages++;
+	pagecache_nrpages++;
 	refcnt_inc(&cp->refcnt); /* user reference returned to caller */
 	spinlock_release(&m->lock);
 
+	pagecache_lru_add(cp);
 	return cp;
 }
 
@@ -396,6 +434,61 @@ int page_cache_flush_range(struct page_cache *m, loff_t start, loff_t end)
 int page_cache_flush(struct page_cache *m)
 {
 	return page_cache_flush_range(m, 0, -1);
+}
+
+unsigned long page_cache_shrink(unsigned long nr_to_reclaim)
+{
+	unsigned long freed = 0;
+	unsigned long scanned = 0;
+
+	if (nr_to_reclaim == 0 || pagecache_nrpages == 0)
+		return 0;
+
+	while (freed < nr_to_reclaim && scanned < pagecache_nrpages) {
+		struct page_cache *mapping;
+		struct cached_page *cp;
+		unsigned int flags;
+
+		spinlock_acquire(&pagecache_lru_lock);
+		if (list_empty(&pagecache_lru)) {
+			spinlock_release(&pagecache_lru_lock);
+			break;
+		}
+		cp = list_first_entry(&pagecache_lru, struct cached_page,
+				      lru_list);
+		list_del_init(&cp->lru_list);
+		spinlock_release(&pagecache_lru_lock);
+
+		scanned++;
+
+		if (refcnt_read(&cp->refcnt) != 1) {
+			pagecache_lru_touch(cp);
+			continue;
+		}
+
+		mapping = cp->mapping;
+		spinlock_acquire(&mapping->lock);
+		flags = cp->flags;
+		if (refcnt_read(&cp->refcnt) != 1 ||
+		    (flags & (PCP_DIRTY | PCP_WRITEBACK)) ||
+		    hlist_unhashed(&cp->ht_node)) {
+			spinlock_release(&mapping->lock);
+			pagecache_lru_touch(cp);
+			continue;
+		}
+		__detach_locked(mapping, cp);
+		spinlock_release(&mapping->lock);
+
+		detach_and_put(cp);
+		freed++;
+	}
+
+	return freed;
+}
+
+unsigned long page_cache_nr_pages(void)
+{
+	return pagecache_nrpages;
 }
 
 int truncate_inode_pages(struct page_cache *m, loff_t new_size)

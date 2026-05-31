@@ -33,6 +33,7 @@ struct cached_page {
 	sleeplock_t io_lock;
 	struct hlist_node ht_node;
 	struct list_head dirty_list;
+	struct list_head lru_list;
 };
 
 struct page_cache_ops {
@@ -70,6 +71,20 @@ struct page_cache {
 };
 
 void page_cache_init(void);
+
+/*
+ * page_cache_shrink() - reclaim clean, unreferenced cached pages.
+ *
+ * Walks the global LRU (oldest first) and evicts up to @nr_to_reclaim pages
+ * that are clean, not under writeback, and held only by the cache itself
+ * (refcount == 1). Dirty pages are skipped and rotated to the MRU end.
+ *
+ * Return: the number of pages actually freed.
+ */
+unsigned long page_cache_shrink(unsigned long nr_to_reclaim);
+
+/* Return the number of pages currently tracked on the global LRU. */
+unsigned long page_cache_nr_pages(void);
 
 struct page_cache *page_cache_create(void *host,
 				     const struct page_cache_ops *ops);
