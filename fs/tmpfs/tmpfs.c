@@ -428,7 +428,7 @@ static struct tmpfs_super_block *tmpfs_alloc_super(void)
 	sb->s_icnt = TMPFS_INODE_PER_PAGE;
 	sleeplock_init(&sb->s_lock, "tmpfs_super_block.s_lock");
 
-	root_ip = tmpfs_inode_alloc_dir(sb, 0);
+	root_ip = tmpfs_inode_alloc_dir(sb, 0755);
 	if (!root_ip) {
 		tmpfs_free_super(sb);
 		return NULL;
