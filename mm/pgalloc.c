@@ -14,12 +14,16 @@ struct buddy_bucket {
 static struct buddy_bucket areas[PAGE_ORDER_MAX + 1];
 static SPINLOCK_DEFINE(areas_lock);
 
+unsigned long page_cache_shrink(unsigned long nr_to_reclaim);
+
 struct page *page_alloc(unsigned int order)
 {
 	unsigned int curr_order = order;
 	struct page *curr = NULL;
 	struct page *buddy = NULL;
+	bool retried = false;
 
+again:
 	spinlock_acquire(&areas_lock);
 
 	for (; curr_order <= PAGE_ORDER_MAX; ++curr_order) {
@@ -32,6 +36,14 @@ struct page *page_alloc(unsigned int order)
 	}
 
 	spinlock_release(&areas_lock);
+
+	if (!retried) {
+		retried = true;
+		if (page_cache_shrink(1UL << order) > 0) {
+			curr_order = order;
+			goto again;
+		}
+	}
 	return NULL;
 
 found:
