@@ -165,14 +165,14 @@ static bool proc_setup_signal_frame(struct process *proc, int sig, u64 handler)
 	u64 sp;
 	struct user_sigframe *frame;
 
-	sp = proc->tf.sp;
+	sp = proc->tf->sp;
 	sp -= sizeof(*frame);
 	sp &= ~0xFULL;
 	if (!user_access_ok(sp, sizeof(*frame)))
 		return false;
 
 	frame = (struct user_sigframe *)sp;
-	frame->tf = proc->tf;
+	frame->tf = *proc->tf;
 	frame->blocked = proc->blocked;
 	frame->signo = sig;
 
@@ -183,9 +183,9 @@ static bool proc_setup_signal_frame(struct process *proc, int sig, u64 handler)
 	proc_clear_pending(proc, sig);
 	proc->in_handler = true;
 
-	proc->tf.sp = sp;
-	proc->tf.epc = handler;
-	proc->tf.a0 = sig;
+	proc->tf->sp = sp;
+	proc->tf->epc = handler;
+	proc->tf->a0 = sig;
 	return true;
 }
 
@@ -250,11 +250,11 @@ u64 proc_do_sigreturn(struct process *proc)
 	if (!user_access_ok(proc->sigframe_sp, sizeof(*frame)))
 		return -EFAULT;
 
-	proc->tf = frame->tf;
+	*proc->tf = frame->tf;
 	proc->blocked = frame->blocked;
 	proc->in_handler = false;
 	proc->sigframe_sp = 0;
-	return proc->tf.a0;
+	return proc->tf->a0;
 }
 
 int proc_sigaction(struct process *proc, int sig, const struct sigaction *act,

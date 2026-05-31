@@ -82,4 +82,8 @@
 		(__num + __div - 1) / __div; \
 	})
 
+#define round_up_pow2_const(x, pow2) (((x) + (pow2) - 1) & ~((pow2) - 1))
+
+#define round_down_pow2_const(x, pow2) ((x) & ~((pow2) - 1))
+
 #endif

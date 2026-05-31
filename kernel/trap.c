@@ -111,7 +111,7 @@ struct trap_frame *user_trap_handler(void)
 	write_stvec((u64)kernel_trap_vector);
 
 	tf = (struct trap_frame *)read_sscratch();
-	proc = container_of(tf, struct process, tf);
+	proc = ((struct extended_trap_frame *)tf)->proc;
 	set_current_process(proc);
 	set_current_cpuid(tf->cpuid);
 	write_sstatus(read_sstatus() | SSTATUS_SUM);
@@ -120,7 +120,7 @@ struct trap_frame *user_trap_handler(void)
 	proc->ptms.tms_utime += jiffies - proc->utime;
 	proc->ktime = jiffies;
 
-	proc->tf.epc = sepc;
+	proc->tf->epc = sepc;
 
 	if (TRAP_IS_INTERRUPT(scause)) {
 		if (code == 5) {
@@ -138,7 +138,7 @@ struct trap_frame *user_trap_handler(void)
 	} else {
 		if (code == 8) {
 			proc_deliver_pending(proc);
-			proc->tf.epc += 4; /* skip ecall */
+			proc->tf->epc += 4; /* skip ecall */
 			intr_on();
 			syscall();
 		} else {
@@ -154,7 +154,7 @@ struct trap_frame *user_trap_handler(void)
 	jiffies = jiffies_get();
 	proc->ptms.tms_stime += jiffies - proc->ktime;
 	proc->utime = jiffies;
-	return &proc->tf;
+	return proc->tf;
 }
 
 void prepare_to_return(void)
@@ -173,10 +173,10 @@ void prepare_to_return(void)
 	sstatus |= SSTATUS_SPIE;
 	write_sstatus(sstatus);
 
-	proc->tf.kernel_sp = proc->kstack + KSTACK_SIZE;
-	proc->tf.cpuid = current_cpuid();
+	proc->tf->kernel_sp = proc->kstack_top;
+	proc->tf->cpuid = current_cpuid();
 
-	write_sepc(proc->tf.epc);
+	write_sepc(proc->tf->epc);
 
 	write_sstatus(read_sstatus() & ~SSTATUS_SUM);
 }

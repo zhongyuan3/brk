@@ -92,7 +92,8 @@ void proc_sched(void)
 		spinlock_release(&sleep_queue_lock);
 		break;
 	default:
-		panic("unexpected state: %d\n", curr->state);
+		panic("unexpected state: pid=%ld, state=%d\n", curr->pid,
+		      curr->state);
 	}
 
 	struct process *next = proc_get_next();
