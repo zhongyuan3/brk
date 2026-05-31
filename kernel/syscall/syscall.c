@@ -77,11 +77,11 @@ static u64 (*systable[])(void) = {
 void syscall(void)
 {
 	struct process *proc = current_process();
-	u64 num = proc->tf.a7;
+	u64 num = proc->tf->a7;
 	if (num < countof(systable) && systable[num])
-		proc->tf.a0 = systable[num]();
+		proc->tf->a0 = systable[num]();
 	else
-		proc->tf.a0 = -ENOSYS;
+		proc->tf->a0 = -ENOSYS;
 }
 
 u64 syscall_arg_raw(int argno)
@@ -90,17 +90,17 @@ u64 syscall_arg_raw(int argno)
 
 	switch (argno) {
 	case 0:
-		return proc->tf.a0;
+		return proc->tf->a0;
 	case 1:
-		return proc->tf.a1;
+		return proc->tf->a1;
 	case 2:
-		return proc->tf.a2;
+		return proc->tf->a2;
 	case 3:
-		return proc->tf.a3;
+		return proc->tf->a3;
 	case 4:
-		return proc->tf.a4;
+		return proc->tf->a4;
 	case 5:
-		return proc->tf.a5;
+		return proc->tf->a5;
 	default:
 		panic("%s(): illegal argument number\n", __func__);
 	}

@@ -54,10 +54,13 @@ static void kstack_free(u64 stack)
 
 struct process *proc_alloc(void)
 {
-	struct process *proc = kobj_pool_alloc(&proc_cache);
+	u64 kstack_top;
+	struct extended_trap_frame *ext_tf;
+	struct process *proc;
+
+	proc = kobj_pool_alloc_zero(&proc_cache);
 	if (!proc)
 		return NULL;
-	memset(proc, 0, sizeof(*proc));
 
 	list_init(&proc->list);
 	list_init(&proc->queue);
@@ -71,9 +74,17 @@ struct process *proc_alloc(void)
 	if (proc->pid < 0)
 		goto pid_alloc_failed;
 
-	proc->kstack = kstack_alloc();
-	if (!proc->kstack)
+	proc->kstack_base = kstack_alloc();
+	if (!proc->kstack_base)
 		goto kstack_alloc_failed;
+
+	kstack_top = proc->kstack_base + KSTACK_SIZE;
+	kstack_top -= TRAP_FRAME_ON_STACK_SIZE;
+	ext_tf = (struct extended_trap_frame *)kstack_top;
+	ext_tf->proc = proc;
+	proc->tf = &ext_tf->tf;
+	memset(proc->tf, 0, sizeof(struct trap_frame));
+	proc->kstack_top = kstack_top;
 
 	proc->mm = mm_alloc();
 	if (!proc->mm)
@@ -86,7 +97,7 @@ struct process *proc_alloc(void)
 	return proc;
 
 create_mm_failed:
-	kstack_free(proc->kstack);
+	kstack_free(proc->kstack_base);
 kstack_alloc_failed:
 	pid_free(proc->pid);
 pid_alloc_failed:
@@ -100,7 +111,7 @@ void proc_free(struct process *proc)
 	list_del_init(&proc->list);
 	spinlock_release(&procs_lock);
 	mm_free(proc->mm);
-	kstack_free(proc->kstack);
+	kstack_free(proc->kstack_base);
 	pid_free(proc->pid);
 	kobj_pool_free(&proc_cache, proc);
 }
@@ -133,9 +144,8 @@ static void user_init_proc_return(void)
 	if (err < 0)
 		panic("execve %s failed: %s\n", argv[0], strerror(err));
 
-	proc->tf.a0 = err;
 	prepare_to_return();
-	user_trap_return(&proc->tf);
+	user_trap_return(proc->tf);
 }
 
 void proc_init_user(void)
@@ -146,7 +156,7 @@ void proc_init_user(void)
 	spinlock_acquire(&init_proc->lock);
 	strlcpy(init_proc->name, "init", sizeof(init_proc->name));
 	init_proc->ctx.ra = (u64)user_init_proc_return;
-	init_proc->ctx.sp = init_proc->kstack + KSTACK_SIZE;
+	init_proc->ctx.sp = init_proc->kstack_top;
 	init_proc->state = PROCESS_STATE_RUNNING;
 	init_proc->irq_enabled = true;
 	spinlock_release(&init_proc->lock);
@@ -347,7 +357,7 @@ static void proc_fork_return(void)
 	struct process *proc = current_process();
 	spinlock_release(&proc->lock);
 	prepare_to_return();
-	user_trap_return(&proc->tf);
+	user_trap_return(proc->tf);
 }
 
 int proc_fork(void)
@@ -367,7 +377,7 @@ int proc_fork(void)
 		return err;
 	}
 
-	memcpy(&child->tf, &parent->tf, sizeof(parent->tf));
+	memcpy(child->tf, parent->tf, sizeof(struct trap_frame));
 	proc_signal_fork(child, parent);
 
 	for (int i = 0; i < OPEN_MAX; ++i) {
@@ -379,7 +389,7 @@ int proc_fork(void)
 	fs_path_get(&parent->root);
 	child->root = parent->root;
 
-	child->tf.a0 = 0;
+	child->tf->a0 = 0;
 
 	spinlock_acquire(&wait_lock);
 	child->parent = parent;
@@ -390,7 +400,7 @@ int proc_fork(void)
 	cpid = child->pid;
 	child->state = PROCESS_STATE_RUNNING;
 	child->ctx.ra = (u64)proc_fork_return;
-	child->ctx.sp = child->kstack + KSTACK_SIZE;
+	child->ctx.sp = child->kstack_top;
 	spinlock_release(&child->lock);
 
 	proc_join(child);

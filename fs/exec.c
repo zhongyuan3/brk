@@ -159,10 +159,10 @@ static void push_args(struct exec_args *args, u64 *psp, u64 stack_virt,
 	u64 argv_strs_kstart = ksp;
 	u64 argv_strs_ustart = sp;
 
-	proc->tf.a2 = stack_push_ptr_slots(&ksp, &sp, args->envc);
+	proc->tf->a2 = stack_push_ptr_slots(&ksp, &sp, args->envc);
 	char **envp_kstart = (char **)ksp;
 
-	proc->tf.a1 = stack_push_ptr_slots(&ksp, &sp, args->argc);
+	proc->tf->a1 = stack_push_ptr_slots(&ksp, &sp, args->argc);
 	char **argv_kstart = (char **)ksp;
 
 	copy_exec_strings(args->envp, args->envc, &envp_strs_kstart,
@@ -413,8 +413,8 @@ static int __do_execve(const char *path, struct exec_args *args)
 		proc->mm = new_mm;
 		mm_free(old_mm);
 		proc_signal_exec(proc);
-		proc->tf.epc = elf_hdr.e_entry;
-		proc->tf.sp = sp;
+		proc->tf->epc = elf_hdr.e_entry;
+		proc->tf->sp = sp;
 	}
 
 	return args->argc;

@@ -3,6 +3,7 @@
 
 #include <brk/asm.h>
 #include <brk/fs_types.h>
+#include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/path.h>
 #include <brk/spinlock_types.h>
@@ -57,6 +58,14 @@ struct trap_frame {
 	/* 264 */ u64 cpuid;
 };
 
+struct extended_trap_frame {
+	struct trap_frame tf;
+	struct process *proc;
+};
+
+#define TRAP_FRAME_ON_STACK_SIZE \
+	round_up_pow2_const(sizeof(struct extended_trap_frame), 16)
+
 struct switch_frame {
 	u64 ra;
 	u64 sp;
@@ -107,8 +116,9 @@ struct process {
 	struct fs_path cwd;
 	struct fs_path root;
 	struct tms ptms;
-	struct trap_frame tf;
-	u64 kstack;
+	struct trap_frame *tf; /* points to the trap frame on kernel stack */
+	u64 kstack_base;
+	u64 kstack_top;
 	u64 ktime;
 	u64 utime;
 	int time_slice;
