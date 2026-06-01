@@ -100,12 +100,18 @@ struct process *proc_alloc(void)
 	if (!proc->fsinfo)
 		goto fsinfo_alloc_failed;
 
+	proc->sigactions = sigaction_table_alloc();
+	if (!proc->sigactions)
+		goto sigaction_table_alloc_failed;
+
 	spinlock_acquire(&procs_lock);
 	list_add_tail(&proc->list, &procs);
 	spinlock_release(&procs_lock);
 
 	return proc;
 
+sigaction_table_alloc_failed:
+	fsinfo_put(proc->fsinfo);
 fsinfo_alloc_failed:
 	fdtable_put(proc->fdtable);
 fdtable_alloc_failed:
@@ -124,6 +130,8 @@ void proc_free(struct process *proc)
 	spinlock_acquire(&procs_lock);
 	list_del_init(&proc->list);
 	spinlock_release(&procs_lock);
+
+	sigaction_table_put(proc->sigactions);
 	fsinfo_put(proc->fsinfo);
 	fdtable_put(proc->fdtable);
 	mm_free(proc->mm);

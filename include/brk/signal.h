@@ -1,16 +1,18 @@
 #ifndef BRK_SIGNAL_H
 #define BRK_SIGNAL_H
 
-#include <brk/process.h>
+#include <brk/refcnt_types.h>
+#include <brk/signal_types.h>
+#include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <uapi/signal.h>
 #include <uapi/types.h>
 
-struct user_sigframe {
-	struct trap_frame tf;
-	u64 blocked;
-	int signo;
-	int pad;
-};
+struct sigaction_table *sigaction_table_alloc(void);
+void sigaction_table_put(struct sigaction_table *table);
+struct sigaction_table *sigaction_table_get(struct sigaction_table *table);
+void sigaction_table_copy(struct sigaction_table *dst,
+			  struct sigaction_table *src);
 
 int proc_kill(pid_t pid, int sig);
 void proc_send_signal(struct process *proc, int sig);

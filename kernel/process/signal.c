@@ -2,8 +2,11 @@
 #include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/process.h>
+#include <brk/refcnt.h>
 #include <brk/signal.h>
+#include <brk/slab.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <uapi/brk/errno.h>
 #include <uapi/signal.h>
 
@@ -36,11 +39,6 @@ void proc_signal_init(struct process *proc)
 	proc->blocked = 0;
 	proc->in_handler = false;
 	proc->sigframe_sp = 0;
-	for (int i = 0; i < NSIG; ++i) {
-		proc->actions[i].sa_handler = (unsigned long)SIG_DFL;
-		proc->actions[i].sa_mask = 0;
-		proc->actions[i].sa_flags = 0;
-	}
 }
 
 void proc_signal_fork(struct process *child, struct process *parent)
@@ -49,13 +47,24 @@ void proc_signal_fork(struct process *child, struct process *parent)
 	child->blocked = parent->blocked;
 	child->in_handler = false;
 	child->sigframe_sp = 0;
-	for (int i = 0; i < NSIG; ++i)
-		child->actions[i] = parent->actions[i];
+	sigaction_table_copy(child->sigactions, parent->sigactions);
+}
+
+static void sigaction_table_reset(struct sigaction_table *table)
+{
+	spinlock_acquire(&table->lock);
+	for (int i = 0; i < NSIG; ++i) {
+		table->actions[i].sa_handler = (unsigned long)SIG_DFL;
+		table->actions[i].sa_mask = 0;
+		table->actions[i].sa_flags = 0;
+	}
+	spinlock_release(&table->lock);
 }
 
 void proc_signal_exec(struct process *proc)
 {
 	proc_signal_init(proc);
+	sigaction_table_reset(proc->sigactions);
 }
 
 static int proc_next_signal(struct process *proc)
@@ -67,12 +76,15 @@ static int proc_next_signal(struct process *proc)
 		int sig;
 
 		deliver &= (1ULL << SIGKILL);
+		spinlock_acquire(&proc->sigactions->lock);
 		for (sig = 1; sig < NSIG; ++sig) {
 			if (!(proc->pending & (1ULL << sig)))
 				continue;
-			if (proc->actions[sig].sa_flags & SA_NODEFER)
+			if (proc->sigactions->actions[sig].sa_flags &
+			    SA_NODEFER)
 				nodfer |= (1ULL << sig);
 		}
+		spinlock_release(&proc->sigactions->lock);
 		deliver |= nodfer & ~proc->blocked;
 	}
 
@@ -177,9 +189,11 @@ static bool proc_setup_signal_frame(struct process *proc, int sig, u64 handler)
 	frame->signo = sig;
 
 	proc->sigframe_sp = sp;
-	if (!(proc->actions[sig].sa_flags & SA_NODEFER))
+	spinlock_acquire(&proc->sigactions->lock);
+	if (!(proc->sigactions->actions[sig].sa_flags & SA_NODEFER))
 		proc->blocked |= (1ULL << sig);
-	proc->blocked |= proc->actions[sig].sa_mask;
+	proc->blocked |= proc->sigactions->actions[sig].sa_mask;
+	spinlock_release(&proc->sigactions->lock);
 	proc_clear_pending(proc, sig);
 	proc->in_handler = true;
 
@@ -195,7 +209,9 @@ static void proc_deliver_one(struct process *proc, int sig)
 	u64 user_handler;
 
 	spinlock_acquire(&proc->lock);
-	handler = proc->actions[sig].sa_handler;
+	spinlock_acquire(&proc->sigactions->lock);
+	handler = proc->sigactions->actions[sig].sa_handler;
+	spinlock_release(&proc->sigactions->lock);
 
 	if (sig == SIGKILL ||
 	    (handler == (unsigned long)SIG_DFL && sig_default_terminate(sig))) {
@@ -260,17 +276,19 @@ u64 proc_do_sigreturn(struct process *proc)
 int proc_sigaction(struct process *proc, int sig, const struct sigaction *act,
 		   struct sigaction *oact)
 {
+	struct sigaction_table *table = proc->sigactions;
+
 	if (!sig_valid(sig))
 		return -EINVAL;
 	if (sig == SIGKILL || sig == SIGSTOP)
 		return -EINVAL;
 
-	spinlock_acquire(&proc->lock);
+	spinlock_acquire(&table->lock);
 	if (oact)
-		*oact = proc->actions[sig];
+		*oact = table->actions[sig];
 	if (act)
-		proc->actions[sig] = *act;
-	spinlock_release(&proc->lock);
+		table->actions[sig] = *act;
+	spinlock_release(&table->lock);
 	return 0;
 }
 
@@ -305,4 +323,42 @@ int proc_sigprocmask(struct process *proc, int how, const sigset_t *set,
 	}
 	spinlock_release(&proc->lock);
 	return 0;
+}
+
+struct sigaction_table *sigaction_table_alloc(void)
+{
+	struct sigaction_table *table;
+
+	table = kzalloc(sizeof(struct sigaction_table));
+	if (!table)
+		return NULL;
+
+	refcnt_init(&table->refcnt, 1);
+	spinlock_init(&table->lock, "sigaction_table");
+
+	return table;
+}
+
+void sigaction_table_put(struct sigaction_table *table)
+{
+	if (refcnt_dec_fetch(&table->refcnt) > 0)
+		return;
+
+	kfree(table);
+}
+
+struct sigaction_table *sigaction_table_get(struct sigaction_table *table)
+{
+	refcnt_inc(&table->refcnt);
+	return table;
+}
+
+void sigaction_table_copy(struct sigaction_table *dst,
+			  struct sigaction_table *src)
+{
+	spinlock_acquire(&src->lock);
+	spinlock_acquire(&dst->lock);
+	memcpy(dst->actions, src->actions, sizeof(dst->actions));
+	spinlock_release(&dst->lock);
+	spinlock_release(&src->lock);
 }
