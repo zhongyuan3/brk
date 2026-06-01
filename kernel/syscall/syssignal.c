@@ -1,7 +1,7 @@
 #include <brk/kernel.h>
-#include <brk/process.h>
 #include <brk/signal.h>
 #include <brk/syscall.h>
+#include <brk/task.h>
 #include <uapi/brk/errno.h>
 #include <uapi/signal.h>
 
@@ -15,7 +15,7 @@ u64 sys_rt_sigaction(void)
 	if (sigsetsize != sizeof(sigset_t))
 		return -EINVAL;
 
-	return proc_sigaction(current_process(), sig, act, oact);
+	return signal_do_sigaction(current_task(), sig, act, oact);
 }
 
 u64 sys_rt_sigprocmask(void)
@@ -28,10 +28,10 @@ u64 sys_rt_sigprocmask(void)
 	if (sigsetsize != sizeof(sigset_t))
 		return -EINVAL;
 
-	return proc_sigprocmask(current_process(), how, set, oldset);
+	return signal_do_sigprocmask(current_task(), how, set, oldset);
 }
 
 u64 sys_rt_sigreturn(void)
 {
-	return proc_do_sigreturn(current_process());
+	return signal_do_sigreturn(current_task());
 }

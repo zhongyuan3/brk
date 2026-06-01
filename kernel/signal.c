@@ -1,12 +1,12 @@
 #include <brk/asm.h>
 #include <brk/kernel.h>
 #include <brk/list.h>
-#include <brk/process.h>
 #include <brk/refcnt.h>
 #include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <uapi/brk/errno.h>
 #include <uapi/signal.h>
 
@@ -33,24 +33,7 @@ static bool user_access_ok(u64 addr, usize_t len)
 	return addr + len <= USER_SPACE_SIZE_MAX;
 }
 
-void proc_signal_init(struct process *proc)
-{
-	proc->pending = 0;
-	proc->blocked = 0;
-	proc->in_handler = false;
-	proc->sigframe_sp = 0;
-}
-
-void proc_signal_fork(struct process *child, struct process *parent)
-{
-	child->pending = 0;
-	child->blocked = parent->blocked;
-	child->in_handler = false;
-	child->sigframe_sp = 0;
-	sigaction_table_copy(child->sigactions, parent->sigactions);
-}
-
-static void sigaction_table_reset(struct sigaction_table *table)
+void sigaction_table_reset(struct sigaction_table *table)
 {
 	spinlock_acquire(&table->lock);
 	for (int i = 0; i < NSIG; ++i) {
@@ -61,31 +44,25 @@ static void sigaction_table_reset(struct sigaction_table *table)
 	spinlock_release(&table->lock);
 }
 
-void proc_signal_exec(struct process *proc)
+static int next_signal(struct task_control_block *task)
 {
-	proc_signal_init(proc);
-	sigaction_table_reset(proc->sigactions);
-}
+	u64 deliver = task->pending & ~task->blocked;
 
-static int proc_next_signal(struct process *proc)
-{
-	u64 deliver = proc->pending & ~proc->blocked;
-
-	if (proc->in_handler) {
+	if (task->in_handler) {
 		u64 nodfer = 0;
 		int sig;
 
 		deliver &= (1ULL << SIGKILL);
-		spinlock_acquire(&proc->sigactions->lock);
+		spinlock_acquire(&task->sigactions->lock);
 		for (sig = 1; sig < NSIG; ++sig) {
-			if (!(proc->pending & (1ULL << sig)))
+			if (!(task->pending & (1ULL << sig)))
 				continue;
-			if (proc->sigactions->actions[sig].sa_flags &
+			if (task->sigactions->actions[sig].sa_flags &
 			    SA_NODEFER)
 				nodfer |= (1ULL << sig);
 		}
-		spinlock_release(&proc->sigactions->lock);
-		deliver |= nodfer & ~proc->blocked;
+		spinlock_release(&task->sigactions->lock);
+		deliver |= nodfer & ~task->blocked;
 	}
 
 	if (!deliver)
@@ -98,48 +75,57 @@ static int proc_next_signal(struct process *proc)
 	return 0;
 }
 
-static void proc_clear_pending(struct process *proc, int sig)
+void signal_reset(struct task_control_block *task)
 {
-	proc->pending &= ~(1ULL << sig);
+	task->pending = 0;
+	task->blocked = 0;
+	task->in_handler = false;
+	task->sigframe_sp = 0;
+	sigaction_table_reset(task->sigactions);
 }
 
-bool proc_signal_pending(struct process *proc)
+static void clear_pending(struct task_control_block *task, int sig)
+{
+	task->pending &= ~(1ULL << sig);
+}
+
+bool signal_pending(struct task_control_block *task)
 {
 	bool pending;
 
-	spinlock_acquire(&proc->lock);
-	pending = proc_next_signal(proc) != 0;
-	spinlock_release(&proc->lock);
+	spinlock_acquire(&task->lock);
+	pending = next_signal(task) != 0;
+	spinlock_release(&task->lock);
 	return pending;
 }
 
-int proc_kill(pid_t pid, int sig)
+int signal_do_kill(pid_t pid, int sig)
 {
-	struct process *p, *target = NULL;
+	struct task_control_block *p, *target = NULL;
 
 	if (sig != 0 && !sig_valid(sig))
 		return -EINVAL;
 
-	spinlock_acquire(&procs_lock);
-	list_for_each_entry(p, &procs, list) {
+	spinlock_acquire(&tasks_lock);
+	list_for_each_entry(p, &tasks, list) {
 		if (p->pid == pid) {
 			target = p;
 			break;
 		}
 	}
 	if (!target) {
-		spinlock_release(&procs_lock);
+		spinlock_release(&tasks_lock);
 		return -ESRCH;
 	}
-	if (target == init_proc) {
-		spinlock_release(&procs_lock);
+	if (target == initial_task) {
+		spinlock_release(&tasks_lock);
 		return -EPERM;
 	}
 
 	spinlock_acquire(&target->lock);
-	spinlock_release(&procs_lock);
+	spinlock_release(&tasks_lock);
 
-	if (target->state == PROCESS_STATE_ZOMBIE) {
+	if (target->state == TASK_STATE_ZOMBIE) {
 		spinlock_release(&target->lock);
 		return -ESRCH;
 	}
@@ -152,131 +138,155 @@ int proc_kill(pid_t pid, int sig)
 	target->pending |= (1ULL << sig);
 	spinlock_release(&target->lock);
 
-	proc_wake_process(target);
+	task_wake_spec(target);
 	return 0;
 }
 
-void proc_send_signal(struct process *proc, int sig)
+void signal_send(struct task_control_block *task, int sig)
 {
-	if (!proc || !sig_valid(sig))
+	if (!task || !sig_valid(sig))
 		return;
 
-	spinlock_acquire(&proc->lock);
-	if (proc->state == PROCESS_STATE_ZOMBIE) {
-		spinlock_release(&proc->lock);
+	spinlock_acquire(&task->lock);
+	if (task->state == TASK_STATE_ZOMBIE) {
+		spinlock_release(&task->lock);
 		return;
 	}
-	proc->pending |= (1ULL << sig);
-	spinlock_release(&proc->lock);
+	task->pending |= (1ULL << sig);
+	spinlock_release(&task->lock);
 
-	proc_wake_process(proc);
+	task_wake_spec(task);
 }
 
-static bool proc_setup_signal_frame(struct process *proc, int sig, u64 handler)
+int signal_init(struct task_control_block *task)
+{
+	task->sigactions = sigaction_table_alloc();
+	if (!task->sigactions)
+		return -ENOMEM;
+	signal_reset(task);
+	return 0;
+}
+
+void signal_deinit(struct task_control_block *task)
+{
+	sigaction_table_put(task->sigactions);
+}
+
+static bool setup_signal_frame(struct task_control_block *task, int sig,
+			       u64 handler)
 {
 	u64 sp;
 	struct user_sigframe *frame;
 
-	sp = proc->tf->sp;
+	sp = task->tf->sp;
 	sp -= sizeof(*frame);
 	sp &= ~0xFULL;
 	if (!user_access_ok(sp, sizeof(*frame)))
 		return false;
 
 	frame = (struct user_sigframe *)sp;
-	frame->tf = *proc->tf;
-	frame->blocked = proc->blocked;
+	frame->tf = *task->tf;
+	frame->blocked = task->blocked;
 	frame->signo = sig;
 
-	proc->sigframe_sp = sp;
-	spinlock_acquire(&proc->sigactions->lock);
-	if (!(proc->sigactions->actions[sig].sa_flags & SA_NODEFER))
-		proc->blocked |= (1ULL << sig);
-	proc->blocked |= proc->sigactions->actions[sig].sa_mask;
-	spinlock_release(&proc->sigactions->lock);
-	proc_clear_pending(proc, sig);
-	proc->in_handler = true;
+	task->sigframe_sp = sp;
+	spinlock_acquire(&task->sigactions->lock);
+	if (!(task->sigactions->actions[sig].sa_flags & SA_NODEFER))
+		task->blocked |= (1ULL << sig);
+	task->blocked |= task->sigactions->actions[sig].sa_mask;
+	spinlock_release(&task->sigactions->lock);
+	clear_pending(task, sig);
+	task->in_handler = true;
 
-	proc->tf->sp = sp;
-	proc->tf->epc = handler;
-	proc->tf->a0 = sig;
+	task->tf->sp = sp;
+	task->tf->epc = handler;
+	task->tf->a0 = sig;
 	return true;
 }
 
-static void proc_deliver_one(struct process *proc, int sig)
+static void signal_deliver_one(struct task_control_block *task, int sig)
 {
 	unsigned long handler;
 	u64 user_handler;
 
-	spinlock_acquire(&proc->lock);
-	spinlock_acquire(&proc->sigactions->lock);
-	handler = proc->sigactions->actions[sig].sa_handler;
-	spinlock_release(&proc->sigactions->lock);
+	spinlock_acquire(&task->lock);
+	spinlock_acquire(&task->sigactions->lock);
+	handler = task->sigactions->actions[sig].sa_handler;
+	spinlock_release(&task->sigactions->lock);
 
 	if (sig == SIGKILL ||
 	    (handler == (unsigned long)SIG_DFL && sig_default_terminate(sig))) {
-		spinlock_release(&proc->lock);
-		proc_exit_signal(sig);
+		spinlock_release(&task->lock);
+		task_exit_signal(sig);
 	}
 
 	if (handler == (unsigned long)SIG_IGN) {
-		proc_clear_pending(proc, sig);
-		spinlock_release(&proc->lock);
+		clear_pending(task, sig);
+		spinlock_release(&task->lock);
 		return;
 	}
 
 	if (handler == (unsigned long)SIG_DFL) {
-		proc_clear_pending(proc, sig);
-		spinlock_release(&proc->lock);
+		clear_pending(task, sig);
+		spinlock_release(&task->lock);
 		return;
 	}
 
 	user_handler = handler;
-	if (!proc_setup_signal_frame(proc, sig, user_handler)) {
-		spinlock_release(&proc->lock);
-		proc_exit_signal(sig);
+	if (!setup_signal_frame(task, sig, user_handler)) {
+		spinlock_release(&task->lock);
+		task_exit_signal(sig);
 	}
-	spinlock_release(&proc->lock);
+	spinlock_release(&task->lock);
 }
 
-void proc_deliver_pending(struct process *proc)
+void signal_deliver_pending(struct task_control_block *task)
 {
 	int sig;
 
 	for (;;) {
-		spinlock_acquire(&proc->lock);
-		sig = proc_next_signal(proc);
-		spinlock_release(&proc->lock);
+		spinlock_acquire(&task->lock);
+		sig = next_signal(task);
+		spinlock_release(&task->lock);
 		if (!sig)
 			return;
-		proc_deliver_one(proc, sig);
-		if (proc->in_handler)
+		signal_deliver_one(task, sig);
+		if (task->in_handler)
 			return;
 	}
 }
 
-u64 proc_do_sigreturn(struct process *proc)
+void signal_copy(struct task_control_block *dst, struct task_control_block *src)
+{
+	dst->pending = 0;
+	dst->blocked = src->blocked;
+	dst->in_handler = false;
+	dst->sigframe_sp = 0;
+	sigaction_table_copy(dst->sigactions, src->sigactions);
+}
+
+u64 signal_do_sigreturn(struct task_control_block *task)
 {
 	struct user_sigframe *frame;
 
-	if (!proc->sigframe_sp)
+	if (!task->sigframe_sp)
 		return -EINVAL;
 
-	frame = (struct user_sigframe *)proc->sigframe_sp;
-	if (!user_access_ok(proc->sigframe_sp, sizeof(*frame)))
+	frame = (struct user_sigframe *)task->sigframe_sp;
+	if (!user_access_ok(task->sigframe_sp, sizeof(*frame)))
 		return -EFAULT;
 
-	*proc->tf = frame->tf;
-	proc->blocked = frame->blocked;
-	proc->in_handler = false;
-	proc->sigframe_sp = 0;
-	return proc->tf->a0;
+	*task->tf = frame->tf;
+	task->blocked = frame->blocked;
+	task->in_handler = false;
+	task->sigframe_sp = 0;
+	return task->tf->a0;
 }
 
-int proc_sigaction(struct process *proc, int sig, const struct sigaction *act,
-		   struct sigaction *oact)
+int signal_do_sigaction(struct task_control_block *task, int sig,
+			const struct sigaction *act, struct sigaction *oact)
 {
-	struct sigaction_table *table = proc->sigactions;
+	struct sigaction_table *table = task->sigactions;
 
 	if (!sig_valid(sig))
 		return -EINVAL;
@@ -292,17 +302,17 @@ int proc_sigaction(struct process *proc, int sig, const struct sigaction *act,
 	return 0;
 }
 
-int proc_sigprocmask(struct process *proc, int how, const sigset_t *set,
-		     sigset_t *oldset)
+int signal_do_sigprocmask(struct task_control_block *task, int how,
+			  const sigset_t *set, sigset_t *oldset)
 {
 	sigset_t newblocked;
 
-	spinlock_acquire(&proc->lock);
+	spinlock_acquire(&task->lock);
 	if (oldset)
-		*oldset = proc->blocked;
+		*oldset = task->blocked;
 
 	if (set) {
-		newblocked = proc->blocked;
+		newblocked = task->blocked;
 		switch (how) {
 		case SIG_BLOCK:
 			newblocked |= *set;
@@ -314,14 +324,14 @@ int proc_sigprocmask(struct process *proc, int how, const sigset_t *set,
 			newblocked = *set;
 			break;
 		default:
-			spinlock_release(&proc->lock);
+			spinlock_release(&task->lock);
 			return -EINVAL;
 		}
 		newblocked &= ~(1ULL << SIGKILL);
 		newblocked &= ~(1ULL << SIGSTOP);
-		proc->blocked = newblocked;
+		task->blocked = newblocked;
 	}
-	spinlock_release(&proc->lock);
+	spinlock_release(&task->lock);
 	return 0;
 }
 

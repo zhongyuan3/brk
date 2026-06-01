@@ -7,8 +7,8 @@
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
-#include <brk/process.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <uapi/brk/errno.h>
 #include <uapi/brk/limits.h>
 #include <uapi/fcntl.h>
@@ -48,20 +48,20 @@ static int dir_lookup_entry(struct fs_path *dir, const struct qstr *name,
 
 static int path_init(int dir_fd, const char **pathname, struct fs_path *path)
 {
-	struct process *proc = current_process();
+	struct task_control_block *task = current_task();
 
 	if ((*pathname)[0] == '/') {
-		fsinfo_get_root(proc->fsinfo, path);
+		fsinfo_get_root(task->fsinfo, path);
 		*pathname += 1;
 		return 0;
 	}
 
 	if (dir_fd == AT_FDCWD) {
-		fsinfo_get_cwd(proc->fsinfo, path);
+		fsinfo_get_cwd(task->fsinfo, path);
 		return 0;
 	}
 
-	struct fs_file *f = fdtable_get_file(proc->fdtable, dir_fd);
+	struct fs_file *f = fdtable_get_file(task->fdtable, dir_fd);
 	if (IS_ERR(f))
 		return PTR_ERR(f);
 	fs_path_get(&f->path);

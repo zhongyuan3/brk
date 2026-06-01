@@ -5,11 +5,11 @@
 #include <brk/panic.h>
 #include <brk/plic.h>
 #include <brk/printk.h>
-#include <brk/process.h>
 #include <brk/riscv.h>
 #include <brk/sbi.h>
 #include <brk/signal.h>
 #include <brk/syscall.h>
+#include <brk/task.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
 #include <brk/trap.h>
@@ -75,14 +75,14 @@ void kernel_trap_handler(void)
 	u64 scause = read_scause();
 	u64 sepc = read_sepc();
 	u64 stval = read_stval();
-	struct process *proc = current_process();
+	struct task_control_block *task = current_task();
 	u64 code = TRAP_CAUSE_CODE(scause);
 
 	if (TRAP_IS_INTERRUPT(scause)) {
 		if (code == 5) {
 			timer_handle_int();
-			if (proc && --proc->time_slice <= 0)
-				proc_yield();
+			if (task && --task->time_slice <= 0)
+				task_yield();
 		} else if (code == 9) {
 			irq_handle_external(current_cpuid());
 		} else {
@@ -101,7 +101,7 @@ void kernel_trap_handler(void)
 struct trap_frame *user_trap_handler(void)
 {
 	struct trap_frame *tf;
-	struct process *proc;
+	struct task_control_block *task;
 	u64 jiffies;
 	u64 scause = read_scause();
 	u64 sepc = read_sepc();
@@ -111,72 +111,72 @@ struct trap_frame *user_trap_handler(void)
 	write_stvec((u64)kernel_trap_vector);
 
 	tf = (struct trap_frame *)read_sscratch();
-	proc = ((struct extended_trap_frame *)tf)->proc;
-	set_current_process(proc);
+	task = ((struct extended_trap_frame *)tf)->task;
+	set_current_task(task);
 	set_current_cpuid(tf->cpuid);
 	write_sstatus(read_sstatus() | SSTATUS_SUM);
 
 	jiffies = jiffies_get();
-	proc->ptms.tms_utime += jiffies - proc->utime;
-	proc->ktime = jiffies;
+	task->ptms.tms_utime += jiffies - task->utime;
+	task->ktime = jiffies;
 
-	proc->tf->epc = sepc;
+	task->tf->epc = sepc;
 
 	if (TRAP_IS_INTERRUPT(scause)) {
 		if (code == 5) {
 			timer_handle_int();
-			proc_deliver_pending(proc);
-			if (--proc->time_slice <= 0)
-				proc_yield();
+			signal_deliver_pending(task);
+			if (--task->time_slice <= 0)
+				task_yield();
 		} else if (code == 9) {
 			irq_handle_external(current_cpuid());
 		} else {
 			klog_warn("%s: scause=%#lx,sepc=%#lx,stval=%#lx\n",
 				  cause_to_str(scause), scause, sepc, stval);
-			proc_set_killed(proc);
+			task_set_killed(task);
 		}
 	} else {
 		if (code == 8) {
-			proc_deliver_pending(proc);
-			proc->tf->epc += 4; /* skip ecall */
+			signal_deliver_pending(task);
+			task->tf->epc += 4; /* skip ecall */
 			intr_on();
 			syscall();
 		} else {
 			klog_warn("%s: scause=%#lx,sepc=%#lx,stval=%#lx\n",
 				  cause_to_str(scause), scause, sepc, stval);
-			proc_set_killed(proc);
+			task_set_killed(task);
 		}
 	}
 
-	proc_deliver_pending(proc);
+	signal_deliver_pending(task);
 
 	prepare_to_return();
 	jiffies = jiffies_get();
-	proc->ptms.tms_stime += jiffies - proc->ktime;
-	proc->utime = jiffies;
-	return proc->tf;
+	task->ptms.tms_stime += jiffies - task->ktime;
+	task->utime = jiffies;
+	return task->tf;
 }
 
 void prepare_to_return(void)
 {
 	u64 sstatus;
-	struct process *proc;
+	struct task_control_block *task;
 
 	intr_off();
 
 	write_stvec((u64)user_trap_vector);
 
-	proc = current_process();
+	task = current_task();
 
 	sstatus = read_sstatus();
 	sstatus &= ~SSTATUS_SPP;
 	sstatus |= SSTATUS_SPIE;
 	write_sstatus(sstatus);
 
-	proc->tf->kernel_sp = proc->kstack_top;
-	proc->tf->cpuid = current_cpuid();
+	task->tf->kernel_sp = task->kstack_top;
+	task->tf->cpuid = current_cpuid();
 
-	write_sepc(proc->tf->epc);
+	write_sepc(task->tf->epc);
 
 	write_sstatus(read_sstatus() & ~SSTATUS_SUM);
 }

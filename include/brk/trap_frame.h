@@ -3,7 +3,7 @@
 
 #include <brk/types.h>
 
-struct process;
+struct task_control_block;
 
 struct trap_frame {
 	/* 0   */ u64 kernel_sp;
@@ -44,7 +44,7 @@ struct trap_frame {
 
 struct extended_trap_frame {
 	struct trap_frame tf;
-	struct process *proc;
+	struct task_control_block *task;
 };
 
 #define TRAP_FRAME_ON_STACK_SIZE \

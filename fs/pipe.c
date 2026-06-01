@@ -8,10 +8,10 @@
 #include <brk/mount.h>
 #include <brk/panic.h>
 #include <brk/path.h>
-#include <brk/process.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
 #include <uapi/fcntl.h>
@@ -251,12 +251,12 @@ static int pipe_release(struct fs_inode *inode, struct fs_file *file)
 	if (file->mode & FMODE_READ) {
 		if (pipe->readers)
 			pipe->readers--;
-		proc_wake_all(&pipe->wwait);
+		task_wake_all(&pipe->wwait);
 	}
 	if (file->mode & FMODE_WRITE) {
 		if (pipe->writers)
 			pipe->writers--;
-		proc_wake_all(&pipe->rwait);
+		task_wake_all(&pipe->rwait);
 	}
 	spinlock_release(&pipe->lock);
 	return 0;
@@ -284,11 +284,11 @@ static ssize_t pipe_read(struct fs_file *file, char *buf, usize_t size,
 				spinlock_release(&pipe->lock);
 				return total ? total : -EAGAIN;
 			}
-			if (proc_is_killed(current_process())) {
+			if (task_is_killed(current_task())) {
 				spinlock_release(&pipe->lock);
 				return total ? total : -EINTR;
 			}
-			proc_sleep(&pipe->rwait, &pipe->lock);
+			task_sleep(&pipe->rwait, &pipe->lock);
 		}
 
 		n = pipe->count;
@@ -308,7 +308,7 @@ static ssize_t pipe_read(struct fs_file *file, char *buf, usize_t size,
 		buf += n;
 		size -= n;
 		total += (ssize_t)n;
-		proc_wake_all(&pipe->wwait);
+		task_wake_all(&pipe->wwait);
 	}
 
 	return total;
@@ -336,11 +336,11 @@ static ssize_t pipe_write(struct fs_file *file, const char *buf, usize_t size,
 				spinlock_release(&pipe->lock);
 				return total ? total : -EAGAIN;
 			}
-			if (proc_is_killed(current_process())) {
+			if (task_is_killed(current_task())) {
 				spinlock_release(&pipe->lock);
 				return total ? total : -EINTR;
 			}
-			proc_sleep(&pipe->wwait, &pipe->lock);
+			task_sleep(&pipe->wwait, &pipe->lock);
 			if (pipe->readers == 0) {
 				spinlock_release(&pipe->lock);
 				return total ? total : -EPIPE;
@@ -368,7 +368,7 @@ static ssize_t pipe_write(struct fs_file *file, const char *buf, usize_t size,
 		buf += n;
 		size -= n;
 		total += (ssize_t)n;
-		proc_wake_all(&pipe->rwait);
+		task_wake_all(&pipe->rwait);
 	}
 
 	return total;
@@ -505,7 +505,7 @@ void pipe_fs_init(void)
 int do_pipe2(int *pipefd, int flags)
 {
 	struct fs_file *rf, *wf;
-	struct process *proc = current_process();
+	struct task_control_block *task = current_task();
 	int fd0, fd1, err;
 
 	if (flags & ~(O_CLOEXEC | O_NONBLOCK))
@@ -515,16 +515,16 @@ int do_pipe2(int *pipefd, int flags)
 	if (err)
 		return err;
 
-	fd0 = fdtable_alloc_fd(proc->fdtable, rf);
+	fd0 = fdtable_alloc_fd(task->fdtable, rf);
 	if (fd0 < 0) {
 		fs_file_put(wf);
 		fs_file_put(rf);
 		return -EMFILE;
 	}
 
-	fd1 = fdtable_alloc_fd(proc->fdtable, wf);
+	fd1 = fdtable_alloc_fd(task->fdtable, wf);
 	if (fd1 < 0) {
-		fdtable_close_fd(proc->fdtable, fd0);
+		fdtable_close_fd(task->fdtable, fd0);
 		fs_file_put(wf);
 		return -EMFILE;
 	}

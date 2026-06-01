@@ -4,12 +4,12 @@
 #include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/pagecache.h>
-#include <brk/process.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
 
@@ -107,7 +107,7 @@ retry:
 			if (inode->state & (I_FREEING | I_WILL_FREE)) {
 				spinlock_release(&inode->lock);
 				/* Wait for release to complete and retry */
-				proc_sleep(&inode->state, &inode_hash_lock);
+				task_sleep(&inode->state, &inode_hash_lock);
 				goto retry;
 			}
 
@@ -168,7 +168,7 @@ struct fs_inode *fs_inode_get_locked(struct fs_super_block *sb,
 			spinlock_release(&inode->lock);
 			break;
 		}
-		proc_sleep(&inode->state, &inode->lock);
+		task_sleep(&inode->state, &inode->lock);
 	}
 
 	return inode;
@@ -179,7 +179,7 @@ void fs_inode_unlock_new(struct fs_inode *inode)
 	spinlock_acquire(&inode->lock);
 	inode->state &= ~I_NEW;
 	spinlock_release(&inode->lock);
-	proc_wake_up(&inode->state);
+	task_wake_all(&inode->state);
 }
 
 struct fs_inode *fs_inode_get(struct fs_inode *inode)

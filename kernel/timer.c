@@ -1,7 +1,7 @@
 #include <brk/cpu.h>
-#include <brk/process.h>
 #include <brk/riscv.h>
 #include <brk/sbi.h>
+#include <brk/task.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
 static u64 timer_interval;
@@ -25,10 +25,10 @@ void timer_set_next(void)
 
 void timer_handle_int(void)
 {
-	if (current_cpuid() == init_cpuid)
+	if (current_cpuid() == boot_cpuid)
 		timekeeper_tick();
 
-	proc_wake_all(timekeeper_wait_chan());
+	task_wake_all(timekeeper_wait_chan());
 
 	timer_set_next();
 }
