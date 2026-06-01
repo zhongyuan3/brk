@@ -1,7 +1,9 @@
 #include <brk/dcache.h>
 #include <brk/device.h>
 #include <brk/error.h>
+#include <brk/fdtable.h>
 #include <brk/fs.h>
+#include <brk/fsinfo.h>
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
@@ -36,10 +38,13 @@ int fs_init(void)
 		return PTR_ERR(mnt);
 
 	proc = current_process();
-	proc->root.mnt = mnt;
-	proc->root.dentry = fs_dentry_get(mnt->root);
-	fs_path_get(&proc->root);
-	proc->cwd = proc->root;
+	struct fs_path root_path = {
+		.mnt = mnt,
+		.dentry = fs_dentry_get(mnt->root),
+	};
+	fsinfo_set_root(proc->fsinfo, &root_path);
+	fs_path_get(&root_path);
+	fsinfo_set_cwd(proc->fsinfo, &root_path);
 	klog_info("root mount point initialized\n");
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
@@ -60,18 +65,18 @@ int fs_init(void)
 		return err;
 	klog_info("/ mounted successfully\n");
 
-	new_root_mnt = fs_mount_state_lookup(&proc->root);
+	new_root_mnt = fs_mount_state_lookup(&root_path);
 	if (!new_root_mnt)
 		return -EINVAL;
 
 	new_root_path.mnt = new_root_mnt;
 	new_root_path.dentry = fs_dentry_get(new_root_mnt->root);
-
-	fs_path_put(&proc->root);
-	fs_path_put(&proc->cwd);
-	proc->root = new_root_path;
 	fs_path_get(&new_root_path);
-	proc->cwd = new_root_path;
+
+	fsinfo_update_root(proc->fsinfo, &new_root_path);
+	fsinfo_update_cwd(proc->fsinfo, &new_root_path);
+	fs_path_put(&root_path);
+	fs_path_put(&new_root_path);
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
 	if (err && err != -EEXIST)
@@ -105,9 +110,9 @@ int fs_init(void)
 		return err;
 	}
 
-	proc->ofiles[0] = f;
-	proc->ofiles[1] = fs_file_get(f);
-	proc->ofiles[2] = fs_file_get(f);
+	fdtable_alloc_fd(proc->fdtable, f);
+	fdtable_dup_fd(proc->fdtable, 0);
+	fdtable_dup_fd(proc->fdtable, 0);
 
 	return 0;
 }

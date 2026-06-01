@@ -115,16 +115,3 @@ int syscall_arg_int(int argno)
 {
 	return (int)syscall_arg_raw(argno);
 }
-
-int syscall_arg_fd(int argno, int *pfd, struct fs_file **pfp)
-{
-	int fd = syscall_arg_int(argno);
-	struct process *proc = current_process();
-	if (!(0 <= fd && fd < OPEN_MAX) || !proc->ofiles[fd])
-		return -EBADF;
-	if (pfd)
-		*pfd = fd;
-	if (pfp)
-		*pfp = proc->ofiles[fd];
-	return 0;
-}
