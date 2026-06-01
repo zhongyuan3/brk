@@ -1,7 +1,9 @@
 #include <brk/assert.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
+#include <brk/fdtable.h>
 #include <brk/fs.h>
+#include <brk/fsinfo.h>
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
@@ -49,25 +51,23 @@ static int path_init(int dir_fd, const char **pathname, struct fs_path *path)
 	struct process *proc = current_process();
 
 	if ((*pathname)[0] == '/') {
-		fs_path_get(&proc->root);
-		*path = proc->root;
+		fsinfo_get_root(proc->fsinfo, path);
 		*pathname += 1;
 		return 0;
 	}
 
 	if (dir_fd == AT_FDCWD) {
-		fs_path_get(&proc->cwd);
-		*path = proc->cwd;
+		fsinfo_get_cwd(proc->fsinfo, path);
 		return 0;
 	}
 
-	if (0 <= dir_fd && dir_fd < OPEN_MAX && proc->ofiles[dir_fd]) {
-		fs_path_get(&proc->ofiles[dir_fd]->path);
-		*path = proc->ofiles[dir_fd]->path;
-		return 0;
-	}
-
-	return -EBADF;
+	struct fs_file *f = fdtable_get_file(proc->fdtable, dir_fd);
+	if (IS_ERR(f))
+		return PTR_ERR(f);
+	fs_path_get(&f->path);
+	*path = f->path;
+	fs_file_put(f);
+	return 0;
 }
 
 static const char *skip_component(const char *pathname,
@@ -221,12 +221,16 @@ int fs_path_lookup(const char *name, unsigned int flags, struct fs_path *path)
 
 void fs_path_get(struct fs_path *path)
 {
+	if (!path->dentry || !path->mnt)
+		return;
 	fs_dentry_get(path->dentry);
 	fs_mount_state_get(path->mnt);
 }
 
 void fs_path_put(struct fs_path *path)
 {
+	if (!path->dentry || !path->mnt)
+		return;
 	fs_dentry_put(path->dentry);
 	fs_mount_state_put(path->mnt);
 }

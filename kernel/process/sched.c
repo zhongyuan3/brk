@@ -1,4 +1,6 @@
+#include <brk/fdtable.h>
 #include <brk/fs.h>
+#include <brk/fsinfo.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
@@ -221,32 +223,26 @@ void proc_exit_signal(int sig)
 void proc_exit(int status)
 {
 	struct process *child;
-	struct process *parent = current_process();
+	struct process *proc = current_process();
 
-	if (parent == init_proc)
+	if (proc == init_proc)
 		panic("%s(): init exit\n", __func__);
 
-	for (int i = 0; i < OPEN_MAX; ++i) {
-		if (parent->ofiles[i]) {
-			fs_file_put(parent->ofiles[i]);
-			parent->ofiles[i] = NULL;
-		}
-	}
-	fs_path_put(&parent->cwd);
-	fs_path_put(&parent->root);
+	fdtable_close_all(proc->fdtable);
+	fsinfo_free_resources(proc->fsinfo);
 
 	spinlock_acquire(&wait_lock);
-	list_for_each_entry(child, &parent->children, child) {
+	list_for_each_entry(child, &proc->children, child) {
 		child->parent = init_proc;
 	}
-	list_splice(&parent->children, &init_proc->children);
-	proc_wake_up(parent->parent);
+	list_splice(&proc->children, &init_proc->children);
+	proc_wake_up(proc->parent);
 	spinlock_release(&wait_lock);
 
-	spinlock_acquire(&parent->lock);
+	spinlock_acquire(&proc->lock);
 
-	parent->state = PROCESS_STATE_ZOMBIE;
-	parent->exit_status = status;
+	proc->state = PROCESS_STATE_ZOMBIE;
+	proc->exit_status = status;
 
 	proc_sched();
 

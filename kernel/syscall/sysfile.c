@@ -1,7 +1,9 @@
 #include <brk/dcache.h>
 #include <brk/error.h>
+#include <brk/fdtable.h>
 #include <brk/fs.h>
 #include <brk/fs_types.h>
+#include <brk/fsinfo.h>
 #include <brk/kernel.h>
 #include <brk/mount.h>
 #include <brk/path.h>
@@ -18,6 +20,7 @@
 #include <uapi/dirent.h>
 #include <uapi/fcntl.h>
 #include <uapi/stat.h>
+#include <uapi/types.h>
 #include <uapi/utsname.h>
 
 u64 sys_read(void)
@@ -26,16 +29,19 @@ u64 sys_read(void)
 	void *buf;
 	usize_t n;
 	struct fs_file *fp;
-	int err;
+	ssize_t ret;
+	struct process *proc;
 
-	err = syscall_arg_fd(0, &fd, &fp);
-	if (err)
-		return err;
-	if (fp->mode & FMODE_DIR)
-		return -EISDIR;
+	proc = current_process();
+	fd = syscall_arg_int(0);
+	fp = fdtable_get_file(proc->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
 	buf = syscall_arg_ptr(1);
 	n = syscall_arg_raw(2);
-	return fs_file_read(fp, buf, n);
+	ret = fs_file_read(fp, buf, n);
+	fs_file_put(fp);
+	return ret;
 }
 
 u64 sys_write(void)
@@ -44,16 +50,23 @@ u64 sys_write(void)
 	const void *buf;
 	usize_t n;
 	struct fs_file *fp;
-	int err;
+	ssize_t ret;
+	struct process *proc;
 
-	err = syscall_arg_fd(0, &fd, &fp);
-	if (err)
-		return err;
-	if (fp->mode & FMODE_DIR)
+	proc = current_process();
+	fd = syscall_arg_int(0);
+	fp = fdtable_get_file(proc->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
+	if (fp->mode & FMODE_DIR) {
+		fs_file_put(fp);
 		return -EISDIR;
+	}
 	buf = syscall_arg_ptr(1);
 	n = syscall_arg_raw(2);
-	return fs_file_write(fp, buf, n);
+	ret = fs_file_write(fp, buf, n);
+	fs_file_put(fp);
+	return ret;
 }
 
 u64 sys_open(void)
@@ -68,7 +81,7 @@ u64 sys_open(void)
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
-	fd = proc_alloc_fd(current_process(), fp);
+	fd = fdtable_alloc_fd(current_process()->fdtable, fp);
 	if (fd < 0) {
 		fs_file_put(fp);
 		return -EMFILE;
@@ -89,7 +102,7 @@ u64 sys_openat(void)
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
-	fd = proc_alloc_fd(current_process(), fp);
+	fd = fdtable_alloc_fd(current_process()->fdtable, fp);
 	if (fd < 0) {
 		fs_file_put(fp);
 		return -EMFILE;
@@ -99,17 +112,9 @@ u64 sys_openat(void)
 
 u64 sys_close(void)
 {
-	int err;
-	struct fs_file *fp = NULL;
-	int fd = 0;
-
-	err = syscall_arg_fd(0, &fd, &fp);
-	if (err)
-		return err;
-
-	current_process()->ofiles[fd] = NULL;
-	fs_file_put(fp);
-	return 0;
+	int fd = syscall_arg_int(0);
+	struct process *proc = current_process();
+	return fdtable_close_fd(proc->fdtable, fd);
 }
 
 u64 sys_execve(void)
@@ -149,31 +154,28 @@ u64 sys_fstat(void)
 {
 	struct fs_file *fp = NULL;
 	struct stat *buf;
-	int err;
+	int ret;
+	int fd;
+	struct process *proc = current_process();
 
-	err = syscall_arg_fd(0, NULL, &fp);
-	if (err)
-		return err;
+	fd = syscall_arg_int(0);
+	fp = fdtable_get_file(proc->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
 	buf = syscall_arg_ptr(1);
-	return fs_file_stat(fp, buf);
+	ret = fs_file_stat(fp, buf);
+	fs_file_put(fp);
+	return ret;
 }
 
 u64 sys_lstat(void)
 {
-	struct fs_file *fp = NULL;
-	struct stat *buf;
-	int err;
-
-	err = syscall_arg_fd(0, NULL, &fp);
-	if (err)
-		return err;
-	buf = syscall_arg_ptr(1);
-	return fs_file_stat(fp, buf);
+	return -ENOSYS;
 }
 
 u64 sys_stat(void)
 {
-	int err;
+	int ret;
 	const char *path = syscall_arg_ptr(0);
 	struct stat *buf = syscall_arg_ptr(1);
 	struct fs_file *fp = NULL;
@@ -182,9 +184,9 @@ u64 sys_stat(void)
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
-	err = fs_file_stat(fp, buf);
+	ret = fs_file_stat(fp, buf);
 	fs_file_put(fp);
-	return err;
+	return ret;
 }
 
 u64 sys_link(void)
@@ -273,12 +275,11 @@ u64 sys_getcwd(void)
 	struct process *proc = current_process();
 	char *buf = syscall_arg_ptr(0);
 	usize_t size = syscall_arg_raw(1);
-	int err = fs_path_to_absolute(&proc->cwd, buf, size);
-	if (err) {
-		klog_warn("%s(): %s\n", __func__, strerror(err));
-		return err;
-	}
-	return 0;
+	struct fs_path cwd = { 0 };
+	fsinfo_get_cwd(proc->fsinfo, &cwd);
+	int ret = fs_path_to_absolute(&cwd, buf, size);
+	fs_path_put(&cwd);
+	return ret;
 }
 
 u64 sys_chdir(void)
@@ -301,28 +302,29 @@ u64 sys_chdir(void)
 		return -ENOTDIR;
 	}
 
-	fs_path_put(&proc->cwd);
-	proc->cwd = new_path;
+	fsinfo_update_cwd(proc->fsinfo, &new_path);
 	return 0;
 }
 
 u64 sys_fchdir(void)
 {
-	int err;
-	int fd = 0;
-	struct fs_file *fp = NULL;
+	int fd;
+	struct fs_file *fp;
 	struct process *proc = current_process();
 
-	err = syscall_arg_fd(0, &fd, &fp);
-	if (err)
-		return err;
+	fd = syscall_arg_int(0);
+	fp = fdtable_get_file(proc->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
 
-	if (!(fp->mode & FMODE_DIR))
+	if (!(fp->mode & FMODE_DIR)) {
+		fs_file_put(fp);
 		return -ENOTDIR;
+	}
 
 	fs_path_get(&fp->path);
-	fs_path_put(&proc->cwd);
-	proc->cwd = fp->path;
+	fsinfo_update_cwd(proc->fsinfo, &fp->path);
+	fs_file_put(fp);
 	return 0;
 }
 
@@ -350,12 +352,9 @@ u64 sys_symlinkat(void)
 	const char *target;
 	int newdirfd;
 	const char *linkpath;
-	int err;
 
-	err = syscall_arg_fd(1, &newdirfd, NULL);
-	if (err)
-		return err;
 	target = syscall_arg_ptr(0);
+	newdirfd = syscall_arg_int(1);
 	linkpath = syscall_arg_ptr(2);
 	return do_symlinkat(newdirfd, linkpath, target);
 }
@@ -366,11 +365,8 @@ u64 sys_readlinkat(void)
 	const char *pathname;
 	char *buf;
 	usize_t bufsiz;
-	int err;
 
-	err = syscall_arg_fd(0, &dirfd, NULL);
-	if (err)
-		return err;
+	dirfd = syscall_arg_int(0);
 	pathname = syscall_arg_ptr(1);
 	buf = syscall_arg_ptr(2);
 	bufsiz = syscall_arg_raw(3);
@@ -432,51 +428,19 @@ u64 sys_pipe2(void)
 
 u64 sys_dup(void)
 {
-	int oldfd;
-	int newfd;
-	int err;
-	struct fs_file *fp = NULL;
-
-	err = syscall_arg_fd(0, &oldfd, &fp);
-	if (err)
-		return err;
-
-	fp = fs_file_get(fp);
-	newfd = proc_alloc_fd(current_process(), fp);
-	if (newfd >= 0) {
-		return newfd;
-	} else {
-		fs_file_put(fp);
-		return -EMFILE;
-	}
+	int oldfd = syscall_arg_int(0);
+	struct process *proc = current_process();
+	return fdtable_dup_fd(proc->fdtable, oldfd);
 }
 
 u64 sys_dup2(void)
 {
-	int oldfd;
-	int newfd;
-	int err;
+	int oldfd = syscall_arg_int(0);
+	int newfd = syscall_arg_int(1);
 	struct process *proc = current_process();
-	struct fs_file *f = NULL;
-
-	err = syscall_arg_fd(0, &oldfd, &f);
+	int err = fdtable_dup_fd2(proc->fdtable, oldfd, newfd);
 	if (err)
 		return err;
-
-	newfd = syscall_arg_int(1);
-	if (!(0 <= newfd && newfd < OPEN_MAX))
-		return -ERANGE;
-
-	if (proc->ofiles[newfd] && proc->ofiles[newfd] == f)
-		return newfd;
-
-	if (proc->ofiles[newfd] && proc->ofiles[newfd] != f) {
-		fs_file_put(proc->ofiles[newfd]);
-		proc->ofiles[newfd] = fs_file_get(f);
-		return newfd;
-	}
-
-	proc->ofiles[newfd] = fs_file_get(f);
 	return newfd;
 }
 
@@ -530,17 +494,21 @@ u64 sys_lseek(void)
 {
 	int fd = 0;
 	struct fs_file *fp = NULL;
-	int err;
+	int ret;
 	off_t off;
 	int whence;
 
-	err = syscall_arg_fd(0, &fd, &fp);
-	if (err)
-		return err;
+	fd = syscall_arg_int(0);
+	fp = fdtable_get_file(current_process()->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
+
 	off = syscall_arg_raw(1);
 	whence = syscall_arg_int(2);
 
-	return fs_file_lseek(fp, off, whence);
+	ret = fs_file_lseek(fp, off, whence);
+	fs_file_put(fp);
+	return ret;
 }
 
 struct getdents_context {
@@ -587,12 +555,15 @@ u64 sys_getdents(void)
 	usize_t size;
 	int err;
 
-	err = syscall_arg_fd(0, &fd, &fp);
-	if (err)
-		return err;
+	fd = syscall_arg_int(0);
+	fp = fdtable_get_file(current_process()->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
 
-	if (!(fp->mode & FMODE_DIR))
+	if (!(fp->mode & FMODE_DIR)) {
+		fs_file_put(fp);
 		return -ENOTDIR;
+	}
 
 	buf = syscall_arg_ptr(1);
 	size = syscall_arg_raw(2);
@@ -600,8 +571,10 @@ u64 sys_getdents(void)
 	struct fs_inode *inode = fp->path.dentry->inode;
 	const struct fs_file_ops *fop = fp->ops;
 
-	if (!fop->iterate_shared)
+	if (!fop->iterate_shared) {
+		fs_file_put(fp);
 		return -EOPNOTSUPP;
+	}
 
 	sleeplock_acquire(&fp->pos_lock);
 
@@ -618,11 +591,13 @@ u64 sys_getdents(void)
 	sleeplock_release(&inode->rwsem);
 	if (err) {
 		sleeplock_release(&fp->pos_lock);
+		fs_file_put(fp);
 		return err;
 	}
 
 	fp->pos = ctx.pos;
 	sleeplock_release(&fp->pos_lock);
+	fs_file_put(fp);
 
 	return ctx.pos;
 }
@@ -671,12 +646,14 @@ u64 sys_getdents64(void)
 	usize_t size;
 	int err;
 
-	err = syscall_arg_fd(0, &fd, &fp);
-	if (err)
-		return err;
+	fd = syscall_arg_int(0);
+	fp = fdtable_get_file(current_process()->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
 
 	if (!(fp->mode & FMODE_DIR)) {
 		klog_info("%s(): Not a directory\n", __func__);
+		fs_file_put(fp);
 		return -ENOTDIR;
 	}
 
@@ -686,8 +663,10 @@ u64 sys_getdents64(void)
 	struct fs_inode *inode = fp->path.dentry->inode;
 	const struct fs_file_ops *fop = fp->ops;
 
-	if (!fop->iterate_shared)
+	if (!fop->iterate_shared) {
+		fs_file_put(fp);
 		return -EOPNOTSUPP;
+	}
 
 	sleeplock_acquire(&fp->pos_lock);
 
@@ -704,11 +683,13 @@ u64 sys_getdents64(void)
 	sleeplock_release(&inode->rwsem);
 	if (err) {
 		sleeplock_release(&fp->pos_lock);
+		fs_file_put(fp);
 		return err;
 	}
 
 	fp->pos = ctx.pos;
 	sleeplock_release(&fp->pos_lock);
+	fs_file_put(fp);
 
 	return ctx.pos;
 }
@@ -716,33 +697,41 @@ u64 sys_getdents64(void)
 u64 sys_ioctl(void)
 {
 	struct fs_file *fp;
-	int err;
+	int fd;
 
-	err = syscall_arg_fd(0, NULL, &fp);
-	if (err)
-		return (u64)(long)err;
+	fd = syscall_arg_int(0);
+	fp = fdtable_get_file(current_process()->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
 
 	unsigned int cmd = (unsigned int)syscall_arg_raw(1);
 	unsigned long arg = (unsigned long)syscall_arg_raw(2);
 	long ret = fs_file_ioctl(fp, cmd, arg);
+	fs_file_put(fp);
 	return (u64)(long)ret;
 }
 
 static u64 do_fsync(int datasync)
 {
 	struct fs_file *fp = NULL;
-	int err;
+	int ret;
+	int fd;
 
-	err = syscall_arg_fd(0, NULL, &fp);
-	if (err)
-		return err;
+	fd = syscall_arg_int(0);
+	fp = fdtable_get_file(current_process()->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
 
 	/* Filesystems with nothing to persist (pipes, tmpfs, ...) have no
 	 * ->fsync; treat the request as a successful no-op. */
-	if (!fp->ops || !fp->ops->fsync)
+	if (!fp->ops || !fp->ops->fsync) {
+		fs_file_put(fp);
 		return 0;
+	}
 
-	return fp->ops->fsync(fp, 0, -1, datasync);
+	ret = fp->ops->fsync(fp, 0, -1, datasync);
+	fs_file_put(fp);
+	return ret;
 }
 
 u64 sys_fsync(void)
@@ -764,12 +753,19 @@ u64 sys_sync(void)
 u64 sys_syncfs(void)
 {
 	struct fs_file *fp = NULL;
-	int err;
+	int ret;
+	int fd;
 
-	err = syscall_arg_fd(0, NULL, &fp);
-	if (err)
-		return err;
-	if (!fp->inode)
+	fd = syscall_arg_int(0);
+	fp = fdtable_get_file(current_process()->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
+
+	if (!fp->inode) {
+		fs_file_put(fp);
 		return -EINVAL;
-	return sync_filesystem(fp->inode->sb);
+	}
+	ret = sync_filesystem(fp->inode->sb);
+	fs_file_put(fp);
+	return ret;
 }

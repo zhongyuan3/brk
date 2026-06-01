@@ -1,6 +1,7 @@
 #include <brk/asm.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
+#include <brk/fdtable.h>
 #include <brk/fs.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
@@ -514,18 +515,17 @@ int do_pipe2(int *pipefd, int flags)
 	if (err)
 		return err;
 
-	fd0 = proc_alloc_fd(proc, rf);
+	fd0 = fdtable_alloc_fd(proc->fdtable, rf);
 	if (fd0 < 0) {
 		fs_file_put(wf);
 		fs_file_put(rf);
 		return -EMFILE;
 	}
 
-	fd1 = proc_alloc_fd(proc, wf);
+	fd1 = fdtable_alloc_fd(proc->fdtable, wf);
 	if (fd1 < 0) {
-		proc->ofiles[fd0] = NULL;
+		fdtable_close_fd(proc->fdtable, fd0);
 		fs_file_put(wf);
-		fs_file_put(rf);
 		return -EMFILE;
 	}
 

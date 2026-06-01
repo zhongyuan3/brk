@@ -2,6 +2,7 @@
 #define BRK_PROCESS_H
 
 #include <brk/asm.h>
+#include <brk/fdtable.h>
 #include <brk/fs_types.h>
 #include <brk/kernel.h>
 #include <brk/mm_types.h>
@@ -112,9 +113,8 @@ struct process {
 	u64 sigframe_sp;
 
 	struct uvm_space *mm;
-	struct fs_file *ofiles[OPEN_MAX];
-	struct fs_path cwd;
-	struct fs_path root;
+	struct file_desc_table *fdtable;
+	struct file_system_info *fsinfo;
 	struct tms ptms;
 	struct trap_frame *tf; /* points to the trap frame on kernel stack */
 	u64 kstack_base;
@@ -145,7 +145,6 @@ void proc_exit_normal(int code);
 void proc_exit_signal(int sig);
 int proc_fork(void);
 int proc_set_brk(u64 addr);
-int proc_alloc_fd(struct process *proc, struct fs_file *fp);
 void proc_dump(void);
 
 void proc_yield(void);

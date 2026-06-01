@@ -1,6 +1,8 @@
 #include <brk/asm.h>
 #include <brk/dcache.h>
+#include <brk/fdtable.h>
 #include <brk/fs.h>
+#include <brk/fsinfo.h>
 #include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/mm.h>
@@ -90,12 +92,24 @@ struct process *proc_alloc(void)
 	if (!proc->mm)
 		goto create_mm_failed;
 
+	proc->fdtable = fdtable_alloc();
+	if (!proc->fdtable)
+		goto fdtable_alloc_failed;
+
+	proc->fsinfo = fsinfo_alloc();
+	if (!proc->fsinfo)
+		goto fsinfo_alloc_failed;
+
 	spinlock_acquire(&procs_lock);
 	list_add_tail(&proc->list, &procs);
 	spinlock_release(&procs_lock);
 
 	return proc;
 
+fsinfo_alloc_failed:
+	fdtable_put(proc->fdtable);
+fdtable_alloc_failed:
+	mm_free(proc->mm);
 create_mm_failed:
 	kstack_free(proc->kstack_base);
 kstack_alloc_failed:
@@ -110,22 +124,12 @@ void proc_free(struct process *proc)
 	spinlock_acquire(&procs_lock);
 	list_del_init(&proc->list);
 	spinlock_release(&procs_lock);
+	fsinfo_put(proc->fsinfo);
+	fdtable_put(proc->fdtable);
 	mm_free(proc->mm);
 	kstack_free(proc->kstack_base);
 	pid_free(proc->pid);
 	kobj_pool_free(&proc_cache, proc);
-}
-
-int proc_alloc_fd(struct process *proc, struct fs_file *fp)
-{
-	for (int i = 0; i < OPEN_MAX; ++i) {
-		if (!proc->ofiles[i]) {
-			proc->ofiles[i] = fp;
-			return i;
-		}
-	}
-
-	return -1;
 }
 
 static void user_init_proc_return(void)
@@ -380,14 +384,8 @@ int proc_fork(void)
 	memcpy(child->tf, parent->tf, sizeof(struct trap_frame));
 	proc_signal_fork(child, parent);
 
-	for (int i = 0; i < OPEN_MAX; ++i) {
-		if (parent->ofiles[i])
-			child->ofiles[i] = fs_file_get(parent->ofiles[i]);
-	}
-	fs_path_get(&parent->cwd);
-	child->cwd = parent->cwd;
-	fs_path_get(&parent->root);
-	child->root = parent->root;
+	fdtable_copy(child->fdtable, parent->fdtable);
+	fsinfo_copy(child->fsinfo, parent->fsinfo);
 
 	child->tf->a0 = 0;
 
