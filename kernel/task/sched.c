@@ -5,9 +5,9 @@
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/pgtable.h>
-#include <brk/process.h>
 #include <brk/riscv.h>
 #include <brk/spinlock.h>
+#include <brk/task.h>
 #include <brk/timekeeper.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
@@ -20,38 +20,39 @@ static SPINLOCK_DEFINE(run_queue_lock);
 static LIST_DEFINE(sleep_queue);
 static SPINLOCK_DEFINE(sleep_queue_lock);
 
-void proc_join(struct process *proc)
+void task_join(struct task_control_block *task)
 {
 	spinlock_acquire(&run_queue_lock);
-	list_add_tail(&proc->queue, &run_queue);
+	list_add_tail(&task->queue, &run_queue);
 	spinlock_release(&run_queue_lock);
 }
 
-static struct process *proc_get_next(void)
+static struct task_control_block *task_pick_next(void)
 {
-	struct process *proc = NULL;
+	struct task_control_block *task = NULL;
 	spinlock_acquire(&run_queue_lock);
 	if (!list_empty(&run_queue)) {
-		proc = list_first_entry(&run_queue, struct process, queue);
-		list_del_init(&proc->queue);
+		task = list_first_entry(&run_queue, struct task_control_block,
+					queue);
+		list_del_init(&task->queue);
 	}
 	spinlock_release(&run_queue_lock);
-	return proc;
+	return task;
 }
 
-void proc_scheduler(void)
+void task_scheduler(void)
 {
 	struct cpu *cpu = current_cpu();
-	struct process *next = NULL;
+	struct task_control_block *next = NULL;
 
 	cpu->handoff = NULL;
 	for (;;) {
-		proc_sched_resume();
+		task_sched_resume();
 
 		intr_on();
 		intr_off();
 
-		next = proc_get_next();
+		next = task_pick_next();
 		if (!next) {
 			intr_on();
 			asm volatile("wfi");
@@ -59,7 +60,7 @@ void proc_scheduler(void)
 		}
 
 		spinlock_acquire(&next->lock);
-		set_current_process(next);
+		set_current_task(next);
 		cpu->irq_enabled = next->irq_enabled;
 		switch_pgtable(next->mm->pgd);
 		write_sstatus(read_sstatus() | SSTATUS_SUM);
@@ -67,13 +68,13 @@ void proc_scheduler(void)
 		next->ktime = jiffies_get();
 		switch_context(&cpu->ctx, &next->ctx);
 
-		set_current_process(NULL);
+		set_current_task(NULL);
 	}
 }
 
-void proc_sched(void)
+void task_sched(void)
 {
-	struct process *curr = current_process();
+	struct task_control_block *curr = current_task();
 	struct cpu *cpu = current_cpu();
 
 	ASSERT(!intr_enabled());
@@ -83,12 +84,12 @@ void proc_sched(void)
 	curr->irq_enabled = cpu->irq_enabled;
 
 	switch (curr->state) {
-	case PROCESS_STATE_RUNNING:
-		proc_join(curr);
+	case TASK_STATE_RUNNING:
+		task_join(curr);
 		break;
-	case PROCESS_STATE_ZOMBIE:
+	case TASK_STATE_ZOMBIE:
 		break;
-	case PROCESS_STATE_SLEEPING:
+	case TASK_STATE_SLEEPING:
 		spinlock_acquire(&sleep_queue_lock);
 		list_add_tail(&curr->queue, &sleep_queue);
 		spinlock_release(&sleep_queue_lock);
@@ -98,10 +99,10 @@ void proc_sched(void)
 		      curr->state);
 	}
 
-	struct process *next = proc_get_next();
+	struct task_control_block *next = task_pick_next();
 	if (next == curr) {
 		curr->time_slice = TIME_SLICE_MAX;
-		set_current_process(curr);
+		set_current_task(curr);
 		cpu->irq_enabled = curr->irq_enabled;
 		return;
 	}
@@ -110,74 +111,52 @@ void proc_sched(void)
 	cpu->handoff = curr;
 	if (next) {
 		spinlock_acquire(&next->lock);
-		set_current_process(next);
+		set_current_task(next);
 		cpu->irq_enabled = next->irq_enabled;
 		switch_pgtable(next->mm->pgd);
 		next->time_slice = TIME_SLICE_MAX;
 		next->ktime = jiffies_get();
 		switch_context(&curr->ctx, &next->ctx);
 	} else {
-		set_current_process(NULL);
+		set_current_task(NULL);
 		switch_context(&curr->ctx, &cpu->ctx);
 	}
 
-	proc_sched_resume();
+	task_sched_resume();
 }
 
-void proc_yield(void)
+void task_yield(void)
 {
-	struct process *proc = current_process();
-	spinlock_acquire(&proc->lock);
-	proc_sched();
-	spinlock_release(&proc->lock);
+	struct task_control_block *task = current_task();
+	spinlock_acquire(&task->lock);
+	task_sched();
+	spinlock_release(&task->lock);
 }
 
-void proc_sleep(void *chan, spinlock_t *lock)
+void task_sleep(void *chan, spinlock_t *lock)
 {
-	struct process *proc = current_process();
-	spinlock_acquire(&proc->lock);
+	struct task_control_block *task = current_task();
+	spinlock_acquire(&task->lock);
 	spinlock_release(lock);
-	proc->state = PROCESS_STATE_SLEEPING;
-	proc->chan = chan;
-	proc_sched();
-	proc->chan = NULL;
-	spinlock_release(&proc->lock);
+	task->state = TASK_STATE_SLEEPING;
+	task->chan = chan;
+	task_sched();
+	task->chan = NULL;
+	spinlock_release(&task->lock);
 	spinlock_acquire(lock);
 }
 
-void proc_wake_up(void *chan)
-{
-	struct process *proc;
-
-	spinlock_acquire(&sleep_queue_lock);
-	list_for_each_entry(proc, &sleep_queue, queue) {
-		spinlock_acquire(&proc->lock);
-		if (proc->state == PROCESS_STATE_SLEEPING &&
-		    proc->chan == chan) {
-			proc->state = PROCESS_STATE_RUNNING;
-			proc->chan = NULL;
-			list_del_init(&proc->queue);
-			spinlock_release(&proc->lock);
-			spinlock_release(&sleep_queue_lock);
-			proc_join(proc);
-			return;
-		}
-		spinlock_release(&proc->lock);
-	}
-	spinlock_release(&sleep_queue_lock);
-}
-
-void proc_wake_all(void *chan)
+void task_wake_all(void *chan)
 {
 	for (;;) {
-		struct process *p, *wakee = NULL;
+		struct task_control_block *p, *wakee = NULL;
 
 		spinlock_acquire(&sleep_queue_lock);
 		list_for_each_entry(p, &sleep_queue, queue) {
 			spinlock_acquire(&p->lock);
-			if (p->state == PROCESS_STATE_SLEEPING &&
+			if (p->state == TASK_STATE_SLEEPING &&
 			    p->chan == chan) {
-				p->state = PROCESS_STATE_RUNNING;
+				p->state = TASK_STATE_RUNNING;
 				p->chan = NULL;
 				list_del_init(&p->queue);
 				spinlock_release(&p->lock);
@@ -189,70 +168,70 @@ void proc_wake_all(void *chan)
 		spinlock_release(&sleep_queue_lock);
 		if (!wakee)
 			return;
-		proc_join(wakee);
+		task_join(wakee);
 	}
 }
 
-void proc_wake_process(struct process *proc)
+void task_wake_spec(struct task_control_block *task)
 {
 	spinlock_acquire(&sleep_queue_lock);
-	spinlock_acquire(&proc->lock);
-	if (proc->state == PROCESS_STATE_SLEEPING) {
-		proc->state = PROCESS_STATE_RUNNING;
-		proc->chan = NULL;
-		list_del_init(&proc->queue);
-		spinlock_release(&proc->lock);
+	spinlock_acquire(&task->lock);
+	if (task->state == TASK_STATE_SLEEPING) {
+		task->state = TASK_STATE_RUNNING;
+		task->chan = NULL;
+		list_del_init(&task->queue);
+		spinlock_release(&task->lock);
 		spinlock_release(&sleep_queue_lock);
-		proc_join(proc);
+		task_join(task);
 		return;
 	}
-	spinlock_release(&proc->lock);
+	spinlock_release(&task->lock);
 	spinlock_release(&sleep_queue_lock);
 }
 
-void proc_exit_normal(int code)
+void task_exit_normal(int code)
 {
-	proc_exit((code & 0xff) << 8);
+	task_exit((code & 0xff) << 8);
 }
 
-void proc_exit_signal(int sig)
+void task_exit_signal(int sig)
 {
-	proc_exit(sig & 0x7f);
+	task_exit(sig & 0x7f);
 }
 
-void proc_exit(int status)
+void task_exit(int status)
 {
-	struct process *child;
-	struct process *proc = current_process();
+	struct task_control_block *child;
+	struct task_control_block *task = current_task();
 
-	if (proc == init_proc)
+	if (task == initial_task)
 		panic("%s(): init exit\n", __func__);
 
-	fdtable_close_all(proc->fdtable);
-	fsinfo_free_resources(proc->fsinfo);
+	fdtable_close_all(task->fdtable);
+	fsinfo_free_resources(task->fsinfo);
 
 	spinlock_acquire(&wait_lock);
-	list_for_each_entry(child, &proc->children, child) {
-		child->parent = init_proc;
+	list_for_each_entry(child, &task->children, child) {
+		child->parent = initial_task;
 	}
-	list_splice(&proc->children, &init_proc->children);
-	proc_wake_up(proc->parent);
+	list_splice(&task->children, &initial_task->children);
+	task_wake_spec(task->parent);
 	spinlock_release(&wait_lock);
 
-	spinlock_acquire(&proc->lock);
+	spinlock_acquire(&task->lock);
 
-	proc->state = PROCESS_STATE_ZOMBIE;
-	proc->exit_status = status;
+	task->state = TASK_STATE_ZOMBIE;
+	task->exit_status = status;
 
-	proc_sched();
+	task_sched();
 
 	panic("scheduling zombie\n");
 }
 
-pid_t proc_wait(pid_t pid, int *status, int options, struct rusage *rus)
+pid_t task_wait(pid_t pid, int *status, int options, struct rusage *rus)
 {
-	struct process *child;
-	struct process *parent = current_process();
+	struct task_control_block *child;
+	struct task_control_block *parent = current_task();
 	bool found;
 
 	(void)options;
@@ -274,7 +253,7 @@ again:
 			found = true;
 		}
 
-		if (child->state != PROCESS_STATE_ZOMBIE ||
+		if (child->state != TASK_STATE_ZOMBIE ||
 		    (pid > 0 && child->pid != pid)) {
 			spinlock_release(&child->lock);
 			continue;
@@ -288,7 +267,7 @@ again:
 		spinlock_release(&child->lock);
 		list_del_init(&child->child);
 		spinlock_release(&wait_lock);
-		proc_free(child);
+		task_destroy(child);
 		return pid;
 	}
 
@@ -297,12 +276,12 @@ again:
 		return -ECHILD;
 	}
 
-	proc_sleep(parent, &wait_lock);
+	task_sleep(parent, &wait_lock);
 
 	goto again;
 }
 
-void proc_sched_resume(void)
+void task_sched_resume(void)
 {
 	struct cpu *cpu = current_cpu();
 	if (cpu->handoff) {

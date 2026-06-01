@@ -1,8 +1,8 @@
 #include <brk/cpu.h>
-#include <brk/process.h>
 #include <brk/riscv.h>
 #include <brk/rtc.h>
 #include <brk/spinlock.h>
+#include <brk/task.h>
 #include <brk/timeconst.h>
 #include <brk/timekeeper.h>
 #include <uapi/brk/errno.h>
@@ -118,7 +118,7 @@ u64 timekeeper_nanosleep(const struct timespec *dur, struct timespec *rem)
 
 	spinlock_acquire(&tk_lock);
 	for (;;) {
-		if (proc_is_killed(current_process())) {
+		if (task_is_killed(current_task())) {
 			s64 left_ns;
 
 			spinlock_release(&tk_lock);
@@ -132,7 +132,7 @@ u64 timekeeper_nanosleep(const struct timespec *dur, struct timespec *rem)
 		now_ns = (s64)timekeeper_mono_ns();
 		if (now_ns >= deadline_ns)
 			break;
-		proc_sleep(&jiffies, &tk_lock);
+		task_sleep(&jiffies, &tk_lock);
 	}
 	spinlock_release(&tk_lock);
 

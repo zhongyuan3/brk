@@ -11,12 +11,12 @@
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>
 #include <brk/printk.h>
-#include <brk/process.h>
 #include <brk/riscv.h>
 #include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>
@@ -25,18 +25,18 @@
 #include <uapi/brk/limits.h>
 #include <uapi/signal.h>
 
-cpuid_t init_cpuid;
-struct process *init_proc;
+cpuid_t boot_cpuid;
+struct task_control_block *initial_task;
 struct cpu cpus[NR_CPUS];
 
-LIST_DEFINE(procs);
-SPINLOCK_DEFINE(procs_lock);
-static struct kobj_pool proc_cache;
+LIST_DEFINE(tasks);
+SPINLOCK_DEFINE(tasks_lock);
+static struct kobj_pool task_cache;
 
-void proc_cache_init(void)
+void task_cache_init(void)
 {
-	kobj_pool_init(&proc_cache, sizeof(struct process),
-		       alignof(struct process), "proc_cache");
+	kobj_pool_init(&task_cache, sizeof(struct task_control_block),
+		       alignof(struct task_control_block), "task_cache");
 }
 
 static u64 kstack_alloc(void)
@@ -54,97 +54,105 @@ static void kstack_free(u64 stack)
 	page_free(pg, KSTACK_PAGE_ORDER);
 }
 
-struct process *proc_alloc(void)
+static struct task_control_block *task_alloc(void)
+{
+	return kobj_pool_alloc_zero(&task_cache);
+}
+
+static void task_free(struct task_control_block *task)
+{
+	kobj_pool_free(&task_cache, task);
+}
+
+struct task_control_block *task_create(void)
 {
 	u64 kstack_top;
 	struct extended_trap_frame *ext_tf;
-	struct process *proc;
+	struct task_control_block *task;
 
-	proc = kobj_pool_alloc_zero(&proc_cache);
-	if (!proc)
+	task = task_alloc();
+	if (!task)
 		return NULL;
 
-	list_init(&proc->list);
-	list_init(&proc->queue);
-	list_init(&proc->children);
-	list_init(&proc->child);
-	spinlock_init(&proc->lock, "proc");
-	proc->state = PROCESS_STATE_NEW;
-	proc_signal_init(proc);
+	list_init(&task->list);
+	list_init(&task->queue);
+	list_init(&task->children);
+	list_init(&task->child);
+	spinlock_init(&task->lock, "task_control_block");
+	task->state = TASK_STATE_NEW;
 
-	proc->pid = pid_alloc();
-	if (proc->pid < 0)
+	task->pid = pid_alloc();
+	if (task->pid < 0)
 		goto pid_alloc_failed;
 
-	proc->kstack_base = kstack_alloc();
-	if (!proc->kstack_base)
+	task->kstack_base = kstack_alloc();
+	if (!task->kstack_base)
 		goto kstack_alloc_failed;
 
-	kstack_top = proc->kstack_base + KSTACK_SIZE;
+	kstack_top = task->kstack_base + KSTACK_SIZE;
 	kstack_top -= TRAP_FRAME_ON_STACK_SIZE;
 	ext_tf = (struct extended_trap_frame *)kstack_top;
-	ext_tf->proc = proc;
-	proc->tf = &ext_tf->tf;
-	memset(proc->tf, 0, sizeof(struct trap_frame));
-	proc->kstack_top = kstack_top;
+	ext_tf->task = task;
+	task->tf = &ext_tf->tf;
+	memset(task->tf, 0, sizeof(struct trap_frame));
+	task->kstack_top = kstack_top;
 
-	proc->mm = mm_alloc();
-	if (!proc->mm)
+	task->mm = mm_alloc();
+	if (!task->mm)
 		goto create_mm_failed;
 
-	proc->fdtable = fdtable_alloc();
-	if (!proc->fdtable)
+	task->fdtable = fdtable_alloc();
+	if (!task->fdtable)
 		goto fdtable_alloc_failed;
 
-	proc->fsinfo = fsinfo_alloc();
-	if (!proc->fsinfo)
+	task->fsinfo = fsinfo_alloc();
+	if (!task->fsinfo)
 		goto fsinfo_alloc_failed;
 
-	proc->sigactions = sigaction_table_alloc();
-	if (!proc->sigactions)
-		goto sigaction_table_alloc_failed;
+	if (signal_init(task) < 0)
+		goto signal_init_failed;
 
-	spinlock_acquire(&procs_lock);
-	list_add_tail(&proc->list, &procs);
-	spinlock_release(&procs_lock);
+	spinlock_acquire(&tasks_lock);
+	list_add_tail(&task->list, &tasks);
+	spinlock_release(&tasks_lock);
 
-	return proc;
+	return task;
 
-sigaction_table_alloc_failed:
-	fsinfo_put(proc->fsinfo);
+signal_init_failed:
+	fsinfo_put(task->fsinfo);
 fsinfo_alloc_failed:
-	fdtable_put(proc->fdtable);
+	fdtable_put(task->fdtable);
 fdtable_alloc_failed:
-	mm_free(proc->mm);
+	mm_free(task->mm);
 create_mm_failed:
-	kstack_free(proc->kstack_base);
+	kstack_free(task->kstack_base);
 kstack_alloc_failed:
-	pid_free(proc->pid);
+	pid_free(task->pid);
 pid_alloc_failed:
-	kobj_pool_free(&proc_cache, proc);
+	task_free(task);
 	return NULL;
 }
 
-void proc_free(struct process *proc)
+void task_destroy(struct task_control_block *task)
 {
-	spinlock_acquire(&procs_lock);
-	list_del_init(&proc->list);
-	spinlock_release(&procs_lock);
+	spinlock_acquire(&tasks_lock);
+	list_del_init(&task->list);
+	spinlock_release(&tasks_lock);
 
-	sigaction_table_put(proc->sigactions);
-	fsinfo_put(proc->fsinfo);
-	fdtable_put(proc->fdtable);
-	mm_free(proc->mm);
-	kstack_free(proc->kstack_base);
-	pid_free(proc->pid);
-	kobj_pool_free(&proc_cache, proc);
+	signal_deinit(task);
+	fsinfo_put(task->fsinfo);
+	fdtable_put(task->fdtable);
+	mm_free(task->mm);
+	kstack_free(task->kstack_base);
+	pid_free(task->pid);
+	task_free(task);
 }
 
-static void user_init_proc_return(void)
+static void initial_task_return(void)
 {
-	proc_sched_resume();
-	struct process *proc = current_process();
-	spinlock_release(&proc->lock);
+	task_sched_resume();
+	struct task_control_block *task = current_task();
+	spinlock_release(&task->lock);
 
 	int err = fs_init();
 	if (err)
@@ -157,38 +165,38 @@ static void user_init_proc_return(void)
 		panic("execve %s failed: %s\n", argv[0], strerror(err));
 
 	prepare_to_return();
-	user_trap_return(proc->tf);
+	user_trap_return(task->tf);
 }
 
-void proc_init_user(void)
+void task_init_user(void)
 {
-	init_proc = proc_alloc();
-	if (!init_proc)
-		panic("failed to create user init process\n");
-	spinlock_acquire(&init_proc->lock);
-	strlcpy(init_proc->name, "init", sizeof(init_proc->name));
-	init_proc->ctx.ra = (u64)user_init_proc_return;
-	init_proc->ctx.sp = init_proc->kstack_top;
-	init_proc->state = PROCESS_STATE_RUNNING;
-	init_proc->irq_enabled = true;
-	spinlock_release(&init_proc->lock);
-	proc_join(init_proc);
+	initial_task = task_create();
+	if (!initial_task)
+		panic("failed to create initial user task\n");
+	spinlock_acquire(&initial_task->lock);
+	strlcpy(initial_task->name, "init", sizeof(initial_task->name));
+	initial_task->ctx.ra = (u64)initial_task_return;
+	initial_task->ctx.sp = initial_task->kstack_top;
+	initial_task->state = TASK_STATE_RUNNING;
+	initial_task->irq_enabled = true;
+	spinlock_release(&initial_task->lock);
+	task_join(initial_task);
 }
 
-void proc_set_killed(struct process *proc)
+void task_set_killed(struct task_control_block *task)
 {
-	proc_send_signal(proc, SIGKILL);
+	signal_send(task, SIGKILL);
 }
 
-bool proc_is_killed(struct process *proc)
+bool task_is_killed(struct task_control_block *task)
 {
-	return proc_signal_pending(proc);
+	return signal_pending(task);
 }
 
-int proc_set_brk(u64 addr)
+int task_set_brk(u64 addr)
 {
-	struct process *proc = current_process();
-	struct uvm_space *mm = proc->mm;
+	struct task_control_block *task = current_task();
+	struct uvm_space *mm = task->mm;
 	struct uvm_region *heap = mm->heap;
 	u64 heap_start = heap->addr;
 	u64 curr_heap_end = heap_start + heap->size;
@@ -254,68 +262,68 @@ failed:
 	return err;
 }
 
-int proc_snapshot_pids(pid_t *out, int max)
+int task_snapshot_pids(pid_t *out, int max)
 {
-	struct process *p;
+	struct task_control_block *p;
 	int n = 0;
 
 	if (!out || max <= 0)
 		return 0;
 
-	spinlock_acquire(&procs_lock);
-	list_for_each_entry(p, &procs, list) {
+	spinlock_acquire(&tasks_lock);
+	list_for_each_entry(p, &tasks, list) {
 		if (n >= max)
 			break;
 		out[n++] = p->pid;
 	}
-	spinlock_release(&procs_lock);
+	spinlock_release(&tasks_lock);
 	return n;
 }
 
-bool proc_pid_exists(pid_t pid)
+bool task_pid_exists(pid_t pid)
 {
-	struct process *p;
+	struct task_control_block *p;
 	bool found = false;
 
-	spinlock_acquire(&procs_lock);
-	list_for_each_entry(p, &procs, list) {
+	spinlock_acquire(&tasks_lock);
+	list_for_each_entry(p, &tasks, list) {
 		if (p->pid == pid) {
 			found = true;
 			break;
 		}
 	}
-	spinlock_release(&procs_lock);
+	spinlock_release(&tasks_lock);
 	return found;
 }
 
-bool proc_get_info(pid_t pid, struct process_info *info)
+bool task_get_info(pid_t pid, struct task_info *info)
 {
-	struct process *p, *target = NULL;
+	struct task_control_block *p, *target = NULL;
 
 	if (!info)
 		return false;
 
-	spinlock_acquire(&procs_lock);
-	list_for_each_entry(p, &procs, list) {
+	spinlock_acquire(&tasks_lock);
+	list_for_each_entry(p, &tasks, list) {
 		if (p->pid == pid) {
 			target = p;
 			break;
 		}
 	}
 	if (!target) {
-		spinlock_release(&procs_lock);
+		spinlock_release(&tasks_lock);
 		return false;
 	}
 
 	/*
-	 * procs_lock keeps both @target and its parent on the procs list,
+	 * tasks_lock keeps both @target and its parent on the tasks list,
 	 * so neither can be freed underneath us. We take a snapshot of
 	 * parent->pid without taking wait_lock: a concurrent reparent
-	 * (proc_exit re-parenting orphans to init_proc) is a benign race
+	 * (task_exit re-parenting orphans to initial_task) is a benign race
 	 * here -- we may observe either the old or new parent pid.
 	 */
 	{
-		struct process *par = target->parent;
+		struct task_control_block *par = target->parent;
 		info->ppid = par ? par->pid : 0;
 	}
 
@@ -327,70 +335,70 @@ bool proc_get_info(pid_t pid, struct process_info *info)
 	info->utime = target->ptms.tms_utime;
 	info->ktime = target->ptms.tms_stime;
 	info->brk = target->mm ? target->mm->brk : 0;
-	for (usize_t i = 0; i < PROCESS_NAME_MAX; ++i) {
+	for (usize_t i = 0; i < TASK_NAME_MAX; ++i) {
 		info->name[i] = target->name[i];
 		if (target->name[i] == '\0')
 			break;
 	}
-	info->name[PROCESS_NAME_MAX - 1] = '\0';
+	info->name[TASK_NAME_MAX - 1] = '\0';
 	spinlock_release(&target->lock);
 
-	spinlock_release(&procs_lock);
+	spinlock_release(&tasks_lock);
 	return true;
 }
 
-void proc_dump(void)
+void task_dump(void)
 {
 	static char *state_strs[] = {
-		[PROCESS_STATE_NEW] = "new    ",
-		[PROCESS_STATE_SLEEPING] = "sleep  ",
-		[PROCESS_STATE_RUNNING] = "running",
-		[PROCESS_STATE_ZOMBIE] = "zombie ",
+		[TASK_STATE_NEW] = "new    ",
+		[TASK_STATE_SLEEPING] = "sleep  ",
+		[TASK_STATE_RUNNING] = "running",
+		[TASK_STATE_ZOMBIE] = "zombie ",
 	};
-	struct process *proc;
+	struct task_control_block *task;
 	char *state;
 
-	spinlock_acquire(&procs_lock);
+	spinlock_acquire(&tasks_lock);
 	printk("\n");
-	list_for_each_entry(proc, &procs, list) {
-		if (proc->state >= 0 && proc->state < countof(state_strs) &&
-		    state_strs[proc->state])
-			state = state_strs[proc->state];
+	list_for_each_entry(task, &tasks, list) {
+		if (task->state >= 0 && task->state < countof(state_strs) &&
+		    state_strs[task->state])
+			state = state_strs[task->state];
 		else
 			state = "???    ";
-		printk("%ld %s %s\n", proc->pid, state, proc->name);
+		printk("%ld %s %s\n", task->pid, state, task->name);
 	}
-	spinlock_release(&procs_lock);
+	spinlock_release(&tasks_lock);
 }
 
-static void proc_fork_return(void)
+static void task_fork_return(void)
 {
-	proc_sched_resume();
-	struct process *proc = current_process();
-	spinlock_release(&proc->lock);
+	task_sched_resume();
+	struct task_control_block *task = current_task();
+	spinlock_release(&task->lock);
 	prepare_to_return();
-	user_trap_return(proc->tf);
+	user_trap_return(task->tf);
 }
 
-int proc_fork(void)
+int task_fork(void)
 {
 	int err;
 	pid_t cpid;
-	struct process *child;
-	struct process *parent = current_process();
+	struct task_control_block *child;
+	struct task_control_block *parent = current_task();
 
-	child = proc_alloc();
+	child = task_create();
 	if (!child)
 		return -ENOMEM;
 
 	err = mm_copy(child->mm, parent->mm);
 	if (err) {
-		proc_free(child);
+		task_destroy(child);
 		return err;
 	}
 
 	memcpy(child->tf, parent->tf, sizeof(struct trap_frame));
-	proc_signal_fork(child, parent);
+	signal_copy(child, parent);
 
 	fdtable_copy(child->fdtable, parent->fdtable);
 	fsinfo_copy(child->fsinfo, parent->fsinfo);
@@ -404,19 +412,19 @@ int proc_fork(void)
 
 	spinlock_acquire(&child->lock);
 	cpid = child->pid;
-	child->state = PROCESS_STATE_RUNNING;
-	child->ctx.ra = (u64)proc_fork_return;
+	child->state = TASK_STATE_RUNNING;
+	child->ctx.ra = (u64)task_fork_return;
 	child->ctx.sp = child->kstack_top;
 	spinlock_release(&child->lock);
 
-	proc_join(child);
+	task_join(child);
 
 	return cpid;
 }
 
-struct process *current_process(void)
+struct task_control_block *current_task(void)
 {
-	return (struct process *)read_tp();
+	return (struct task_control_block *)read_tp();
 }
 
 cpuid_t current_cpuid(void)
@@ -450,9 +458,9 @@ void pop_off(void)
 		intr_on();
 }
 
-void set_current_process(struct process *proc)
+void set_current_task(struct task_control_block *task)
 {
-	write_tp((u64)proc);
+	write_tp((u64)task);
 }
 
 void set_current_cpuid(cpuid_t cpuid)

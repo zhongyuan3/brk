@@ -14,6 +14,6 @@ obj-y += console.o
 obj-y += refcnt.o
 obj-y += signal.o
 
-subdir-y += process
+subdir-y += task
 subdir-y += syscall
 subdir-y += locking

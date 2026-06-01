@@ -14,7 +14,7 @@
 
 struct fs_file;
 struct char_dev;
-struct process;
+struct task_control_block;
 struct tty;
 struct tty_port;
 struct tty_ops;
@@ -29,7 +29,7 @@ struct tty_port {
 	struct tty_driver *driver;
 	spinlock_t lock;
 	void *client_data;
-	struct process *foreground;
+	struct task_control_block *foreground;
 };
 
 struct tty_driver {
@@ -80,7 +80,7 @@ void tty_close(struct tty *tty);
 ssize_t tty_read(struct tty *tty, void *buf, usize_t n);
 ssize_t tty_write(struct tty *tty, const void *buf, usize_t n);
 void tty_receive(struct tty *tty, int c);
-void tty_set_foreground(struct tty *tty, struct process *proc);
+void tty_set_foreground(struct tty *tty, struct task_control_block *task);
 long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg);
 
 #endif

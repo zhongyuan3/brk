@@ -7,10 +7,10 @@
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>
-#include <brk/process.h>
 #include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <brk/timer.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
@@ -144,7 +144,7 @@ static void copy_exec_strings(char **src, int n, u64 *k_pos, u64 *u_pos,
 }
 
 static void push_args(struct exec_args *args, u64 *psp, u64 stack_virt,
-		      struct process *proc)
+		      struct task_control_block *task)
 {
 	u64 sp = *psp;
 	u64 ksp = stack_virt + USTACK_SIZE;
@@ -159,10 +159,10 @@ static void push_args(struct exec_args *args, u64 *psp, u64 stack_virt,
 	u64 argv_strs_kstart = ksp;
 	u64 argv_strs_ustart = sp;
 
-	proc->tf->a2 = stack_push_ptr_slots(&ksp, &sp, args->envc);
+	task->tf->a2 = stack_push_ptr_slots(&ksp, &sp, args->envc);
 	char **envp_kstart = (char **)ksp;
 
-	proc->tf->a1 = stack_push_ptr_slots(&ksp, &sp, args->argc);
+	task->tf->a1 = stack_push_ptr_slots(&ksp, &sp, args->argc);
 	char **argv_kstart = (char **)ksp;
 
 	copy_exec_strings(args->envp, args->envc, &envp_strs_kstart,
@@ -348,7 +348,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 {
 	struct elf64_hdr elf_hdr = { 0 };
 	struct elf64_phdr phdr = { 0 };
-	struct process *proc = current_process();
+	struct task_control_block *task = current_task();
 	struct fs_file *f = NULL;
 	struct uvm_space *new_mm = NULL;
 	int err = 0;
@@ -403,18 +403,18 @@ static int __do_execve(const char *path, struct exec_args *args)
 		u64 stack_phys = page_to_phys(stack_pg);
 		u64 stack_virt = phys_to_virt(stack_phys);
 
-		push_args(args, &sp, stack_virt, proc);
-		strlcpy(proc->name, args->argv[0], sizeof(proc->name));
+		push_args(args, &sp, stack_virt, task);
+		strlcpy(task->name, args->argv[0], sizeof(task->name));
 
 		switch_pgtable(new_mm->pgd);
 
-		struct uvm_space *old_mm = proc->mm;
+		struct uvm_space *old_mm = task->mm;
 
-		proc->mm = new_mm;
+		task->mm = new_mm;
 		mm_free(old_mm);
-		proc_signal_exec(proc);
-		proc->tf->epc = elf_hdr.e_entry;
-		proc->tf->sp = sp;
+		signal_reset(task);
+		task->tf->epc = elf_hdr.e_entry;
+		task->tf->sp = sp;
 	}
 
 	return args->argc;

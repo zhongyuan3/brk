@@ -8,12 +8,12 @@
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
-#include <brk/process.h>
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
+#include <brk/task.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
 #include <uapi/brk/limits.h>
@@ -30,11 +30,11 @@ u64 sys_read(void)
 	usize_t n;
 	struct fs_file *fp;
 	ssize_t ret;
-	struct process *proc;
+	struct task_control_block *task;
 
-	proc = current_process();
+	task = current_task();
 	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(proc->fdtable, fd);
+	fp = fdtable_get_file(task->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 	buf = syscall_arg_ptr(1);
@@ -51,11 +51,11 @@ u64 sys_write(void)
 	usize_t n;
 	struct fs_file *fp;
 	ssize_t ret;
-	struct process *proc;
+	struct task_control_block *task;
 
-	proc = current_process();
+	task = current_task();
 	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(proc->fdtable, fd);
+	fp = fdtable_get_file(task->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 	if (fp->mode & FMODE_DIR) {
@@ -81,7 +81,7 @@ u64 sys_open(void)
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
-	fd = fdtable_alloc_fd(current_process()->fdtable, fp);
+	fd = fdtable_alloc_fd(current_task()->fdtable, fp);
 	if (fd < 0) {
 		fs_file_put(fp);
 		return -EMFILE;
@@ -102,7 +102,7 @@ u64 sys_openat(void)
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
-	fd = fdtable_alloc_fd(current_process()->fdtable, fp);
+	fd = fdtable_alloc_fd(current_task()->fdtable, fp);
 	if (fd < 0) {
 		fs_file_put(fp);
 		return -EMFILE;
@@ -113,8 +113,8 @@ u64 sys_openat(void)
 u64 sys_close(void)
 {
 	int fd = syscall_arg_int(0);
-	struct process *proc = current_process();
-	return fdtable_close_fd(proc->fdtable, fd);
+	struct task_control_block *task = current_task();
+	return fdtable_close_fd(task->fdtable, fd);
 }
 
 u64 sys_execve(void)
@@ -156,10 +156,10 @@ u64 sys_fstat(void)
 	struct stat *buf;
 	int ret;
 	int fd;
-	struct process *proc = current_process();
+	struct task_control_block *task = current_task();
 
 	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(proc->fdtable, fd);
+	fp = fdtable_get_file(task->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 	buf = syscall_arg_ptr(1);
@@ -272,11 +272,11 @@ u64 sys_uname(void)
 
 u64 sys_getcwd(void)
 {
-	struct process *proc = current_process();
+	struct task_control_block *task = current_task();
 	char *buf = syscall_arg_ptr(0);
 	usize_t size = syscall_arg_raw(1);
 	struct fs_path cwd = { 0 };
-	fsinfo_get_cwd(proc->fsinfo, &cwd);
+	fsinfo_get_cwd(task->fsinfo, &cwd);
 	int ret = fs_path_to_absolute(&cwd, buf, size);
 	fs_path_put(&cwd);
 	return ret;
@@ -285,7 +285,7 @@ u64 sys_getcwd(void)
 u64 sys_chdir(void)
 {
 	char *pathname = syscall_arg_ptr(0);
-	struct process *proc = current_process();
+	struct task_control_block *task = current_task();
 	struct fs_path new_path;
 
 	int err = fs_path_lookup(pathname, 0, &new_path);
@@ -302,7 +302,7 @@ u64 sys_chdir(void)
 		return -ENOTDIR;
 	}
 
-	fsinfo_update_cwd(proc->fsinfo, &new_path);
+	fsinfo_update_cwd(task->fsinfo, &new_path);
 	return 0;
 }
 
@@ -310,10 +310,10 @@ u64 sys_fchdir(void)
 {
 	int fd;
 	struct fs_file *fp;
-	struct process *proc = current_process();
+	struct task_control_block *task = current_task();
 
 	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(proc->fdtable, fd);
+	fp = fdtable_get_file(task->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
@@ -323,7 +323,7 @@ u64 sys_fchdir(void)
 	}
 
 	fs_path_get(&fp->path);
-	fsinfo_update_cwd(proc->fsinfo, &fp->path);
+	fsinfo_update_cwd(task->fsinfo, &fp->path);
 	fs_file_put(fp);
 	return 0;
 }
@@ -429,16 +429,16 @@ u64 sys_pipe2(void)
 u64 sys_dup(void)
 {
 	int oldfd = syscall_arg_int(0);
-	struct process *proc = current_process();
-	return fdtable_dup_fd(proc->fdtable, oldfd);
+	struct task_control_block *task = current_task();
+	return fdtable_dup_fd(task->fdtable, oldfd);
 }
 
 u64 sys_dup2(void)
 {
 	int oldfd = syscall_arg_int(0);
 	int newfd = syscall_arg_int(1);
-	struct process *proc = current_process();
-	int err = fdtable_dup_fd2(proc->fdtable, oldfd, newfd);
+	struct task_control_block *task = current_task();
+	int err = fdtable_dup_fd2(task->fdtable, oldfd, newfd);
 	if (err)
 		return err;
 	return newfd;
@@ -499,7 +499,7 @@ u64 sys_lseek(void)
 	int whence;
 
 	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(current_process()->fdtable, fd);
+	fp = fdtable_get_file(current_task()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
@@ -556,7 +556,7 @@ u64 sys_getdents(void)
 	int err;
 
 	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(current_process()->fdtable, fd);
+	fp = fdtable_get_file(current_task()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
@@ -647,7 +647,7 @@ u64 sys_getdents64(void)
 	int err;
 
 	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(current_process()->fdtable, fd);
+	fp = fdtable_get_file(current_task()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
@@ -700,7 +700,7 @@ u64 sys_ioctl(void)
 	int fd;
 
 	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(current_process()->fdtable, fd);
+	fp = fdtable_get_file(current_task()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
@@ -718,7 +718,7 @@ static u64 do_fsync(int datasync)
 	int fd;
 
 	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(current_process()->fdtable, fd);
+	fp = fdtable_get_file(current_task()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
@@ -757,7 +757,7 @@ u64 sys_syncfs(void)
 	int fd;
 
 	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(current_process()->fdtable, fd);
+	fp = fdtable_get_file(current_task()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 

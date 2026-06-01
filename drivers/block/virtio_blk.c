@@ -9,10 +9,10 @@
 #include <brk/plic.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
-#include <brk/process.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <brk/types.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
@@ -108,7 +108,7 @@ static void virtio_blk_vq_used(struct virtq *vq, u32 id, void *ctx)
 
 	io = vblk->slots[id].trans;
 	io->completed = true;
-	proc_wake_up(&io->completed);
+	task_wake_all(&io->completed);
 }
 
 static void virtio_blk_irq_handler(void *ctx)
@@ -137,7 +137,7 @@ static int virtio_blk_submit(struct virtio_blk_dev *vblk,
 	spinlock_acquire(&vblk->lock);
 
 	while (virtq_alloc_desc_chain(&vblk->vq, idx, 3))
-		proc_sleep(&vblk->vq.desc, &vblk->lock);
+		task_sleep(&vblk->vq.desc, &vblk->lock);
 
 	req = &vblk->reqs[idx[0]];
 	req->type = io->is_write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
@@ -169,12 +169,12 @@ static int virtio_blk_submit(struct virtio_blk_dev *vblk,
 	virtio_mmio_queue_notify(vblk->vdev, 0);
 
 	while (!io->completed)
-		proc_sleep(&io->completed, &vblk->lock);
+		task_sleep(&io->completed, &vblk->lock);
 
 	err = virtio_blk_status_to_errno(vblk->slots[idx[0]].status);
 	vblk->slots[idx[0]].trans = NULL;
 	virtq_free_desc_chain(&vblk->vq, idx[0]);
-	proc_wake_up(&vblk->vq.desc);
+	task_wake_all(&vblk->vq.desc);
 
 	spinlock_release(&vblk->lock);
 	return err;

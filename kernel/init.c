@@ -15,11 +15,11 @@
 #include <brk/pagecache.h>
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>
-#include <brk/process.h>
 #include <brk/riscv.h>
 #include <brk/rtc.h>
 #include <brk/sbi.h>
 #include <brk/slab.h>
+#include <brk/task.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
 #include <brk/trap.h>
@@ -47,10 +47,10 @@ static void smp_wake_secondary_harts(u64 init_hart_id)
 void boot_run_primary(usize_t hart_id, u64 dtb, usize_t load_offset)
 {
 	set_current_cpuid(hart_id);
-	set_current_process(NULL);
+	set_current_task(NULL);
 	kernel_load_offset = load_offset;
 	dtb_phys = dtb;
-	init_cpuid = hart_id;
+	boot_cpuid = hart_id;
 
 	memblock_init();
 	memblock_reserve(_SKERNEL_PHYS, _KERNEL_SIZE);
@@ -97,8 +97,8 @@ void boot_run_primary(usize_t hart_id, u64 dtb, usize_t load_offset)
 	fs_dentry_cache_init();
 	fs_inode_cache_init();
 	fs_file_cache_init();
-	proc_cache_init();
-	proc_init_user();
+	task_cache_init();
+	task_init_user();
 
 	intr_on();
 
@@ -106,7 +106,7 @@ void boot_run_primary(usize_t hart_id, u64 dtb, usize_t load_offset)
 	smp_wake_secondary_harts(hart_id);
 #endif
 
-	proc_scheduler();
+	task_scheduler();
 }
 
 #if ENABLE_SMP
@@ -114,7 +114,7 @@ void boot_run_primary(usize_t hart_id, u64 dtb, usize_t load_offset)
 void boot_run_secondary(u64 hart_id)
 {
 	set_current_cpuid(hart_id);
-	set_current_process(NULL);
+	set_current_task(NULL);
 
 	write_satp(make_satp_sv39(symbol_phys(kernel_pgdir)));
 	sfence_vma();
@@ -128,7 +128,7 @@ void boot_run_secondary(u64 hart_id)
 
 	klog_info("hart %lu ready\n", hart_id);
 
-	proc_scheduler();
+	task_scheduler();
 }
 
 #endif

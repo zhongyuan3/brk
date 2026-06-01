@@ -1,10 +1,10 @@
 #include <brk/device.h>
-#include <brk/process.h>
 #include <brk/refcnt.h>
 #include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
@@ -52,26 +52,26 @@ void tty_init(struct tty *tty, struct tty_port *port)
 	tty_init_winsize(tty);
 }
 
-void tty_set_foreground(struct tty *tty, struct process *proc)
+void tty_set_foreground(struct tty *tty, struct task_control_block *task)
 {
 	if (!tty || !tty->port)
 		return;
 	spinlock_acquire(&tty->port->lock);
-	tty->port->foreground = proc;
+	tty->port->foreground = task;
 	spinlock_release(&tty->port->lock);
 }
 
 long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 {
 	struct winsize *ws = (struct winsize *)arg;
-	struct process *fg;
+	struct task_control_block *fg;
 
 	if (!tty)
 		return -EBADF;
 	if (!ws)
 		return -EFAULT;
 
-	tty_set_foreground(tty, current_process());
+	tty_set_foreground(tty, current_task());
 
 	switch (cmd) {
 	case TIOCGWINSZ:
@@ -83,7 +83,7 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 		fg = tty->port->foreground;
 		spinlock_release(&tty->port->lock);
 		if (fg)
-			proc_send_signal(fg, SIGWINCH);
+			signal_send(fg, SIGWINCH);
 		return 0;
 	default:
 		return -ENOTTY;
@@ -96,7 +96,7 @@ ssize_t tty_read(struct tty *tty, void *buf, usize_t n)
 	int c;
 	char *dst = buf;
 
-	tty_set_foreground(tty, current_process());
+	tty_set_foreground(tty, current_task());
 
 	target = n;
 	spinlock_acquire(&tty->port->lock);
@@ -104,11 +104,11 @@ ssize_t tty_read(struct tty *tty, void *buf, usize_t n)
 		/* wait until interrupt handler has put some
 		 * input into cons.buffer. */
 		while (tty->rx_r == tty->rx_w) {
-			if (proc_signal_pending(current_process())) {
+			if (signal_pending(current_task())) {
 				spinlock_release(&tty->port->lock);
 				return -EINTR;
 			}
-			proc_sleep(&tty->rx_r, &tty->port->lock);
+			task_sleep(&tty->rx_r, &tty->port->lock);
 		}
 
 		c = tty->rx_buf[tty->rx_r++ % tty->rx_size];
@@ -162,7 +162,7 @@ void tty_receive(struct tty *tty, int c)
 	switch (c) {
 	case CTRL('C'):
 		if (tty->port->foreground)
-			proc_send_signal(tty->port->foreground, SIGINT);
+			signal_send(tty->port->foreground, SIGINT);
 		break;
 	case CTRL('U'): /* Kill line. */
 		while (tty->rx_e != tty->rx_w &&
@@ -189,7 +189,7 @@ void tty_receive(struct tty *tty, int c)
 			if (c == '\n' || c == CTRL('D') ||
 			    tty->rx_e - tty->rx_r == tty->rx_size) {
 				tty->rx_w = tty->rx_e;
-				proc_wake_all(&tty->rx_r);
+				task_wake_all(&tty->rx_r);
 			}
 		}
 		break;

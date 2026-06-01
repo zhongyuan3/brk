@@ -1,7 +1,7 @@
 #include <brk/panic.h>
-#include <brk/process.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
+#include <brk/task.h>
 
 void sleeplock_init(sleeplock_t *lock, const char *name)
 {
@@ -18,9 +18,9 @@ void sleeplock_acquire(sleeplock_t *lock)
 		      lock->pid);
 	spinlock_acquire(&lock->lock);
 	while (lock->locked)
-		proc_sleep(lock, &lock->lock);
+		task_sleep(lock, &lock->lock);
 	lock->locked = 1;
-	lock->pid = current_process()->pid;
+	lock->pid = current_task()->pid;
 	spinlock_release(&lock->lock);
 }
 
@@ -32,7 +32,7 @@ void sleeplock_release(sleeplock_t *lock)
 	spinlock_acquire(&lock->lock);
 	lock->locked = 0;
 	lock->pid = -1;
-	proc_wake_up(lock);
+	task_wake_all(lock);
 	spinlock_release(&lock->lock);
 }
 
@@ -41,7 +41,7 @@ bool sleeplock_holding(sleeplock_t *lock)
 	bool holding;
 
 	spinlock_acquire(&lock->lock);
-	holding = lock->locked && (current_process()->pid == lock->pid);
+	holding = lock->locked && (current_task()->pid == lock->pid);
 	spinlock_release(&lock->lock);
 	return holding;
 }

@@ -7,8 +7,8 @@
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
-#include <brk/process.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <brk/tty.h>
 #include <brk/virtio_blk.h>
 #include <uapi/brk/errno.h>
@@ -25,7 +25,7 @@ static void register_builtin_filesystems(void)
 
 int fs_init(void)
 {
-	struct process *proc;
+	struct task_control_block *task;
 	struct fs_mount_state *mnt;
 	struct fs_mount_state *new_root_mnt;
 	struct fs_path new_root_path;
@@ -37,14 +37,14 @@ int fs_init(void)
 	if (IS_ERR(mnt))
 		return PTR_ERR(mnt);
 
-	proc = current_process();
+	task = current_task();
 	struct fs_path root_path = {
 		.mnt = mnt,
 		.dentry = fs_dentry_get(mnt->root),
 	};
-	fsinfo_set_root(proc->fsinfo, &root_path);
+	fsinfo_set_root(task->fsinfo, &root_path);
 	fs_path_get(&root_path);
-	fsinfo_set_cwd(proc->fsinfo, &root_path);
+	fsinfo_set_cwd(task->fsinfo, &root_path);
 	klog_info("root mount point initialized\n");
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
@@ -73,8 +73,8 @@ int fs_init(void)
 	new_root_path.dentry = fs_dentry_get(new_root_mnt->root);
 	fs_path_get(&new_root_path);
 
-	fsinfo_update_root(proc->fsinfo, &new_root_path);
-	fsinfo_update_cwd(proc->fsinfo, &new_root_path);
+	fsinfo_update_root(task->fsinfo, &new_root_path);
+	fsinfo_update_cwd(task->fsinfo, &new_root_path);
 	fs_path_put(&root_path);
 	fs_path_put(&new_root_path);
 
@@ -110,9 +110,9 @@ int fs_init(void)
 		return err;
 	}
 
-	fdtable_alloc_fd(proc->fdtable, f);
-	fdtable_dup_fd(proc->fdtable, 0);
-	fdtable_dup_fd(proc->fdtable, 0);
+	fdtable_alloc_fd(task->fdtable, f);
+	fdtable_dup_fd(task->fdtable, 0);
+	fdtable_dup_fd(task->fdtable, 0);
 
 	return 0;
 }

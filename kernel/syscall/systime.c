@@ -5,10 +5,10 @@
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>
 #include <brk/printk.h>
-#include <brk/process.h>
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
+#include <brk/task.h>
 #include <brk/vmalloc.h>
 #include <uapi/brk/errno.h>
 #include <uapi/resource.h>
@@ -37,7 +37,7 @@ u64 sys_times(void)
 	struct tms *buf;
 
 	buf = syscall_arg_ptr(0);
-	*buf = current_process()->ptms;
+	*buf = current_task()->ptms;
 	return 0;
 }
 

@@ -416,9 +416,8 @@ int page_cache_flush_range(struct page_cache *m, loff_t start, loff_t end)
 	spinlock_release(&m->lock);
 
 	while (!list_empty(&batch)) {
-		struct cached_page *cp = list_first_entry(&batch,
-							  struct cached_page,
-							  dirty_list);
+		struct cached_page *cp = list_first_entry(
+			&batch, struct cached_page, dirty_list);
 		int err;
 
 		/* writeback_one() unlinks @cp from @batch. */

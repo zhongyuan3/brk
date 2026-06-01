@@ -1,7 +1,7 @@
 #ifndef BRK_TRAP_H
 #define BRK_TRAP_H
 
-#include <brk/process.h>
+#include <brk/task.h>
 #include <brk/types.h>
 
 #define TRAP_IS_INTERRUPT(scause) ((scause) & (1ULL << 63))
