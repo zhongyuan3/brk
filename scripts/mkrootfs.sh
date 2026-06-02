@@ -12,24 +12,24 @@ IMG=$1
 
 BRK_KERNEL_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 BRK_USER_ROOT=${BRK_USER_ROOT:-"$BRK_KERNEL_ROOT/../brk-user"}
-BRK_FSTOOLS_ROOT=${BRK_FSTOOLS_ROOT:-"$BRK_KERNEL_ROOT/../brkfstools"}
+BRK_TOOLS_ROOT=${BRK_TOOLS_ROOT:-"$BRK_KERNEL_ROOT/../brk-tools"}
 
-for d in "$BRK_USER_ROOT" "$BRK_FSTOOLS_ROOT"; do
+for d in "$BRK_USER_ROOT" "$BRK_TOOLS_ROOT"; do
 	if [[ ! -d $d ]]; then
 		echo "${0##*/}: missing directory: $d" >&2
-		echo "Set BRK_USER_ROOT / BRK_FSTOOLS_ROOT if your layout differs." >&2
+		echo "Set BRK_USER_ROOT / BRK_TOOLS_ROOT if your layout differs." >&2
 		exit 1
 	fi
 done
 
-MKFS=$BRK_FSTOOLS_ROOT/mkfs.brkfs
-CP=$BRK_FSTOOLS_ROOT/cp.brkfs
+MKFS=$BRK_TOOLS_ROOT/mkfs.brkfs
+CP=$BRK_TOOLS_ROOT/cp.brkfs
 if [[ ! -x $MKFS ]] || [[ ! -x $CP ]]; then
-	if [[ -n ${BRK_SKIP_FSTOOLS_BUILD:-} ]]; then
-		echo "${0##*/}: $MKFS or $CP not found (BRK_SKIP_FSTOOLS_BUILD is set)" >&2
+	if [[ -n ${BRK_SKIP_TOOLS_BUILD:-} ]]; then
+		echo "${0##*/}: $MKFS or $CP not found (BRK_SKIP_TOOLS_BUILD is set)" >&2
 		exit 1
 	fi
-	make -C "$BRK_FSTOOLS_ROOT"
+	make -C "$BRK_TOOLS_ROOT"
 fi
 [[ -x $MKFS && -x $CP ]] || {
 	echo "${0##*/}: expected host tools: $MKFS $CP" >&2
