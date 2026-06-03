@@ -31,33 +31,39 @@ void fdtable_put(struct file_desc_table *table)
 	if (refcnt_dec_fetch(&table->refcnt) > 0)
 		return;
 
-	struct fs_file **files = table->files;
-	spinlock_acquire(&table->lock);
+	/*
+	 * refcnt dropped to zero: no other thread can reach this table,
+	 * so no locking is needed while draining the file array.
+	 */
 	for (int i = 0; i < OPEN_MAX; i++) {
-		if (files[i]) {
-			fs_file_put(files[i]);
-			files[i] = NULL;
+		if (table->files[i]) {
+			fs_file_put(table->files[i]);
+			table->files[i] = NULL;
 		}
 	}
-	spinlock_release(&table->lock);
 
 	kfree(table);
 }
 
 void fdtable_copy(struct file_desc_table *dst, struct file_desc_table *src)
 {
-	struct fs_file **dst_files = dst->files;
-	struct fs_file **src_files = src->files;
-	spinlock_acquire(&src->lock);
-	spinlock_acquire(&dst->lock);
 	for (int i = 0; i < OPEN_MAX; i++) {
-		if (dst_files[i])
-			fs_file_put(dst_files[i]);
-		if (src_files[i])
-			dst_files[i] = fs_file_get(src_files[i]);
+		struct fs_file *old = NULL;
+		struct fs_file *new_file = NULL;
+
+		spinlock_acquire(&src->lock);
+		if (src->files[i])
+			new_file = fs_file_get(src->files[i]);
+		spinlock_release(&src->lock);
+
+		spinlock_acquire(&dst->lock);
+		old = dst->files[i];
+		dst->files[i] = new_file;
+		spinlock_release(&dst->lock);
+
+		if (old)
+			fs_file_put(old);
 	}
-	spinlock_release(&dst->lock);
-	spinlock_release(&src->lock);
 }
 
 int fdtable_alloc_fd(struct file_desc_table *table, struct fs_file *file)
@@ -141,6 +147,7 @@ int fdtable_dup_fd(struct file_desc_table *table, int fd)
 
 int fdtable_dup_fd2(struct file_desc_table *table, int oldfd, int newfd)
 {
+	struct fs_file *old_file = NULL;
 	struct fs_file **files = table->files;
 
 	if (oldfd < 0 || oldfd >= OPEN_MAX || newfd < 0 || newfd >= OPEN_MAX)
@@ -155,7 +162,7 @@ int fdtable_dup_fd2(struct file_desc_table *table, int oldfd, int newfd)
 
 	if (files[newfd]) {
 		if (files[newfd] != files[oldfd]) {
-			fs_file_put(files[newfd]);
+			old_file = files[newfd];
 			files[newfd] = fs_file_get(files[oldfd]);
 		}
 	} else {
@@ -163,18 +170,23 @@ int fdtable_dup_fd2(struct file_desc_table *table, int oldfd, int newfd)
 	}
 
 	spinlock_release(&table->lock);
+
+	if (old_file)
+		fs_file_put(old_file);
 	return 0;
 }
 
 void fdtable_close_all(struct file_desc_table *table)
 {
-	struct fs_file **files = table->files;
-	spinlock_acquire(&table->lock);
 	for (int i = 0; i < OPEN_MAX; i++) {
-		if (files[i]) {
-			fs_file_put(files[i]);
-			files[i] = NULL;
-		}
+		struct fs_file *file = NULL;
+
+		spinlock_acquire(&table->lock);
+		file = table->files[i];
+		table->files[i] = NULL;
+		spinlock_release(&table->lock);
+
+		if (file)
+			fs_file_put(file);
 	}
-	spinlock_release(&table->lock);
 }
