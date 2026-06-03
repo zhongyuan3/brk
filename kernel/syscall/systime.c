@@ -9,6 +9,7 @@
 #include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
+#include <brk/timekeeper.h>
 #include <brk/vmalloc.h>
 #include <uapi/brk/errno.h>
 #include <uapi/resource.h>
@@ -35,10 +36,13 @@ u64 sys_settimeofday(void)
 u64 sys_times(void)
 {
 	struct tms *buf;
+	int err;
 
 	buf = syscall_arg_ptr(0);
-	*buf = current_task()->ptms;
-	return 0;
+	err = task_get_times(current_task(), buf);
+	if (err)
+		return -1;
+	return jiffies_get();
 }
 
 u64 sys_nanosleep(void)

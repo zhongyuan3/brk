@@ -1,9 +1,11 @@
 #include <brk/asm.h>
+#include <brk/error.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>
+#include <brk/refcnt.h>
 #include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/task.h>
@@ -11,26 +13,27 @@
 #include <brk/vmalloc.h>
 #include <uapi/brk/errno.h>
 
-static struct kobj_pool mm_cache;
+static struct kobj_pool uvms_cache;
 
-void mm_cache_init(void)
+void uvm_space_cache_init(void)
 {
-	kobj_pool_init(&mm_cache, sizeof(struct uvm_space),
-		       alignof(struct uvm_space), "mm_cache");
+	kobj_pool_init(&uvms_cache, sizeof(struct uvm_space),
+		       alignof(struct uvm_space), "uvms_cache");
 }
 
-struct uvm_space *mm_alloc(void)
+struct uvm_space *uvm_space_create(void)
 {
 	struct uvm_space *mm;
 
-	mm = kobj_pool_alloc(&mm_cache);
+	mm = kobj_pool_alloc(&uvms_cache);
 	if (!mm)
-		return NULL;
+		return ERR_PTR(-ENOMEM);
+	refcnt_init(&mm->refcnt, 1);
 
 	mm->pgd = create_user_pgtable();
 	if (!mm->pgd) {
-		kobj_pool_free(&mm_cache, mm);
-		return NULL;
+		kobj_pool_free(&uvms_cache, mm);
+		return ERR_PTR(-ENOMEM);
 	}
 
 	list_init(&mm->seg);
@@ -38,16 +41,16 @@ struct uvm_space *mm_alloc(void)
 	mm->stack = uvm_region_alloc();
 	if (!mm->stack) {
 		destroy_user_pgtable(mm->pgd);
-		kobj_pool_free(&mm_cache, mm);
-		return NULL;
+		kobj_pool_free(&uvms_cache, mm);
+		return ERR_PTR(-ENOMEM);
 	}
 
 	mm->heap = uvm_region_alloc();
 	if (!mm->heap) {
 		uvm_region_free(mm->stack);
 		destroy_user_pgtable(mm->pgd);
-		kobj_pool_free(&mm_cache, mm);
-		return NULL;
+		kobj_pool_free(&uvms_cache, mm);
+		return ERR_PTR(-ENOMEM);
 	}
 
 	mm->brk = 0;
@@ -55,7 +58,7 @@ struct uvm_space *mm_alloc(void)
 	return mm;
 }
 
-static void mm_free_seg(struct uvm_space *mm)
+static void uvm_space_free_segments(struct uvm_space *mm)
 {
 	struct uvm_region *curr, *next;
 
@@ -74,7 +77,7 @@ static void mm_free_seg(struct uvm_space *mm)
 	}
 }
 
-static void mm_free_stack(struct uvm_space *mm)
+static void uvm_space_free_stack(struct uvm_space *mm)
 {
 	if (mm->stack->size > 0) {
 		uvunmap(mm->pgd, mm->stack->addr, mm->stack->size);
@@ -84,7 +87,7 @@ static void mm_free_stack(struct uvm_space *mm)
 	uvm_region_free(mm->stack);
 }
 
-static void mm_free_heap(struct uvm_space *mm)
+static void uvm_space_free_heap(struct uvm_space *mm)
 {
 	if (mm->heap->size > 0) {
 		uvunmap(mm->pgd, mm->heap->addr, mm->heap->size);
@@ -97,17 +100,30 @@ static void mm_free_heap(struct uvm_space *mm)
 	uvm_region_free(mm->heap);
 }
 
-void mm_free(struct uvm_space *mm)
+static void uvm_space_destroy(struct uvm_space *mm)
 {
-	mm_free_seg(mm);
-	mm_free_stack(mm);
-	mm_free_heap(mm);
+	uvm_space_free_segments(mm);
+	uvm_space_free_stack(mm);
+	uvm_space_free_heap(mm);
 	destroy_user_pgtable(mm->pgd);
-	kobj_pool_free(&mm_cache, mm);
+	kobj_pool_free(&uvms_cache, mm);
 }
 
-static int mm_copy_area(struct uvm_region *dst, struct uvm_region *src,
-			struct uvm_space *mm)
+struct uvm_space *uvm_space_get(struct uvm_space *mm)
+{
+	refcnt_inc(&mm->refcnt);
+	return mm;
+}
+
+void uvm_space_put(struct uvm_space *mm)
+{
+	if (refcnt_dec_fetch(&mm->refcnt) > 0)
+		return;
+	uvm_space_destroy(mm);
+}
+
+static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
+				 struct uvm_space *mm)
 {
 	usize_t npgs;
 	struct page **pgs;
@@ -163,7 +179,7 @@ failed:
 	return err;
 }
 
-static int mm_copy_seg(struct uvm_space *dst, struct uvm_space *src)
+static int uvm_space_copy_segments(struct uvm_space *dst, struct uvm_space *src)
 {
 	LIST_DEFINE(seg);
 	struct uvm_region *curr, *next;
@@ -180,7 +196,7 @@ static int mm_copy_seg(struct uvm_space *dst, struct uvm_space *src)
 			err = -ENOMEM;
 			goto failed;
 		}
-		err = mm_copy_area(vma, curr, dst);
+		err = uvm_space_copy_region(vma, curr, dst);
 		if (err) {
 			uvm_region_free(vma);
 			goto failed;
@@ -210,7 +226,7 @@ failed:
 	return err;
 }
 
-static int mm_copy_stack(struct uvm_space *dst, struct uvm_space *src)
+static int uvm_space_copy_stack(struct uvm_space *dst, struct uvm_space *src)
 {
 	if (src->stack->size == 0)
 		return 0;
@@ -251,32 +267,32 @@ static int mm_copy_stack(struct uvm_space *dst, struct uvm_space *src)
 	return 0;
 }
 
-static int mm_copy_heap(struct uvm_space *dst, struct uvm_space *src)
+static int uvm_space_copy_heap(struct uvm_space *dst, struct uvm_space *src)
 {
 	if (src->heap->size == 0)
 		return 0;
 
-	return mm_copy_area(dst->heap, src->heap, dst);
+	return uvm_space_copy_region(dst->heap, src->heap, dst);
 }
 
-int mm_copy(struct uvm_space *dst, struct uvm_space *src)
+int uvm_space_copy(struct uvm_space *dst, struct uvm_space *src)
 {
 	int err;
 
-	err = mm_copy_seg(dst, src);
+	err = uvm_space_copy_segments(dst, src);
 	if (err)
 		return err;
 
-	err = mm_copy_stack(dst, src);
+	err = uvm_space_copy_stack(dst, src);
 	if (err) {
-		mm_free_seg(dst);
+		uvm_space_free_segments(dst);
 		return err;
 	}
 
-	err = mm_copy_heap(dst, src);
+	err = uvm_space_copy_heap(dst, src);
 	if (err) {
-		mm_free_seg(dst);
-		mm_free_stack(dst);
+		uvm_space_free_segments(dst);
+		uvm_space_free_stack(dst);
 		return err;
 	}
 

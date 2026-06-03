@@ -107,7 +107,7 @@ void task_sched(void)
 		return;
 	}
 
-	curr->ptms.tms_stime += jiffies_get() - curr->ktime;
+	task_add_system_time(curr, jiffies_get() - curr->ktime);
 	cpu->handoff = curr;
 	if (next) {
 		spinlock_acquire(&next->lock);
@@ -249,21 +249,25 @@ again:
 
 	list_for_each_entry(child, &parent->children, child) {
 		spinlock_acquire(&child->lock);
-		if (pid > 0 && child->pid == pid) {
+		if (pid > 0 && child->tgid == pid) {
 			found = true;
 		}
 
 		if (child->state != TASK_STATE_ZOMBIE ||
-		    (pid > 0 && child->pid != pid)) {
+		    (pid > 0 && child->tgid != pid)) {
 			spinlock_release(&child->lock);
 			continue;
 		}
 
 		if (status)
 			*status = child->exit_status;
-		pid = child->pid;
-		parent->ptms.tms_cstime += child->ptms.tms_stime;
-		parent->ptms.tms_cutime += child->ptms.tms_utime;
+		pid = child->tgid;
+		task_add_child_system_time(
+			parent, task_get_system_time(child) +
+					task_get_child_system_time(child));
+		task_add_child_user_time(
+			parent, task_get_user_time(child) +
+					task_get_child_user_time(child));
 		spinlock_release(&child->lock);
 		list_del_init(&child->child);
 		spinlock_release(&wait_lock);
