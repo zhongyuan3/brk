@@ -117,7 +117,7 @@ struct trap_frame *user_trap_handler(void)
 	write_sstatus(read_sstatus() | SSTATUS_SUM);
 
 	jiffies = jiffies_get();
-	task->ptms.tms_utime += jiffies - task->utime;
+	task_add_user_time(task, jiffies - task->utime);
 	task->ktime = jiffies;
 
 	task->tf->epc = sepc;
@@ -152,7 +152,7 @@ struct trap_frame *user_trap_handler(void)
 
 	prepare_to_return();
 	jiffies = jiffies_get();
-	task->ptms.tms_stime += jiffies - task->ktime;
+	task_add_system_time(task, jiffies - task->ktime);
 	task->utime = jiffies;
 	return task->tf;
 }

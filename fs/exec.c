@@ -363,9 +363,9 @@ static int __do_execve(const char *path, struct exec_args *args)
 	if (err)
 		goto err;
 
-	new_mm = mm_alloc();
-	if (!new_mm) {
-		err = -ENOMEM;
+	new_mm = uvm_space_create();
+	if (IS_ERR(new_mm)) {
+		err = PTR_ERR(new_mm);
 		goto err;
 	}
 
@@ -411,7 +411,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 		struct uvm_space *old_mm = task->mm;
 
 		task->mm = new_mm;
-		mm_free(old_mm);
+		uvm_space_put(old_mm);
 		signal_reset(task);
 		task->tf->epc = elf_hdr.e_entry;
 		task->tf->sp = sp;
@@ -420,8 +420,8 @@ static int __do_execve(const char *path, struct exec_args *args)
 	return args->argc;
 
 err:
-	if (new_mm)
-		mm_free(new_mm);
+	if (new_mm && !IS_ERR(new_mm))
+		uvm_space_put(new_mm);
 	if (!IS_ERR(f) && f)
 		fs_file_put(f);
 	return err;

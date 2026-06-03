@@ -69,7 +69,7 @@ void boot_run_primary(usize_t hart_id, u64 dtb, usize_t load_offset)
 
 	kmalloc_init();
 	vmalloc_init();
-	mm_cache_init();
+	uvm_space_cache_init();
 
 	console_register(&early_console);
 

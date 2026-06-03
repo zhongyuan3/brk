@@ -66,10 +66,17 @@ u64 sys_sched_yield(void)
 
 u64 sys_getpid(void)
 {
-	return current_task()->pid;
+	return current_task()->tgid;
 }
 
 u64 sys_getppid(void)
 {
-	return current_task()->parent->pid;
+	struct task_control_block *par = current_task()->parent;
+
+	return par ? par->tgid : 0;
+}
+
+u64 sys_gettid(void)
+{
+	return current_task()->pid;
 }

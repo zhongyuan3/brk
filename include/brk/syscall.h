@@ -76,5 +76,6 @@ u64 sys_fsync(void);
 u64 sys_fdatasync(void);
 u64 sys_sync(void);
 u64 sys_syncfs(void);
+u64 sys_gettid(void);
 
 #endif

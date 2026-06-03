@@ -16,7 +16,8 @@ void sigaction_table_copy(struct sigaction_table *dst,
 void sigaction_table_reset(struct sigaction_table *table);
 
 void signal_send(struct task_control_block *task, int sig);
-int signal_init(struct task_control_block *task);
+int signal_init(struct task_control_block *task,
+		struct sigaction_table *sigactions, u64 blocked);
 void signal_deinit(struct task_control_block *task);
 void signal_reset(struct task_control_block *task);
 bool signal_pending(struct task_control_block *task);

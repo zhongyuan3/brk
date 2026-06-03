@@ -1,6 +1,7 @@
 #ifndef BRK_MM_TYPES_H
 #define BRK_MM_TYPES_H
 
+#include <brk/refcnt_types.h>
 #include <brk/types.h>
 
 typedef struct __pgde {
@@ -56,6 +57,7 @@ struct uvm_space {
 	struct uvm_region *stack;
 	struct uvm_region *heap;
 	u64 brk;
+	refcnt_t refcnt;
 };
 
 #endif

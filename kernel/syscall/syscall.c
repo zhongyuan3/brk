@@ -72,6 +72,7 @@ static u64 (*systable[])(void) = {
 	[SYS_fdatasync] = sys_fdatasync,
 	[SYS_sync] = sys_sync,
 	[SYS_syncfs] = sys_syncfs,
+	[SYS_gettid] = sys_gettid,
 };
 
 void syscall(void)
