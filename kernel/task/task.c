@@ -4,6 +4,7 @@
 #include <brk/fdtable.h>
 #include <brk/fs.h>
 #include <brk/fsinfo.h>
+#include <brk/init.h>
 #include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/mm.h>
@@ -222,6 +223,10 @@ static void initial_task_return(void)
 	err = do_execve(argv[0], argv, envp);
 	if (err < 0)
 		panic("execve %s failed: %s\n", argv[0], strerror(err));
+
+#if ENABLE_SMP
+	smp_boot_release_secondary_harts();
+#endif
 
 	prepare_to_return();
 	user_trap_return(task->tf);

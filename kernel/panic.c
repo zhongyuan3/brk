@@ -1,9 +1,12 @@
 #include <brk/assert.h>
 #include <brk/panic.h>
-#include <brk/printk.h>
+#include <brk/printf.h>
 #include <brk/riscv.h>
+#include <brk/sbi.h>
+#include <brk/string.h>
 
-volatile bool panicked;
+static volatile int in_panic;
+static char panic_buf[512];
 
 void panic(char const *fmt, ...)
 {
@@ -11,12 +14,27 @@ void panic(char const *fmt, ...)
 
 	intr_off();
 
-	printk("PANIC: ");
+	/*
+	 * Never route panic through printk()/printk_lock: a panic may fire
+	 * while the current CPU already holds printk_lock, in which case
+	 * re-entering spinlock_acquire() would itself panic and recurse
+	 * forever (overflowing the stack and corrupting memory). Render the
+	 * message into a local buffer and push it straight to the SBI
+	 * console instead.
+	 */
+	if (__sync_lock_test_and_set(&in_panic, 1)) {
+		for (;;)
+			;
+	}
+
+	memset(panic_buf, 0, sizeof(panic_buf));
 
 	va_start(ap, fmt);
-	vprintk(fmt, ap);
+	vsnprintf(panic_buf, sizeof(panic_buf) - 1, fmt, ap);
 	va_end(ap);
-	panicked = true;
+
+	sbi_console_putstr("PANIC: ");
+	sbi_console_putstr(panic_buf);
 
 	for (;;)
 		;
@@ -24,8 +42,5 @@ void panic(char const *fmt, ...)
 
 void __assert_fail(char const *file, int line, char const *expr)
 {
-	intr_off();
-	printk("Assertion failed: %s:%d: %s\n", file, line, expr);
-	for (;;)
-		;
+	panic("Assertion failed: %s:%d: %s\n", file, line, expr);
 }
