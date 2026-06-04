@@ -98,6 +98,8 @@ static inline u64 read_stval(void)
 #define SIE_STIE (1L << 5) /* Timer */
 #define SIE_SSIE (1L << 1) /* Software */
 
+#define SIP_SSIP (1L << 1) /* Supervisor software interrupt pending */
+
 static inline u64 read_sie(void)
 {
 	u64 x;
@@ -156,6 +158,11 @@ static inline u64 read_sscratch(void)
 static inline void write_sscratch(u64 x)
 {
 	asm volatile("csrw sscratch, %0" : : "r"(x));
+}
+
+static inline void clear_ssip_csr(void)
+{
+	asm volatile("csrc sip, %0" : : "r"((u64)SIP_SSIP));
 }
 
 #endif

@@ -8,6 +8,7 @@
 #include <brk/riscv.h>
 #include <brk/spinlock.h>
 #include <brk/task.h>
+#include <brk/task_types.h>
 #include <brk/timekeeper.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
@@ -81,6 +82,7 @@ void task_sched(void)
 	ASSERT(spinlock_holding(&curr->lock));
 	ASSERT(current_cpu()->irq_nest == 1);
 
+	set_current_task(NULL);
 	curr->irq_enabled = cpu->irq_enabled;
 
 	switch (curr->state) {
@@ -103,7 +105,6 @@ void task_sched(void)
 	if (next == curr) {
 		curr->time_slice = TIME_SLICE_MAX;
 		set_current_task(curr);
-		cpu->irq_enabled = curr->irq_enabled;
 		return;
 	}
 

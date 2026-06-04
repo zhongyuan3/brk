@@ -11,7 +11,6 @@ void start_kernel(usize_t hart_id, u64 dtb, usize_t load_offset)
 
 void start_hart(u64 hart_id)
 {
-	klog_info("hart %lu starting\n", hart_id);
 	boot_run_secondary(hart_id);
 }
 

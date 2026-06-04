@@ -77,6 +77,11 @@ int irq_handle_external(u32 hart_id)
 	if (source == 0)
 		return 0;
 
+	if (!irq_handlers || source >= irq_handlers_num) {
+		plic_complete(hart_id, source);
+		return -EINVAL;
+	}
+
 	spinlock_acquire(&irq_handlers_lock);
 	handler = irq_handlers[source];
 	ctx = irq_handlers_ctx[source];

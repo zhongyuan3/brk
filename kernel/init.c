@@ -29,21 +29,6 @@
 #include <brk/vmalloc.h>
 #include <libfdt.h>
 
-#if ENABLE_SMP
-
-static void smp_wake_secondary_harts(u64 init_hart_id)
-{
-	u64 start_addr = symbol_phys(hart_entry);
-
-	for (u64 id = 0; id < NR_CPUS; ++id) {
-		if (id == init_hart_id)
-			continue;
-		sbi_hart_start(id, start_addr, 0);
-	}
-}
-
-#endif
-
 void boot_run_primary(usize_t hart_id, u64 dtb, usize_t load_offset)
 {
 	set_current_cpuid(hart_id);
@@ -102,10 +87,6 @@ void boot_run_primary(usize_t hart_id, u64 dtb, usize_t load_offset)
 
 	intr_on();
 
-#if ENABLE_SMP
-	smp_wake_secondary_harts(hart_id);
-#endif
-
 	task_scheduler();
 }
 
@@ -120,8 +101,7 @@ void boot_run_secondary(u64 hart_id)
 	sfence_vma();
 
 	irq_init_hart(hart_id);
-	ns16550a_enable_irq(hart_id);
-	virtio_blk_enable_irq(hart_id);
+	/* Device IRQs are handled on the boot hart only (no IPI support yet). */
 	trap_init_hart(hart_id);
 
 	intr_on();
@@ -129,6 +109,27 @@ void boot_run_secondary(u64 hart_id)
 	klog_info("hart %lu ready\n", hart_id);
 
 	task_scheduler();
+}
+
+static void smp_wake_secondary_harts(u64 init_hart_id)
+{
+	u64 start_addr = symbol_phys(hart_entry);
+
+	for (u64 id = 0; id < NR_CPUS; ++id) {
+		if (id == init_hart_id)
+			continue;
+		sbi_hart_start(id, start_addr, 0);
+	}
+}
+
+void smp_boot_release_secondary_harts(void)
+{
+	static bool released;
+
+	if (released)
+		return;
+	released = true;
+	smp_wake_secondary_harts(boot_cpuid);
 }
 
 #endif

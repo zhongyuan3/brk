@@ -79,19 +79,23 @@ void kernel_trap_handler(void)
 	u64 code = TRAP_CAUSE_CODE(scause);
 
 	if (TRAP_IS_INTERRUPT(scause)) {
-		if (code == 5) {
+		if (code == 1) {
+			clear_ssip_csr();
+		} else if (code == 5) {
 			timer_handle_int();
 			if (task && --task->time_slice <= 0)
 				task_yield();
 		} else if (code == 9) {
 			irq_handle_external(current_cpuid());
 		} else {
-			panic("%s: scause=%#lx,sepc=%#lx,stval=%#lx\n",
-			      cause_to_str(scause), scause, sepc, stval);
+			panic("%s: cpu=%d scause=%#lx,sepc=%#lx,stval=%#lx\n",
+			      cause_to_str(scause), current_cpuid(), scause,
+			      sepc, stval);
 		}
 	} else {
-		panic("%s: scause=%#lx,sepc=%#lx,stval=%#lx\n",
-		      cause_to_str(scause), scause, sepc, stval);
+		panic("%s: cpu=%d scause=%#lx,sepc=%#lx,stval=%#lx\n",
+		      cause_to_str(scause), current_cpuid(), scause, sepc,
+		      stval);
 	}
 
 	write_sepc(sepc);
@@ -123,7 +127,9 @@ struct trap_frame *user_trap_handler(void)
 	task->tf->epc = sepc;
 
 	if (TRAP_IS_INTERRUPT(scause)) {
-		if (code == 5) {
+		if (code == 1) {
+			clear_ssip_csr();
+		} else if (code == 5) {
 			timer_handle_int();
 			signal_deliver_pending(task);
 			if (--task->time_slice <= 0)
@@ -131,8 +137,10 @@ struct trap_frame *user_trap_handler(void)
 		} else if (code == 9) {
 			irq_handle_external(current_cpuid());
 		} else {
-			klog_warn("%s: scause=%#lx,sepc=%#lx,stval=%#lx\n",
-				  cause_to_str(scause), scause, sepc, stval);
+			klog_warn(
+				"%s: pid=%ld,scause=%#lx,sepc=%#lx,stval=%#lx\n",
+				cause_to_str(scause), task->pid, scause, sepc,
+				stval);
 			task_set_killed(task);
 		}
 	} else {
@@ -142,8 +150,10 @@ struct trap_frame *user_trap_handler(void)
 			intr_on();
 			syscall();
 		} else {
-			klog_warn("%s: scause=%#lx,sepc=%#lx,stval=%#lx\n",
-				  cause_to_str(scause), scause, sepc, stval);
+			klog_warn(
+				"%s: pid=%ld,scause=%#lx,sepc=%#lx,stval=%#lx\n",
+				cause_to_str(scause), task->pid, scause, sepc,
+				stval);
 			task_set_killed(task);
 		}
 	}
