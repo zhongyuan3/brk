@@ -19,7 +19,7 @@ extern char _stext[], _etext[];
 extern char _srodata[], _erodata[];
 extern char _sdata[], _edata[];
 extern char _sbss[], _ebss[];
-extern char init_stack[], init_stack_top[];
+extern char init_stack[];
 extern char hart_entry[];
 
 static inline u64 symbol_phys(void *vaddr)
