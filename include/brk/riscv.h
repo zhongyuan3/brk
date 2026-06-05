@@ -56,6 +56,11 @@ static inline void sfence_vma(void)
 	asm volatile("sfence.vma zero, zero");
 }
 
+static inline void fence_i(void)
+{
+	asm volatile("fence.i" ::: "memory");
+}
+
 static inline u64 read_stvec(void)
 {
 	u64 x;

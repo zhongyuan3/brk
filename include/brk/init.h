@@ -17,7 +17,4 @@ void boot_run_secondary(u64 hart_id);
 void smp_boot_release_secondary_harts(void);
 #endif
 
-void boot_hart_online(u32 hart_id);
-void boot_hart_irq_on(void);
-
 #endif
