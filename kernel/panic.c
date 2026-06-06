@@ -1,8 +1,8 @@
+#include <arch/irqflags.h>
 #include <brk/assert.h>
+#include <brk/earlycon.h>
 #include <brk/panic.h>
 #include <brk/printf.h>
-#include <brk/riscv.h>
-#include <brk/sbi.h>
 #include <brk/string.h>
 
 static volatile int in_panic;
@@ -33,8 +33,8 @@ void panic(char const *fmt, ...)
 	vsnprintf(panic_buf, sizeof(panic_buf) - 1, fmt, ap);
 	va_end(ap);
 
-	sbi_console_putstr("PANIC: ");
-	sbi_console_putstr(panic_buf);
+	earlycon_putstr("PANIC: ");
+	earlycon_putstr(panic_buf);
 
 	for (;;)
 		;

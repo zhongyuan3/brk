@@ -1,8 +1,8 @@
+#include <arch/pgtable.h>
 #include <brk/dtb.h>
 #include <brk/ioremap.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
-#include <brk/pgtable.h>
 #include <brk/plic.h>
 #include <brk/string.h>
 #include <brk/types.h>

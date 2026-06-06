@@ -1,9 +1,7 @@
-#ifndef BRK_PGTABLE_H
-#define BRK_PGTABLE_H
+#ifndef ARCH_PGTABLE_H
+#define ARCH_PGTABLE_H
 
-#include <brk/asm.h>
-#include <brk/mm.h>
-#include <brk/mm_types.h>
+#include <arch/mm.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 

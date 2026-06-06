@@ -1,4 +1,4 @@
-#include <brk/asm.h>
+#include <arch/vmlayout.h>
 #include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/refcnt.h>
@@ -211,14 +211,14 @@ static bool setup_signal_frame_locked(struct task_control_block *task, int sig,
 	u64 sp;
 	struct user_sigframe *frame;
 
-	sp = task->tf->sp;
+	sp = arch_tf_get_sp(task->tf);
 	sp -= sizeof(*frame);
 	sp &= ~0xFULL;
 	if (!user_access_ok(sp, sizeof(*frame)))
 		return false;
 
 	frame = (struct user_sigframe *)sp;
-	frame->tf = *task->tf;
+	arch_tf_copy(&frame->tf, task->tf);
 	frame->blocked = task->blocked;
 	frame->signo = sig;
 
@@ -229,9 +229,9 @@ static bool setup_signal_frame_locked(struct task_control_block *task, int sig,
 	clear_pending_locked(task, sig);
 	task->in_handler = true;
 
-	task->tf->sp = sp;
-	task->tf->epc = handler;
-	task->tf->a0 = sig;
+	arch_tf_set_sp(task->tf, sp);
+	arch_tf_set_pc(task->tf, handler);
+	arch_tf_set_a0(task->tf, sig);
 	return true;
 }
 
@@ -328,11 +328,11 @@ u64 signal_do_sigreturn(struct task_control_block *task)
 		goto unlock_and_return;
 	}
 
-	*task->tf = frame->tf;
+	arch_tf_copy(task->tf, &frame->tf);
 	task->blocked = frame->blocked;
 	task->in_handler = false;
 	task->sigframe_sp = 0;
-	ret = task->tf->a0;
+	ret = arch_tf_get_a0(task->tf);
 
 unlock_and_return:
 	spinlock_release(&task->sigactions->lock);

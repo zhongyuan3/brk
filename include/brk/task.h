@@ -1,27 +1,23 @@
 #ifndef BRK_TASK_H
 #define BRK_TASK_H
 
-#include <brk/asm.h>
+#include <arch/smp.h>
+#include <arch/task.h>
 #include <brk/fdtable.h>
 #include <brk/fs_types.h>
 #include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/path.h>
+#include <brk/processor.h>
 #include <brk/signal_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/task_types.h>
-#include <brk/trap_frame.h>
 #include <brk/types.h>
 #include <uapi/brk/limits.h>
 #include <uapi/resource.h>
 #include <uapi/signal.h>
 #include <uapi/times.h>
 #include <uapi/types.h>
-
-#define KSTACK_PAGE_ORDER 1
-#define KSTACK_SIZE (PAGE_SIZE * (1 << KSTACK_PAGE_ORDER))
-#define USTACK_PAGE_ORDER 4
-#define USTACK_SIZE (PAGE_SIZE * (1 << USTACK_PAGE_ORDER))
 
 #define TIME_SLICE_MAX 5
 
@@ -100,17 +96,6 @@ bool task_get_info(pid_t tgid, struct task_info *info);
 
 /* Return true if a thread group with @tgid exists. */
 bool task_pid_exists(pid_t tgid);
-
-void push_off(void);
-void pop_off(void);
-
-struct task_control_block *current_task(void);
-struct cpu *current_cpu(void);
-cpuid_t current_cpuid(void);
-void set_current_task(struct task_control_block *task);
-void set_current_cpuid(cpuid_t cpuid);
-
-void switch_context(struct switch_frame *prev, struct switch_frame *next);
 
 extern cpuid_t boot_cpuid;
 extern struct task_control_block *initial_task;

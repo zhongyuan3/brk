@@ -5,8 +5,6 @@
 
 #define BITS_PER_LONG (sizeof(unsigned long) * 8)
 #define BITS_TO_LONGS(nbits) (((nbits) + BITS_PER_LONG - 1) / BITS_PER_LONG)
-#define DECLARE_BITMAP(name, nbits) unsigned long name[BITS_TO_LONGS(nbits)]
-
 #define BITMAP_DECLARE(name, nbits) unsigned long name[BITS_TO_LONGS(nbits)]
 
 void bitmap_zero(unsigned long *bitmap, usize_t nbits);

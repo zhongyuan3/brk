@@ -1,9 +1,9 @@
 #ifndef BRK_SIGNAL_TYPES_H
 #define BRK_SIGNAL_TYPES_H
 
+#include <arch/trapframe.h>
 #include <brk/refcnt_types.h>
 #include <brk/spinlock_types.h>
-#include <brk/trap_frame.h>
 #include <uapi/signal.h>
 
 struct sigaction_table {

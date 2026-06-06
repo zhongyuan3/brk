@@ -4,6 +4,7 @@
             "name": "brk",
             "includePath": [
                 "${workspaceFolder}/include",
+                "${workspaceFolder}/arch/riscv/include",
                 "${workspaceFolder}/vendor/libfdt"
             ],
             "defines": [],

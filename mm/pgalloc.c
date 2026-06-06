@@ -1,4 +1,4 @@
-#include <brk/asm.h>
+#include <arch/pgalloc.h>
 #include <brk/assert.h>
 #include <brk/list.h>
 #include <brk/mm_types.h>

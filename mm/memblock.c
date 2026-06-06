@@ -1,3 +1,4 @@
+#include <arch/pgalloc.h>
 #include <brk/assert.h>
 #include <brk/kernel.h>
 #include <brk/memblock.h>

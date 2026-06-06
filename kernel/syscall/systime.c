@@ -1,9 +1,8 @@
-#include <brk/asm.h>
+#include <arch/pgtable.h>
 #include <brk/kernel.h>
 #include <brk/ktime.h>
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
-#include <brk/pgtable.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/string.h>

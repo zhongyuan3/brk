@@ -8,6 +8,7 @@
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
+#include <brk/processor.h>
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
@@ -262,10 +263,11 @@ u64 sys_uname(void)
 		.nodename = "none",
 		.release = "0.0.1",
 		.version = "0.0.1",
-		.machine = "riscv64",
 		.domainname = "none",
 	};
 	struct utsname *buf = syscall_arg_ptr(0);
+
+	strlcpy(name.machine, arch_uname_machine(), sizeof(name.machine));
 	*buf = name;
 	return 0;
 }

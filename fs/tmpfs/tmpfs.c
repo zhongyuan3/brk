@@ -1,5 +1,6 @@
 #include "tmpfs.h"
-#include <brk/asm.h>
+#include <arch/page.h>
+#include <brk/assert.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fs.h>

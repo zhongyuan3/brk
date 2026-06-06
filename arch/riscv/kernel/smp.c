@@ -1,0 +1,55 @@
+#include <arch/csr.h>
+#include <arch/pgtable.h>
+#include <arch/sbi.h>
+#include <arch/smp.h>
+#include <brk/init.h>
+#include <brk/irq.h>
+#include <brk/kernel.h>
+#include <brk/mm.h>
+#include <brk/printk.h>
+#include <brk/task.h>
+#include <brk/trap.h>
+
+#if ENABLE_SMP
+
+void boot_run_secondary(u64 hart_id)
+{
+	set_current_cpuid(hart_id);
+	set_current_task(NULL);
+
+	write_satp(make_satp_sv39(symbol_phys(kernel_pgdir)));
+	sfence_vma();
+
+	irq_init_hart(hart_id);
+	/* Device IRQs are handled on the boot hart only (no IPI support yet). */
+	trap_init_hart(hart_id);
+
+	intr_on();
+
+	klog_info("hart %lu ready\n", hart_id);
+
+	task_scheduler();
+}
+
+static void smp_wake_secondary_harts(u64 init_hart_id)
+{
+	u64 start_addr = symbol_phys(hart_entry);
+
+	for (u64 id = 0; id < NR_CPUS; ++id) {
+		if (id == init_hart_id)
+			continue;
+		sbi_hart_start(id, start_addr, 0);
+	}
+}
+
+void smp_boot_release_secondary_harts(void)
+{
+	static bool released;
+
+	if (released)
+		return;
+	released = true;
+	smp_wake_secondary_harts(boot_cpuid);
+}
+
+#endif

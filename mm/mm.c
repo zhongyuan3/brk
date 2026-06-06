@@ -1,10 +1,9 @@
-#include <brk/asm.h>
+#include <arch/pgtable.h>
 #include <brk/error.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
-#include <brk/pgtable.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
 #include <brk/string.h>

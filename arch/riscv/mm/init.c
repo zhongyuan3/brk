@@ -1,3 +1,6 @@
+#include <arch/csr.h>
+#include <arch/mm.h>
+#include <arch/pgtable.h>
 #include <brk/dtb.h>
 #include <brk/kernel.h>
 #include <brk/memblock.h>
@@ -5,8 +8,6 @@
 #include <brk/mm_types.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
-#include <brk/pgtable.h>
-#include <brk/riscv.h>
 #include <brk/vmalloc.h>
 #include <libfdt.h>
 

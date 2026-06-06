@@ -1,10 +1,10 @@
 #include <brk/cpu.h>
-#include <brk/riscv.h>
 #include <brk/rtc.h>
 #include <brk/spinlock.h>
 #include <brk/task.h>
 #include <brk/timeconst.h>
 #include <brk/timekeeper.h>
+#include <brk/timer.h>
 #include <uapi/brk/errno.h>
 
 static u64 mono_base_cycles;
@@ -23,7 +23,7 @@ static u64 cycles_to_ns(u64 cycles)
 
 static u64 timekeeper_mono_ns(void)
 {
-	return cycles_to_ns(read_time() - mono_base_cycles);
+	return cycles_to_ns(timer_get_time() - mono_base_cycles);
 }
 
 static void ns_to_ts(s64 ns, struct timespec *ts)
@@ -42,7 +42,7 @@ void timekeeper_init(void)
 	struct timespec rtc_ts;
 	u64 wall_ns;
 
-	mono_base_cycles = read_time();
+	mono_base_cycles = timer_get_time();
 
 	if (rtc_is_available()) {
 		rtc_read_timespec(&rtc_ts);

@@ -1,7 +1,6 @@
 #include <brk/console.h>
 #include <brk/device.h>
 #include <brk/list.h>
-#include <brk/sbi.h>
 #include <brk/spinlock.h>
 #include <brk/tty.h>
 #include <brk/uart.h>
@@ -37,15 +36,3 @@ void console_write_all(const char *s, usize_t n)
 	}
 	spinlock_release(&console_lock);
 }
-
-static int early_console_put_char(struct console *console, int c)
-{
-	(void)console;
-	sbi_console_putchar(c);
-	return 0;
-}
-
-struct console early_console = {
-	.put_char = early_console_put_char,
-	.active = true,
-};

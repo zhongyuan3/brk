@@ -1,6 +1,8 @@
 #ifndef BRK_TASK_TYPES_H
 #define BRK_TASK_TYPES_H
 
+#include <arch/processor.h>
+#include <arch/trapframe.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <uapi/times.h>
@@ -8,25 +10,10 @@
 
 #define TASK_NAME_MAX 32
 
-struct trap_frame;
 struct sigaction_table;
-
-struct switch_frame {
-	u64 ra;
-	u64 sp;
-	u64 s0;
-	u64 s1;
-	u64 s2;
-	u64 s3;
-	u64 s4;
-	u64 s5;
-	u64 s6;
-	u64 s7;
-	u64 s8;
-	u64 s9;
-	u64 s10;
-	u64 s11;
-};
+struct uvm_space;
+struct file_desc_table;
+struct file_system_info;
 
 enum task_state {
 	TASK_STATE_NEW,

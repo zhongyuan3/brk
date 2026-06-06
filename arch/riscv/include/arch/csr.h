@@ -1,5 +1,5 @@
-#ifndef BRK_RISCV_H
-#define BRK_RISCV_H
+#ifndef ARCH_CSR_H
+#define ARCH_CSR_H
 
 #include <brk/types.h>
 

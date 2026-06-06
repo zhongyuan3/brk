@@ -1,3 +1,8 @@
+#include <arch/csr.h>
+#include <arch/irqflags.h>
+#include <arch/sbi.h>
+#include <arch/trap.h>
+#include <arch/trapframe.h>
 #include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/irq.h>
@@ -5,8 +10,6 @@
 #include <brk/panic.h>
 #include <brk/plic.h>
 #include <brk/printk.h>
-#include <brk/riscv.h>
-#include <brk/sbi.h>
 #include <brk/signal.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
@@ -117,14 +120,14 @@ struct trap_frame *user_trap_handler(void)
 	tf = (struct trap_frame *)read_sscratch();
 	task = ((struct extended_trap_frame *)tf)->task;
 	set_current_task(task);
-	set_current_cpuid(tf->cpuid);
+	set_current_cpuid(arch_tf_get_cpuid(tf));
 	write_sstatus(read_sstatus() | SSTATUS_SUM);
 
 	jiffies = jiffies_get();
 	task_add_user_time(task, jiffies - task->utime);
 	task->ktime = jiffies;
 
-	task->tf->epc = sepc;
+	arch_tf_set_pc(task->tf, sepc);
 
 	if (TRAP_IS_INTERRUPT(scause)) {
 		if (code == 1) {
@@ -146,7 +149,7 @@ struct trap_frame *user_trap_handler(void)
 	} else {
 		if (code == 8) {
 			signal_deliver_pending(task);
-			task->tf->epc += 4; /* skip ecall */
+			arch_tf_skip_syscall(task->tf);
 			intr_on();
 			syscall();
 		} else {
@@ -183,10 +186,10 @@ void prepare_to_return(void)
 	sstatus |= SSTATUS_SPIE;
 	write_sstatus(sstatus);
 
-	task->tf->kernel_sp = task->kstack_top;
-	task->tf->cpuid = current_cpuid();
+	arch_tf_set_kernel_sp(task->tf, task->kstack_top);
+	arch_tf_set_cpuid(task->tf, current_cpuid());
 
-	write_sepc(task->tf->epc);
+	write_sepc(arch_tf_get_pc(task->tf));
 
 	write_sstatus(read_sstatus() & ~SSTATUS_SUM);
 }

@@ -1,5 +1,5 @@
-#ifndef BRK_SBI_H
-#define BRK_SBI_H
+#ifndef ARCH_SBI_H
+#define ARCH_SBI_H
 
 #include <brk/types.h>
 

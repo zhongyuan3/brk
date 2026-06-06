@@ -1,5 +1,6 @@
 #include "brkfs.h"
-#include <brk/asm.h>
+#include <arch/page.h>
+#include <arch/pgtable.h>
 #include <brk/dcache.h>
 #include <brk/device.h>
 #include <brk/error.h>
@@ -7,7 +8,6 @@
 #include <brk/list.h>
 #include <brk/pagecache.h>
 #include <brk/path.h>
-#include <brk/pgtable.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/sleeplock.h>

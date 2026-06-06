@@ -1,0 +1,17 @@
+#ifndef ARCH_VMLAYOUT_H
+#define ARCH_VMLAYOUT_H
+
+#include <arch/page.h>
+
+#define USER_SPACE_SIZE_MAX ((1UL << 38) - PAGE_SIZE)
+
+#define PAGE_OFFSET 0xffffffc000000000
+#define LINEAR_MAPPING_SIZE 0x2000000000 /* 128G */
+
+#define VMALLOC_START 0xffffffe000000000
+#define VMALLOC_SIZE 0x1000000000 /* 64G */
+
+#define VMEMMAP_START 0xfffffff000000000
+#define VMEMMAP_SIZE 0x100000000 /* 4G */
+
+#endif

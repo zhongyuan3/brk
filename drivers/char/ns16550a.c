@@ -1,3 +1,4 @@
+#include <arch/pgtable.h>
 #include <brk/chrdev.h>
 #include <brk/cpu.h>
 #include <brk/dtb.h>
@@ -8,7 +9,6 @@
 #include <brk/mm.h>
 #include <brk/mmio.h>
 #include <brk/panic.h>
-#include <brk/pgtable.h>
 #include <brk/plic.h>
 #include <brk/printk.h>
 #include <brk/slab.h>

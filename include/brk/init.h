@@ -1,6 +1,7 @@
 #ifndef BRK_INIT_H
 #define BRK_INIT_H
 
+#include <arch/smp.h>
 #include <brk/types.h>
 
 /*
