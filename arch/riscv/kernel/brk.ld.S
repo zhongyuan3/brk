@@ -1,7 +1,9 @@
 OUTPUT_ARCH("riscv")
 ENTRY(_start)
 
-#include <brk/asm.h>
+#include <arch/boot.h>
+#include <arch/page.h>
+#include <arch/smp.h>
 
 SECTIONS
 {

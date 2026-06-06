@@ -1,3 +1,4 @@
+#include <arch/syscall.h>
 #include <brk/cpu.h>
 #include <brk/kernel.h>
 #include <brk/panic.h>
@@ -78,33 +79,19 @@ static u64 (*systable[])(void) = {
 void syscall(void)
 {
 	struct task_control_block *task = current_task();
-	u64 num = task->tf->a7;
+	u64 num = arch_syscall_get_nr(task->tf);
+	u64 ret;
+
 	if (num < countof(systable) && systable[num])
-		task->tf->a0 = systable[num]();
+		ret = systable[num]();
 	else
-		task->tf->a0 = -ENOSYS;
+		ret = -ENOSYS;
+	arch_syscall_set_ret(task->tf, ret);
 }
 
 u64 syscall_arg_raw(int argno)
 {
-	struct task_control_block *task = current_task();
-
-	switch (argno) {
-	case 0:
-		return task->tf->a0;
-	case 1:
-		return task->tf->a1;
-	case 2:
-		return task->tf->a2;
-	case 3:
-		return task->tf->a3;
-	case 4:
-		return task->tf->a4;
-	case 5:
-		return task->tf->a5;
-	default:
-		panic("%s(): illegal argument number\n", __func__);
-	}
+	return arch_syscall_get_arg(current_task()->tf, argno);
 }
 
 void *syscall_arg_ptr(int argno)

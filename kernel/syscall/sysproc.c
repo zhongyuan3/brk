@@ -1,8 +1,7 @@
-#include <brk/asm.h>
+#include <arch/pgtable.h>
 #include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
-#include <brk/pgtable.h>
 #include <brk/printk.h>
 #include <brk/signal.h>
 #include <brk/slab.h>

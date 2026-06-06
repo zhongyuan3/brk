@@ -3,6 +3,7 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/pagecache.h>
+#include <brk/printk.h>
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>

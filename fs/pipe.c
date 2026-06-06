@@ -1,4 +1,4 @@
-#include <brk/asm.h>
+#include <arch/page.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>

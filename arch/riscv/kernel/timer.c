@@ -1,6 +1,6 @@
+#include <arch/csr.h>
+#include <arch/sbi.h>
 #include <brk/cpu.h>
-#include <brk/riscv.h>
-#include <brk/sbi.h>
 #include <brk/task.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>

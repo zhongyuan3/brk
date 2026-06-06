@@ -1,10 +1,10 @@
-#include <brk/asm.h>
+#include <arch/page.h>
+#include <arch/pgtable.h>
 #include <brk/kernel.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
-#include <brk/pgtable.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <uapi/brk/errno.h>

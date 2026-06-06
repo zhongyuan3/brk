@@ -1,6 +1,7 @@
 #ifndef BRK_VMALLOC_H
 #define BRK_VMALLOC_H
 
+#include <arch/pgtable_types.h>
 #include <brk/mm_types.h>
 #include <brk/types.h>
 

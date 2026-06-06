@@ -1,4 +1,4 @@
-#include <brk/asm.h>
+#include <arch/pgtable.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
@@ -11,9 +11,8 @@
 #include <brk/mm_types.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
-#include <brk/pgtable.h>
 #include <brk/printk.h>
-#include <brk/riscv.h>
+#include <brk/processor.h>
 #include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
@@ -110,7 +109,7 @@ struct task_control_block *task_create(struct task_create_args *args)
 	ext_tf = (struct extended_trap_frame *)kstack_top;
 	ext_tf->task = task;
 	task->tf = &ext_tf->tf;
-	memset(task->tf, 0, sizeof(struct trap_frame));
+	arch_tf_init(task->tf);
 	task->kstack_top = kstack_top;
 
 	if (args && args->mm) {
@@ -480,13 +479,13 @@ int task_fork(void)
 		return err;
 	}
 
-	memcpy(child->tf, parent->tf, sizeof(struct trap_frame));
+	arch_tf_copy(child->tf, parent->tf);
 	signal_copy(child, parent);
 
 	fdtable_copy(child->fdtable, parent->fdtable);
 	fsinfo_copy(child->fsinfo, parent->fsinfo);
 
-	child->tf->a0 = 0;
+	arch_tf_set_a0(child->tf, 0);
 
 	spinlock_acquire(&wait_lock);
 	child->parent = parent;
@@ -503,52 +502,6 @@ int task_fork(void)
 	task_join(child);
 
 	return cpid;
-}
-
-struct task_control_block *current_task(void)
-{
-	return (struct task_control_block *)read_tp();
-}
-
-cpuid_t current_cpuid(void)
-{
-	return read_sscratch();
-}
-
-struct cpu *current_cpu(void)
-{
-	return &cpus[current_cpuid()];
-}
-
-void push_off(void)
-{
-	int enabled = intr_off_get();
-	struct cpu *cpu = current_cpu();
-	if (cpu->irq_nest == 0)
-		cpu->irq_enabled = enabled;
-	cpu->irq_nest += 1;
-}
-
-void pop_off(void)
-{
-	struct cpu *cpu = current_cpu();
-	if (intr_enabled())
-		panic("%s(): interruptible\n", __func__);
-	if (cpu->irq_nest < 1)
-		panic("%s(): nesting level < 1\n", __func__);
-	cpu->irq_nest -= 1;
-	if (cpu->irq_nest == 0 && cpu->irq_enabled)
-		intr_on();
-}
-
-void set_current_task(struct task_control_block *task)
-{
-	write_tp((u64)task);
-}
-
-void set_current_cpuid(cpuid_t cpuid)
-{
-	write_sscratch(cpuid);
 }
 
 int task_get_times(struct task_control_block *task, struct tms *times)

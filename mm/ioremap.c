@@ -1,8 +1,6 @@
-#include <brk/asm.h>
+#include <arch/page.h>
 #include <brk/ioremap.h>
 #include <brk/kernel.h>
-#include <brk/list.h>
-#include <brk/slab.h>
 #include <brk/vmalloc.h>
 
 void *ioremap(u64 paddr, usize_t size, unsigned int flags)

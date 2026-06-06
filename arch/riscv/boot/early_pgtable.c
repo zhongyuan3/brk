@@ -1,8 +1,10 @@
-#include <brk/asm.h>
+#include <arch/boot.h>
+#include <arch/csr.h>
+#include <arch/page.h>
+#include <arch/pgtable.h>
+#include <arch/sbi.h>
 #include <brk/kernel.h>
-#include <brk/pgtable.h>
-#include <brk/riscv.h>
-#include <brk/sbi.h>
+#include <brk/mm.h>
 #include <brk/types.h>
 #include <libfdt.h>
 

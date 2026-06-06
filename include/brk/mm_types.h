@@ -1,20 +1,9 @@
 #ifndef BRK_MM_TYPES_H
 #define BRK_MM_TYPES_H
 
+#include <arch/pgtable_types.h>
 #include <brk/refcnt_types.h>
 #include <brk/types.h>
-
-typedef struct __pgde {
-	u64 pgde;
-} pgde_t;
-
-typedef struct __pmde {
-	u64 pmde;
-} pmde_t;
-
-typedef struct __pte {
-	u64 pte;
-} pte_t;
 
 struct kobj_pool;
 

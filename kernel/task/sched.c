@@ -1,11 +1,12 @@
+#include <arch/irqflags.h>
+#include <arch/mm.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
 #include <brk/fsinfo.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
-#include <brk/pgtable.h>
-#include <brk/riscv.h>
+#include <brk/processor.h>
 #include <brk/spinlock.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
@@ -56,15 +57,14 @@ void task_scheduler(void)
 		next = task_pick_next();
 		if (!next) {
 			intr_on();
-			asm volatile("wfi");
+			arch_cpu_idle();
 			continue;
 		}
 
 		spinlock_acquire(&next->lock);
 		set_current_task(next);
 		cpu->irq_enabled = next->irq_enabled;
-		switch_pgtable(next->mm->pgd);
-		write_sstatus(read_sstatus() | SSTATUS_SUM);
+		arch_mm_activate(next->mm->pgd);
 		next->time_slice = TIME_SLICE_MAX;
 		next->ktime = jiffies_get();
 		switch_context(&cpu->ctx, &next->ctx);
@@ -114,7 +114,7 @@ void task_sched(void)
 		spinlock_acquire(&next->lock);
 		set_current_task(next);
 		cpu->irq_enabled = next->irq_enabled;
-		switch_pgtable(next->mm->pgd);
+		arch_mm_switch(next->mm->pgd);
 		next->time_slice = TIME_SLICE_MAX;
 		next->ktime = jiffies_get();
 		switch_context(&curr->ctx, &next->ctx);

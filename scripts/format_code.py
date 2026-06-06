@@ -12,7 +12,7 @@ from pathlib import Path
 
 DEFAULT_STYLE = "file"
 BACKUP_SUFFIX = ".bak"
-DEFAULT_TARGET_DIRS = ("drivers", "fs", "include", "kernel", "lib", "mm")
+DEFAULT_TARGET_DIRS = ("arch", "drivers", "fs", "include", "kernel", "lib", "mm")
 DEFAULT_EXTENSIONS = ("c", "h")
 
 RED = "\033[0;31m"

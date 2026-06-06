@@ -6,6 +6,9 @@ BRK_TOP_MAKEFILE := $(BRK_ROOT)/Makefile
 # Suppress recursive-make noise; @echo in recipes still prints on rebuild.
 MAKEFLAGS += --no-print-directory --silent
 
+ARCH ?= riscv
+include $(BRK_ROOT)/arch/$(ARCH)/config.mk
+
 BRK_BUILD_ROOT ?= build
 
 BUILD ?= debug
@@ -19,8 +22,6 @@ CPU ?= 1
 BUILD_DIR ?= $(BRK_BUILD_ROOT)/$(BUILD)
 endif
 
-include $(BRK_ROOT)/scripts/toolchain.mk
-
 CC := $(CROSS_COMPILE)gcc
 CPP := $(CC) -E
 LD := $(CROSS_COMPILE)ld
@@ -29,10 +30,8 @@ AR := $(CROSS_COMPILE)ar
 OBJCOPY := $(CROSS_COMPILE)objcopy
 OBJDUMP := $(CROSS_COMPILE)objdump
 GDB := gdb-multiarch
-QEMU := qemu-system-riscv64
 
 BRK_WARN_FLAGS := -Wall -Wextra -Werror
-BRK_ARCH_FLAGS := -march=rv64gc -mcmodel=medany
 BRK_FREESTANDING_FLAGS := -ffreestanding -fno-common -nostdlib \
 	-fno-stack-protector -fno-pie -no-pie
 
@@ -63,18 +62,19 @@ $(error unknown BUILD value '$(BUILD)', expected debug or release)
 endif
 
 CFLAGS += -MMD -MP
+CFLAGS += -I$(BRK_ROOT)/arch/$(ARCH)/include
 CFLAGS += -I$(BRK_ROOT)/include -I$(BRK_ROOT)/vendor/libfdt
 
 export BRK_ROOT BRK_TOP_MAKEFILE CROSS_COMPILE CC LD AS AR CFLAGS LDFLAGS
 
-BRK_LINKER_SCRIPT_SRC := kernel/brk.ld.S
-BRK_LINKER_SCRIPT := $(BUILD_DIR)/kernel/brk.ld
+BRK_LINKER_SCRIPT_SRC := arch/$(ARCH)/kernel/brk.ld.S
+BRK_LINKER_SCRIPT := $(BUILD_DIR)/arch/$(ARCH)/kernel/brk.ld
 BRK_ELF := $(BUILD_DIR)/brk.elf
 BRK_ROOTFS_IMG := $(BRK_BUILD_ROOT)/rootfs.img
 BRK_DISASM := $(BUILD_DIR)/brk.txt
 
 # Each top-level module produces $(BUILD_DIR)/<name>/built-in.o
-core-y := boot
+core-y := arch/$(ARCH)
 core-y += kernel
 core-y += mm
 core-y += drivers
@@ -84,7 +84,6 @@ core-y += vendor
 
 BRK_BUILTIN_OBJS := $(addprefix $(BUILD_DIR)/,$(patsubst %,%/built-in.o,$(core-y)))
 
-QEMU_OPTS := -machine virt -nographic
 QEMU_OPTS += -m $(RAM)
 QEMU_OPTS += -smp $(CPU)
 QEMU_OPTS += -bios default
@@ -121,6 +120,7 @@ help:
 	@echo "  dts                    Dump QEMU virt device tree as DTS"
 	@echo "  objdump                Disassemble kernel ELF"
 	@echo "Configurable vars:"
+	@echo "  ARCH=<name>            (default: riscv)"
 	@echo "  BUILD={debug|release}"
 	@echo "  BUILD_DIR=<path>       (default: build/<BUILD> or build/<BUILD>-smp)"
 	@echo "  BRK_BUILD_ROOT=<path>"

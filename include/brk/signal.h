@@ -8,6 +8,8 @@
 #include <uapi/signal.h>
 #include <uapi/types.h>
 
+struct task_control_block;
+
 struct sigaction_table *sigaction_table_alloc(void);
 void sigaction_table_put(struct sigaction_table *table);
 struct sigaction_table *sigaction_table_get(struct sigaction_table *table);

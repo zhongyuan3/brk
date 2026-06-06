@@ -5,6 +5,7 @@
 #include <brk/kernel.h>
 #include <brk/ktime.h>
 #include <brk/pagecache.h>
+#include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>

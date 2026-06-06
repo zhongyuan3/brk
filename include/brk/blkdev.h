@@ -9,9 +9,8 @@ struct page_cache;
 struct cached_page;
 
 struct block_dev_ops {
-	int (*read)(struct block_dev *bd, u64 blk_id, void *buf, u32 blk_cnt);
-	int (*write)(struct block_dev *bd, u64 blk_id, const void *buf,
-		     u32 blk_cnt);
+	int (*read)(struct block_dev *, u64, void *, u32);
+	int (*write)(struct block_dev *, u64, const void *, u32);
 };
 
 struct block_dev {

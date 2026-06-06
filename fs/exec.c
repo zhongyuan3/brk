@@ -1,4 +1,7 @@
-#include <brk/asm.h>
+#include <arch/page.h>
+#include <arch/pgtable.h>
+#include <arch/trapframe.h>
+#include <arch/vmlayout.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
@@ -6,7 +9,6 @@
 #include <brk/mm.h>
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
-#include <brk/pgtable.h>
 #include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/string.h>
@@ -159,10 +161,10 @@ static void push_args(struct exec_args *args, u64 *psp, u64 stack_virt,
 	u64 argv_strs_kstart = ksp;
 	u64 argv_strs_ustart = sp;
 
-	task->tf->a2 = stack_push_ptr_slots(&ksp, &sp, args->envc);
+	arch_tf_set_a2(task->tf, stack_push_ptr_slots(&ksp, &sp, args->envc));
 	char **envp_kstart = (char **)ksp;
 
-	task->tf->a1 = stack_push_ptr_slots(&ksp, &sp, args->argc);
+	arch_tf_set_a1(task->tf, stack_push_ptr_slots(&ksp, &sp, args->argc));
 	char **argv_kstart = (char **)ksp;
 
 	copy_exec_strings(args->envp, args->envc, &envp_strs_kstart,
@@ -413,8 +415,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 		task->mm = new_mm;
 		uvm_space_put(old_mm);
 		signal_reset(task);
-		task->tf->epc = elf_hdr.e_entry;
-		task->tf->sp = sp;
+		arch_tf_set_user_entry(task->tf, elf_hdr.e_entry, sp);
 	}
 
 	return args->argc;

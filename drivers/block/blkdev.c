@@ -1,4 +1,4 @@
-#include <brk/asm.h>
+#include <arch/page.h>
 #include <brk/bitmap.h>
 #include <brk/blkdev.h>
 #include <brk/device.h>

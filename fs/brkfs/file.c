@@ -1,5 +1,5 @@
 #include "brkfs.h"
-#include <brk/asm.h>
+#include <arch/page.h>
 #include <brk/blkdev.h>
 #include <brk/error.h>
 #include <brk/fs.h>
