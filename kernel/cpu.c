@@ -1,4 +1,4 @@
-#include <brk/cpu.h>
+#include <brk/kernel/cpu.h>
 
 static u32 timebase_freq;
 

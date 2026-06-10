@@ -1,14 +1,14 @@
 #include <arch/csr.h>
 #include <arch/mm.h>
 #include <arch/pgtable.h>
-#include <brk/dtb.h>
-#include <brk/kernel.h>
-#include <brk/memblock.h>
-#include <brk/mm.h>
-#include <brk/mm_types.h>
-#include <brk/panic.h>
-#include <brk/pgalloc.h>
-#include <brk/vmalloc.h>
+#include <brk/kernel/dtb.h>
+#include <brk/kernel/panic.h>
+#include <brk/lib/kernel.h>
+#include <brk/mm/memblock.h>
+#include <brk/mm/mm.h>
+#include <brk/mm/mm_types.h>
+#include <brk/mm/pgalloc.h>
+#include <brk/mm/vmalloc.h>
 #include <libfdt.h>
 
 usize_t kernel_load_offset;

@@ -1,11 +1,11 @@
-#include <brk/console.h>
-#include <brk/kernel.h>
-#include <brk/ktime.h>
-#include <brk/printf.h>
-#include <brk/printk.h>
-#include <brk/spinlock.h>
-#include <brk/string.h>
-#include <brk/tty.h>
+#include <brk/drivers/tty.h>
+#include <brk/kernel/console.h>
+#include <brk/kernel/ktime.h>
+#include <brk/kernel/printk.h>
+#include <brk/lib/kernel.h>
+#include <brk/lib/printf.h>
+#include <brk/lib/string.h>
+#include <brk/lock/spinlock.h>
 #include <uapi/brk/errno.h>
 #include <uapi/time.h>
 

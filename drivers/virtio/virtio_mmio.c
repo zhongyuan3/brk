@@ -1,8 +1,8 @@
-#include <brk/mm.h>
-#include <brk/mmio.h>
-#include <brk/panic.h>
-#include <brk/virtio.h>
-#include <brk/virtio_mmio.h>
+#include <brk/drivers/virtio.h>
+#include <brk/drivers/virtio_mmio.h>
+#include <brk/kernel/panic.h>
+#include <brk/mm/mm.h>
+#include <brk/mm/mmio.h>
 #include <uapi/brk/errno.h>
 
 static u64 virtio_mmio_base(struct virtio_device *dev)

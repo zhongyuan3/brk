@@ -1,10 +1,10 @@
-#include <brk/fs.h>
-#include <brk/kmalloc.h>
-#include <brk/list.h>
-#include <brk/pagecache.h>
-#include <brk/refcnt.h>
-#include <brk/sleeplock.h>
-#include <brk/spinlock.h>
+#include <brk/fs/fs.h>
+#include <brk/kernel/refcnt.h>
+#include <brk/lib/list.h>
+#include <brk/lock/sleeplock.h>
+#include <brk/lock/spinlock.h>
+#include <brk/mm/kmalloc.h>
+#include <brk/mm/pagecache.h>
 
 static LIST_DEFINE(super_blocks);
 static SPINLOCK_DEFINE(sb_lock);

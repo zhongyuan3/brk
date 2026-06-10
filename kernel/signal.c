@@ -1,13 +1,13 @@
 #include <arch/vmlayout.h>
-#include <brk/kernel.h>
-#include <brk/kmalloc.h>
-#include <brk/list.h>
-#include <brk/refcnt.h>
-#include <brk/signal.h>
-#include <brk/spinlock.h>
-#include <brk/string.h>
-#include <brk/task.h>
-#include <brk/types.h>
+#include <brk/kernel/refcnt.h>
+#include <brk/kernel/signal.h>
+#include <brk/kernel/task.h>
+#include <brk/lib/kernel.h>
+#include <brk/lib/list.h>
+#include <brk/lib/string.h>
+#include <brk/lib/types.h>
+#include <brk/lock/spinlock.h>
+#include <brk/mm/kmalloc.h>
 #include <uapi/brk/errno.h>
 #include <uapi/signal.h>
 

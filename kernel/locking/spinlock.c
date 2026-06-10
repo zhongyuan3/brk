@@ -1,6 +1,6 @@
-#include <brk/panic.h>
-#include <brk/spinlock.h>
-#include <brk/task.h>
+#include <brk/kernel/panic.h>
+#include <brk/kernel/task.h>
+#include <brk/lock/spinlock.h>
 
 void spinlock_init(spinlock_t *lock, const char *name)
 {

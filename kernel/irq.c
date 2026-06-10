@@ -1,8 +1,8 @@
-#include <brk/irq.h>
-#include <brk/kmalloc.h>
-#include <brk/panic.h>
-#include <brk/plic.h>
-#include <brk/spinlock.h>
+#include <brk/drivers/plic.h>
+#include <brk/kernel/irq.h>
+#include <brk/kernel/panic.h>
+#include <brk/lock/spinlock.h>
+#include <brk/mm/kmalloc.h>
 #include <uapi/brk/errno.h>
 
 static irq_handler_t *irq_handlers;

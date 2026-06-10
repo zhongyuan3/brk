@@ -1,13 +1,13 @@
 #include <arch/pgtable.h>
 #include <asm/large_page.h>
 #include <asm/page.h>
-#include <brk/kernel.h>
-#include <brk/mm.h>
-#include <brk/mm_types.h>
-#include <brk/panic.h>
-#include <brk/pgalloc.h>
-#include <brk/spinlock.h>
-#include <brk/string.h>
+#include <brk/kernel/panic.h>
+#include <brk/lib/kernel.h>
+#include <brk/lib/string.h>
+#include <brk/lock/spinlock.h>
+#include <brk/mm/mm.h>
+#include <brk/mm/mm_types.h>
+#include <brk/mm/pgalloc.h>
 #include <uapi/brk/errno.h>
 
 SPINLOCK_DEFINE(kernel_pgdir_lock);

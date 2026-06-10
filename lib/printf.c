@@ -1,8 +1,8 @@
-#include <brk/compiler.h>
-#include <brk/kernel.h>
-#include <brk/printf.h>
-#include <brk/string.h>
-#include <brk/types.h>
+#include <brk/lib/compiler.h>
+#include <brk/lib/kernel.h>
+#include <brk/lib/printf.h>
+#include <brk/lib/string.h>
+#include <brk/lib/types.h>
 #include <uapi/brk/errno.h>
 
 #define ZERO_PAD (1U << 0)
