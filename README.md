@@ -36,7 +36,7 @@ BRK has recently graduated from just printing characters to the console. It curr
 - [x] Physical memory probing and basic page memory management
 - [x] A rudimentary kernel heap allocator (slightly better than a basic `sbrk()`)
 - [x] Timer interrupts and basic Trap context save/restore
-- [ ] Virtual File System (VFS) — _Currently living in my imagination_
+- [x] Virtual File System (VFS)
 - [x] User mode & System Calls
 - [ ] Multi-core (SMP) support — _Still a lonely, single-core beast_
 
