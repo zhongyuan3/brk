@@ -2,7 +2,7 @@
 #define ARCH_PGALLOC_H
 
 #include <arch/mm.h>
-#include <arch/page.h>
+#include <asm/page.h>
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
 

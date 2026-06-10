@@ -1,7 +1,7 @@
-#include <arch/page.h>
 #include <arch/pgtable.h>
 #include <arch/trapframe.h>
 #include <arch/vmlayout.h>
+#include <asm/page.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>

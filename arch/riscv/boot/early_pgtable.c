@@ -1,8 +1,10 @@
-#include <arch/boot.h>
 #include <arch/csr.h>
-#include <arch/page.h>
 #include <arch/pgtable.h>
 #include <arch/sbi.h>
+#include <asm/boot.h>
+#include <asm/large_page.h>
+#include <asm/page.h>
+#include <asm/page_table.h>
 #include <brk/kernel.h>
 #include <brk/mm.h>
 #include <brk/types.h>

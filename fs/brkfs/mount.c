@@ -1,6 +1,6 @@
 #include "brkfs.h"
-#include <arch/page.h>
 #include <arch/pgtable.h>
+#include <asm/page.h>
 #include <brk/dcache.h>
 #include <brk/device.h>
 #include <brk/error.h>
