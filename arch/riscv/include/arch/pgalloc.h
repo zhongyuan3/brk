@@ -3,8 +3,8 @@
 
 #include <arch/mm.h>
 #include <asm/page.h>
-#include <brk/mm_types.h>
-#include <brk/pgalloc.h>
+#include <brk/mm/mm_types.h>
+#include <brk/mm/pgalloc.h>
 
 static inline usize_t phys_to_pfn(u64 paddr)
 {

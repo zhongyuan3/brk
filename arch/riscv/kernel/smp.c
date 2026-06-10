@@ -2,13 +2,13 @@
 #include <arch/pgtable.h>
 #include <arch/sbi.h>
 #include <asm/smp.h>
-#include <brk/init.h>
-#include <brk/irq.h>
-#include <brk/kernel.h>
-#include <brk/mm.h>
-#include <brk/printk.h>
-#include <brk/task.h>
-#include <brk/trap.h>
+#include <brk/kernel/init.h>
+#include <brk/kernel/irq.h>
+#include <brk/kernel/printk.h>
+#include <brk/kernel/task.h>
+#include <brk/kernel/trap.h>
+#include <brk/lib/kernel.h>
+#include <brk/mm/mm.h>
 
 #if ENABLE_SMP
 

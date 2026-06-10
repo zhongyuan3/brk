@@ -3,20 +3,20 @@
 #include <arch/sbi.h>
 #include <arch/trap.h>
 #include <arch/trapframe.h>
-#include <brk/assert.h>
-#include <brk/cpu.h>
-#include <brk/irq.h>
-#include <brk/kernel.h>
-#include <brk/panic.h>
-#include <brk/plic.h>
-#include <brk/printk.h>
-#include <brk/signal.h>
-#include <brk/syscall.h>
-#include <brk/task.h>
-#include <brk/timekeeper.h>
-#include <brk/timer.h>
-#include <brk/trap.h>
-#include <brk/types.h>
+#include <brk/drivers/plic.h>
+#include <brk/kernel/cpu.h>
+#include <brk/kernel/irq.h>
+#include <brk/kernel/panic.h>
+#include <brk/kernel/printk.h>
+#include <brk/kernel/signal.h>
+#include <brk/kernel/syscall.h>
+#include <brk/kernel/task.h>
+#include <brk/kernel/timekeeper.h>
+#include <brk/kernel/timer.h>
+#include <brk/kernel/trap.h>
+#include <brk/lib/assert.h>
+#include <brk/lib/kernel.h>
+#include <brk/lib/types.h>
 
 static const char *const exception_strs[] = {
 	[0] = "Instruction address misaligned",

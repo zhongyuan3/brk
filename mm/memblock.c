@@ -1,11 +1,11 @@
 #include <arch/pgalloc.h>
-#include <brk/assert.h>
-#include <brk/kernel.h>
-#include <brk/memblock.h>
-#include <brk/panic.h>
-#include <brk/pgalloc.h>
-#include <brk/printk.h>
-#include <brk/string.h>
+#include <brk/kernel/panic.h>
+#include <brk/kernel/printk.h>
+#include <brk/lib/assert.h>
+#include <brk/lib/kernel.h>
+#include <brk/lib/string.h>
+#include <brk/mm/memblock.h>
+#include <brk/mm/pgalloc.h>
 
 #define for_each_memblock_region_set(set, idx, rgn)           \
 	for (idx = 0, rgn = &set->regions[0]; idx < set->cnt; \

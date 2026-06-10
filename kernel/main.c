@@ -1,6 +1,6 @@
-#include <brk/init.h>
-#include <brk/printk.h>
-#include <brk/types.h>
+#include <brk/kernel/init.h>
+#include <brk/kernel/printk.h>
+#include <brk/lib/types.h>
 
 void start_kernel(usize_t hart_id, u64 dtb, usize_t load_offset)
 {

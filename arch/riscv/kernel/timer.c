@@ -1,9 +1,9 @@
 #include <arch/csr.h>
 #include <arch/sbi.h>
-#include <brk/cpu.h>
-#include <brk/task.h>
-#include <brk/timekeeper.h>
-#include <brk/timer.h>
+#include <brk/kernel/cpu.h>
+#include <brk/kernel/task.h>
+#include <brk/kernel/timekeeper.h>
+#include <brk/kernel/timer.h>
 
 static u64 timer_interval;
 static u64 xorshift_state;

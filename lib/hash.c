@@ -1,4 +1,4 @@
-#include <brk/hash.h>
+#include <brk/lib/hash.h>
 
 u32 fnv1a_32(const void *data, usize_t len)
 {

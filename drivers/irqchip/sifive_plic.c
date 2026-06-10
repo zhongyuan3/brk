@@ -1,11 +1,11 @@
 #include <arch/pgtable.h>
-#include <brk/dtb.h>
-#include <brk/ioremap.h>
-#include <brk/mm.h>
-#include <brk/panic.h>
-#include <brk/plic.h>
-#include <brk/string.h>
-#include <brk/types.h>
+#include <brk/drivers/plic.h>
+#include <brk/kernel/dtb.h>
+#include <brk/kernel/panic.h>
+#include <brk/lib/string.h>
+#include <brk/lib/types.h>
+#include <brk/mm/ioremap.h>
+#include <brk/mm/mm.h>
 #include <uapi/brk/errno.h>
 
 static struct plic_device plic;

@@ -1,10 +1,10 @@
-#include <brk/cpu.h>
-#include <brk/rtc.h>
-#include <brk/spinlock.h>
-#include <brk/task.h>
-#include <brk/timeconst.h>
-#include <brk/timekeeper.h>
-#include <brk/timer.h>
+#include <brk/drivers/rtc.h>
+#include <brk/kernel/cpu.h>
+#include <brk/kernel/task.h>
+#include <brk/kernel/timeconst.h>
+#include <brk/kernel/timekeeper.h>
+#include <brk/kernel/timer.h>
+#include <brk/lock/spinlock.h>
 #include <uapi/brk/errno.h>
 
 static u64 mono_base_cycles;

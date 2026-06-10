@@ -4,9 +4,9 @@
 #include <arch/pgtable_types.h>
 #include <arch/vmlayout.h>
 #include <asm/page.h>
-#include <brk/kernel.h>
-#include <brk/mm_types.h>
-#include <brk/types.h>
+#include <brk/lib/kernel.h>
+#include <brk/lib/types.h>
+#include <brk/mm/mm_types.h>
 
 extern usize_t kernel_load_offset;
 extern u64 ram_phys_offset;

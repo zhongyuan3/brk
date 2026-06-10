@@ -1,11 +1,11 @@
 #include <arch/pgalloc.h>
-#include <brk/assert.h>
-#include <brk/list.h>
-#include <brk/mm_types.h>
-#include <brk/panic.h>
-#include <brk/pgalloc.h>
-#include <brk/spinlock.h>
-#include <brk/string.h>
+#include <brk/kernel/panic.h>
+#include <brk/lib/assert.h>
+#include <brk/lib/list.h>
+#include <brk/lib/string.h>
+#include <brk/lock/spinlock.h>
+#include <brk/mm/mm_types.h>
+#include <brk/mm/pgalloc.h>
 
 struct buddy_bucket {
 	struct list_head free_list;
