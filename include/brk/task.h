@@ -1,8 +1,8 @@
 #ifndef BRK_TASK_H
 #define BRK_TASK_H
 
-#include <arch/smp.h>
 #include <arch/task.h>
+#include <asm/smp.h>
 #include <brk/fdtable.h>
 #include <brk/fs_types.h>
 #include <brk/kernel.h>

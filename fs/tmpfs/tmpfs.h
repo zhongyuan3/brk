@@ -1,8 +1,8 @@
 #ifndef TMPFS_H
 #define TMPFS_H
 
-#include <arch/page.h>
 #include <arch/pgalloc.h>
+#include <asm/page.h>
 #include <brk/mm_types.h>
 #include <brk/sleeplock_types.h>
 #include <brk/types.h>

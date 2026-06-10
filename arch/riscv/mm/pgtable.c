@@ -1,5 +1,6 @@
-#include <arch/page.h>
 #include <arch/pgtable.h>
+#include <asm/large_page.h>
+#include <asm/page.h>
 #include <brk/kernel.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>

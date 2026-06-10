@@ -1,7 +1,7 @@
 #ifndef ARCH_VMLAYOUT_H
 #define ARCH_VMLAYOUT_H
 
-#include <arch/page.h>
+#include <asm/page.h>
 
 #define USER_SPACE_SIZE_MAX ((1UL << 38) - PAGE_SIZE)
 

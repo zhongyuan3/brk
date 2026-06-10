@@ -1,6 +1,7 @@
-#include <arch/boot.h>
-#include <arch/page.h>
-#include <arch/smp.h>
+#include <asm/boot.h>
+#include <asm/page_table.h>
+#include <asm/page.h>
+#include <asm/smp.h>
 
 	.macro compute_load_offset
 	la t0, _skernel

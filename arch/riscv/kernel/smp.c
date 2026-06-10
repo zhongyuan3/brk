@@ -1,7 +1,7 @@
 #include <arch/csr.h>
 #include <arch/pgtable.h>
 #include <arch/sbi.h>
-#include <arch/smp.h>
+#include <asm/smp.h>
 #include <brk/init.h>
 #include <brk/irq.h>
 #include <brk/kernel.h>

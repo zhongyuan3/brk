@@ -1,0 +1,7 @@
+#ifndef ASM_PAGE_TABLE_H
+#define ASM_PAGE_TABLE_H
+
+#define KERNEL_LOAD_ADDR 0x80200000
+#define KERNEL_LINK_ADDR 0xffffffff80000000
+
+#endif
