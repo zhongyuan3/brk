@@ -1,8 +1,8 @@
 #include <brk/error.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
+#include <brk/kmalloc.h>
 #include <brk/refcnt.h>
-#include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <uapi/brk/errno.h>
 

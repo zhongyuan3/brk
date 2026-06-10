@@ -2,6 +2,7 @@
 #include <arch/pgtable.h>
 #include <brk/assert.h>
 #include <brk/kernel.h>
+#include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/memblock.h>
 #include <brk/panic.h>
@@ -21,7 +22,7 @@ struct vmalloc_region {
 	bool is_free;
 };
 
-static struct kobj_pool vma_cache;
+static struct slab_allocator vma_cache;
 static struct list_head vma;
 static SPINLOCK_DEFINE(vma_lock);
 
@@ -261,7 +262,7 @@ void uvunmap(pgde_t *pgd, u64 addr, usize_t size)
 
 static struct vmalloc_region *vmalloc_region_alloc(void)
 {
-	struct vmalloc_region *vma = kobj_pool_alloc(&vma_cache);
+	struct vmalloc_region *vma = slab_alloc(&vma_cache);
 	if (vma) {
 		memset(vma, 0, sizeof(*vma));
 		list_init(&vma->list);
@@ -271,7 +272,7 @@ static struct vmalloc_region *vmalloc_region_alloc(void)
 
 static void vmalloc_region_free(struct vmalloc_region *area)
 {
-	kobj_pool_free(&vma_cache, area);
+	slab_free(&vma_cache, area);
 }
 
 static struct vmalloc_region *find_vm_area(u64 addr)
@@ -340,8 +341,8 @@ static void free_vm_area(struct vmalloc_region *area)
 
 void vmalloc_init(void)
 {
-	kobj_pool_init(&vma_cache, sizeof(struct vmalloc_region),
-		       alignof(struct vmalloc_region), "vma_cache");
+	slab_init(&vma_cache, sizeof(struct vmalloc_region),
+		  alignof(struct vmalloc_region), "vma_cache");
 	list_init(&vma);
 	struct vmalloc_region *area = vmalloc_region_alloc();
 	area->addr = VMALLOC_START;

@@ -1,10 +1,10 @@
 #include <brk/cpu.h>
 #include <brk/dtb.h>
+#include <brk/kmalloc.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
-#include <brk/slab.h>
 #include <brk/types.h>
 #include <brk/uart.h>
 #include <brk/virtio.h>

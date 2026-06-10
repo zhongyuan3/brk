@@ -1,7 +1,7 @@
 #include <brk/irq.h>
+#include <brk/kmalloc.h>
 #include <brk/panic.h>
 #include <brk/plic.h>
-#include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <uapi/brk/errno.h>
 

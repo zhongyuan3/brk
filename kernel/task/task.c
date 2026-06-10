@@ -6,6 +6,7 @@
 #include <brk/fsinfo.h>
 #include <brk/init.h>
 #include <brk/kernel.h>
+#include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
@@ -32,12 +33,12 @@ struct cpu cpus[NR_CPUS];
 
 LIST_DEFINE(tasks);
 SPINLOCK_DEFINE(tasks_lock);
-static struct kobj_pool task_cache;
+static struct slab_allocator task_cache;
 
 void task_cache_init(void)
 {
-	kobj_pool_init(&task_cache, sizeof(struct task_control_block),
-		       alignof(struct task_control_block), "task_cache");
+	slab_init(&task_cache, sizeof(struct task_control_block),
+		  alignof(struct task_control_block), "task_cache");
 }
 
 static u64 kstack_alloc(void)
@@ -57,12 +58,12 @@ static void kstack_free(u64 stack)
 
 static struct task_control_block *task_alloc(void)
 {
-	return kobj_pool_alloc_zero(&task_cache);
+	return slab_alloc_zero(&task_cache);
 }
 
 static void task_free(struct task_control_block *task)
 {
-	kobj_pool_free(&task_cache, task);
+	slab_free(&task_cache, task);
 }
 
 static void default_new_task_entry(void)

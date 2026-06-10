@@ -4,6 +4,7 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
+#include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/printk.h>
 #include <brk/refcnt.h>
@@ -16,12 +17,12 @@
 
 static struct hlist_head dentry_htable[DENTRY_HTABLE_SIZE];
 static SPINLOCK_DEFINE(dentry_htable_lock);
-static struct kobj_pool dentry_cache;
+static struct slab_allocator dentry_cache;
 
 void fs_dentry_cache_init(void)
 {
-	kobj_pool_init(&dentry_cache, sizeof(struct fs_dentry),
-		       alignof(struct fs_dentry), "dentry_cache");
+	slab_init(&dentry_cache, sizeof(struct fs_dentry),
+		  alignof(struct fs_dentry), "dentry_cache");
 }
 
 static struct fs_dentry *__dentry_alloc(struct fs_super_block *sb,
@@ -29,7 +30,7 @@ static struct fs_dentry *__dentry_alloc(struct fs_super_block *sb,
 {
 	struct fs_dentry *d;
 
-	d = kobj_pool_alloc(&dentry_cache);
+	d = slab_alloc(&dentry_cache);
 	if (!d)
 		return NULL;
 
@@ -50,7 +51,7 @@ static struct fs_dentry *__dentry_alloc(struct fs_super_block *sb,
 	} else {
 		d->long_name = kmalloc(name->len + 1);
 		if (!d->long_name) {
-			kobj_pool_free(&dentry_cache, d);
+			slab_free(&dentry_cache, d);
 			return NULL;
 		}
 		d->name.name = d->long_name;
@@ -69,7 +70,7 @@ static void __dentry_free(struct fs_dentry *dentry)
 {
 	if (dentry->name.len >= DENTRY_SHORT_NAME_SIZE)
 		kfree(dentry->long_name);
-	kobj_pool_free(&dentry_cache, dentry);
+	slab_free(&dentry_cache, dentry);
 }
 
 static struct fs_dentry *fs_dentry_alloc(struct fs_dentry *parent,

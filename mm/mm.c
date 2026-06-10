@@ -1,5 +1,6 @@
 #include <arch/pgtable.h>
 #include <brk/error.h>
+#include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
@@ -12,26 +13,26 @@
 #include <brk/vmalloc.h>
 #include <uapi/brk/errno.h>
 
-static struct kobj_pool uvms_cache;
+static struct slab_allocator uvms_cache;
 
 void uvm_space_cache_init(void)
 {
-	kobj_pool_init(&uvms_cache, sizeof(struct uvm_space),
-		       alignof(struct uvm_space), "uvms_cache");
+	slab_init(&uvms_cache, sizeof(struct uvm_space),
+		  alignof(struct uvm_space), "uvms_cache");
 }
 
 struct uvm_space *uvm_space_create(void)
 {
 	struct uvm_space *mm;
 
-	mm = kobj_pool_alloc(&uvms_cache);
+	mm = slab_alloc(&uvms_cache);
 	if (!mm)
 		return ERR_PTR(-ENOMEM);
 	refcnt_init(&mm->refcnt, 1);
 
 	mm->pgd = create_user_pgtable();
 	if (!mm->pgd) {
-		kobj_pool_free(&uvms_cache, mm);
+		slab_free(&uvms_cache, mm);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -40,7 +41,7 @@ struct uvm_space *uvm_space_create(void)
 	mm->stack = uvm_region_alloc();
 	if (!mm->stack) {
 		destroy_user_pgtable(mm->pgd);
-		kobj_pool_free(&uvms_cache, mm);
+		slab_free(&uvms_cache, mm);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -48,7 +49,7 @@ struct uvm_space *uvm_space_create(void)
 	if (!mm->heap) {
 		uvm_region_free(mm->stack);
 		destroy_user_pgtable(mm->pgd);
-		kobj_pool_free(&uvms_cache, mm);
+		slab_free(&uvms_cache, mm);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -105,7 +106,7 @@ static void uvm_space_destroy(struct uvm_space *mm)
 	uvm_space_free_stack(mm);
 	uvm_space_free_heap(mm);
 	destroy_user_pgtable(mm->pgd);
-	kobj_pool_free(&uvms_cache, mm);
+	slab_free(&uvms_cache, mm);
 }
 
 struct uvm_space *uvm_space_get(struct uvm_space *mm)

@@ -1,7 +1,7 @@
 #include <brk/device.h>
+#include <brk/kmalloc.h>
 #include <brk/refcnt.h>
 #include <brk/signal.h>
-#include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>

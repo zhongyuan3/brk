@@ -15,12 +15,12 @@
 
 static struct hlist_head inode_hash_table[INODE_HTABLE_SIZE];
 static SPINLOCK_DEFINE(inode_hash_lock);
-static struct kobj_pool inode_cache;
+static struct slab_allocator inode_cache;
 
 void fs_inode_cache_init(void)
 {
-	kobj_pool_init(&inode_cache, sizeof(struct fs_inode),
-		       alignof(struct fs_inode), "inode_cache");
+	slab_init(&inode_cache, sizeof(struct fs_inode),
+		  alignof(struct fs_inode), "inode_cache");
 }
 
 static struct fs_inode *__inode_alloc(struct fs_super_block *sb,
@@ -31,7 +31,7 @@ static struct fs_inode *__inode_alloc(struct fs_super_block *sb,
 	if (sb->ops->alloc_inode) {
 		inode = sb->ops->alloc_inode(sb);
 	} else {
-		inode = kobj_pool_alloc(&inode_cache);
+		inode = slab_alloc(&inode_cache);
 		inode->private_data = NULL;
 	}
 
@@ -70,7 +70,7 @@ static void __inode_free(struct fs_inode *inode)
 	if (op->free_inode)
 		op->free_inode(inode);
 	else
-		kobj_pool_free(&inode_cache, inode);
+		slab_free(&inode_cache, inode);
 }
 
 static u32 __inode_hash(const struct fs_super_block *sb, unsigned long ino)

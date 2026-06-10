@@ -5,11 +5,11 @@
 #include <brk/fs_types.h>
 #include <brk/fsinfo.h>
 #include <brk/kernel.h>
+#include <brk/kmalloc.h>
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
 #include <brk/processor.h>
-#include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>

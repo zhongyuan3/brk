@@ -10,19 +10,19 @@
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
 
-static struct kobj_pool file_cache;
+static struct slab_allocator file_cache;
 
 void fs_file_cache_init(void)
 {
-	kobj_pool_init(&file_cache, sizeof(struct fs_file),
-		       alignof(struct fs_file), "file_cache");
+	slab_init(&file_cache, sizeof(struct fs_file), alignof(struct fs_file),
+		  "file_cache");
 }
 
 struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode)
 {
 	struct fs_file *file;
 
-	file = kobj_pool_alloc(&file_cache);
+	file = slab_alloc(&file_cache);
 	if (!file)
 		return ERR_PTR(-ENOMEM);
 
@@ -40,7 +40,7 @@ struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode)
 	int err = file->ops->open(file->inode, file);
 	if (err) {
 		fs_path_put(&file->path);
-		kobj_pool_free(&file_cache, file);
+		slab_free(&file_cache, file);
 		return ERR_PTR(err);
 	}
 
@@ -66,7 +66,7 @@ void fs_file_put(struct fs_file *file)
 
 	fs_path_put(&file->path);
 
-	kobj_pool_free(&file_cache, file);
+	slab_free(&file_cache, file);
 }
 
 loff_t fs_file_lseek(struct fs_file *file, loff_t len, int whence)

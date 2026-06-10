@@ -5,8 +5,6 @@
 #include <brk/refcnt_types.h>
 #include <brk/types.h>
 
-struct kobj_pool;
-
 struct page {
 	unsigned int flags;
 
@@ -19,7 +17,7 @@ struct page {
 
 		struct { /* SLAB */
 			void *slab_free_objs;
-			struct kobj_pool *slab_cache;
+			struct slab_allocator *slab_cache;
 			struct list_head slab_list;
 			usize_t slab_free_count;
 			usize_t slab_objs_count;

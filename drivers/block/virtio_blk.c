@@ -3,6 +3,7 @@
 #include <brk/fs.h>
 #include <brk/irq.h>
 #include <brk/kernel.h>
+#include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/panic.h>

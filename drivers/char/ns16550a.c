@@ -5,13 +5,13 @@
 #include <brk/ioremap.h>
 #include <brk/irq.h>
 #include <brk/kernel.h>
+#include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mmio.h>
 #include <brk/panic.h>
 #include <brk/plic.h>
 #include <brk/printk.h>
-#include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/tty.h>
 #include <brk/types.h>

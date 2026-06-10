@@ -5,13 +5,13 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
+#include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/mm_types.h>
 #include <brk/path.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
-#include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>

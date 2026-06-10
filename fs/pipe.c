@@ -3,12 +3,12 @@
 #include <brk/error.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
+#include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/mount.h>
 #include <brk/panic.h>
 #include <brk/path.h>
-#include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>

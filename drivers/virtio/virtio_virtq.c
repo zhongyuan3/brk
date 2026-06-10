@@ -1,6 +1,6 @@
 #include <brk/assert.h>
 #include <brk/kernel.h>
-#include <brk/slab.h>
+#include <brk/kmalloc.h>
 #include <brk/virtio_queue.h>
 #include <uapi/brk/errno.h>
 
