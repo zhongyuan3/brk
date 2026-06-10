@@ -1,9 +1,9 @@
 #include <arch/vmlayout.h>
 #include <brk/kernel.h>
+#include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/refcnt.h>
 #include <brk/signal.h>
-#include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>

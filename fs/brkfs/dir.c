@@ -1,6 +1,6 @@
 #include "brkfs.h"
 #include <brk/fs.h>
-#include <brk/slab.h>
+#include <brk/kmalloc.h>
 #include <brk/string.h>
 #include <uapi/brk/errno.h>
 #include <uapi/dirent.h>

@@ -2,6 +2,7 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
+#include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/pagecache.h>
@@ -15,7 +16,7 @@
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
 
-static struct kobj_pool cached_page_cache;
+static struct slab_allocator cached_page_cache;
 
 static LIST_DEFINE(pagecache_lru);
 static SPINLOCK_DEFINE(pagecache_lru_lock);
@@ -50,8 +51,8 @@ static void pagecache_lru_touch(struct cached_page *cp)
 void page_cache_init(void)
 {
 	list_init(&pagecache_lru);
-	kobj_pool_init(&cached_page_cache, sizeof(struct cached_page),
-		       alignof(struct cached_page), "cached_page");
+	slab_init(&cached_page_cache, sizeof(struct cached_page),
+		  alignof(struct cached_page), "cached_page");
 }
 
 static unsigned int mapping_hash(pgoff_t index)
@@ -129,12 +130,12 @@ static struct cached_page *cached_page_alloc(struct page_cache *m,
 	struct cached_page *cp;
 	struct page *pg;
 
-	cp = kobj_pool_alloc(&cached_page_cache);
+	cp = slab_alloc(&cached_page_cache);
 	if (!cp)
 		return NULL;
 	pg = page_zalloc(0);
 	if (!pg) {
-		kobj_pool_free(&cached_page_cache, cp);
+		slab_free(&cached_page_cache, cp);
 		return NULL;
 	}
 
@@ -156,7 +157,7 @@ static struct cached_page *cached_page_alloc(struct page_cache *m,
 static void cached_page_destroy(struct cached_page *cp)
 {
 	page_free(cp->page, 0);
-	kobj_pool_free(&cached_page_cache, cp);
+	slab_free(&cached_page_cache, cp);
 }
 
 static struct cached_page *__lookup_locked(struct page_cache *m, pgoff_t index)

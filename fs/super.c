@@ -1,8 +1,8 @@
 #include <brk/fs.h>
+#include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/pagecache.h>
 #include <brk/refcnt.h>
-#include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 

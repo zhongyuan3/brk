@@ -1,11 +1,11 @@
 #include <brk/chrdev.h>
 #include <brk/device.h>
 #include <brk/fs.h>
+#include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/refcnt.h>
-#include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>

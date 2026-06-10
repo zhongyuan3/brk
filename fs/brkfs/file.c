@@ -4,10 +4,10 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
+#include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/pagecache.h>
 #include <brk/printk.h>
-#include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/string.h>
 #include <brk/types.h>

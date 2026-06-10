@@ -1,10 +1,10 @@
 #include <arch/pgtable.h>
 #include <brk/kernel.h>
+#include <brk/kmalloc.h>
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/signal.h>
-#include <brk/slab.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>

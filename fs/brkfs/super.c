@@ -1,8 +1,8 @@
 #include "brkfs.h"
 #include <brk/dcache.h>
 #include <brk/fs.h>
+#include <brk/kmalloc.h>
 #include <brk/pagecache.h>
-#include <brk/slab.h>
 #include <brk/spinlock.h>
 
 struct brkfs_sb_info *brkfs_sb_info_alloc(struct block_dev *bdev,

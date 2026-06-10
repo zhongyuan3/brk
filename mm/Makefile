@@ -5,3 +5,4 @@ obj-y += slab.o
 obj-y += vmalloc.o
 obj-y += ioremap.o
 obj-y += pagecache.o
+obj-y += kmalloc.o

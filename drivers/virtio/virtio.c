@@ -1,8 +1,8 @@
 #include <arch/pgtable.h>
 #include <brk/ioremap.h>
+#include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/mmio.h>
-#include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>

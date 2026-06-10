@@ -10,12 +10,12 @@
 #include <brk/init.h>
 #include <brk/irq.h>
 #include <brk/kernel.h>
+#include <brk/kmalloc.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
 #include <brk/pagecache.h>
 #include <brk/pgalloc.h>
 #include <brk/rtc.h>
-#include <brk/slab.h>
 #include <brk/task.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
