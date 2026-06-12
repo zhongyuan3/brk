@@ -1,7 +1,7 @@
-#include <arch/pgalloc.h>
 #include <brk/lib/assert.h>
 #include <brk/lib/string.h>
 #include <brk/mm/kmalloc.h>
+#include <brk/mm/pgalloc.h>
 #include <brk/mm/slab.h>
 
 #define NR_KMALLOC_ALLOCATORS 10

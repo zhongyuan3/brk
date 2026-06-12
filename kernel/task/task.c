@@ -11,6 +11,7 @@
 #include <brk/kernel/task.h>
 #include <brk/kernel/timer.h>
 #include <brk/kernel/trap.h>
+#include <brk/lib/assert.h>
 #include <brk/lib/error.h>
 #include <brk/lib/kernel.h>
 #include <brk/lib/list.h>

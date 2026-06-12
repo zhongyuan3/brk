@@ -2,6 +2,7 @@
 #include <asm/large_page.h>
 #include <asm/page.h>
 #include <brk/kernel/panic.h>
+#include <brk/lib/assert.h>
 #include <brk/lib/kernel.h>
 #include <brk/lib/string.h>
 #include <brk/lock/spinlock.h>

@@ -1,6 +1,7 @@
 #include <arch/pgtable.h>
 #include <brk/kernel/refcnt.h>
 #include <brk/kernel/task.h>
+#include <brk/lib/assert.h>
 #include <brk/lib/error.h>
 #include <brk/lib/list.h>
 #include <brk/lib/string.h>

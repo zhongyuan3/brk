@@ -1,5 +1,5 @@
-#ifndef ARCH_VMLAYOUT_H
-#define ARCH_VMLAYOUT_H
+#ifndef ASM_VAS_LAYOUT_H
+#define ASM_VAS_LAYOUT_H
 
 #include <asm/page.h>
 

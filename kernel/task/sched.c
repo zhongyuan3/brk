@@ -8,6 +8,7 @@
 #include <brk/kernel/task.h>
 #include <brk/kernel/task_types.h>
 #include <brk/kernel/timekeeper.h>
+#include <brk/lib/assert.h>
 #include <brk/lib/list.h>
 #include <brk/lib/types.h>
 #include <brk/lock/spinlock.h>
@@ -64,7 +65,8 @@ void task_scheduler(void)
 		spinlock_acquire(&next->lock);
 		set_current_task(next);
 		cpu->irq_enabled = next->irq_enabled;
-		arch_mm_activate(next->mm->pgd);
+		switch_pgtable(next->mm->pgd);
+		user_access_enable();
 		next->time_slice = TIME_SLICE_MAX;
 		next->ktime = jiffies_get();
 		switch_context(&cpu->ctx, &next->ctx);
@@ -114,7 +116,7 @@ void task_sched(void)
 		spinlock_acquire(&next->lock);
 		set_current_task(next);
 		cpu->irq_enabled = next->irq_enabled;
-		arch_mm_switch(next->mm->pgd);
+		switch_pgtable(next->mm->pgd);
 		next->time_slice = TIME_SLICE_MAX;
 		next->ktime = jiffies_get();
 		switch_context(&curr->ctx, &next->ctx);

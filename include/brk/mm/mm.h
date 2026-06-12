@@ -1,14 +1,13 @@
 #ifndef BRK_MM_H
 #define BRK_MM_H
 
-#include <arch/mm.h>
-#include <arch/pgalloc.h>
-#include <brk/kernel/printk.h>
-#include <brk/lib/assert.h>
-#include <brk/lib/kernel.h>
-#include <brk/lib/types.h>
+#include <arch/pgtable_types.h>
 #include <brk/mm/mm_types.h>
-#include <brk/mm/vmalloc.h>
+
+void switch_pgtable(pgde_t *pgd);
+
+void user_access_enable(void);
+void user_access_disable(void);
 
 void uvm_space_cache_init(void);
 struct uvm_space *uvm_space_create(void);

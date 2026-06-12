@@ -1,4 +1,3 @@
-#include <arch/pgalloc.h>
 #include <arch/pgtable.h>
 #include <asm/large_page.h>
 #include <brk/kernel/panic.h>

@@ -3,7 +3,9 @@
 #include <arch/pgtable.h>
 #include <brk/kernel/dtb.h>
 #include <brk/kernel/panic.h>
+#include <brk/lib/assert.h>
 #include <brk/lib/kernel.h>
+#include <brk/lib/types.h>
 #include <brk/mm/memblock.h>
 #include <brk/mm/mm.h>
 #include <brk/mm/mm_types.h>
@@ -11,8 +13,8 @@
 #include <brk/mm/vmalloc.h>
 #include <libfdt.h>
 
-usize_t kernel_load_offset;
-u64 ram_phys_offset;
+usize_t load_offset;
+u64 phys_ram_base;
 
 static void map_mem(void)
 {
@@ -83,21 +85,14 @@ static void map_dtb(void)
 			VMAP_MODE_EARLY);
 }
 
-static u64 make_final_pgtable(void)
+static void final_pgtable_init(void)
 {
 	map_mem();
 	map_kernel();
 	map_dtb();
-	return make_satp_sv39(symbol_phys(kernel_pgdir));
 }
 
-void setup_final_pgtable(void)
-{
-	write_satp(make_final_pgtable());
-	sfence_vma();
-}
-
-void vmemmap_init(void)
+static void vmemmap_init(void)
 {
 	u32 idx;
 	u64 start, end;
@@ -112,6 +107,20 @@ void vmemmap_init(void)
 		kvmap_with_mode((u64)pfn_to_page(start), sz, paddr,
 				PTE_R | PTE_W, VMAP_MODE_INTERIM);
 	}
+}
+
+void final_pgtable_enable(void)
+{
+	u64 satp = make_satp_sv39(symbol_phys(kernel_pgdir));
+	write_satp(satp);
+	sfence_vma();
+}
+
+void paging_init(void)
+{
+	final_pgtable_init();
+	final_pgtable_enable();
+	vmemmap_init();
 }
 
 void switch_pgtable(pgde_t *pgd)

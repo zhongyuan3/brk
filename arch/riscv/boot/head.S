@@ -3,10 +3,15 @@
 #include <asm/page.h>
 #include <asm/smp.h>
 
+#define HART_ID_SAVED_REG s2
+#define DTB_PHYS_SAVED_REG s3
+#define LOAD_OFFSET_SAVED_REG s4
+#define STACK_SAVED_REG s5
+
 	.macro compute_load_offset
 	la t0, _skernel
 	li t1, KERNEL_LINK_ADDR
-	sub s4, t0, t1
+	sub LOAD_OFFSET_SAVED_REG, t0, t1
 	.endm
 
 	.macro setup_per_hart_stack hart_reg
@@ -17,23 +22,26 @@
 	addi t1, \hart_reg, 1
 	mul t0, t1, t0
 	la t2, init_stack
-	add s5, t2, t0
-	mv sp, s5
+	add STACK_SAVED_REG, t2, t0
+	mv sp, STACK_SAVED_REG
 	.endm
 
 	.macro jump_to_kernel_virt target
-	mv sp, s5
-	sub sp, sp, s4
+	mv sp, STACK_SAVED_REG
+	sub sp, sp, LOAD_OFFSET_SAVED_REG
 	la t0, \target
-	sub t0, t0, s4
+	sub t0, t0, LOAD_OFFSET_SAVED_REG
 	jr t0
 	.endm
 
 	.section ".text.head"
 	.global _start
 _start:
-	mv s2, a0
-	mv s3, a1
+	mv HART_ID_SAVED_REG, a0
+	mv DTB_PHYS_SAVED_REG, a1
+
+	csrw sscratch, a0
+	li tp, 0
 
 	compute_load_offset
 
@@ -46,32 +54,37 @@ _start:
 	j .Lclear_bss
 .Lclear_bss_done:
 
-	setup_per_hart_stack a0
+	setup_per_hart_stack HART_ID_SAVED_REG
 
-	mv a0, s3
-	mv a1, s4
+	mv a0, DTB_PHYS_SAVED_REG
+	mv a1, LOAD_OFFSET_SAVED_REG
 	call early_pgtable_map
 
-	mv a0, s4
+	mv a0, LOAD_OFFSET_SAVED_REG
 	call early_pgtable_enable
 
-	mv a0, s2
-	mv a1, s3
-	mv a2, s4
+	la a0, boot_cpuid
+	sd HART_ID_SAVED_REG, 0(a0)
+	la a0, dtb_phys
+	sd DTB_PHYS_SAVED_REG, 0(a0)
+	la a0, load_offset
+	sd LOAD_OFFSET_SAVED_REG, 0(a0)
+
 	jump_to_kernel_virt start_kernel
 
 #if ENABLE_SMP
 	.global hart_entry
 hart_entry:
-	mv s2, a0
+	mv HART_ID_SAVED_REG, a0
+
+	csrw sscratch, a0
+	li tp, 0
 
 	compute_load_offset
-	setup_per_hart_stack a0
+	setup_per_hart_stack HART_ID_SAVED_REG
 
-	mv a0, s4
+	mv a0, LOAD_OFFSET_SAVED_REG
 	call early_pgtable_enable
 
-	mv a0, s2
-	mv a2, s4
 	jump_to_kernel_virt start_hart
 #endif
