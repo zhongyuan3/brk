@@ -1,3 +1,4 @@
+#include <arch/mm.h>
 #include <brk/drivers/uart.h>
 #include <brk/drivers/virtio.h>
 #include <brk/kernel/cpu.h>

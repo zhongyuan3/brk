@@ -1,11 +1,13 @@
 #include <arch/pgtable.h>
 #include <arch/trapframe.h>
-#include <arch/vmlayout.h>
 #include <asm/page.h>
+#include <asm/vas_layout.h>
 #include <brk/fs/fs.h>
+#include <brk/kernel/printk.h>
 #include <brk/kernel/signal.h>
 #include <brk/kernel/task.h>
 #include <brk/kernel/timer.h>
+#include <brk/lib/assert.h>
 #include <brk/lib/error.h>
 #include <brk/lib/kernel.h>
 #include <brk/lib/list.h>

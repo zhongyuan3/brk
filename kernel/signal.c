@@ -1,4 +1,4 @@
-#include <arch/vmlayout.h>
+#include <asm/vas_layout.h>
 #include <brk/kernel/refcnt.h>
 #include <brk/kernel/signal.h>
 #include <brk/kernel/task.h>

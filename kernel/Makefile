@@ -1,7 +1,6 @@
 obj-y += dtb.o
 obj-y += ktime.o
 obj-y += timekeeper.o
-obj-y += init.o
 obj-y += main.o
 obj-y += panic.o
 obj-y += printk.o

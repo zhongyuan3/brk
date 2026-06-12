@@ -1,7 +1,6 @@
 #ifndef TMPFS_H
 #define TMPFS_H
 
-#include <arch/pgalloc.h>
 #include <asm/page.h>
 #include <brk/lib/types.h>
 #include <brk/lock/sleeplock_types.h>

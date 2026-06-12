@@ -2,14 +2,14 @@
 #define ARCH_MM_H
 
 #include <arch/pgtable_types.h>
-#include <arch/vmlayout.h>
 #include <asm/page.h>
+#include <asm/vas_layout.h>
 #include <brk/lib/kernel.h>
 #include <brk/lib/types.h>
 #include <brk/mm/mm_types.h>
 
-extern usize_t kernel_load_offset;
-extern u64 ram_phys_offset;
+extern usize_t load_offset;
+extern u64 phys_ram_base;
 
 extern char _skernel[], _ekernel[];
 extern char _stext[], _etext[];
@@ -21,7 +21,7 @@ extern char hart_entry[];
 
 static inline u64 symbol_phys(void *vaddr)
 {
-	return (u64)vaddr + kernel_load_offset;
+	return (u64)vaddr + load_offset;
 }
 
 #define _SKERNEL_PHYS symbol_phys(_skernel)
@@ -50,18 +50,15 @@ static inline u64 symbol_phys(void *vaddr)
 
 static inline u64 phys_to_virt(u64 paddr)
 {
-	return (paddr - ram_phys_offset) + PAGE_OFFSET;
+	return (paddr - phys_ram_base) + PAGE_OFFSET;
 }
 
 static inline u64 virt_to_phys(u64 vaddr)
 {
-	return (vaddr - PAGE_OFFSET) + ram_phys_offset;
+	return (vaddr - PAGE_OFFSET) + phys_ram_base;
 }
 
-void vmemmap_init(void);
-void setup_final_pgtable(void);
-void switch_pgtable(pgde_t *pgd);
-void arch_mm_activate(pgde_t *pgd);
-void arch_mm_switch(pgde_t *pgd);
+void paging_init(void);
+void final_pgtable_enable(void);
 
 #endif

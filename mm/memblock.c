@@ -1,4 +1,3 @@
-#include <arch/pgalloc.h>
 #include <brk/kernel/panic.h>
 #include <brk/kernel/printk.h>
 #include <brk/lib/assert.h>

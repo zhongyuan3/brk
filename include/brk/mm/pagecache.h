@@ -1,7 +1,6 @@
 #ifndef BRK_PAGECACHE_H
 #define BRK_PAGECACHE_H
 
-#include <arch/pgalloc.h>
 #include <brk/fs/fs_types.h>
 #include <brk/kernel/refcnt_types.h>
 #include <brk/lib/list.h>

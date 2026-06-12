@@ -1,3 +1,4 @@
+#include <arch/mm.h>
 #include <brk/drivers/virtio.h>
 #include <brk/drivers/virtio_mmio.h>
 #include <brk/kernel/panic.h>
