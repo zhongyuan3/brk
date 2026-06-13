@@ -1,19 +1,21 @@
-# brk kernel — top-level Makefile
-
 BRK_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BRK_TOP_MAKEFILE := $(BRK_ROOT)/Makefile
 
-# Suppress recursive-make noise; @echo in recipes still prints on rebuild.
 MAKEFLAGS += --no-print-directory --silent
-
-ARCH ?= riscv
-include $(BRK_ROOT)/arch/$(ARCH)/config.mk
 
 BRK_BUILD_ROOT ?= build
 
+ARCH ?= riscv
+
+ifeq ($(ARCH),riscv)
+include $(BRK_ROOT)/arch/$(ARCH)/config.mk
+else
+$(error ARCH=$(ARCH) is not supported)
+endif
+
 BUILD ?= debug
 RAM ?= 128M
-ENABLE_SMP ?= 0
+ENABLE_SMP ?= 1
 ifeq ($(ENABLE_SMP),1)
 CPU ?= 3
 BUILD_DIR ?= $(BRK_BUILD_ROOT)/$(BUILD)-smp
@@ -29,7 +31,6 @@ AS := $(CROSS_COMPILE)as
 AR := $(CROSS_COMPILE)ar
 OBJCOPY := $(CROSS_COMPILE)objcopy
 OBJDUMP := $(CROSS_COMPILE)objdump
-GDB := gdb-multiarch
 
 BRK_WARN_FLAGS := -Wall -Wextra -Werror
 BRK_FREESTANDING_FLAGS := -ffreestanding -fno-common -nostdlib \
@@ -91,49 +92,40 @@ QEMU_OPTS += -drive file=$(BRK_ROOTFS_IMG),if=none,format=raw,id=x0
 QEMU_OPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 QEMU_OPTS += -global virtio-mmio.force-legacy=false
 
-SMP_MAKE = $(MAKE) -f $(BRK_TOP_MAKEFILE) ENABLE_SMP=1
-
 ifdef build
 src := $(build)
 obj := $(BUILD_DIR)/$(build)
 include scripts/Makefile.build
 else
 
-.PHONY: all brk brk-smp run run-smp gdb-server gdb-server-smp \
-	gdb-client gdb-client-smp rootfs clean clean-kernel help dts objdump FORCE
+.PHONY: all brk run gdb-server gdb-client rootfs clean clean-kernel \
+	help dts objdump FORCE
 
 all: brk
 
 help:
 	@echo "Targets:"
 	@echo "  all / brk              Build uniprocessor kernel"
-	@echo "  brk-smp                Build SMP kernel (ENABLE_SMP=1, CPU=3)"
 	@echo "  run                    Boot uniprocessor kernel in QEMU"
-	@echo "  run-smp                Boot SMP kernel in QEMU"
 	@echo "  gdb-server             QEMU + GDB stub (uniprocessor)"
-	@echo "  gdb-server-smp         QEMU + GDB stub (SMP)"
 	@echo "  gdb-client             Connect GDB to :1234"
-	@echo "  gdb-client-smp         Connect GDB to SMP kernel ELF"
 	@echo "  rootfs                 Create brkfs root disk"
 	@echo "  clean                  Remove all build outputs"
 	@echo "  clean-kernel           Remove current variant build directory"
 	@echo "  dts                    Dump QEMU virt device tree as DTS"
 	@echo "  objdump                Disassemble kernel ELF"
 	@echo "Configurable vars:"
-	@echo "  ARCH=<name>            (default: riscv)"
-	@echo "  BUILD={debug|release}"
-	@echo "  BUILD_DIR=<path>       (default: build/<BUILD> or build/<BUILD>-smp)"
-	@echo "  BRK_BUILD_ROOT=<path>"
-	@echo "  CPU=<n>                (default 1, or 3 when ENABLE_SMP=1)"
-	@echo "  RAM=<size>"
+	@echo "  ARCH=<name>"
 	@echo "  CROSS_COMPILE=<prefix>"
-	@echo "  ENABLE_SMP={0|1}"
-	@echo "  ENABLE_GC={0|1}  (debug only; release always uses GC)"
+	@echo "  BUILD={debug|release}  (default: debug)"
+	@echo "  BUILD_DIR=<path>       (default: build/<BUILD> or build/<BUILD>-smp)"
+	@echo "  BRK_BUILD_ROOT=<path>  (default: build)"
+	@echo "  CPU=<n>                (default 1, or 3 when ENABLE_SMP=1)"
+	@echo "  RAM=<size>             (default 128M)"
+	@echo "  ENABLE_SMP={0|1}       (default 1)"
+	@echo "  ENABLE_GC={0|1}        (default 0, only for debug builds)"
 
 brk: $(BRK_ELF)
-
-brk-smp:
-	$(SMP_MAKE) brk
 
 $(BRK_LINKER_SCRIPT): $(BRK_ROOT)/$(BRK_LINKER_SCRIPT_SRC)
 	@mkdir -p $(dir $@)
@@ -150,20 +142,11 @@ $(BUILD_DIR)/%/built-in.o: FORCE
 run: $(BRK_ELF) $(BRK_ROOTFS_IMG)
 	$(QEMU) $(QEMU_OPTS) -kernel $(BRK_ELF)
 
-run-smp:
-	$(SMP_MAKE) run
-
 gdb-server: $(BRK_ELF) $(BRK_ROOTFS_IMG)
 	$(QEMU) $(QEMU_OPTS) -S -s -kernel $(BRK_ELF)
 
-gdb-server-smp:
-	$(SMP_MAKE) gdb-server
-
 gdb-client: $(BRK_ELF)
 	$(GDB) --tui -quiet -ex "target remote :1234" $(BRK_ELF)
-
-gdb-client-smp:
-	$(SMP_MAKE) gdb-client
 
 rootfs: $(BRK_ROOTFS_IMG)
 
