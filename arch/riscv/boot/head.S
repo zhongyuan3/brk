@@ -11,7 +11,7 @@
 	.macro compute_load_offset
 	la t0, _skernel
 	li t1, KERNEL_LINK_ADDR
-	sub LOAD_OFFSET_SAVED_REG, t0, t1
+	sub LOAD_OFFSET_SAVED_REG, t1, t0
 	.endm
 
 	.macro setup_per_hart_stack hart_reg
@@ -28,9 +28,9 @@
 
 	.macro jump_to_kernel_virt target
 	mv sp, STACK_SAVED_REG
-	sub sp, sp, LOAD_OFFSET_SAVED_REG
+	add sp, sp, LOAD_OFFSET_SAVED_REG
 	la t0, \target
-	sub t0, t0, LOAD_OFFSET_SAVED_REG
+	add t0, t0, LOAD_OFFSET_SAVED_REG
 	jr t0
 	.endm
 
