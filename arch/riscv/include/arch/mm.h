@@ -8,7 +8,7 @@
 #include <brk/lib/types.h>
 #include <brk/mm/mm_types.h>
 
-extern usize_t load_offset;
+extern usize_t load_offset; /* LOAD_OFFSET = VMA - LMA */
 extern u64 phys_ram_base;
 
 extern char _skernel[], _ekernel[];
@@ -21,7 +21,7 @@ extern char hart_entry[];
 
 static inline u64 symbol_phys(void *vaddr)
 {
-	return (u64)vaddr + load_offset;
+	return (u64)vaddr - load_offset;
 }
 
 #define _SKERNEL_PHYS symbol_phys(_skernel)
