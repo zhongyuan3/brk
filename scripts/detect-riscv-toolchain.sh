@@ -1,5 +1,5 @@
-#!/bin/sh
-# Detect RISC-V cross toolchain paths and write .brk-toolchain.mk cache.
+#!/bin/bash
+
 set -eu
 
 cache=$1
@@ -21,7 +21,7 @@ detect_cross() {
 	else
 		for p in $prefixes; do
 			if command -v "${p}gcc" >/dev/null 2>&1 &&
-			   "${p}gcc" -dumpmachine 2>/dev/null | grep -q '^riscv64'; then
+				"${p}gcc" -dumpmachine 2>/dev/null | grep -q '^riscv64'; then
 				cross=$p
 				gcc=$(command -v "${p}gcc")
 				break
@@ -34,11 +34,11 @@ detect_cross() {
 
 	{
 		printf 'CROSS_COMPILE := %s\n' "$cross"
-		printf 'BRK_CROSS_GCC := %s\n' "$gcc"
-	} > "${cache}.tmp"
+		printf 'CROSS_GCC := %s\n' "$gcc"
+	} >"${cache}.tmp"
 
 	if [ -f "$cache" ] && grep -q '^GDB :=' "$cache" 2>/dev/null; then
-		grep '^GDB :=' "$cache" >> "${cache}.tmp"
+		grep '^GDB :=' "$cache" >>"${cache}.tmp"
 	fi
 
 	mv "${cache}.tmp" "$cache"
@@ -65,10 +65,10 @@ detect_gdb() {
 	[ -n "$gdb" ] || return 1
 
 	if [ -f "$cache" ]; then
-		grep -v '^GDB :=' "$cache" > "${cache}.tmp" || true
+		grep -v '^GDB :=' "$cache" >"${cache}.tmp" || true
 		mv "${cache}.tmp" "$cache"
 	fi
-	printf 'GDB := %s\n' "$gdb" >> "$cache"
+	printf 'GDB := %s\n' "$gdb" >>"$cache"
 	echo ok
 }
 
