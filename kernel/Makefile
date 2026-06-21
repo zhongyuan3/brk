@@ -1,15 +1,13 @@
-obj-y += dtb.o
-obj-y += ktime.o
-obj-y += timekeeper.o
-obj-y += main.o
-obj-y += panic.o
-obj-y += printk.o
-obj-y += cpu.o
-obj-y += irq.o
-obj-y += console.o
-obj-y += refcnt.o
-obj-y += signal.o
-
-subdir-y += task
+subdir-y := arch/$(ARCH)
+subdir-y += mm
+subdir-y += drivers
+subdir-y += fs
+subdir-y += lib
+subdir-y += init
+subdir-y += ipc
+subdir-y += irq
+subdir-y += lock
+subdir-y += printk
+subdir-y += process
 subdir-y += syscall
-subdir-y += locking
+subdir-y += time
