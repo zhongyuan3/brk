@@ -1,5 +1,5 @@
-#include <brk/kernel/refcnt.h>
-#include <brk/lock/spinlock.h>
+#include <brk/refcnt.h>
+#include <brk/spinlock.h>
 
 void refcnt_init(refcnt_t *rc, refcnt_value_t val)
 {

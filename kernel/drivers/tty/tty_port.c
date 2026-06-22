@@ -1,7 +1,7 @@
-#include <brk/drivers/tty.h>
-#include <brk/lib/types.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/kmalloc.h>
+#include <brk/kmalloc.h>
+#include <brk/spinlock.h>
+#include <brk/tty.h>
+#include <brk/types.h>
 
 struct tty_port *tty_port_alloc(void)
 {

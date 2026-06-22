@@ -1,7 +1,7 @@
 #include <arch/mm.h>
-#include <brk/kernel/dtb.h>
-#include <brk/kernel/init.h>
-#include <brk/mm/memblock.h>
+#include <brk/dtb.h>
+#include <brk/init.h>
+#include <brk/memblock.h>
 #include <libfdt.h>
 
 void arch_init(void)

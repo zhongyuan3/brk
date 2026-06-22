@@ -1,13 +1,13 @@
-#include <brk/kernel/panic.h>
-#include <brk/lib/assert.h>
-#include <brk/lib/kernel.h>
-#include <brk/lib/list.h>
-#include <brk/lib/string.h>
-#include <brk/lib/types.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/mm.h>
-#include <brk/mm/pgalloc.h>
-#include <brk/mm/slab.h>
+#include <brk/assert.h>
+#include <brk/kernel.h>
+#include <brk/list.h>
+#include <brk/mm.h>
+#include <brk/panic.h>
+#include <brk/pgalloc.h>
+#include <brk/slab.h>
+#include <brk/spinlock.h>
+#include <brk/string.h>
+#include <brk/types.h>
 #include <uapi/brk/errno.h>
 
 static void slab_mark_page_range(struct page *head, unsigned int order,

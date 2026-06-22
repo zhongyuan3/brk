@@ -1,7 +1,7 @@
 #ifndef ARCH_SBI_H
 #define ARCH_SBI_H
 
-#include <brk/lib/types.h>
+#include <brk/types.h>
 
 #define SBI_LEGACY_SET_TIMER 0x00
 #define SBI_LEGACY_CONSOLE_PUTCHAR 0x01

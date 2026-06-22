@@ -1,10 +1,10 @@
 #ifndef BRKFS_H
 #define BRKFS_H
 
-#include <brk/drivers/blkdev.h>
-#include <brk/fs/fs_types.h>
-#include <brk/lib/types.h>
-#include <brk/mm/pagecache.h>
+#include <brk/blkdev.h>
+#include <brk/fs_types.h>
+#include <brk/pagecache.h>
+#include <brk/types.h>
 #include <uapi/types.h>
 
 #define BRKFS_DIRECT_BLOCKS 7 /* Total number of direct block pointers */

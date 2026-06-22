@@ -1,7 +1,7 @@
 #include "brkfs.h"
-#include <brk/fs/fs.h>
-#include <brk/lib/string.h>
-#include <brk/mm/kmalloc.h>
+#include <brk/fs.h>
+#include <brk/kmalloc.h>
+#include <brk/string.h>
 #include <uapi/brk/errno.h>
 #include <uapi/dirent.h>
 

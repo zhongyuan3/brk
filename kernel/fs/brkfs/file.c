@@ -1,16 +1,16 @@
 #include "brkfs.h"
 #include <asm/page.h>
-#include <brk/drivers/blkdev.h>
-#include <brk/fs/fs.h>
-#include <brk/kernel/ktime.h>
-#include <brk/kernel/printk.h>
-#include <brk/lib/error.h>
-#include <brk/lib/kernel.h>
-#include <brk/lib/string.h>
-#include <brk/lib/types.h>
-#include <brk/lock/sleeplock.h>
-#include <brk/mm/kmalloc.h>
-#include <brk/mm/pagecache.h>
+#include <brk/blkdev.h>
+#include <brk/error.h>
+#include <brk/fs.h>
+#include <brk/kernel.h>
+#include <brk/kmalloc.h>
+#include <brk/ktime.h>
+#include <brk/pagecache.h>
+#include <brk/printk.h>
+#include <brk/sleeplock.h>
+#include <brk/string.h>
+#include <brk/types.h>
 #include <uapi/brk/errno.h>
 
 static int brkfs_file_read_page(struct page_cache *m, struct cached_page *cp)

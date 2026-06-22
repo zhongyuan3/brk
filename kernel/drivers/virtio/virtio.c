@@ -1,12 +1,12 @@
 #include <arch/pgtable.h>
-#include <brk/drivers/virtio.h>
-#include <brk/drivers/virtio_blk.h>
-#include <brk/drivers/virtio_mmio.h>
-#include <brk/lib/list.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/ioremap.h>
-#include <brk/mm/kmalloc.h>
-#include <brk/mm/mmio.h>
+#include <brk/ioremap.h>
+#include <brk/kmalloc.h>
+#include <brk/list.h>
+#include <brk/mmio.h>
+#include <brk/spinlock.h>
+#include <brk/virtio.h>
+#include <brk/virtio_blk.h>
+#include <brk/virtio_mmio.h>
 #include <uapi/brk/errno.h>
 
 static LIST_DEFINE(vdevs);

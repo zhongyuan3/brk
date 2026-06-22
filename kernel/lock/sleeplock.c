@@ -1,7 +1,7 @@
-#include <brk/kernel/panic.h>
-#include <brk/kernel/task.h>
-#include <brk/lock/sleeplock.h>
-#include <brk/lock/spinlock.h>
+#include <brk/panic.h>
+#include <brk/sleeplock.h>
+#include <brk/spinlock.h>
+#include <brk/task.h>
 
 void sleeplock_init(sleeplock_t *lock, const char *name)
 {
