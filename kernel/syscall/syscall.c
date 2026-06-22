@@ -1,10 +1,10 @@
 #include <arch/syscall.h>
-#include <brk/kernel/cpu.h>
-#include <brk/kernel/panic.h>
-#include <brk/kernel/printk.h>
-#include <brk/kernel/syscall.h>
-#include <brk/kernel/task.h>
-#include <brk/lib/kernel.h>
+#include <brk/cpu.h>
+#include <brk/kernel.h>
+#include <brk/panic.h>
+#include <brk/printk.h>
+#include <brk/syscall.h>
+#include <brk/task.h>
 #include <uapi/brk/errno.h>
 
 static u64 (*systable[])(void) = {

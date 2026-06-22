@@ -1,16 +1,16 @@
 #include <arch/pgtable.h>
 #include <asm/large_page.h>
-#include <brk/kernel/panic.h>
-#include <brk/lib/assert.h>
-#include <brk/lib/kernel.h>
-#include <brk/lib/list.h>
-#include <brk/lib/string.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/kmalloc.h>
-#include <brk/mm/memblock.h>
-#include <brk/mm/pgalloc.h>
-#include <brk/mm/slab.h>
-#include <brk/mm/vmalloc.h>
+#include <brk/assert.h>
+#include <brk/kernel.h>
+#include <brk/kmalloc.h>
+#include <brk/list.h>
+#include <brk/memblock.h>
+#include <brk/panic.h>
+#include <brk/pgalloc.h>
+#include <brk/slab.h>
+#include <brk/spinlock.h>
+#include <brk/string.h>
+#include <brk/vmalloc.h>
 #include <uapi/brk/errno.h>
 
 struct vmalloc_region {

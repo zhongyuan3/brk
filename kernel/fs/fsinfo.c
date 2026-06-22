@@ -1,8 +1,8 @@
-#include <brk/fs/fsinfo.h>
-#include <brk/fs/path.h>
-#include <brk/kernel/refcnt.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/kmalloc.h>
+#include <brk/fsinfo.h>
+#include <brk/kmalloc.h>
+#include <brk/path.h>
+#include <brk/refcnt.h>
+#include <brk/spinlock.h>
 
 struct file_system_info *fsinfo_alloc(void)
 {

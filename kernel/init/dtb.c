@@ -1,14 +1,14 @@
 #include <arch/mm.h>
-#include <brk/drivers/uart.h>
-#include <brk/drivers/virtio.h>
-#include <brk/kernel/cpu.h>
-#include <brk/kernel/dtb.h>
-#include <brk/kernel/panic.h>
-#include <brk/kernel/printk.h>
-#include <brk/lib/types.h>
-#include <brk/mm/kmalloc.h>
-#include <brk/mm/memblock.h>
-#include <brk/mm/mm.h>
+#include <brk/cpu.h>
+#include <brk/dtb.h>
+#include <brk/kmalloc.h>
+#include <brk/memblock.h>
+#include <brk/mm.h>
+#include <brk/panic.h>
+#include <brk/printk.h>
+#include <brk/types.h>
+#include <brk/uart.h>
+#include <brk/virtio.h>
 #include <libfdt.h>
 #include <uapi/brk/errno.h>
 

@@ -1,7 +1,7 @@
-#include <brk/drivers/virtio_queue.h>
-#include <brk/lib/assert.h>
-#include <brk/lib/kernel.h>
-#include <brk/mm/kmalloc.h>
+#include <brk/assert.h>
+#include <brk/kernel.h>
+#include <brk/kmalloc.h>
+#include <brk/virtio_queue.h>
 #include <uapi/brk/errno.h>
 
 int virtq_alloc(struct virtq *vq, unsigned int num)

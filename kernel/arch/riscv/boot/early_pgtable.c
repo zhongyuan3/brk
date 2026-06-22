@@ -5,9 +5,9 @@
 #include <asm/large_page.h>
 #include <asm/page.h>
 #include <asm/page_table.h>
-#include <brk/lib/kernel.h>
-#include <brk/lib/types.h>
-#include <brk/mm/mm.h>
+#include <brk/kernel.h>
+#include <brk/mm.h>
+#include <brk/types.h>
 #include <libfdt.h>
 
 static void early_pgtable_hang(const char *msg)

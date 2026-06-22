@@ -2,8 +2,8 @@
 #define ARCH_PGTABLE_H
 
 #include <arch/mm.h>
-#include <brk/lib/types.h>
-#include <brk/lock/spinlock_types.h>
+#include <brk/spinlock_types.h>
+#include <brk/types.h>
 
 #define PTE_V 1 /* Valid */
 #define PTE_R 2 /* Read */

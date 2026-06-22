@@ -1,9 +1,9 @@
 #ifndef ARCH_TRAPFRAME_H
 #define ARCH_TRAPFRAME_H
 
-#include <brk/kernel/panic.h>
-#include <brk/lib/string.h>
-#include <brk/lib/types.h>
+#include <brk/panic.h>
+#include <brk/string.h>
+#include <brk/types.h>
 
 struct task_control_block;
 
