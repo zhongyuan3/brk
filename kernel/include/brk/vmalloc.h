@@ -11,15 +11,16 @@ enum vmap_mode {
 	VMAP_MODE_FINAL,
 };
 
-int vmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr, unsigned int flags,
-	 enum vmap_mode mode);
-void vunmap(pgde_t *pgd, uint64_t addr, size_t size, enum vmap_mode mode);
+int vmap(pgd_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
+	 unsigned int flags, enum vmap_mode mode);
+void vunmap(pgd_t *pgd, uint64_t addr, size_t size, enum vmap_mode mode);
 int kvmap(uint64_t addr, size_t size, uint64_t paddr, unsigned int flags);
-int kvmap_with_mode(uint64_t addr, size_t size, uint64_t paddr, unsigned int flags,
-		    enum vmap_mode mode);
+int kvmap_with_mode(uint64_t addr, size_t size, uint64_t paddr,
+		    unsigned int flags, enum vmap_mode mode);
 void kvunmap(uint64_t addr, size_t size);
-int uvmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr, unsigned int flags);
-void uvunmap(pgde_t *pgd, uint64_t addr, size_t size);
+int uvmap(pgd_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
+	  unsigned int flags);
+void uvunmap(pgd_t *pgd, uint64_t addr, size_t size);
 
 void vmalloc_init(void);
 void *vmalloc(size_t size);

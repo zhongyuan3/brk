@@ -39,7 +39,7 @@ struct uvm_region {
 };
 
 struct uvm_space {
-	pgde_t *pgd;
+	pgd_t *pgd;
 	struct list_head seg;
 	struct uvm_region *stack;
 	struct uvm_region *heap;

@@ -4,7 +4,7 @@
 #include <arch/pgtable_types.h>
 #include <brk/mm_types.h>
 
-void switch_pgtable(pgde_t *pgd);
+void switch_pgtable(pgd_t *pgd);
 
 void user_access_enable(void);
 void user_access_disable(void);
