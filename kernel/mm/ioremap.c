@@ -3,7 +3,7 @@
 #include <brk/kernel.h>
 #include <brk/vmalloc.h>
 
-void *ioremap(u64 paddr, usize_t size, unsigned int flags)
+void *ioremap(u64 paddr, size_t size, unsigned int flags)
 {
 	size = round_up(size, PAGE_SIZE);
 	void *virt = vmalloc_nomap(size);
@@ -18,7 +18,7 @@ void *ioremap(u64 paddr, usize_t size, unsigned int flags)
 	return virt;
 }
 
-void iounmap(void *addr, usize_t size)
+void iounmap(void *addr, size_t size)
 {
 	size = round_up(size, PAGE_SIZE);
 	kvunmap((u64)addr, size);

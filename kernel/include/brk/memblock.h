@@ -8,14 +8,14 @@
 
 struct memblock_region {
 	u64 base;
-	usize_t size;
+	size_t size;
 };
 
 struct memblock_region_set {
 	char const *name;
 	struct memblock_region *regions;
-	usize_t max;
-	usize_t cnt;
+	size_t max;
+	size_t cnt;
 };
 
 struct memblock {
@@ -24,10 +24,10 @@ struct memblock {
 };
 
 void memblock_init(void);
-int memblock_add(u64 base, usize_t size);
-int memblock_reserve(u64 base, usize_t size);
-u64 memblock_alloc(usize_t size, u64 min_addr, usize_t align);
-void memblock_free(u64 base, usize_t size);
+int memblock_add(u64 base, size_t size);
+int memblock_reserve(u64 base, size_t size);
+u64 memblock_alloc(size_t size, u64 min_addr, size_t align);
+void memblock_free(u64 base, size_t size);
 u64 memblock_get_ram_base(void);
 void memblock_free_all(void);
 void memblock_dump(struct memblock_region_set *set);

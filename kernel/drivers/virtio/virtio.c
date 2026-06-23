@@ -12,7 +12,7 @@
 static LIST_DEFINE(vdevs);
 static SPINLOCK_DEFINE(vdevs_lock);
 
-struct virtio_device *virtio_dev_create(u64 phys_base, usize_t size, u32 irq)
+struct virtio_device *virtio_dev_create(u64 phys_base, size_t size, u32 irq)
 {
 	struct virtio_device *dev;
 	int err;

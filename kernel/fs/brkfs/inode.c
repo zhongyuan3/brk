@@ -211,9 +211,9 @@ static int brkfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct fs_super_block *sb = dir->sb;
 	struct fs_inode *inode = NULL;
 	u32 ino = 0;
-	usize_t len = strlen(symname);
+	size_t len = strlen(symname);
 	loff_t pos = 0;
-	usize_t w = 0;
+	size_t w = 0;
 	int err;
 
 	err = brkfs_inode_alloc(sbi, &ino);
@@ -266,14 +266,14 @@ static int brkfs_readlink(struct fs_dentry *dentry, char *buf, int bufsiz)
 {
 	struct fs_inode *inode = dentry->inode;
 	loff_t pos = 0;
-	usize_t rd = 0;
+	size_t rd = 0;
 	int err;
 
 	if (!S_ISLNK(inode->mode))
 		return -EINVAL;
 	if (bufsiz <= 0)
 		return -EINVAL;
-	err = brkfs_file_read_at(inode, &pos, buf, (usize_t)(bufsiz - 1), &rd);
+	err = brkfs_file_read_at(inode, &pos, buf, (size_t)(bufsiz - 1), &rd);
 	if (err)
 		return err;
 	buf[rd] = '\0';

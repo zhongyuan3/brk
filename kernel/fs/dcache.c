@@ -351,7 +351,7 @@ void fs_dcache_dump(void)
 
 	spinlock_acquire(&dentry_htable_lock);
 	printk("Dcache dump:\n");
-	for (usize_t i = 0; i < DENTRY_HTABLE_SIZE; i++) {
+	for (size_t i = 0; i < DENTRY_HTABLE_SIZE; i++) {
 		head = &dentry_htable[i];
 		if (hlist_empty(head))
 			continue;

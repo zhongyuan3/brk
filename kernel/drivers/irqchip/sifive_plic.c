@@ -34,7 +34,7 @@ void plic_init(void)
 
 static volatile u32 *plic_senable(u32 hart_id)
 {
-	usize_t ctx = 2 * hart_id + 1;
+	size_t ctx = 2 * hart_id + 1;
 	return (volatile u32 *)(enable_base + ctx * 0x80);
 }
 
@@ -80,7 +80,7 @@ int plic_set_priority(u32 source, unsigned int priority)
 
 static volatile u32 *plic_sthreshold(u32 hart_id)
 {
-	usize_t ctx = 2 * hart_id + 1;
+	size_t ctx = 2 * hart_id + 1;
 	return (volatile u32 *)(threshold_base + ctx * 0x1000);
 }
 
@@ -98,7 +98,7 @@ int plic_set_threshold(u32 hart_id, unsigned int threshold)
 
 static volatile u32 *plic_sclaim_complete(u32 hart_id)
 {
-	usize_t ctx = 2 * hart_id + 1;
+	size_t ctx = 2 * hart_id + 1;
 	return (volatile u32 *)(claim_complete_base + ctx * 0x1000);
 }
 

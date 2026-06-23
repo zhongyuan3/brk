@@ -109,7 +109,7 @@ static struct tmpfs_inode *tmpfs_inode_get(struct tmpfs_super_block *sb,
 		return NULL;
 
 	pg = sb->s_imap;
-	for (usize_t i = 0, j = ino / TMPFS_INODE_PER_PAGE; i < j; ++i)
+	for (size_t i = 0, j = ino / TMPFS_INODE_PER_PAGE; i < j; ++i)
 		pg = pg->tmpfs_next;
 
 	ip = (struct tmpfs_inode *)page_to_virt(pg) +
@@ -130,7 +130,7 @@ static struct tmpfs_inode *tmpfs_inode_alloc(struct tmpfs_super_block *sb,
 again:
 	for (; *pg; pg = &((*pg)->tmpfs_next)) {
 		imap = (struct tmpfs_inode *)page_to_virt(*pg);
-		for (usize_t i = 0; i < TMPFS_INODE_PER_PAGE; ++i) {
+		for (size_t i = 0; i < TMPFS_INODE_PER_PAGE; ++i) {
 			if (imap[i].i_no == 0) {
 				imap[i].i_page = NULL;
 				imap[i].i_size = 0;
@@ -229,7 +229,7 @@ static int tmpfs_inode_read(struct tmpfs_super_block *sb,
 }
 
 static int tmpfs_dir_add_entry_to(struct tmpfs_dir_entry *entries, u32 ino,
-				  const char *name, usize_t name_len, u8 type,
+				  const char *name, size_t name_len, u8 type,
 				  s32 *pos)
 {
 	u16 n = PAGE_SIZE;
@@ -452,7 +452,7 @@ static void tmpfs_free_super(struct tmpfs_super_block *sb)
 	while (curr) {
 		next = curr->tmpfs_next;
 		imap = (struct tmpfs_inode *)page_to_virt(curr);
-		for (usize_t i = 0; i < TMPFS_INODE_PER_PAGE; ++i) {
+		for (size_t i = 0; i < TMPFS_INODE_PER_PAGE; ++i) {
 			if (imap[i].i_nlink > 0)
 				tmpfs_inode_free_data_pages(&imap[i]);
 		}
@@ -463,10 +463,10 @@ static void tmpfs_free_super(struct tmpfs_super_block *sb)
 	kfree(sb);
 }
 
-static int tmpfs_read_file_at(struct tmpfs_inode *inode, void *buf, usize_t n,
-			      off_t *pos, usize_t *wcnt)
+static int tmpfs_read_file_at(struct tmpfs_inode *inode, void *buf, size_t n,
+			      off_t *pos, size_t *wcnt)
 {
-	usize_t size, target, start;
+	size_t size, target, start;
 	struct page *pg;
 	u8 *data, *b;
 	off_t off = *pos;
@@ -509,10 +509,10 @@ static int tmpfs_read_file_at(struct tmpfs_inode *inode, void *buf, usize_t n,
 }
 
 static int tmpfs_write_file_at(struct tmpfs_inode *ip, const void *buf,
-			       usize_t n, off_t *pos, usize_t *rcnt)
+			       size_t n, off_t *pos, size_t *rcnt)
 {
 	struct page *pg, *new_pg;
-	usize_t target = n, size, start;
+	size_t target = n, size, start;
 	off_t off = *pos;
 	u8 *data;
 	const u8 *b = buf;
@@ -855,7 +855,7 @@ static int tmpfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct tmpfs_inode *t_inode, *t_dir;
 	struct tmpfs_super_block *t_sb;
 	off_t pos = 0;
-	usize_t len, wcnt;
+	size_t len, wcnt;
 	u32 ino;
 	int err;
 
@@ -918,7 +918,7 @@ static int tmpfs_readlink(struct fs_dentry *dentry, char *buf, int bufsiz)
 	struct tmpfs_inode *t_inode = inode->private_data;
 	struct tmpfs_super_block *t_sb = inode->sb->private_data;
 	off_t pos = 0;
-	usize_t rcnt = 0;
+	size_t rcnt = 0;
 	int err;
 
 	if (!S_ISLNK(inode->mode))
@@ -927,7 +927,7 @@ static int tmpfs_readlink(struct fs_dentry *dentry, char *buf, int bufsiz)
 		return -EINVAL;
 
 	sleeplock_acquire(&t_sb->s_lock);
-	err = tmpfs_read_file_at(t_inode, buf, (usize_t)(bufsiz - 1), &pos,
+	err = tmpfs_read_file_at(t_inode, buf, (size_t)(bufsiz - 1), &pos,
 				 &rcnt);
 	sleeplock_release(&t_sb->s_lock);
 	if (err)
@@ -1164,14 +1164,14 @@ static int tmpfs_file_open(struct fs_inode *inode, struct fs_file *file)
 	return -EINVAL;
 }
 
-static ssize_t tmpfs_file_read(struct fs_file *file, char *buf, usize_t size,
+static ssize_t tmpfs_file_read(struct fs_file *file, char *buf, size_t size,
 			       loff_t *pos)
 {
 	struct fs_inode *inode = file->inode;
 	struct tmpfs_inode *t_inode = inode->private_data;
 	struct tmpfs_super_block *t_sb = inode->sb->private_data;
 	int err = 0;
-	usize_t rcnt = 0;
+	size_t rcnt = 0;
 
 	sleeplock_acquire(&inode->rwsem);
 
@@ -1190,13 +1190,13 @@ static ssize_t tmpfs_file_read(struct fs_file *file, char *buf, usize_t size,
 }
 
 static ssize_t tmpfs_file_write(struct fs_file *file, const char *buf,
-				usize_t size, loff_t *pos)
+				size_t size, loff_t *pos)
 {
 	struct fs_inode *inode = file->inode;
 	struct tmpfs_inode *t_inode = inode->private_data;
 	struct tmpfs_super_block *t_sb = inode->sb->private_data;
 	int err = 0;
-	usize_t wcnt = 0;
+	size_t wcnt = 0;
 
 	loff_t old_pos = *pos;
 
@@ -1294,7 +1294,7 @@ static int tmpfs_dir_open(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static ssize_t tmpfs_dir_read(struct fs_file *file, char *buf, usize_t size,
+static ssize_t tmpfs_dir_read(struct fs_file *file, char *buf, size_t size,
 			      loff_t *pos)
 {
 	(void)file;
@@ -1305,7 +1305,7 @@ static ssize_t tmpfs_dir_read(struct fs_file *file, char *buf, usize_t size,
 }
 
 static ssize_t tmpfs_dir_write(struct fs_file *file, const char *buf,
-			       usize_t size, loff_t *pos)
+			       size_t size, loff_t *pos)
 {
 	(void)file;
 	(void)buf;

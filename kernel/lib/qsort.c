@@ -1,12 +1,12 @@
 #include <brk/sort.h>
 #include <brk/string.h>
 
-static void heapify(void *base, usize_t nmemb, usize_t size, usize_t i,
+static void heapify(void *base, size_t nmemb, size_t size, size_t i,
 		    int (*compar)(const void *, const void *))
 {
-	usize_t largest = i;
-	usize_t l = 2 * i + 1;
-	usize_t r = 2 * i + 2;
+	size_t largest = i;
+	size_t l = 2 * i + 1;
+	size_t r = 2 * i + 2;
 
 	if (l < nmemb &&
 	    compar((char *)base + l * size, (char *)base + largest * size) > 0)
@@ -23,7 +23,7 @@ static void heapify(void *base, usize_t nmemb, usize_t size, usize_t i,
 	}
 }
 
-void qsort(void *base, usize_t nmemb, usize_t size,
+void qsort(void *base, size_t nmemb, size_t size,
 	   int (*compar)(const void *, const void *))
 {
 	if (nmemb <= 1 || base == NULL || compar == NULL)
@@ -32,10 +32,10 @@ void qsort(void *base, usize_t nmemb, usize_t size,
 	long i;
 
 	for (i = (long)(nmemb / 2) - 1; i >= 0; --i)
-		heapify(base, nmemb, size, (usize_t)i, compar);
+		heapify(base, nmemb, size, (size_t)i, compar);
 
 	for (i = (long)(nmemb - 1); i > 0; --i) {
-		memswap(base, (char *)base + (usize_t)i * size, size);
-		heapify(base, (usize_t)i, size, 0, compar);
+		memswap(base, (char *)base + (size_t)i * size, size);
+		heapify(base, (size_t)i, size, 0, compar);
 	}
 }

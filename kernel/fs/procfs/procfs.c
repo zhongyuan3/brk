@@ -86,10 +86,10 @@ enum proc_kind {
 struct procfs_entry;
 
 typedef int (*procfs_show_fn)(const struct procfs_entry *entry, pid_t pid,
-			      char *buf, usize_t size);
+			      char *buf, size_t size);
 
 typedef ssize_t (*procfs_write_fn)(const struct procfs_entry *entry,
-				   const char *buf, usize_t size, loff_t *pos);
+				   const char *buf, size_t size, loff_t *pos);
 
 struct procfs_entry {
 	const char *name;
@@ -102,26 +102,26 @@ struct procfs_entry {
 };
 
 static int procfs_show_version(const struct procfs_entry *e, pid_t pid,
-			       char *buf, usize_t size);
+			       char *buf, size_t size);
 static int procfs_show_uptime(const struct procfs_entry *e, pid_t pid,
-			      char *buf, usize_t size);
+			      char *buf, size_t size);
 static int procfs_show_meminfo(const struct procfs_entry *e, pid_t pid,
-			       char *buf, usize_t size);
+			       char *buf, size_t size);
 static int procfs_show_filesystems(const struct procfs_entry *e, pid_t pid,
-				   char *buf, usize_t size);
+				   char *buf, size_t size);
 static int procfs_show_pagecache(const struct procfs_entry *e, pid_t pid,
-				 char *buf, usize_t size);
+				 char *buf, size_t size);
 static int procfs_show_pagecache_shrink(const struct procfs_entry *e, pid_t pid,
-					char *buf, usize_t size);
+					char *buf, size_t size);
 static ssize_t procfs_write_pagecache_shrink(const struct procfs_entry *e,
-					     const char *buf, usize_t size,
+					     const char *buf, size_t size,
 					     loff_t *pos);
 static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
-				  char *buf, usize_t size);
+				  char *buf, size_t size);
 static int procfs_show_pid_stat(const struct procfs_entry *e, pid_t pid,
-				char *buf, usize_t size);
+				char *buf, size_t size);
 static int procfs_show_pid_cmdline(const struct procfs_entry *e, pid_t pid,
-				   char *buf, usize_t size);
+				   char *buf, size_t size);
 
 static const struct procfs_entry procfs_root_entries[] = {
 	{ .name = "version",
@@ -232,7 +232,7 @@ static inline unsigned long procfs_make_pid_file_ino(pid_t pid, int idx)
 
 static const struct procfs_entry *procfs_static_by_idx(int idx)
 {
-	for (usize_t i = 0; i < PROCFS_ROOT_ENTRIES_NR; ++i)
+	for (size_t i = 0; i < PROCFS_ROOT_ENTRIES_NR; ++i)
 		if (procfs_root_entries[i].idx == idx)
 			return &procfs_root_entries[i];
 	return NULL;
@@ -240,7 +240,7 @@ static const struct procfs_entry *procfs_static_by_idx(int idx)
 
 static const struct procfs_entry *procfs_pid_by_idx(int idx)
 {
-	for (usize_t i = 0; i < PROCFS_PID_ENTRIES_NR; ++i)
+	for (size_t i = 0; i < PROCFS_PID_ENTRIES_NR; ++i)
 		if (procfs_pid_entries[i].idx == idx)
 			return &procfs_pid_entries[i];
 	return NULL;
@@ -277,7 +277,7 @@ static char procfs_state_letter(enum task_state state)
 }
 
 static int procfs_show_version(const struct procfs_entry *e, pid_t pid,
-			       char *buf, usize_t size)
+			       char *buf, size_t size)
 {
 	(void)e;
 	(void)pid;
@@ -286,7 +286,7 @@ static int procfs_show_version(const struct procfs_entry *e, pid_t pid,
 }
 
 static int procfs_show_uptime(const struct procfs_entry *e, pid_t pid,
-			      char *buf, usize_t size)
+			      char *buf, size_t size)
 {
 	(void)e;
 	(void)pid;
@@ -305,13 +305,13 @@ static int procfs_show_uptime(const struct procfs_entry *e, pid_t pid,
 
 struct procfs_meminfo_acc {
 	char *buf;
-	usize_t size;
-	usize_t pos;
+	size_t size;
+	size_t pos;
 	int err;
 };
 
 static int procfs_show_meminfo(const struct procfs_entry *e, pid_t pid,
-			       char *buf, usize_t size)
+			       char *buf, size_t size)
 {
 	(void)e;
 	(void)pid;
@@ -338,8 +338,8 @@ static int procfs_show_meminfo(const struct procfs_entry *e, pid_t pid,
 
 struct procfs_fs_iter {
 	char *buf;
-	usize_t size;
-	usize_t pos;
+	size_t size;
+	size_t pos;
 };
 
 static void procfs_fs_collect(const struct fs_driver *fs, void *ctx)
@@ -351,11 +351,11 @@ static void procfs_fs_collect(const struct fs_driver *fs, void *ctx)
 		return;
 	n = snprintf(it->buf + it->pos, it->size - it->pos, "%s\n", fs->name);
 	if (n > 0)
-		it->pos += (usize_t)n;
+		it->pos += (size_t)n;
 }
 
 static int procfs_show_filesystems(const struct procfs_entry *e, pid_t pid,
-				   char *buf, usize_t size)
+				   char *buf, size_t size)
 {
 	(void)e;
 	(void)pid;
@@ -366,7 +366,7 @@ static int procfs_show_filesystems(const struct procfs_entry *e, pid_t pid,
 }
 
 static int procfs_show_pagecache(const struct procfs_entry *e, pid_t pid,
-				 char *buf, usize_t size)
+				 char *buf, size_t size)
 {
 	(void)e;
 	(void)pid;
@@ -378,7 +378,7 @@ static int procfs_show_pagecache(const struct procfs_entry *e, pid_t pid,
 }
 
 static int procfs_show_pagecache_shrink(const struct procfs_entry *e, pid_t pid,
-					char *buf, usize_t size)
+					char *buf, size_t size)
 {
 	(void)e;
 	(void)pid;
@@ -388,12 +388,12 @@ static int procfs_show_pagecache_shrink(const struct procfs_entry *e, pid_t pid,
 			"# example: echo 8 > /proc/pagecache_shrink\n");
 }
 
-static unsigned long procfs_parse_ulong(const char *buf, usize_t size)
+static unsigned long procfs_parse_ulong(const char *buf, size_t size)
 {
 	unsigned long val = 0;
 	bool seen = false;
 
-	for (usize_t i = 0; i < size; ++i) {
+	for (size_t i = 0; i < size; ++i) {
 		char c = buf[i];
 
 		if (c == ' ' || c == '\t' || c == '\n' || c == '\r')
@@ -407,7 +407,7 @@ static unsigned long procfs_parse_ulong(const char *buf, usize_t size)
 }
 
 static ssize_t procfs_write_pagecache_shrink(const struct procfs_entry *e,
-					     const char *buf, usize_t size,
+					     const char *buf, size_t size,
 					     loff_t *pos)
 {
 	unsigned long nr;
@@ -432,7 +432,7 @@ static ssize_t procfs_write_pagecache_shrink(const struct procfs_entry *e,
 }
 
 static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
-				  char *buf, usize_t size)
+				  char *buf, size_t size)
 {
 	(void)e;
 	struct task_info info;
@@ -457,7 +457,7 @@ static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
 }
 
 static int procfs_show_pid_stat(const struct procfs_entry *e, pid_t pid,
-				char *buf, usize_t size)
+				char *buf, size_t size)
 {
 	(void)e;
 	struct task_info info;
@@ -478,11 +478,11 @@ static int procfs_show_pid_stat(const struct procfs_entry *e, pid_t pid,
 }
 
 static int procfs_show_pid_cmdline(const struct procfs_entry *e, pid_t pid,
-				   char *buf, usize_t size)
+				   char *buf, size_t size)
 {
 	(void)e;
 	struct task_info info;
-	usize_t n;
+	size_t n;
 
 	if (!task_get_info(pid, &info))
 		return -ESRCH;
@@ -612,7 +612,7 @@ static struct fs_dentry *procfs_root_lookup(struct fs_inode *dir,
 	int len = dentry->name.len;
 	pid_t pid;
 
-	for (usize_t i = 0; i < PROCFS_ROOT_ENTRIES_NR; ++i) {
+	for (size_t i = 0; i < PROCFS_ROOT_ENTRIES_NR; ++i) {
 		const struct procfs_entry *e = &procfs_root_entries[i];
 		if (e->name_len == len && !memcmp(e->name, name, len)) {
 			struct fs_inode *inode = procfs_iget_static(sb, e);
@@ -647,7 +647,7 @@ static struct fs_dentry *procfs_pid_dir_lookup(struct fs_inode *dir,
 	if (!task_pid_exists(pid))
 		return ERR_PTR(-ENOENT);
 
-	for (usize_t i = 0; i < PROCFS_PID_ENTRIES_NR; ++i) {
+	for (size_t i = 0; i < PROCFS_PID_ENTRIES_NR; ++i) {
 		const struct procfs_entry *e = &procfs_pid_entries[i];
 		if (e->name_len == len && !memcmp(e->name, name, len)) {
 			struct fs_inode *inode =
@@ -706,8 +706,8 @@ static const struct fs_inode_ops procfs_file_iops = {
 struct procfs_file_priv {
 	const struct procfs_entry *entry;
 	char *buf;
-	usize_t len; /* bytes actually generated */
-	usize_t cap; /* allocation size */
+	size_t len; /* bytes actually generated */
+	size_t cap; /* allocation size */
 };
 
 static int procfs_file_open(struct fs_inode *inode, struct fs_file *file)
@@ -750,9 +750,9 @@ static int procfs_file_open(struct fs_inode *inode, struct fs_file *file)
 		kfree(priv);
 		return n;
 	}
-	if ((usize_t)n > priv->cap)
+	if ((size_t)n > priv->cap)
 		n = (int)priv->cap;
-	priv->len = (usize_t)n;
+	priv->len = (size_t)n;
 	priv->entry = e;
 	file->private_data = priv;
 	return 0;
@@ -770,27 +770,27 @@ static int procfs_file_release(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static ssize_t procfs_file_read(struct fs_file *file, char *buf, usize_t size,
+static ssize_t procfs_file_read(struct fs_file *file, char *buf, size_t size,
 				loff_t *pos)
 {
 	struct procfs_file_priv *priv = file->private_data;
-	usize_t remaining, n;
+	size_t remaining, n;
 
 	if (!priv)
 		return -EBADF;
 	if (*pos < 0)
 		return -EINVAL;
-	if ((usize_t)*pos >= priv->len)
+	if ((size_t)*pos >= priv->len)
 		return 0;
-	remaining = priv->len - (usize_t)*pos;
+	remaining = priv->len - (size_t)*pos;
 	n = size < remaining ? size : remaining;
-	memcpy(buf, priv->buf + (usize_t)*pos, n);
+	memcpy(buf, priv->buf + (size_t)*pos, n);
 	*pos += (loff_t)n;
 	return (ssize_t)n;
 }
 
 static ssize_t procfs_file_write(struct fs_file *file, const char *buf,
-				 usize_t size, loff_t *pos)
+				 size_t size, loff_t *pos)
 {
 	struct procfs_file_priv *priv = file->private_data;
 
@@ -883,7 +883,7 @@ static int procfs_dir_release(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static ssize_t procfs_dir_read(struct fs_file *file, char *buf, usize_t size,
+static ssize_t procfs_dir_read(struct fs_file *file, char *buf, size_t size,
 			       loff_t *pos)
 {
 	(void)file;
@@ -894,7 +894,7 @@ static ssize_t procfs_dir_read(struct fs_file *file, char *buf, usize_t size,
 }
 
 static ssize_t procfs_dir_write(struct fs_file *file, const char *buf,
-				usize_t size, loff_t *pos)
+				size_t size, loff_t *pos)
 {
 	(void)file;
 	(void)buf;
@@ -961,7 +961,7 @@ static int procfs_root_iterate_shared(struct fs_file *file,
 	if (!procfs_emit_dot(ctx, dir))
 		return 0;
 
-	for (usize_t i = 0; i < PROCFS_ROOT_ENTRIES_NR; ++i) {
+	for (size_t i = 0; i < PROCFS_ROOT_ENTRIES_NR; ++i) {
 		idx = (loff_t)(2 + i);
 		if (ctx->pos > idx)
 			continue;
@@ -990,7 +990,7 @@ static int procfs_root_iterate_shared(struct fs_file *file,
 		nlen = snprintf(name, sizeof(name), "%ld", (long)pids[i]);
 		if (nlen <= 0)
 			continue;
-		if ((usize_t)nlen >= sizeof(name))
+		if ((size_t)nlen >= sizeof(name))
 			nlen = (int)sizeof(name) - 1;
 		unsigned long ino = procfs_make_pid_dir_ino(pids[i]);
 		if (!ctx->actor(ctx, name, nlen, ctx->pos, ino, DT_DIR)) {
@@ -1017,7 +1017,7 @@ static int procfs_pid_dir_iterate_shared(struct fs_file *file,
 	if (!procfs_emit_dot(ctx, dir))
 		return 0;
 
-	for (usize_t i = 0; i < PROCFS_PID_ENTRIES_NR; ++i) {
+	for (size_t i = 0; i < PROCFS_PID_ENTRIES_NR; ++i) {
 		idx = (loff_t)(2 + i);
 		if (ctx->pos > idx)
 			continue;

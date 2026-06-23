@@ -19,8 +19,8 @@ struct page {
 			void *slab_free_objs;
 			struct slab_allocator *slab_cache;
 			struct list_head slab_list;
-			usize_t slab_free_count;
-			usize_t slab_objs_count;
+			size_t slab_free_count;
+			size_t slab_objs_count;
 		};
 
 		struct { /* tmpfs */
@@ -32,9 +32,9 @@ struct page {
 struct uvm_region {
 	struct list_head list;
 	u64 addr;
-	usize_t size;
+	size_t size;
 	struct page **pages;
-	usize_t nr_pages;
+	size_t nr_pages;
 	unsigned int flags;
 };
 

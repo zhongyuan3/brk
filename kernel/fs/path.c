@@ -235,10 +235,10 @@ void fs_path_put(struct fs_path *path)
 	fs_mount_state_put(path->mnt);
 }
 
-int fs_path_to_absolute(const struct fs_path *path, char *buf, usize_t bufsz)
+int fs_path_to_absolute(const struct fs_path *path, char *buf, size_t bufsz)
 {
 	struct fs_path cur;
-	usize_t pos;
+	size_t pos;
 
 	if (!path || !path->mnt || !path->dentry || !buf || bufsz == 0)
 		return -EINVAL;
@@ -251,7 +251,7 @@ int fs_path_to_absolute(const struct fs_path *path, char *buf, usize_t bufsz)
 
 	while (1) {
 		const char *name;
-		usize_t len;
+		size_t len;
 		struct fs_dentry *parent;
 
 		if (cur.dentry == cur.mnt->root && cur.mnt->parent &&

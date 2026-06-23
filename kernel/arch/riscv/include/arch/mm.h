@@ -8,7 +8,7 @@
 #include <brk/mm_types.h>
 #include <brk/types.h>
 
-extern usize_t load_offset; /* LOAD_OFFSET = VMA - LMA */
+extern size_t load_offset; /* LOAD_OFFSET = VMA - LMA */
 extern u64 phys_ram_base;
 
 extern char _skernel[], _ekernel[];

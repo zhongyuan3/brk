@@ -10,8 +10,8 @@ static struct slab_allocator kmalloc_allocators[NR_KMALLOC_ALLOCATORS];
 
 static struct page *kmalloc_block_head(struct page *pg, unsigned int order)
 {
-	usize_t pfn = page_to_pfn(pg);
-	usize_t head_pfn = pfn & ~(((usize_t)1 << order) - 1);
+	size_t pfn = page_to_pfn(pg);
+	size_t head_pfn = pfn & ~(((size_t)1 << order) - 1);
 
 	return pfn_to_page(head_pfn);
 }
@@ -36,7 +36,7 @@ static void kmalloc_unmark_block(struct page *head, unsigned int order)
 		(head + i)->flags &= ~PAGE_FLAGS_KMALLOC;
 }
 
-static int kmalloc_allocator_index(usize_t size)
+static int kmalloc_allocator_index(size_t size)
 {
 	if (size <= 8)
 		return 0;
@@ -64,15 +64,15 @@ static int kmalloc_allocator_index(usize_t size)
 
 void kmalloc_init(void)
 {
-	usize_t sz[NR_KMALLOC_ALLOCATORS] = {
+	size_t sz[NR_KMALLOC_ALLOCATORS] = {
 		8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096,
 	};
-	usize_t align = alignof(max_align_t);
+	size_t align = alignof(max_align_t);
 	for (int i = 0; i < NR_KMALLOC_ALLOCATORS; ++i)
 		slab_init(&kmalloc_allocators[i], sz[i], align, "kmalloc");
 }
 
-void *kmalloc(usize_t size)
+void *kmalloc(size_t size)
 {
 	if (size == 0)
 		return NULL;
@@ -93,9 +93,9 @@ void *kmalloc(usize_t size)
 	return (void *)page_to_virt(pg);
 }
 
-void *kcalloc(usize_t nmemb, usize_t size)
+void *kcalloc(size_t nmemb, size_t size)
 {
-	usize_t bytes;
+	size_t bytes;
 
 	if (nmemb != 0 && size > SIZE_MAX / nmemb)
 		return NULL;
@@ -110,7 +110,7 @@ void *kcalloc(usize_t nmemb, usize_t size)
 	return ptr;
 }
 
-void *kzalloc(usize_t size)
+void *kzalloc(size_t size)
 {
 	return kcalloc(1, size);
 }

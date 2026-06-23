@@ -140,7 +140,7 @@ struct virtio_blk_config {
 struct virtio_blk_io_desc {
 	u64 buf_phys;
 	u64 sector;
-	usize_t sec_count;
+	size_t sec_count;
 	bool is_write;
 	bool completed;
 };

@@ -56,7 +56,7 @@ static int copy_user_pt(pte_t *dst, pte_t *src)
 	u64 dpg_pa;
 	struct page *pg;
 
-	for (usize_t i = 0; i < PTRS_PER_PT; ++i) {
+	for (size_t i = 0; i < PTRS_PER_PT; ++i) {
 		if (!pte_present(src[i]))
 			continue;
 
@@ -91,7 +91,7 @@ static int copy_user_pmd(pmde_t *dst, pmde_t *src)
 {
 	int err = 0;
 
-	for (usize_t i = 0; i < PTRS_PER_PMD; ++i) {
+	for (size_t i = 0; i < PTRS_PER_PMD; ++i) {
 		if (!pmde_present(src[i]))
 			continue;
 
@@ -136,7 +136,7 @@ static int copy_user_pgd(pgde_t *dst, pgde_t *src)
 {
 	int err = 0;
 
-	for (usize_t i = 0; i < PTRS_PER_PGD; ++i) {
+	for (size_t i = 0; i < PTRS_PER_PGD; ++i) {
 		spinlock_acquire(&kernel_pgdir_lock);
 		bool is_kspace = pgde_present(kernel_pgdir[i]);
 		spinlock_release(&kernel_pgdir_lock);
@@ -175,9 +175,9 @@ int copy_user_pgtable(pgde_t *dst, pgde_t *src)
 	return copy_user_pgd(dst, src);
 }
 
-static void destroy_user_pt(pte_t *pt, usize_t pgde_idx, usize_t pmde_idx)
+static void destroy_user_pt(pte_t *pt, size_t pgde_idx, size_t pmde_idx)
 {
-	for (usize_t i = 0; i < PTRS_PER_PT; ++i) {
+	for (size_t i = 0; i < PTRS_PER_PT; ++i) {
 		if (pte_present(pt[i])) {
 			u64 pa = pte_get(pt[i]);
 			u64 va = pgde_idx << 30;
@@ -191,12 +191,12 @@ static void destroy_user_pt(pte_t *pt, usize_t pgde_idx, usize_t pmde_idx)
 	}
 }
 
-static void destroy_user_pmd(pmde_t *pmd, usize_t pgde_idx)
+static void destroy_user_pmd(pmde_t *pmd, size_t pgde_idx)
 {
 	u64 pa;
 	pte_t *pt;
 
-	for (usize_t i = 0; i < PTRS_PER_PMD; ++i) {
+	for (size_t i = 0; i < PTRS_PER_PMD; ++i) {
 		if (!pmde_present(pmd[i]))
 			continue;
 
@@ -222,7 +222,7 @@ static void destroy_user_pgd(pgde_t *pgd)
 	u64 pa;
 	pmde_t *pmd;
 
-	for (usize_t i = 0; i < PTRS_PER_PGD; ++i) {
+	for (size_t i = 0; i < PTRS_PER_PGD; ++i) {
 		spinlock_acquire(&kernel_pgdir_lock);
 		bool is_kspace = pgde_present(kernel_pgdir[i]);
 		spinlock_release(&kernel_pgdir_lock);

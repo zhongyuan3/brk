@@ -118,9 +118,9 @@ int brkfs_dir_remove(struct fs_inode *dir, const char *name,
 int brkfs_new_dir_body(struct fs_inode *inode, u32 parent_ino);
 
 int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
-		       usize_t size, usize_t *read_out);
+		       size_t size, size_t *read_out);
 int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
-			usize_t size, usize_t *written_out);
+			size_t size, size_t *written_out);
 int brkfs_truncate_inode_blocks(struct fs_inode *inode, loff_t new_size);
 
 #define BRKFS_GETBLK_CREATE 0x1

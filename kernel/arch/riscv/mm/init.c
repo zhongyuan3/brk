@@ -13,7 +13,7 @@
 #include <brk/vmalloc.h>
 #include <libfdt.h>
 
-usize_t load_offset;
+size_t load_offset;
 u64 phys_ram_base;
 
 static void map_mem(void)
@@ -21,8 +21,8 @@ static void map_mem(void)
 	u64 idx;
 	u64 start, end;
 	struct memblock_region *regs, *reg;
-	usize_t regs_cnt = 0;
-	usize_t size;
+	size_t regs_cnt = 0;
+	size_t size;
 
 	for_each_mem_range(idx, start, end)
 		++regs_cnt;
@@ -41,7 +41,7 @@ static void map_mem(void)
 	unsigned int flags = PTE_R | PTE_W;
 	u64 vaddr;
 
-	for (usize_t i = 0; i < regs_cnt; ++i) {
+	for (size_t i = 0; i < regs_cnt; ++i) {
 		vaddr = phys_to_virt(regs[i].base);
 		kvmap_with_mode(vaddr, regs[i].size, regs[i].base, flags,
 				VMAP_MODE_EARLY);
@@ -80,7 +80,7 @@ static void map_kernel(void)
 static void map_dtb(void)
 {
 	u64 dtb_virt = phys_to_virt(dtb_phys);
-	usize_t dtb_size = fdt_totalsize(dtb_phys);
+	size_t dtb_size = fdt_totalsize(dtb_phys);
 	kvmap_with_mode(dtb_virt, dtb_size, dtb_phys, PTE_R | PTE_W,
 			VMAP_MODE_EARLY);
 }
@@ -96,7 +96,7 @@ static void vmemmap_init(void)
 {
 	u32 idx;
 	u64 start, end;
-	usize_t sz;
+	size_t sz;
 	u64 paddr;
 
 	for_each_mem_pfn_range(idx, start, end) {

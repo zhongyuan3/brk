@@ -28,7 +28,7 @@ u64 sys_read(void)
 {
 	int fd;
 	void *buf;
-	usize_t n;
+	size_t n;
 	struct fs_file *fp;
 	ssize_t ret;
 	struct task_control_block *task;
@@ -49,7 +49,7 @@ u64 sys_write(void)
 {
 	int fd;
 	const void *buf;
-	usize_t n;
+	size_t n;
 	struct fs_file *fp;
 	ssize_t ret;
 	struct task_control_block *task;
@@ -232,7 +232,7 @@ u64 sys_readlink(void)
 {
 	const char *pathname = syscall_arg_ptr(0);
 	char *buf = syscall_arg_ptr(1);
-	usize_t bufsiz = syscall_arg_raw(2);
+	size_t bufsiz = syscall_arg_raw(2);
 	return do_readlinkat(AT_FDCWD, pathname, buf, bufsiz);
 }
 
@@ -276,7 +276,7 @@ u64 sys_getcwd(void)
 {
 	struct task_control_block *task = current_task();
 	char *buf = syscall_arg_ptr(0);
-	usize_t size = syscall_arg_raw(1);
+	size_t size = syscall_arg_raw(1);
 	struct fs_path cwd = { 0 };
 	fsinfo_get_cwd(task->fsinfo, &cwd);
 	int ret = fs_path_to_absolute(&cwd, buf, size);
@@ -366,7 +366,7 @@ u64 sys_readlinkat(void)
 	int dirfd;
 	const char *pathname;
 	char *buf;
-	usize_t bufsiz;
+	size_t bufsiz;
 
 	dirfd = syscall_arg_int(0);
 	pathname = syscall_arg_ptr(1);
@@ -516,8 +516,8 @@ u64 sys_lseek(void)
 struct getdents_context {
 	struct fs_dir_iterator ctx;
 	u8 *buf;
-	usize_t size;
-	usize_t pos;
+	size_t size;
+	size_t pos;
 };
 
 static bool getdents_filldir(struct fs_dir_iterator *ctx, const char *name,
@@ -531,7 +531,7 @@ static bool getdents_filldir(struct fs_dir_iterator *ctx, const char *name,
 	if (gctx->pos > gctx->size)
 		return false;
 
-	usize_t len = offsetof(struct dirent, d_name) + namelen + 1;
+	size_t len = offsetof(struct dirent, d_name) + namelen + 1;
 	len = round_up(len, alignof(struct dirent));
 
 	if (len > gctx->size - gctx->pos)
@@ -554,7 +554,7 @@ u64 sys_getdents(void)
 	int fd = -1;
 	struct fs_file *fp = NULL;
 	void *buf;
-	usize_t size;
+	size_t size;
 	int err;
 
 	fd = syscall_arg_int(0);
@@ -607,8 +607,8 @@ u64 sys_getdents(void)
 struct getdents64_context {
 	struct fs_dir_iterator ctx;
 	u8 *buf;
-	usize_t size;
-	usize_t pos;
+	size_t size;
+	size_t pos;
 };
 
 static bool getdents64_filldir(struct fs_dir_iterator *ctx, const char *name,
@@ -622,7 +622,7 @@ static bool getdents64_filldir(struct fs_dir_iterator *ctx, const char *name,
 	if (gctx->pos > gctx->size)
 		return false;
 
-	usize_t len = offsetof(struct dirent64, d_name) + namelen + 1;
+	size_t len = offsetof(struct dirent64, d_name) + namelen + 1;
 	len = round_up(len, alignof(struct dirent64));
 
 	if (len > gctx->size - gctx->pos)
@@ -645,7 +645,7 @@ u64 sys_getdents64(void)
 	int fd = -1;
 	struct fs_file *fp = NULL;
 	void *buf;
-	usize_t size;
+	size_t size;
 	int err;
 
 	fd = syscall_arg_int(0);

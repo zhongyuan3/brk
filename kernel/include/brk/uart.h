@@ -11,7 +11,7 @@ struct tty_port;
 
 struct ns16550a_device {
 	u64 phys_base;
-	usize_t size;
+	size_t size;
 	u32 irq;
 	u32 clock_freq;
 	struct hlist_node node;

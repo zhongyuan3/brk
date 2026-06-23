@@ -19,22 +19,22 @@
 #define PAGE_FLAGS_NEW_FREE_PAGE \
 	(PAGE_FLAGS_BUDDY | PAGE_FLAGS_HEAD | PAGE_FLAGS_FREE)
 
-static inline usize_t phys_to_pfn(u64 paddr)
+static inline size_t phys_to_pfn(u64 paddr)
 {
 	return (paddr - phys_ram_base) >> PAGE_SHIFT;
 }
 
-static inline u64 pfn_to_phys(usize_t pfn)
+static inline u64 pfn_to_phys(size_t pfn)
 {
 	return (pfn << PAGE_SHIFT) + phys_ram_base;
 }
 
-static inline usize_t page_to_pfn(struct page *pg)
+static inline size_t page_to_pfn(struct page *pg)
 {
 	return pg - (struct page *)VMEMMAP_START;
 }
 
-static inline struct page *pfn_to_page(usize_t pfn)
+static inline struct page *pfn_to_page(size_t pfn)
 {
 	return (struct page *)VMEMMAP_START + pfn;
 }
@@ -59,7 +59,7 @@ static inline struct page *virt_to_page(u64 vaddr)
 	return phys_to_page(virt_to_phys(vaddr));
 }
 
-static inline usize_t find_buddy_pfn(usize_t pfn, unsigned int order)
+static inline size_t find_buddy_pfn(size_t pfn, unsigned int order)
 {
 	return pfn ^ (1 << order);
 }
@@ -69,7 +69,7 @@ static inline struct page *find_buddy_page(struct page *pg, unsigned int order)
 	return pfn_to_page(find_buddy_pfn(page_to_pfn(pg), order));
 }
 
-static inline unsigned int page_order(usize_t size)
+static inline unsigned int page_order(size_t size)
 {
 	for (unsigned int order = 0; order < PAGE_ORDER_MAX; ++order)
 		if (PAGE_SIZE * (1U << order) >= size)

@@ -27,7 +27,7 @@ static int brkfs_file_read_page(struct page_cache *m, struct cached_page *cp)
 		return -EIO;
 	}
 
-	for (usize_t boff = 0; boff < PAGE_SIZE; boff += bs) {
+	for (size_t boff = 0; boff < PAGE_SIZE; boff += bs) {
 		u32 bno;
 		int err;
 
@@ -65,7 +65,7 @@ static int brkfs_file_write_page(struct page_cache *m, struct cached_page *cp)
 		return -EIO;
 	}
 
-	for (usize_t boff = 0; boff < PAGE_SIZE; boff += bs) {
+	for (size_t boff = 0; boff < PAGE_SIZE; boff += bs) {
 		u32 bno;
 		int err;
 
@@ -123,14 +123,14 @@ static int brkfs_file_release(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static ssize_t brkfs_file_read(struct fs_file *file, char *buf, usize_t size,
+static ssize_t brkfs_file_read(struct fs_file *file, char *buf, size_t size,
 			       loff_t *pos)
 {
 	return generic_file_read(file, buf, size, pos);
 }
 
 static ssize_t brkfs_file_write(struct fs_file *file, const char *buf,
-				usize_t size, loff_t *pos)
+				size_t size, loff_t *pos)
 {
 	return generic_file_write(file, buf, size, pos);
 }
@@ -194,7 +194,7 @@ static long brkfs_file_ioctl(struct fs_file *file, unsigned int cmd,
 }
 
 int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
-		       usize_t size, usize_t *read_out)
+		       size_t size, size_t *read_out)
 {
 	struct brkfs_inode_info *inf = inode->private_data;
 	loff_t off = *pos;
@@ -210,12 +210,12 @@ int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
 		return 0;
 	}
 	if ((loff_t)(off + size) > inode->size)
-		size = (usize_t)(inode->size - off);
+		size = (size_t)(inode->size - off);
 
 	u8 *p = buf;
 	while (size > 0) {
-		usize_t in_off = off % PAGE_SIZE;
-		usize_t chunk = PAGE_SIZE - in_off;
+		size_t in_off = off % PAGE_SIZE;
+		size_t chunk = PAGE_SIZE - in_off;
 		if (chunk > size)
 			chunk = size;
 
@@ -242,7 +242,7 @@ int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
 }
 
 int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
-			usize_t size, usize_t *written_out)
+			size_t size, size_t *written_out)
 {
 	struct brkfs_inode_info *inf = inode->private_data;
 	loff_t off = *pos;
@@ -256,8 +256,8 @@ int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
 
 	const u8 *p = buf;
 	while (size > 0) {
-		usize_t in_off = off % PAGE_SIZE;
-		usize_t chunk = PAGE_SIZE - in_off;
+		size_t in_off = off % PAGE_SIZE;
+		size_t chunk = PAGE_SIZE - in_off;
 		if (chunk > size)
 			chunk = size;
 

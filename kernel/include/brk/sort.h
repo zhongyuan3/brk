@@ -3,7 +3,7 @@
 
 #include <brk/types.h>
 
-void qsort(void *base, usize_t nmemb, usize_t size,
+void qsort(void *base, size_t nmemb, size_t size,
 	   int (*compar)(const void *, const void *));
 
 #endif

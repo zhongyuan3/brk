@@ -43,7 +43,7 @@ static int dtb_get_parent_cells(void *dtb_virt, int node, int *addr_cells,
 
 static int dtb_for_each_reg(void *dtb_virt, int node, int addr_cells,
 			    int size_cells,
-			    int (*callback)(u64 addr, usize_t size))
+			    int (*callback)(u64 addr, size_t size))
 {
 	const u32 *reg;
 	u64 addr, size;
