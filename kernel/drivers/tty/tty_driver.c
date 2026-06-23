@@ -245,7 +245,7 @@ static int tty_file_release(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static ssize_t tty_file_read(struct fs_file *file, char *buf, usize_t size,
+static ssize_t tty_file_read(struct fs_file *file, char *buf, size_t size,
 			     loff_t *pos)
 {
 	(void)pos;
@@ -256,7 +256,7 @@ static ssize_t tty_file_read(struct fs_file *file, char *buf, usize_t size,
 }
 
 static ssize_t tty_file_write(struct fs_file *file, const char *buf,
-			      usize_t size, loff_t *pos)
+			      size_t size, loff_t *pos)
 {
 	(void)pos;
 	struct tty *tty = file->private_data;

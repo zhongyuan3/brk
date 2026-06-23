@@ -13,12 +13,12 @@
 static void early_pgtable_hang(const char *msg)
 	__attribute__((section(".text.head"), noreturn));
 static u64 early_pgtable_alloc_pmd(u64) __attribute__((section(".text.head")));
-static void early_pgtable_map_range(u64 addr, usize_t size, u64 paddr,
+static void early_pgtable_map_range(u64 addr, size_t size, u64 paddr,
 				    unsigned int flags)
 	__attribute__((section(".text.head")));
-void early_pgtable_map(u64 dtb, usize_t load_offset)
+void early_pgtable_map(u64 dtb, size_t load_offset)
 	__attribute__((section(".text.head")));
-void early_pgtable_enable(usize_t load_offset)
+void early_pgtable_enable(size_t load_offset)
 	__attribute__((section(".text.head")));
 
 static void early_pgtable_hang(const char *msg)
@@ -39,7 +39,7 @@ static u64 early_pgtable_alloc_pmd(u64 prev)
 	early_pgtable_hang("early pgtable OOM\n");
 }
 
-static void early_pgtable_map_range(u64 addr, usize_t size, u64 paddr,
+static void early_pgtable_map_range(u64 addr, size_t size, u64 paddr,
 				    unsigned int flags)
 {
 	pgde_t *pgdep;
@@ -64,10 +64,10 @@ static void early_pgtable_map_range(u64 addr, usize_t size, u64 paddr,
 	}
 }
 
-void early_pgtable_map(u64 dtb, usize_t load_offset)
+void early_pgtable_map(u64 dtb, size_t load_offset)
 {
 	u64 kern_end;
-	usize_t size;
+	size_t size;
 	unsigned int flags;
 
 	/*
@@ -87,7 +87,7 @@ void early_pgtable_map(u64 dtb, usize_t load_offset)
 	early_pgtable_map_range((u64)KERNEL_LINK_ADDR, size, (u64)_skernel,
 				flags);
 
-	usize_t dtb_end = dtb + fdt_totalsize(dtb);
+	size_t dtb_end = dtb + fdt_totalsize(dtb);
 	if (dtb >= (u64)_skernel && dtb_end <= kern_end)
 		return;
 
@@ -103,7 +103,7 @@ void early_pgtable_map(u64 dtb, usize_t load_offset)
 	early_pgtable_map_range(map_start, size, map_start, flags);
 }
 
-void early_pgtable_enable(usize_t load_offset)
+void early_pgtable_enable(size_t load_offset)
 {
 	/*
 	 * early_pgdir resolves to a physical address here via PC-relative

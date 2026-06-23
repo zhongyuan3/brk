@@ -27,7 +27,7 @@ static SPINLOCK_DEFINE(cd_htable_lock);
 
 static int chrdev_alloc_major_no_lock(unsigned base_major, unsigned *major_out)
 {
-	usize_t bit = 0;
+	size_t bit = 0;
 
 	if (bitmap_alloc_bit_from(cd_major_pooled, MAJOR_MAX, base_major,
 				  &bit)) {

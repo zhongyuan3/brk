@@ -278,7 +278,7 @@ int do_symlinkat(int dirfd, const char *pathname, const char *target)
 	return err;
 }
 
-int do_readlinkat(int dirfd, const char *pathname, char *buf, usize_t bufsiz)
+int do_readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz)
 {
 	int err;
 	struct fs_path path;

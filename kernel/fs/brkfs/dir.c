@@ -19,7 +19,7 @@ static int brkfs_dir_release(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static ssize_t brkfs_dir_read(struct fs_file *file, char *buf, usize_t size,
+static ssize_t brkfs_dir_read(struct fs_file *file, char *buf, size_t size,
 			      loff_t *pos)
 {
 	(void)file;
@@ -30,7 +30,7 @@ static ssize_t brkfs_dir_read(struct fs_file *file, char *buf, usize_t size,
 }
 
 static ssize_t brkfs_dir_write(struct fs_file *file, const char *buf,
-			       usize_t size, loff_t *pos)
+			       size_t size, loff_t *pos)
 {
 	(void)file;
 	(void)buf;
@@ -63,7 +63,7 @@ static int brkfs_dir_iterate_shared(struct fs_file *file,
 	struct fs_inode *inode = file->inode;
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	struct brkfs_inode_info *di = inode->private_data;
-	usize_t bsz = sbi->s_sb.s_blocksize;
+	size_t bsz = sbi->s_sb.s_blocksize;
 	loff_t off = ctx->pos;
 	u8 *blk;
 	unsigned int bi;
@@ -80,7 +80,7 @@ static int brkfs_dir_iterate_shared(struct fs_file *file,
 		u32 pblk = di->i_block[bi];
 		loff_t blk_base = (loff_t)bi * (loff_t)bsz;
 		struct brkfs_dir_entry *ent;
-		usize_t left;
+		size_t left;
 
 		if (blk_base >= inode->size)
 			break;
@@ -169,7 +169,7 @@ static u8 brkfs_mode_to_dt(umode_t mode)
 	return DT_UNKNOWN;
 }
 
-static usize_t brkfs_dirent_reclen(unsigned int name_len)
+static size_t brkfs_dirent_reclen(unsigned int name_len)
 {
 	return round_up(offsetof(struct brkfs_dir_entry, name) + name_len, 4u);
 }
@@ -180,7 +180,7 @@ static int brkfs_dir_ensure_first_block(struct fs_inode *dir)
 	struct brkfs_inode_info *info = dir->private_data;
 	u32 bno;
 	u8 *blk;
-	usize_t bs = sbi->s_sb.s_blocksize;
+	size_t bs = sbi->s_sb.s_blocksize;
 	int err;
 
 	if (dir->size > 0)
@@ -209,7 +209,7 @@ static int brkfs_dir_ensure_first_block(struct fs_inode *dir)
 	return err;
 }
 
-static int __brkfs_dir_add_in_block(u8 *blk, usize_t bs, u32 ino,
+static int __brkfs_dir_add_in_block(u8 *blk, size_t bs, u32 ino,
 				    const char *name, unsigned int name_len,
 				    u8 ftype, s32 *walk_off)
 {
@@ -268,7 +268,7 @@ int brkfs_dir_add(struct fs_inode *dir, u32 child_ino, const char *name,
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct brkfs_inode_info *di = dir->private_data;
-	usize_t bs = sbi->s_sb.s_blocksize;
+	size_t bs = sbi->s_sb.s_blocksize;
 	u8 ftype = brkfs_mode_to_dt(child_mode);
 	u8 *blk;
 	unsigned int bi;
@@ -337,7 +337,7 @@ out:
 	return err;
 }
 
-static int __brkfs_dir_remove_in_block(u8 *blk, usize_t bs,
+static int __brkfs_dir_remove_in_block(u8 *blk, size_t bs,
 				       unsigned int name_len, const char *name)
 {
 	struct brkfs_dir_entry *curr = (struct brkfs_dir_entry *)blk;
@@ -370,14 +370,14 @@ int brkfs_new_dir_body(struct fs_inode *inode, u32 parent_ino)
 {
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	struct brkfs_inode_info *di = inode->private_data;
-	usize_t bs = sbi->s_sb.s_blocksize;
+	size_t bs = sbi->s_sb.s_blocksize;
 	u32 self_ino = inode->ino;
 	u32 bno;
 	u8 *blk;
 	struct brkfs_dir_entry *e;
 	struct brkfs_dir_entry *e2;
 	struct brkfs_dir_entry *hole;
-	usize_t r1, r2, rest;
+	size_t r1, r2, rest;
 	int err;
 
 	if (!di || !S_ISDIR(inode->mode))
@@ -436,7 +436,7 @@ int brkfs_dir_remove(struct fs_inode *dir, const char *name,
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct brkfs_inode_info *di = dir->private_data;
-	usize_t bs = sbi->s_sb.s_blocksize;
+	size_t bs = sbi->s_sb.s_blocksize;
 	u8 *blk;
 	unsigned int bi;
 	int err = -ENOENT;
@@ -473,7 +473,7 @@ int brkfs_dir_lookup(struct fs_inode *dir, const char *name,
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct brkfs_inode_info *di = dir->private_data;
-	usize_t bs = sbi->s_sb.s_blocksize;
+	size_t bs = sbi->s_sb.s_blocksize;
 	u8 *blk;
 	unsigned int bi;
 
@@ -488,7 +488,7 @@ int brkfs_dir_lookup(struct fs_inode *dir, const char *name,
 		u32 bno = di->i_block[bi];
 		loff_t blk_base = bi * bs;
 		struct brkfs_dir_entry *ent;
-		usize_t left;
+		size_t left;
 
 		if (blk_base >= dir->size)
 			break;

@@ -15,6 +15,6 @@ extern struct console early_console;
 void console_register(struct console *console);
 void console_unregister(struct console *console);
 
-void console_write_all(const char *s, usize_t n);
+void console_write_all(const char *s, size_t n);
 
 #endif

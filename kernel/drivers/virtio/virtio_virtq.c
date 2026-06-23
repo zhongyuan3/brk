@@ -6,7 +6,7 @@
 
 int virtq_alloc(struct virtq *vq, unsigned int num)
 {
-	usize_t size;
+	size_t size;
 
 	vq->desc = kcalloc(num, sizeof(struct virtq_desc));
 	if (!vq->desc)

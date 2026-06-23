@@ -22,8 +22,8 @@
 
 struct anon_pipe {
 	spinlock_t lock;
-	usize_t head;
-	usize_t count;
+	size_t head;
+	size_t count;
 	unsigned int readers;
 	unsigned int writers;
 	bool nonblock;
@@ -79,7 +79,7 @@ static int pipefs_dir_open(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static ssize_t pipefs_dir_read(struct fs_file *file, char *buf, usize_t size,
+static ssize_t pipefs_dir_read(struct fs_file *file, char *buf, size_t size,
 			       loff_t *pos)
 {
 	(void)file;
@@ -90,7 +90,7 @@ static ssize_t pipefs_dir_read(struct fs_file *file, char *buf, usize_t size,
 }
 
 static ssize_t pipefs_dir_write(struct fs_file *file, const char *buf,
-				usize_t size, loff_t *pos)
+				size_t size, loff_t *pos)
 {
 	(void)file;
 	(void)buf;
@@ -262,11 +262,11 @@ static int pipe_release(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static ssize_t pipe_read(struct fs_file *file, char *buf, usize_t size,
+static ssize_t pipe_read(struct fs_file *file, char *buf, size_t size,
 			 loff_t *pos)
 {
 	struct anon_pipe *pipe = file->inode->private_data;
-	usize_t n, first;
+	size_t n, first;
 	ssize_t total = 0;
 
 	(void)pos;
@@ -314,11 +314,11 @@ static ssize_t pipe_read(struct fs_file *file, char *buf, usize_t size,
 	return total;
 }
 
-static ssize_t pipe_write(struct fs_file *file, const char *buf, usize_t size,
+static ssize_t pipe_write(struct fs_file *file, const char *buf, size_t size,
 			  loff_t *pos)
 {
 	struct anon_pipe *pipe = file->inode->private_data;
-	usize_t n, first;
+	size_t n, first;
 	ssize_t total = 0;
 
 	(void)pos;

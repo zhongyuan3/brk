@@ -3,9 +3,9 @@
 #include <brk/kernel.h>
 #include <brk/string.h>
 
-static unsigned long bitmap_last_word_mask(usize_t nbits)
+static unsigned long bitmap_last_word_mask(size_t nbits)
 {
-	usize_t rem = nbits % BITS_PER_LONG;
+	size_t rem = nbits % BITS_PER_LONG;
 
 	if (rem == 0)
 		return ~0UL;
@@ -13,55 +13,55 @@ static unsigned long bitmap_last_word_mask(usize_t nbits)
 	return BIT_MASK(rem);
 }
 
-void bitmap_zero(unsigned long *bitmap, usize_t nbits)
+void bitmap_zero(unsigned long *bitmap, size_t nbits)
 {
-	usize_t nlongs = BITS_TO_LONGS(nbits);
+	size_t nlongs = BITS_TO_LONGS(nbits);
 
 	memset(bitmap, 0, nlongs * sizeof(*bitmap));
 }
 
-void bitmap_fill(unsigned long *bitmap, usize_t nbits)
+void bitmap_fill(unsigned long *bitmap, size_t nbits)
 {
-	usize_t nlongs = BITS_TO_LONGS(nbits);
+	size_t nlongs = BITS_TO_LONGS(nbits);
 
 	memset(bitmap, 0xFF, nlongs * sizeof(*bitmap));
 	if (nlongs != 0)
 		bitmap[nlongs - 1] &= bitmap_last_word_mask(nbits);
 }
 
-void bitmap_set_bit(unsigned long *bitmap, usize_t bit)
+void bitmap_set_bit(unsigned long *bitmap, size_t bit)
 {
-	usize_t idx = bit / BITS_PER_LONG;
-	usize_t ofs = bit % BITS_PER_LONG;
+	size_t idx = bit / BITS_PER_LONG;
+	size_t ofs = bit % BITS_PER_LONG;
 
 	bitmap[idx] |= BIT(ofs);
 }
 
-void bitmap_clear_bit(unsigned long *bitmap, usize_t bit)
+void bitmap_clear_bit(unsigned long *bitmap, size_t bit)
 {
-	usize_t idx = bit / BITS_PER_LONG;
-	usize_t ofs = bit % BITS_PER_LONG;
+	size_t idx = bit / BITS_PER_LONG;
+	size_t ofs = bit % BITS_PER_LONG;
 
 	bitmap[idx] &= ~BIT(ofs);
 }
 
-bool bitmap_test_bit(const unsigned long *bitmap, usize_t bit)
+bool bitmap_test_bit(const unsigned long *bitmap, size_t bit)
 {
-	usize_t idx = bit / BITS_PER_LONG;
-	usize_t ofs = bit % BITS_PER_LONG;
+	size_t idx = bit / BITS_PER_LONG;
+	size_t ofs = bit % BITS_PER_LONG;
 
 	return (bitmap[idx] & BIT(ofs)) != 0;
 }
 
-usize_t bitmap_find_first_zero_bit(const unsigned long *bitmap, usize_t nbits)
+size_t bitmap_find_first_zero_bit(const unsigned long *bitmap, size_t nbits)
 {
 	return bitmap_find_next_zero_bit(bitmap, nbits, 0);
 }
 
-usize_t bitmap_find_next_zero_bit(const unsigned long *bitmap, usize_t nbits,
-				  usize_t start)
+size_t bitmap_find_next_zero_bit(const unsigned long *bitmap, size_t nbits,
+				  size_t start)
 {
-	usize_t bit;
+	size_t bit;
 
 	if (start >= nbits)
 		return nbits;
@@ -75,9 +75,9 @@ usize_t bitmap_find_next_zero_bit(const unsigned long *bitmap, usize_t nbits,
 	return nbits;
 }
 
-bool bitmap_alloc_bit(unsigned long *bitmap, usize_t nbits, usize_t *out_bit)
+bool bitmap_alloc_bit(unsigned long *bitmap, size_t nbits, size_t *out_bit)
 {
-	usize_t bit = bitmap_find_first_zero_bit(bitmap, nbits);
+	size_t bit = bitmap_find_first_zero_bit(bitmap, nbits);
 
 	if (bit >= nbits)
 		return false;
@@ -89,10 +89,10 @@ bool bitmap_alloc_bit(unsigned long *bitmap, usize_t nbits, usize_t *out_bit)
 	return true;
 }
 
-bool bitmap_alloc_bit_from(unsigned long *bitmap, usize_t nbits, usize_t hint,
-			   usize_t *out_bit)
+bool bitmap_alloc_bit_from(unsigned long *bitmap, size_t nbits, size_t hint,
+			   size_t *out_bit)
 {
-	usize_t bit;
+	size_t bit;
 
 	if (nbits == 0)
 		return false;
@@ -113,16 +113,16 @@ bool bitmap_alloc_bit_from(unsigned long *bitmap, usize_t nbits, usize_t hint,
 	return true;
 }
 
-void bitmap_free_bit(unsigned long *bitmap, usize_t nbits, usize_t bit)
+void bitmap_free_bit(unsigned long *bitmap, size_t nbits, size_t bit)
 {
 	if (bit < nbits)
 		bitmap_clear_bit(bitmap, bit);
 }
 
-bool bitmap_alloc_region(unsigned long *bitmap, usize_t nbits, usize_t len,
-			 usize_t align, usize_t *out_start)
+bool bitmap_alloc_region(unsigned long *bitmap, size_t nbits, size_t len,
+			 size_t align, size_t *out_start)
 {
-	usize_t cand;
+	size_t cand;
 
 	if (len == 0 || len > nbits)
 		return false;
@@ -133,7 +133,7 @@ bool bitmap_alloc_region(unsigned long *bitmap, usize_t nbits, usize_t len,
 	for (cand = bitmap_find_first_zero_bit(bitmap, nbits);
 	     cand + len <= nbits;
 	     cand = bitmap_find_next_zero_bit(bitmap, nbits, cand + 1)) {
-		usize_t i;
+		size_t i;
 
 		if (align > 1 && (cand % align) != 0)
 			continue;
@@ -157,10 +157,10 @@ bool bitmap_alloc_region(unsigned long *bitmap, usize_t nbits, usize_t len,
 	return false;
 }
 
-void bitmap_free_region(unsigned long *bitmap, usize_t nbits, usize_t start,
-			usize_t len)
+void bitmap_free_region(unsigned long *bitmap, size_t nbits, size_t start,
+			size_t len)
 {
-	usize_t i;
+	size_t i;
 
 	for (i = 0; i < len && start + i < nbits; i++)
 		bitmap_clear_bit(bitmap, start + i);

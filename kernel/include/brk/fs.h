@@ -143,8 +143,8 @@ struct fs_file {
 struct fs_file_ops {
 	int (*open)(struct fs_inode *, struct fs_file *);
 	int (*release)(struct fs_inode *, struct fs_file *);
-	ssize_t (*read)(struct fs_file *, char *, usize_t, loff_t *);
-	ssize_t (*write)(struct fs_file *, const char *, usize_t, loff_t *);
+	ssize_t (*read)(struct fs_file *, char *, size_t, loff_t *);
+	ssize_t (*write)(struct fs_file *, const char *, size_t, loff_t *);
 	loff_t (*llseek)(struct fs_file *, loff_t, int);
 	int (*iterate_shared)(struct fs_file *, struct fs_dir_iterator *);
 	int (*fsync)(struct fs_file *, loff_t, loff_t, int);
@@ -187,8 +187,8 @@ struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode);
 struct fs_file *fs_file_get(struct fs_file *file);
 void fs_file_put(struct fs_file *file);
 loff_t fs_file_lseek(struct fs_file *file, loff_t len, int whence);
-ssize_t fs_file_read(struct fs_file *file, void *buf, usize_t size);
-ssize_t fs_file_write(struct fs_file *file, const void *buf, usize_t size);
+ssize_t fs_file_read(struct fs_file *file, void *buf, size_t size);
+ssize_t fs_file_write(struct fs_file *file, const void *buf, size_t size);
 long fs_file_ioctl(struct fs_file *file, unsigned int cmd, unsigned long arg);
 int fs_file_stat(struct fs_file *file, struct stat *buf);
 int fs_file_truncate(struct fs_file *file, loff_t size);
@@ -202,7 +202,7 @@ int do_linkat(int olddirfd, const char *oldpath, int newdirfd,
 	      const char *newpath, int flags);
 int do_unlinkat(int dirfd, const char *path, int flags);
 int do_symlinkat(int dirfd, const char *pathname, const char *target);
-int do_readlinkat(int dirfd, const char *path, char *buf, usize_t bufsiz);
+int do_readlinkat(int dirfd, const char *path, char *buf, size_t bufsiz);
 int do_creat(const char *pathname, umode_t mode);
 int do_renameat(int olddirfd, const char *oldpath, int newdirfd,
 		const char *newpath, unsigned int flags);

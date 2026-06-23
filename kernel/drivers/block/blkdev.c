@@ -30,7 +30,7 @@ static SPINLOCK_DEFINE(bd_htable_lock);
 
 static int blkdev_alloc_major_no_lock(unsigned base_major, unsigned *major_out)
 {
-	usize_t bit = 0;
+	size_t bit = 0;
 
 	if (bitmap_alloc_bit_from(bd_major_pooled, MAJOR_MAX, base_major,
 				  &bit)) {
@@ -409,7 +409,7 @@ static int blkdev_file_open(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static ssize_t blkdev_file_read(struct fs_file *file, char *buf, usize_t size,
+static ssize_t blkdev_file_read(struct fs_file *file, char *buf, size_t size,
 				loff_t *pos)
 {
 	(void)file;
@@ -420,7 +420,7 @@ static ssize_t blkdev_file_read(struct fs_file *file, char *buf, usize_t size,
 }
 
 static ssize_t blkdev_file_write(struct fs_file *file, const char *buf,
-				 usize_t size, loff_t *pos)
+				 size_t size, loff_t *pos)
 {
 	(void)file;
 	(void)buf;

@@ -268,7 +268,7 @@ int task_set_brk(u64 addr)
 	u64 curr_heap_end = heap_start + heap->size;
 	int err = 0;
 	u64 new_heap_end;
-	usize_t incr;
+	size_t incr;
 
 	if (addr < heap_start)
 		return 0;
@@ -280,15 +280,15 @@ int task_set_brk(u64 addr)
 
 	new_heap_end = round_up(addr, PAGE_SIZE);
 	incr = new_heap_end - curr_heap_end;
-	usize_t old_npgs = heap->nr_pages;
-	usize_t new_npgs = old_npgs + (incr >> PAGE_SHIFT);
+	size_t old_npgs = heap->nr_pages;
+	size_t new_npgs = old_npgs + (incr >> PAGE_SHIFT);
 	struct page **new_pgs = kcalloc(new_npgs, sizeof(struct page *));
 	if (!new_pgs)
 		return -ENOMEM;
 	memcpy(new_pgs, heap->pages, old_npgs * sizeof(struct page *));
 
 	addr = curr_heap_end;
-	usize_t i = old_npgs;
+	size_t i = old_npgs;
 	while (i < new_npgs) {
 		struct page *pg = page_alloc(0);
 		if (!pg) {
@@ -320,7 +320,7 @@ int task_set_brk(u64 addr)
 failed:
 	for (u64 a = curr_heap_end; a < addr; a += PAGE_SIZE)
 		uvunmap(mm->pgd, a, PAGE_SIZE);
-	for (usize_t j = old_npgs; j < i; ++j) {
+	for (size_t j = old_npgs; j < i; ++j) {
 		ASSERT(new_pgs[j]);
 		page_free(new_pgs[j], 0);
 	}
@@ -418,7 +418,7 @@ bool task_get_info(pid_t tgid, struct task_info *info)
 	info->utime = task_get_user_time(target);
 	info->ktime = task_get_system_time(target);
 	info->brk = target->mm ? target->mm->brk : 0;
-	for (usize_t i = 0; i < TASK_NAME_MAX; ++i) {
+	for (size_t i = 0; i < TASK_NAME_MAX; ++i) {
 		info->name[i] = target->name[i];
 		if (target->name[i] == '\0')
 			break;

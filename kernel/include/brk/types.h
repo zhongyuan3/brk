@@ -13,8 +13,6 @@ typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
-typedef size_t usize_t;
-
 typedef unsigned int fmode_t;
 typedef int cpuid_t;
 typedef unsigned int umode_t;

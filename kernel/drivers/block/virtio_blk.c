@@ -183,7 +183,7 @@ static int virtio_blk_submit(struct virtio_blk_dev *vblk,
 }
 
 static int virtio_blk_io(struct virtio_blk_dev *vblk, u64 sector, u64 buf_phys,
-			 usize_t sec_count, bool write)
+			 size_t sec_count, bool write)
 {
 	struct virtio_blk_io_desc trans = {
 		.buf_phys = buf_phys,

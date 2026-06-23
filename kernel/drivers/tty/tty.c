@@ -90,9 +90,9 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 	}
 }
 
-ssize_t tty_read(struct tty *tty, void *buf, usize_t n)
+ssize_t tty_read(struct tty *tty, void *buf, size_t n)
 {
-	usize_t target;
+	size_t target;
 	int c;
 	char *dst = buf;
 
@@ -136,7 +136,7 @@ ssize_t tty_read(struct tty *tty, void *buf, usize_t n)
 	return target - n;
 }
 
-ssize_t tty_write(struct tty *tty, const void *buf, usize_t n)
+ssize_t tty_write(struct tty *tty, const void *buf, size_t n)
 {
 	const struct tty_ops *ops = tty->port->driver->ops;
 	const u8 *p = buf;

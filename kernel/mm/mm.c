@@ -69,7 +69,7 @@ static void uvm_space_free_segments(struct uvm_space *mm)
 	list_for_each_entry_safe(curr, next, &mm->seg, list) {
 		list_del(&curr->list);
 		uvunmap(mm->pgd, curr->addr, curr->size);
-		for (usize_t i = 0; i < curr->nr_pages; ++i) {
+		for (size_t i = 0; i < curr->nr_pages; ++i) {
 			ASSERT(curr->pages[i]);
 			page_free(curr->pages[i], 0);
 		}
@@ -92,7 +92,7 @@ static void uvm_space_free_heap(struct uvm_space *mm)
 {
 	if (mm->heap->size > 0) {
 		uvunmap(mm->pgd, mm->heap->addr, mm->heap->size);
-		for (usize_t i = 0; i < mm->heap->nr_pages; ++i) {
+		for (size_t i = 0; i < mm->heap->nr_pages; ++i) {
 			ASSERT(mm->heap->pages[i]);
 			page_free(mm->heap->pages[i], 0);
 		}
@@ -126,7 +126,7 @@ void uvm_space_put(struct uvm_space *mm)
 static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 				 struct uvm_space *mm)
 {
-	usize_t npgs;
+	size_t npgs;
 	struct page **pgs;
 	int err = 0;
 
@@ -135,9 +135,9 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 	if (!pgs)
 		return -ENOMEM;
 
-	usize_t i = 0;
+	size_t i = 0;
 	u64 addr = src->addr;
-	usize_t size = src->size;
+	size_t size = src->size;
 	unsigned int flags = src->flags;
 	while (size > 0 && i < npgs) {
 		struct page *pg = page_alloc(0);
@@ -172,7 +172,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 failed:
 	for (u64 a = src->addr; a < addr; a += PAGE_SIZE)
 		uvunmap(mm->pgd, a, PAGE_SIZE);
-	for (usize_t j = 0; j < i; ++j) {
+	for (size_t j = 0; j < i; ++j) {
 		ASSERT(pgs[j]);
 		page_free(pgs[j], 0);
 	}
@@ -184,7 +184,7 @@ static int uvm_space_copy_segments(struct uvm_space *dst, struct uvm_space *src)
 {
 	LIST_DEFINE(seg);
 	struct uvm_region *curr, *next;
-	usize_t npgs;
+	size_t npgs;
 	struct page **pgs;
 	int err = 0;
 
@@ -216,7 +216,7 @@ failed:
 			uvunmap(dst->pgd, curr->addr, curr->size);
 			npgs = curr->nr_pages;
 			pgs = curr->pages;
-			for (usize_t i = 0; i < npgs; ++i) {
+			for (size_t i = 0; i < npgs; ++i) {
 				ASSERT(pgs[i]);
 				page_free(pgs[i], 0);
 			}

@@ -33,8 +33,8 @@ static void slab_unmark_page_range(struct page *head, unsigned int order)
 
 static int slab_add_page(struct slab_allocator *allocator)
 {
-	usize_t align = allocator->align;
-	usize_t size = allocator->size;
+	size_t align = allocator->align;
+	size_t size = allocator->size;
 
 	struct page *pg = page_alloc(allocator->page_order);
 
@@ -72,7 +72,7 @@ static int slab_add_page(struct slab_allocator *allocator)
 	return 0;
 }
 
-int slab_init(struct slab_allocator *allocator, usize_t size, usize_t align,
+int slab_init(struct slab_allocator *allocator, size_t size, size_t align,
 	      const char *name)
 {
 	int ret;

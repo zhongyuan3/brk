@@ -458,10 +458,10 @@ static inline void list_splice_tail_init(struct list_head *list,
  * list_count_nodes - count nodes in the list
  * @head:	the head for your list.
  */
-static inline usize_t list_count_nodes(struct list_head *head)
+static inline size_t list_count_nodes(struct list_head *head)
 {
 	struct list_head *pos;
-	usize_t count = 0;
+	size_t count = 0;
 
 	list_for_each(pos, head)
 		count++;
@@ -920,10 +920,10 @@ static inline void hlist_splice_init(struct hlist_head *from,
  * hlist_count_nodes - count nodes in the hlist
  * @head:	the head for your hlist.
  */
-static inline usize_t hlist_count_nodes(struct hlist_head *head)
+static inline size_t hlist_count_nodes(struct hlist_head *head)
 {
 	struct hlist_node *pos;
-	usize_t count = 0;
+	size_t count = 0;
 
 	hlist_for_each(pos, head)
 		count++;

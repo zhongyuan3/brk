@@ -29,7 +29,7 @@ static bool sig_default_terminate(int sig)
 	}
 }
 
-static bool user_access_ok(u64 addr, usize_t len)
+static bool user_access_ok(u64 addr, size_t len)
 {
 	return addr + len <= USER_SPACE_SIZE_MAX;
 }

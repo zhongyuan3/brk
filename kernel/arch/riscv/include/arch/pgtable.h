@@ -35,7 +35,7 @@ static inline bool pgde_large(pgde_t pgde)
 	return pgde_present(pgde) && pgde_flags(pgde) != PTE_V;
 }
 
-static inline usize_t pgde_index(u64 vaddr)
+static inline size_t pgde_index(u64 vaddr)
 {
 	return (vaddr >> PGD_SHIFT) & (PTRS_PER_PGD - 1);
 }
@@ -86,7 +86,7 @@ static inline bool pmde_large(pmde_t pmde)
 	return pmde_present(pmde) && pmde_flags(pmde) != PTE_V;
 }
 
-static inline usize_t pmde_index(u64 vaddr)
+static inline size_t pmde_index(u64 vaddr)
 {
 	return (vaddr >> PMDE_SHIFT) & (PTRS_PER_PMD - 1);
 }
@@ -132,7 +132,7 @@ static inline bool pte_present(pte_t pte)
 	return pte_flags(pte) & PTE_V;
 }
 
-static inline usize_t pte_index(u64 vaddr)
+static inline size_t pte_index(u64 vaddr)
 {
 	return (vaddr >> PTE_SHIFT) & (PTRS_PER_PT - 1);
 }

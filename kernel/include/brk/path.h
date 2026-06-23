@@ -50,7 +50,7 @@ int fs_path_parent_at(int dir_fd, const char *name, struct fs_path *path,
 		      struct qstr *last_component);
 void fs_path_get(struct fs_path *path);
 void fs_path_put(struct fs_path *path);
-int fs_path_to_absolute(const struct fs_path *path, char *buf, usize_t bufsz);
+int fs_path_to_absolute(const struct fs_path *path, char *buf, size_t bufsz);
 int fs_path_dot(struct fs_path *path, struct fs_path *dot);
 int fs_path_dot_dot(struct fs_path *path, struct fs_path *dotdot);
 

@@ -79,7 +79,7 @@ int brkfs_bitmap_alloc(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
 
 	while (1) {
 		u32 n = nbits > bits_per_blk ? bits_per_blk : nbits;
-		usize_t bit = 0;
+		size_t bit = 0;
 		cached_page_lock(curr_bb.cp);
 		if (bitmap_alloc_bit(curr_bb.data, n, &bit)) {
 			cached_page_unlock(curr_bb.cp);
