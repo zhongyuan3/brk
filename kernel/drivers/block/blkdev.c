@@ -269,7 +269,7 @@ void blkdev_free_region(unsigned major, unsigned minor, unsigned count)
 		   count);
 }
 
-int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt)
+int blkdev_check_bounds(struct block_dev *bd, uint64_t blk_id, uint32_t blk_cnt)
 {
 	if (blk_cnt == 0)
 		return 0;
@@ -286,7 +286,8 @@ int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt)
 	return 0;
 }
 
-int blkdev_read(struct block_dev *bd, u64 blk_id, void *buf, u32 blk_cnt)
+int blkdev_read(struct block_dev *bd, uint64_t blk_id, void *buf,
+		uint32_t blk_cnt)
 {
 	int err;
 
@@ -300,7 +301,8 @@ int blkdev_read(struct block_dev *bd, u64 blk_id, void *buf, u32 blk_cnt)
 	return bd->ops.read(bd, blk_id, buf, blk_cnt);
 }
 
-int blkdev_write(struct block_dev *bd, u64 blk_id, const void *buf, u32 blk_cnt)
+int blkdev_write(struct block_dev *bd, uint64_t blk_id, const void *buf,
+		 uint32_t blk_cnt)
 {
 	int err;
 
@@ -317,9 +319,9 @@ int blkdev_write(struct block_dev *bd, u64 blk_id, const void *buf, u32 blk_cnt)
 static int blkdev_read_page(struct page_cache *m, struct cached_page *cp)
 {
 	struct block_dev *bd;
-	u32 bs;
-	u32 nsec;
-	u64 sector;
+	uint32_t bs;
+	uint32_t nsec;
+	uint64_t sector;
 	int err;
 	void *buf;
 
@@ -346,9 +348,9 @@ static int blkdev_read_page(struct page_cache *m, struct cached_page *cp)
 static int blkdev_write_page(struct page_cache *m, struct cached_page *cp)
 {
 	struct block_dev *bd;
-	u32 bs;
-	u32 nsec;
-	u64 sector;
+	uint32_t bs;
+	uint32_t nsec;
+	uint64_t sector;
 	int err;
 	void *buf;
 

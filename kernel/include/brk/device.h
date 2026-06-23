@@ -17,13 +17,13 @@
 #define MINOR_MASK (MINOR_MAX - 1)
 
 #define CHRDEV 0
-#define BLKDEV ((u32)1 << 28)
+#define BLKDEV ((uint32_t)1 << 28)
 
 #define MKDEV(major, minor) \
 	((((major) & MAJOR_MASK) << 20) | ((minor) & MINOR_MASK))
 #define MKCHRDEV(major, minor) (CHRDEV | MKDEV(major, minor))
 #define MKBLKDEV(major, minor) (BLKDEV | MKDEV(major, minor))
-#define DEVTYPE(dev) ((dev) & ((u32)15 << 28))
+#define DEVTYPE(dev) ((dev) & ((uint32_t)15 << 28))
 #define MAJOR(dev) (((dev) >> 20) & MAJOR_MASK)
 #define MINOR(dev) ((dev) & MINOR_MASK)
 

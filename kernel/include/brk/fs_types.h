@@ -29,8 +29,8 @@ struct fs_iattr {
 };
 
 struct fs_dir_iterator {
-	bool (*actor)(struct fs_dir_iterator *, const char *, int, loff_t, u64,
-		      unsigned int);
+	bool (*actor)(struct fs_dir_iterator *, const char *, int, loff_t,
+		      uint64_t, unsigned int);
 	loff_t pos;
 };
 

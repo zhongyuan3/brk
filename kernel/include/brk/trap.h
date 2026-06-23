@@ -4,7 +4,7 @@
 #include <brk/task.h>
 #include <brk/types.h>
 
-void trap_init_hart(u32 hart_id);
+void trap_init_hart(uint32_t hart_id);
 void kernel_trap_handler(void);
 void kernel_trap_vector(void);
 

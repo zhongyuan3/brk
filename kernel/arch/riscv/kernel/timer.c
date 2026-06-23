@@ -5,16 +5,16 @@
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
 
-static u64 timer_interval;
-static u64 xorshift_state;
+static uint64_t timer_interval;
+static uint64_t xorshift_state;
 
 void timer_init(void)
 {
-	u32 timebase_freq = cpu_get_timebase_freq();
+	uint32_t timebase_freq = cpu_get_timebase_freq();
 	timer_interval = timebase_freq / 1000;
 }
 
-u64 timer_get_time(void)
+uint64_t timer_get_time(void)
 {
 	return read_time();
 }
@@ -39,12 +39,12 @@ static void xorshift_srand(void)
 	xorshift_state = read_time();
 }
 
-static u32 xorshift_rand(void)
+static uint32_t xorshift_rand(void)
 {
 	xorshift_state ^= xorshift_state >> 12;
 	xorshift_state ^= xorshift_state << 25;
 	xorshift_state ^= xorshift_state >> 27;
-	return (u32)(xorshift_state * 0x2545F4914F6CDD1DULL >> 32);
+	return (uint32_t)(xorshift_state * 0x2545F4914F6CDD1DULL >> 32);
 }
 
 void timer_srand(void)
@@ -52,7 +52,7 @@ void timer_srand(void)
 	xorshift_srand();
 }
 
-u32 timer_rand(void)
+uint32_t timer_rand(void)
 {
 	return xorshift_rand();
 }

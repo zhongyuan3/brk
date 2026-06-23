@@ -123,7 +123,7 @@ struct fs_inode_ops {
 	int (*rename)(struct fs_inode *, struct fs_dentry *, struct fs_inode *,
 		      struct fs_dentry *, unsigned int);
 	int (*mknod)(struct fs_inode *, struct fs_dentry *, umode_t, dev_t);
-	int (*getattr)(const struct fs_path *, struct stat *, u32,
+	int (*getattr)(const struct fs_path *, struct stat *, uint32_t,
 		       unsigned int);
 	int (*setattr)(struct fs_dentry *, struct fs_iattr *);
 };

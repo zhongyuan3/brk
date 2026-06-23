@@ -119,7 +119,7 @@ void kfree(void *ptr)
 {
 	if (!ptr)
 		return;
-	struct page *pg = virt_to_page((u64)ptr);
+	struct page *pg = virt_to_page((uint64_t)ptr);
 
 	if (pg->flags & PAGE_FLAGS_SLAB) {
 		slab_free(pg->slab_cache, ptr);

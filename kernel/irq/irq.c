@@ -7,13 +7,13 @@
 
 static irq_handler_t *irq_handlers;
 static void **irq_handlers_ctx;
-static u32 irq_handlers_num;
+static uint32_t irq_handlers_num;
 static SPINLOCK_DEFINE(irq_handlers_lock);
 
 void irq_init(void)
 {
 	plic_init();
-	u32 ndev = plic_get_ndev();
+	uint32_t ndev = plic_get_ndev();
 	irq_handlers = kcalloc(ndev, sizeof(irq_handler_t));
 	if (!irq_handlers)
 		panic("%s(): kcalloc() failed\n", __func__);
@@ -23,12 +23,12 @@ void irq_init(void)
 	irq_handlers_num = ndev;
 }
 
-void irq_init_hart(u32 hart_id)
+void irq_init_hart(uint32_t hart_id)
 {
 	plic_set_threshold(hart_id, 0);
 }
 
-int irq_register_handler(u32 source, irq_handler_t handler, void *ctx,
+int irq_register_handler(uint32_t source, irq_handler_t handler, void *ctx,
 			 irq_handler_t *old_handler, void **old_ctx)
 {
 	if (source >= irq_handlers_num)
@@ -46,7 +46,7 @@ int irq_register_handler(u32 source, irq_handler_t handler, void *ctx,
 	return 0;
 }
 
-int irq_unregister_handler(u32 source, irq_handler_t *old_handler,
+int irq_unregister_handler(uint32_t source, irq_handler_t *old_handler,
 			   void **old_ctx)
 {
 	if (source >= irq_handlers_num)
@@ -64,9 +64,9 @@ int irq_unregister_handler(u32 source, irq_handler_t *old_handler,
 	return 0;
 }
 
-int irq_handle_external(u32 hart_id)
+int irq_handle_external(uint32_t hart_id)
 {
-	u32 source = 0;
+	uint32_t source = 0;
 	irq_handler_t handler;
 	void *ctx;
 
@@ -93,17 +93,17 @@ int irq_handle_external(u32 hart_id)
 	return plic_complete(hart_id, source);
 }
 
-int irq_set_priority(u32 source, unsigned int priority)
+int irq_set_priority(uint32_t source, unsigned int priority)
 {
 	return plic_set_priority(source, priority);
 }
 
-int irq_enable_source(u32 hart_id, u32 source)
+int irq_enable_source(uint32_t hart_id, uint32_t source)
 {
 	return plic_enable(hart_id, source);
 }
 
-int irq_disable_source(u32 hart_id, u32 source)
+int irq_disable_source(uint32_t hart_id, uint32_t source)
 {
 	return plic_disable(hart_id, source);
 }

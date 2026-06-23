@@ -136,7 +136,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 		return -ENOMEM;
 
 	size_t i = 0;
-	u64 addr = src->addr;
+	uint64_t addr = src->addr;
 	size_t size = src->size;
 	unsigned int flags = src->flags;
 	while (size > 0 && i < npgs) {
@@ -145,7 +145,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 			err = -ENOMEM;
 			goto failed;
 		}
-		u64 dst_pa = page_to_phys(pg);
+		uint64_t dst_pa = page_to_phys(pg);
 		err = uvmap(mm->pgd, addr, PAGE_SIZE, dst_pa, flags);
 		if (err) {
 			ASSERT(pg);
@@ -170,7 +170,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 	return 0;
 
 failed:
-	for (u64 a = src->addr; a < addr; a += PAGE_SIZE)
+	for (uint64_t a = src->addr; a < addr; a += PAGE_SIZE)
 		uvunmap(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = 0; j < i; ++j) {
 		ASSERT(pgs[j]);
@@ -243,7 +243,7 @@ static int uvm_space_copy_stack(struct uvm_space *dst, struct uvm_space *src)
 		return -ENOMEM;
 	}
 
-	u64 pa = page_to_phys(pg);
+	uint64_t pa = page_to_phys(pg);
 	int err = uvmap(dst->pgd, src->stack->addr, src->stack->size, pa,
 			src->stack->flags);
 	if (err) {

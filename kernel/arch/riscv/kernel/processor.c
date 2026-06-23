@@ -44,7 +44,7 @@ void pop_off(void)
 
 void set_current_task(struct task_control_block *task)
 {
-	write_tp((u64)task);
+	write_tp((uint64_t)task);
 }
 
 void set_current_cpuid(cpuid_t cpuid)

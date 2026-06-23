@@ -14,12 +14,12 @@
 #include <libfdt.h>
 
 size_t load_offset;
-u64 phys_ram_base;
+uint64_t phys_ram_base;
 
 static void map_mem(void)
 {
-	u64 idx;
-	u64 start, end;
+	uint64_t idx;
+	uint64_t start, end;
 	struct memblock_region *regs, *reg;
 	size_t regs_cnt = 0;
 	size_t size;
@@ -39,7 +39,7 @@ static void map_mem(void)
 	}
 
 	unsigned int flags = PTE_R | PTE_W;
-	u64 vaddr;
+	uint64_t vaddr;
 
 	for (size_t i = 0; i < regs_cnt; ++i) {
 		vaddr = phys_to_virt(regs[i].base);
@@ -47,23 +47,23 @@ static void map_mem(void)
 				VMAP_MODE_EARLY);
 	}
 
-	vaddr = phys_to_virt((u64)regs);
-	kvmap_with_mode(vaddr, size, (u64)regs, flags, VMAP_MODE_EARLY);
+	vaddr = phys_to_virt((uint64_t)regs);
+	kvmap_with_mode(vaddr, size, (uint64_t)regs, flags, VMAP_MODE_EARLY);
 
-	memblock_free((u64)regs, size);
+	memblock_free((uint64_t)regs, size);
 }
 
 static void map_kernel(void)
 {
-	u64 virt;
+	uint64_t virt;
 
-	kvmap_with_mode((u64)_stext, _TEXT_SIZE, _STEXT_PHYS, PTE_R | PTE_X,
+	kvmap_with_mode((uint64_t)_stext, _TEXT_SIZE, _STEXT_PHYS,
+			PTE_R | PTE_X, VMAP_MODE_EARLY);
+	kvmap_with_mode((uint64_t)_srodata, _RODATA_SIZE, _SRODATA_PHYS, PTE_R,
 			VMAP_MODE_EARLY);
-	kvmap_with_mode((u64)_srodata, _RODATA_SIZE, _SRODATA_PHYS, PTE_R,
-			VMAP_MODE_EARLY);
-	kvmap_with_mode((u64)_sdata, _DATA_SIZE, _SDATA_PHYS, PTE_R | PTE_W,
-			VMAP_MODE_EARLY);
-	kvmap_with_mode((u64)_sbss, _BSS_SIZE, _SBSS_PHYS, PTE_R | PTE_W,
+	kvmap_with_mode((uint64_t)_sdata, _DATA_SIZE, _SDATA_PHYS,
+			PTE_R | PTE_W, VMAP_MODE_EARLY);
+	kvmap_with_mode((uint64_t)_sbss, _BSS_SIZE, _SBSS_PHYS, PTE_R | PTE_W,
 			VMAP_MODE_EARLY);
 
 	virt = phys_to_virt(_SRODATA_PHYS);
@@ -79,7 +79,7 @@ static void map_kernel(void)
 
 static void map_dtb(void)
 {
-	u64 dtb_virt = phys_to_virt(dtb_phys);
+	uint64_t dtb_virt = phys_to_virt(dtb_phys);
 	size_t dtb_size = fdt_totalsize(dtb_phys);
 	kvmap_with_mode(dtb_virt, dtb_size, dtb_phys, PTE_R | PTE_W,
 			VMAP_MODE_EARLY);
@@ -94,24 +94,24 @@ static void final_pgtable_init(void)
 
 static void vmemmap_init(void)
 {
-	u32 idx;
-	u64 start, end;
+	uint32_t idx;
+	uint64_t start, end;
 	size_t sz;
-	u64 paddr;
+	uint64_t paddr;
 
 	for_each_mem_pfn_range(idx, start, end) {
 		sz = round_up((end - start) * sizeof(struct page), PAGE_SIZE);
 		paddr = memblock_alloc(sz, 0, PAGE_SIZE);
 		ASSERT(paddr);
 		memset((void *)phys_to_virt(paddr), 0, sz);
-		kvmap_with_mode((u64)pfn_to_page(start), sz, paddr,
+		kvmap_with_mode((uint64_t)pfn_to_page(start), sz, paddr,
 				PTE_R | PTE_W, VMAP_MODE_INTERIM);
 	}
 }
 
 void final_pgtable_enable(void)
 {
-	u64 satp = make_satp_sv39(symbol_phys(kernel_pgdir));
+	uint64_t satp = make_satp_sv39(symbol_phys(kernel_pgdir));
 	write_satp(satp);
 	sfence_vma();
 }
@@ -125,8 +125,8 @@ void paging_init(void)
 
 void switch_pgtable(pgde_t *pgd)
 {
-	u64 paddr = virt_to_phys((u64)pgd);
-	u64 satp = make_satp_sv39(paddr);
+	uint64_t paddr = virt_to_phys((uint64_t)pgd);
+	uint64_t satp = make_satp_sv39(paddr);
 	write_satp(satp);
 	sfence_vma();
 }

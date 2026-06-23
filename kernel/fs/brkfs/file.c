@@ -17,9 +17,9 @@ static int brkfs_file_read_page(struct page_cache *m, struct cached_page *cp)
 {
 	struct fs_inode *inode = m->host;
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
-	u32 bs = sbi->s_sb.s_blocksize;
+	uint32_t bs = sbi->s_sb.s_blocksize;
 	loff_t off = (loff_t)cp->index << PAGE_SHIFT;
-	u8 *data = cached_page_addr(cp);
+	uint8_t *data = cached_page_addr(cp);
 	struct block_dev *bd = sbi->s_bdev;
 
 	if (bs > PAGE_SIZE || PAGE_SIZE % bs != 0) {
@@ -28,7 +28,7 @@ static int brkfs_file_read_page(struct page_cache *m, struct cached_page *cp)
 	}
 
 	for (size_t boff = 0; boff < PAGE_SIZE; boff += bs) {
-		u32 bno;
+		uint32_t bno;
 		int err;
 
 		err = brkfs_inode_getblk(inode, off + boff, &bno, 0, sbi);
@@ -41,8 +41,8 @@ static int brkfs_file_read_page(struct page_cache *m, struct cached_page *cp)
 			continue;
 		}
 
-		u32 sec_cnt = bs / bd->phy_bsize;
-		u64 sector = bno * sec_cnt;
+		uint32_t sec_cnt = bs / bd->phy_bsize;
+		uint64_t sector = bno * sec_cnt;
 		err = blkdev_read(bd, sector, data + boff, sec_cnt);
 		if (err)
 			return err;
@@ -54,9 +54,9 @@ static int brkfs_file_write_page(struct page_cache *m, struct cached_page *cp)
 {
 	struct fs_inode *inode = m->host;
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
-	u32 bs = sbi->s_sb.s_blocksize;
+	uint32_t bs = sbi->s_sb.s_blocksize;
 	loff_t off = (loff_t)cp->index << PAGE_SHIFT;
-	u8 *data = cached_page_addr(cp);
+	uint8_t *data = cached_page_addr(cp);
 	int ret = 0;
 	struct block_dev *bd = sbi->s_bdev;
 
@@ -66,7 +66,7 @@ static int brkfs_file_write_page(struct page_cache *m, struct cached_page *cp)
 	}
 
 	for (size_t boff = 0; boff < PAGE_SIZE; boff += bs) {
-		u32 bno;
+		uint32_t bno;
 		int err;
 
 		err = brkfs_inode_getblk(inode, off + boff, &bno,
@@ -76,8 +76,8 @@ static int brkfs_file_write_page(struct page_cache *m, struct cached_page *cp)
 		if (bno == 0)
 			return -ENOSPC;
 
-		u32 sec_cnt = bs / bd->phy_bsize;
-		u64 sector = bno * sec_cnt;
+		uint32_t sec_cnt = bs / bd->phy_bsize;
+		uint64_t sector = bno * sec_cnt;
 		err = blkdev_write(bd, sector, data + boff, sec_cnt);
 		if (err) {
 			ret = err;
@@ -212,7 +212,7 @@ int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
 	if ((loff_t)(off + size) > inode->size)
 		size = (size_t)(inode->size - off);
 
-	u8 *p = buf;
+	uint8_t *p = buf;
 	while (size > 0) {
 		size_t in_off = off % PAGE_SIZE;
 		size_t chunk = PAGE_SIZE - in_off;
@@ -226,7 +226,7 @@ int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
 		}
 
 		cached_page_lock(cp);
-		u8 *data = cached_page_addr(cp);
+		uint8_t *data = cached_page_addr(cp);
 		memcpy(p, data + in_off, chunk);
 		cached_page_unlock(cp);
 		cached_page_put(cp);
@@ -236,7 +236,7 @@ int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
 		p += chunk;
 	}
 
-	*read_out = p - (u8 *)buf;
+	*read_out = p - (uint8_t *)buf;
 	*pos = off;
 	return err;
 }
@@ -254,7 +254,7 @@ int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
 		return -EINVAL;
 	}
 
-	const u8 *p = buf;
+	const uint8_t *p = buf;
 	while (size > 0) {
 		size_t in_off = off % PAGE_SIZE;
 		size_t chunk = PAGE_SIZE - in_off;
@@ -268,7 +268,7 @@ int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
 		}
 
 		cached_page_lock(cp);
-		u8 *data = cached_page_addr(cp);
+		uint8_t *data = cached_page_addr(cp);
 		memcpy(data + in_off, p, chunk);
 		cached_page_mark_dirty(cp);
 		cached_page_unlock(cp);
@@ -281,7 +281,7 @@ int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
 
 	*pos = off;
 	if (written_out)
-		*written_out = p - (const u8 *)buf;
+		*written_out = p - (const uint8_t *)buf;
 	if (off > inode->size) {
 		inode->size = off;
 		fs_inode_mark_dirty(inode);

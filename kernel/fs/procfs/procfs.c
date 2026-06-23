@@ -93,9 +93,9 @@ typedef ssize_t (*procfs_write_fn)(const struct procfs_entry *entry,
 
 struct procfs_entry {
 	const char *name;
-	u8 name_len;
-	u8 idx; /* index used in the inode encoding (>= 1) */
-	u8 d_type;
+	uint8_t name_len;
+	uint8_t idx; /* index used in the inode encoding (>= 1) */
+	uint8_t d_type;
 	umode_t mode;
 	procfs_show_fn show;
 	procfs_write_fn write;
@@ -661,7 +661,7 @@ static struct fs_dentry *procfs_pid_dir_lookup(struct fs_inode *dir,
 }
 
 static int procfs_getattr(const struct fs_path *path, struct stat *stat,
-			  u32 mask, unsigned int flags)
+			  uint32_t mask, unsigned int flags)
 {
 	(void)mask;
 	(void)flags;

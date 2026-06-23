@@ -14,7 +14,7 @@ struct sigaction_table {
 
 struct user_sigframe {
 	struct trap_frame tf;
-	u64 blocked;
+	uint64_t blocked;
 	int signo;
 	int pad;
 };

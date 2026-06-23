@@ -13,17 +13,17 @@
 
 SPINLOCK_DEFINE(kernel_pgdir_lock);
 
-static u64 alloc_pgtable(void)
+static uint64_t alloc_pgtable(void)
 {
 	struct page *pg = page_alloc(0);
 	if (!pg)
 		return 0;
-	u64 pa = page_to_phys(pg);
+	uint64_t pa = page_to_phys(pg);
 	memset((void *)phys_to_virt(pa), 0, PAGE_SIZE);
 	return pa;
 }
 
-static void free_pgtable(u64 paddr)
+static void free_pgtable(uint64_t paddr)
 {
 	struct page *pg = phys_to_page(paddr);
 	ASSERT(pg);
@@ -42,7 +42,7 @@ static pte_t *pmde_to_pt_virt(pmde_t pmde)
 
 pgde_t *create_user_pgtable(void)
 {
-	u64 pa = alloc_pgtable();
+	uint64_t pa = alloc_pgtable();
 	void *pgtable = (void *)phys_to_virt(pa);
 	spinlock_acquire(&kernel_pgdir_lock);
 	memcpy(pgtable, kernel_pgdir, PAGE_SIZE);
@@ -52,8 +52,8 @@ pgde_t *create_user_pgtable(void)
 
 static int copy_user_pt(pte_t *dst, pte_t *src)
 {
-	u64 spg_pa;
-	u64 dpg_pa;
+	uint64_t spg_pa;
+	uint64_t dpg_pa;
 	struct page *pg;
 
 	for (size_t i = 0; i < PTRS_PER_PT; ++i) {
@@ -78,8 +78,8 @@ static int copy_user_pmde_large(pmde_t *dst, pmde_t src)
 	struct page *pg = page_alloc(page_order(PAGE_SIZE_2M));
 	if (!pg)
 		return -ENOMEM;
-	u64 dpg_pa = page_to_phys(pg);
-	u64 spg_pa = pmde_get_large(src);
+	uint64_t dpg_pa = page_to_phys(pg);
+	uint64_t spg_pa = pmde_get_large(src);
 	void *dpg_va = (void *)phys_to_virt(dpg_pa);
 	void *spg_va = (void *)phys_to_virt(spg_pa);
 	memcpy(dpg_va, spg_va, PAGE_SIZE_2M);
@@ -103,7 +103,7 @@ static int copy_user_pmd(pmde_t *dst, pmde_t *src)
 		}
 
 		if (!pmde_present(dst[i])) {
-			u64 pt_pa = alloc_pgtable();
+			uint64_t pt_pa = alloc_pgtable();
 			if (!pt_pa)
 				return -ENOMEM;
 			pmde_set_pt(dst + i, pt_pa);
@@ -123,8 +123,8 @@ static int copy_user_pgde_large(pgde_t *dst, pgde_t src)
 	struct page *dpg = page_alloc(page_order(PAGE_SIZE_1G));
 	if (!dpg)
 		return -ENOMEM;
-	u64 dpg_pa = page_to_phys(dpg);
-	u64 spg_pa = pgde_get_large(src);
+	uint64_t dpg_pa = page_to_phys(dpg);
+	uint64_t spg_pa = pgde_get_large(src);
 	void *dpg_va = (void *)phys_to_virt(dpg_pa);
 	void *spg_va = (void *)phys_to_virt(spg_pa);
 	memcpy(dpg_va, spg_va, PAGE_SIZE_1G);
@@ -151,7 +151,7 @@ static int copy_user_pgd(pgde_t *dst, pgde_t *src)
 		}
 
 		if (!pgde_present(dst[i])) {
-			u64 pmd_pa = alloc_pgtable();
+			uint64_t pmd_pa = alloc_pgtable();
 			if (!pmd_pa)
 				goto failed;
 			pgde_set_pmd(dst + i, pmd_pa);
@@ -179,8 +179,8 @@ static void destroy_user_pt(pte_t *pt, size_t pgde_idx, size_t pmde_idx)
 {
 	for (size_t i = 0; i < PTRS_PER_PT; ++i) {
 		if (pte_present(pt[i])) {
-			u64 pa = pte_get(pt[i]);
-			u64 va = pgde_idx << 30;
+			uint64_t pa = pte_get(pt[i]);
+			uint64_t va = pgde_idx << 30;
 			va = va | (pmde_idx << 21);
 			va = va | (i << 12);
 			if (va & (1UL << 38))
@@ -193,7 +193,7 @@ static void destroy_user_pt(pte_t *pt, size_t pgde_idx, size_t pmde_idx)
 
 static void destroy_user_pmd(pmde_t *pmd, size_t pgde_idx)
 {
-	u64 pa;
+	uint64_t pa;
 	pte_t *pt;
 
 	for (size_t i = 0; i < PTRS_PER_PMD; ++i) {
@@ -202,7 +202,7 @@ static void destroy_user_pmd(pmde_t *pmd, size_t pgde_idx)
 
 		if (pmde_large(pmd[i])) {
 			pa = pmde_get_large(pmd[i]);
-			u64 va = pgde_idx << 30;
+			uint64_t va = pgde_idx << 30;
 			va = va | (i << 21);
 			if (va & (1UL << 38))
 				va = (~((1UL << 39) - 1)) | va;
@@ -219,7 +219,7 @@ static void destroy_user_pmd(pmde_t *pmd, size_t pgde_idx)
 
 static void destroy_user_pgd(pgde_t *pgd)
 {
-	u64 pa;
+	uint64_t pa;
 	pmde_t *pmd;
 
 	for (size_t i = 0; i < PTRS_PER_PGD; ++i) {
@@ -231,7 +231,7 @@ static void destroy_user_pgd(pgde_t *pgd)
 
 		if (pgde_large(pgd[i])) {
 			pa = pgde_get_large(pgd[i]);
-			u64 va = i << 30;
+			uint64_t va = i << 30;
 			if (va & (1UL << 38))
 				va = (~((1UL << 39) - 1)) | va;
 			panic("%s(): pgd[%lu] not empty, vaddr=%#lx,paddr=%#lx\n",
@@ -248,5 +248,5 @@ static void destroy_user_pgd(pgde_t *pgd)
 void destroy_user_pgtable(pgde_t *pgd)
 {
 	destroy_user_pgd(pgd);
-	free_pgtable(virt_to_phys((u64)pgd));
+	free_pgtable(virt_to_phys((uint64_t)pgd));
 }

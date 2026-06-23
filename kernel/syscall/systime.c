@@ -14,7 +14,7 @@
 #include <uapi/resource.h>
 #include <uapi/time.h>
 
-u64 sys_gettimeofday(void)
+uint64_t sys_gettimeofday(void)
 {
 	struct timeval *tv;
 
@@ -23,7 +23,7 @@ u64 sys_gettimeofday(void)
 	return 0;
 }
 
-u64 sys_settimeofday(void)
+uint64_t sys_settimeofday(void)
 {
 	const struct timeval *tv;
 
@@ -32,7 +32,7 @@ u64 sys_settimeofday(void)
 	return 0;
 }
 
-u64 sys_times(void)
+uint64_t sys_times(void)
 {
 	struct tms *buf;
 	int err;
@@ -44,7 +44,7 @@ u64 sys_times(void)
 	return jiffies_get();
 }
 
-u64 sys_nanosleep(void)
+uint64_t sys_nanosleep(void)
 {
 	struct timespec *dur, *rem;
 

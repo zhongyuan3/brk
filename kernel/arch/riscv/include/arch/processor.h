@@ -4,20 +4,20 @@
 #include <brk/types.h>
 
 struct switch_frame {
-	u64 ra;
-	u64 sp;
-	u64 s0;
-	u64 s1;
-	u64 s2;
-	u64 s3;
-	u64 s4;
-	u64 s5;
-	u64 s6;
-	u64 s7;
-	u64 s8;
-	u64 s9;
-	u64 s10;
-	u64 s11;
+	uint64_t ra;
+	uint64_t sp;
+	uint64_t s0;
+	uint64_t s1;
+	uint64_t s2;
+	uint64_t s3;
+	uint64_t s4;
+	uint64_t s5;
+	uint64_t s6;
+	uint64_t s7;
+	uint64_t s8;
+	uint64_t s9;
+	uint64_t s10;
+	uint64_t s11;
 };
 
 void switch_context(struct switch_frame *prev, struct switch_frame *next);

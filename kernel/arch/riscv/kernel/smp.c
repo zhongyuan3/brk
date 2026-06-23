@@ -31,11 +31,11 @@ void start_hart(void)
 	task_scheduler();
 }
 
-static void smp_wake_secondary_harts(u64 init_hart_id)
+static void smp_wake_secondary_harts(uint64_t init_hart_id)
 {
-	u64 start_addr = symbol_phys(hart_entry);
+	uint64_t start_addr = symbol_phys(hart_entry);
 
-	for (u64 id = 0; id < NR_CPUS; ++id) {
+	for (uint64_t id = 0; id < NR_CPUS; ++id) {
 		if (id == init_hart_id)
 			continue;
 		sbi_hart_start(id, start_addr, 0);

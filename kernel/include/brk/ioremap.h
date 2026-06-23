@@ -3,7 +3,7 @@
 
 #include <brk/types.h>
 
-void *ioremap(u64 paddr, size_t size, unsigned int flags);
+void *ioremap(uint64_t paddr, size_t size, unsigned int flags);
 void iounmap(void *addr, size_t size);
 
 #endif
