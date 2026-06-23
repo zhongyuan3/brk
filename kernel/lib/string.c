@@ -245,112 +245,205 @@ char *strstr(char const *haystack, char const *needle)
 	return NULL;
 }
 
-static const char *errmsgs[] = {
-	[0] = "Success",
-	[EILSEQ] = "Illegal byte sequence",
-	[EDOM] = "Domain error",
-	[ERANGE] = "Result not representable",
-	[ENOTTY] = "Not a tty",
-	[EACCES] = "Permission denied",
-	[EPERM] = "Operation not permitted",
-	[ENOENT] = "No such file or directory",
-	[ESRCH] = "No such process",
-	[EEXIST] = "File exists",
-	[EOVERFLOW] = "Value too large for data type",
-	[ENOSPC] = "No space left on device",
-	[ENOMEM] = "Out of memory",
-	[EBUSY] = "Resource busy",
-	[EINTR] = "Interrupted system call",
-	[EAGAIN] = "Resource temporarily unavailable",
-	[ESPIPE] = "Invalid seek",
-	[EXDEV] = "Cross-device link",
-	[EROFS] = "Read-only file system",
-	[ENOTEMPTY] = "Directory not empty",
-	[ECONNRESET] = "Connection reset by peer",
-	[ETIMEDOUT] = "Operation timed out",
-	[ECONNREFUSED] = "Connection refused",
-	[EHOSTDOWN] = "Host is down",
-	[EHOSTUNREACH] = "Host is unreachable",
-	[EADDRINUSE] = "Address in use",
-	[EPIPE] = "Broken pipe",
-	[EIO] = "I/O error",
-	[ENXIO] = "No such device or address",
-	[ENOTBLK] = "Block device required",
-	[ENODEV] = "No such device",
-	[ENOTDIR] = "Not a directory",
-	[EISDIR] = "Is a directory",
-	[ETXTBSY] = "Text file busy",
-	[ENOEXEC] = "Exec format error",
-	[EINVAL] = "Invalid argument",
-	[E2BIG] = "Argument list too long",
-	[ELOOP] = "Symbolic link loop",
-	[ENAMETOOLONG] = "Filename too long",
-	[ENFILE] = "Too many open files in system",
-	[EMFILE] = "No file descriptors available",
-	[EBADF] = "Bad file descriptor",
-	[ECHILD] = "No child process",
-	[EFAULT] = "Bad address",
-	[EFBIG] = "File too large",
-	[EMLINK] = "Too many links",
-	[ENOLCK] = "No locks available",
-	[EDEADLK] = "Resource deadlock would occur",
-	[ENOTRECOVERABLE] = "State not recoverable",
-	[EOWNERDEAD] = "Previous owner died",
-	[ECANCELED] = "Operation canceled",
-	[ENOSYS] = "Function not implemented",
-	[ENOMSG] = "No message of desired type",
-	[EIDRM] = "Identifier removed",
-	[ENOSTR] = "Device not a stream",
-	[ENODATA] = "No data available",
-	[ETIME] = "Device timeout",
-	[ENOSR] = "Out of streams resources",
-	[ENOLINK] = "Link has been severed",
-	[EPROTO] = "Protocol error",
-	[EBADMSG] = "Bad message",
-	[EBADFD] = "File descriptor in bad state",
-	[ENOTSOCK] = "Not a socket",
-	[EDESTADDRREQ] = "Destination address required",
-	[EMSGSIZE] = "Message too large",
-	[EPROTOTYPE] = "Protocol wrong type for socket",
-	[ENOPROTOOPT] = "Protocol not available",
-	[EPROTONOSUPPORT] = "Protocol not supported",
-	[ESOCKTNOSUPPORT] = "Socket type not supported",
-	[EOPNOTSUPP] = "Operation not supported on transport endpoint",
-	[EPFNOSUPPORT] = "Protocol family not supported",
-	[EAFNOSUPPORT] = "Address family not supported by protocol",
-	[EADDRNOTAVAIL] = "Address not available",
-	[ENETDOWN] = "Network is down",
-	[ENETUNREACH] = "Network unreachable",
-	[ENETRESET] = "Connection reset by network",
-	[ECONNABORTED] = "Connection aborted",
-	[ENOBUFS] = "No buffer space available",
-	[EISCONN] = "Socket is connected",
-	[ENOTCONN] = "Socket not connected",
-	[ESHUTDOWN] = "Cannot send after socket shutdown",
-	[EALREADY] = "Operation already in progress",
-	[EINPROGRESS] = "Operation in progress",
-	[ESTALE] = "Stale file handle",
-	[EUCLEAN] = "Data consistency error",
-	[ENAVAIL] = "Resource not available",
-	[EREMOTEIO] = "Remote I/O error",
-	[EDQUOT] = "Quota exceeded",
-	[ENOMEDIUM] = "No medium found",
-	[EMEDIUMTYPE] = "Wrong medium type",
-	[EMULTIHOP] = "Multihop attempted",
-	[ENOKEY] = "Required key not available",
-	[EKEYEXPIRED] = "Key has expired",
-	[EKEYREVOKED] = "Key has been revoked",
-	[EKEYREJECTED] = "Key was rejected by service",
-};
-
 const char *strerror(int errnum)
 {
 	if (errnum < 0)
 		errnum = -errnum;
 
-	if ((size_t)errnum >= countof(errmsgs))
+	switch (errnum) {
+	case 0:
+		return "Success";
+	case EILSEQ:
+		return "Illegal byte sequence";
+	case EDOM:
+		return "Domain error";
+	case ERANGE:
+		return "Result not representable";
+	case ENOTTY:
+		return "Not a tty";
+	case EACCES:
+		return "Permission denied";
+	case EPERM:
+		return "Operation not permitted";
+	case ENOENT:
+		return "No such file or directory";
+	case ESRCH:
+		return "No such process";
+	case EEXIST:
+		return "File exists";
+	case EOVERFLOW:
+		return "Value too large for data type";
+	case ENOSPC:
+		return "No space left on device";
+	case ENOMEM:
+		return "Out of memory";
+	case EBUSY:
+		return "Resource busy";
+	case EINTR:
+		return "Interrupted system call";
+	case EAGAIN:
+		return "Resource temporarily unavailable";
+	case ESPIPE:
+		return "Invalid seek";
+	case EXDEV:
+		return "Cross-device link";
+	case EROFS:
+		return "Read-only file system";
+	case ENOTEMPTY:
+		return "Directory not empty";
+	case ECONNRESET:
+		return "Connection reset by peer";
+	case ETIMEDOUT:
+		return "Operation timed out";
+	case ECONNREFUSED:
+		return "Connection refused";
+	case EHOSTDOWN:
+		return "Host is down";
+	case EHOSTUNREACH:
+		return "Host is unreachable";
+	case EADDRINUSE:
+		return "Address in use";
+	case EPIPE:
+		return "Broken pipe";
+	case EIO:
+		return "I/O error";
+	case ENXIO:
+		return "No such device or address";
+	case ENOTBLK:
+		return "Block device required";
+	case ENODEV:
+		return "No such device";
+	case ENOTDIR:
+		return "Not a directory";
+	case EISDIR:
+		return "Is a directory";
+	case ETXTBSY:
+		return "Text file busy";
+	case ENOEXEC:
+		return "Exec format error";
+	case EINVAL:
+		return "Invalid argument";
+	case E2BIG:
+		return "Argument list too long";
+	case ELOOP:
+		return "Symbolic link loop";
+	case ENAMETOOLONG:
+		return "Filename too long";
+	case ENFILE:
+		return "Too many open files in system";
+	case EMFILE:
+		return "No file descriptors available";
+	case EBADF:
+		return "Bad file descriptor";
+	case ECHILD:
+		return "No child process";
+	case EFAULT:
+		return "Bad address";
+	case EFBIG:
+		return "File too large";
+	case EMLINK:
+		return "Too many links";
+	case ENOLCK:
+		return "No locks available";
+	case EDEADLK:
+		return "Resource deadlock would occur";
+	case ENOTRECOVERABLE:
+		return "State not recoverable";
+	case EOWNERDEAD:
+		return "Previous owner died";
+	case ECANCELED:
+		return "Operation canceled";
+	case ENOSYS:
+		return "Function not implemented";
+	case ENOMSG:
+		return "No message of desired type";
+	case EIDRM:
+		return "Identifier removed";
+	case ENOSTR:
+		return "Device not a stream";
+	case ENODATA:
+		return "No data available";
+	case ETIME:
+		return "Device timeout";
+	case ENOSR:
+		return "Out of streams resources";
+	case ENOLINK:
+		return "Link has been severed";
+	case EPROTO:
+		return "Protocol error";
+	case EBADMSG:
+		return "Bad message";
+	case EBADFD:
+		return "File descriptor in bad state";
+	case ENOTSOCK:
+		return "Not a socket";
+	case EDESTADDRREQ:
+		return "Destination address required";
+	case EMSGSIZE:
+		return "Message too large";
+	case EPROTOTYPE:
+		return "Protocol wrong type for socket";
+	case ENOPROTOOPT:
+		return "Protocol not available";
+	case EPROTONOSUPPORT:
+		return "Protocol not supported";
+	case ESOCKTNOSUPPORT:
+		return "Socket type not supported";
+	case EOPNOTSUPP:
+		return "Operation not supported on transport endpoint";
+	case EPFNOSUPPORT:
+		return "Protocol family not supported";
+	case EAFNOSUPPORT:
+		return "Address family not supported by protocol";
+	case EADDRNOTAVAIL:
+		return "Address not available";
+	case ENETDOWN:
+		return "Network is down";
+	case ENETUNREACH:
+		return "Network unreachable";
+	case ENETRESET:
+		return "Connection reset by network";
+	case ECONNABORTED:
+		return "Connection aborted";
+	case ENOBUFS:
+		return "No buffer space available";
+	case EISCONN:
+		return "Socket is connected";
+	case ENOTCONN:
+		return "Socket not connected";
+	case ESHUTDOWN:
+		return "Cannot send after socket shutdown";
+	case EALREADY:
+		return "Operation already in progress";
+	case EINPROGRESS:
+		return "Operation in progress";
+	case ESTALE:
+		return "Stale file handle";
+	case EUCLEAN:
+		return "Data consistency error";
+	case ENAVAIL:
+		return "Resource not available";
+	case EREMOTEIO:
+		return "Remote I/O error";
+	case EDQUOT:
+		return "Quota exceeded";
+	case ENOMEDIUM:
+		return "No medium found";
+	case EMEDIUMTYPE:
+		return "Wrong medium type";
+	case EMULTIHOP:
+		return "Multihop attempted";
+	case ENOKEY:
+		return "Required key not available";
+	case EKEYEXPIRED:
+		return "Key has expired";
+	case EKEYREVOKED:
+		return "Key has been revoked";
+	case EKEYREJECTED:
+		return "Key was rejected by service";
+	default:
 		return "Unknown error";
-	return errmsgs[errnum];
+	}
 }
 
 size_t strspn(const char *s, const char *accept)
