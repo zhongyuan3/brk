@@ -3,16 +3,19 @@
 
 #include <brk/types.h>
 
-typedef struct __pgde {
-	uint64_t pgde;
-} pgde_t;
+typedef struct __pgd {
+	uint64_t pgd;
+} pgd_t;
+#define pgd_val(x) ((x).pgd)
 
-typedef struct __pmde {
-	uint64_t pmde;
-} pmde_t;
+typedef struct __pmd {
+	uint64_t pmd;
+} pmd_t;
+#define pmd_val(x) ((x).pmd)
 
 typedef struct __pte {
 	uint64_t pte;
 } pte_t;
+#define pte_val(x) ((x).pte)
 
 #endif

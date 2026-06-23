@@ -43,23 +43,23 @@ static uint64_t early_pgtable_alloc_pmd(uint64_t prev)
 static void early_pgtable_map_range(uint64_t addr, size_t size, uint64_t paddr,
 				    unsigned int flags)
 {
-	pgde_t *pgdep;
-	pmde_t *pmdep;
+	pgd_t *pgdep;
+	pmd_t *pmdep;
 	uint64_t pmd_phys;
 	uint64_t end_addr = addr + size;
 	uint64_t prev = (uint64_t)early_pgdir;
 
 	while (addr < end_addr) {
-		pgdep = (pgde_t *)early_pgdir + pgde_index(addr);
-		if (pgde_present(*pgdep)) {
-			pmd_phys = pgde_get_pmd(*pgdep);
+		pgdep = (pgd_t *)early_pgdir + pgd_index(addr);
+		if (pgd_present(*pgdep)) {
+			pmd_phys = pgd_get_pmd(*pgdep);
 		} else {
 			pmd_phys = early_pgtable_alloc_pmd(prev);
 			prev = pmd_phys;
-			pgde_set_pmd(pgdep, pmd_phys);
+			pgd_set_pmd(pgdep, pmd_phys);
 		}
-		pmdep = (pmde_t *)pmd_phys + pmde_index(addr);
-		pmde_set_large(pmdep, paddr, flags);
+		pmdep = (pmd_t *)pmd_phys + pmd_index(addr);
+		pmd_set_large(pmdep, paddr, flags);
 		addr += PAGE_SIZE_2M;
 		paddr += PAGE_SIZE_2M;
 	}

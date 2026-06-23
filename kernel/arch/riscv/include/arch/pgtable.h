@@ -16,113 +16,108 @@
 
 #define PGD_SHIFT 30
 /* Number of entries in the page global directory */
-#define PTRS_PER_PGD (PAGE_SIZE / sizeof(pgde_t))
-#define PGDE_FLAGS_MASK 0x3ff
-#define pgde_val(x) ((x).pgde)
+#define PTRS_PER_PGD (PAGE_SIZE / sizeof(pgd_t))
+#define PGD_FLAGS_MASK 0x3ff
 
-static inline unsigned int pgde_flags(pgde_t pgde)
+static inline unsigned int pgd_flags(pgd_t pgd)
 {
-	return pgde_val(pgde) & PGDE_FLAGS_MASK;
+	return pgd_val(pgd) & PGD_FLAGS_MASK;
 }
 
-static inline bool pgde_present(pgde_t pgde)
+static inline bool pgd_present(pgd_t pgd)
 {
-	return pgde_flags(pgde) & PTE_V;
+	return pgd_flags(pgd) & PTE_V;
 }
 
-static inline bool pgde_large(pgde_t pgde)
+static inline bool pgd_large(pgd_t pgd)
 {
-	return pgde_present(pgde) && pgde_flags(pgde) != PTE_V;
+	return pgd_present(pgd) && pgd_flags(pgd) != PTE_V;
 }
 
-static inline size_t pgde_index(uint64_t vaddr)
+static inline size_t pgd_index(uint64_t vaddr)
 {
 	return (vaddr >> PGD_SHIFT) & (PTRS_PER_PGD - 1);
 }
 
-static inline void pgde_set_pmd(pgde_t *pgdep, uint64_t pmd_phys)
+static inline void pgd_set_pmd(pgd_t *pgdp, uint64_t pmd_phys)
 {
-	pgde_val(*pgdep) = ((pmd_phys >> PAGE_SHIFT) << 10) | PTE_V;
+	pgd_val(*pgdp) = ((pmd_phys >> PAGE_SHIFT) << 10) | PTE_V;
 }
 
-static inline void pgde_set_large(pgde_t *pgdep, uint64_t phys,
-				  unsigned int flags)
+static inline void pgd_set_large(pgd_t *pgdp, uint64_t phys, unsigned int flags)
 {
-	pgde_val(*pgdep) = ((phys >> PGD_SHIFT) << 28) | PTE_V | flags;
+	pgd_val(*pgdp) = ((phys >> PGD_SHIFT) << 28) | PTE_V | flags;
 }
 
-static inline uint64_t pgde_get_pmd(pgde_t pgde)
+static inline uint64_t pgd_get_pmd(pgd_t pgd)
 {
-	return (pgde_val(pgde) >> 10) << PAGE_SHIFT;
+	return (pgd_val(pgd) >> 10) << PAGE_SHIFT;
 }
 
-static inline uint64_t pgde_get_large(pgde_t pgde)
+static inline uint64_t pgd_get_large(pgd_t pgd)
 {
-	return (pgde_val(pgde) >> 28) << PGD_SHIFT;
+	return (pgd_val(pgd) >> 28) << PGD_SHIFT;
 }
 
-static inline void pgde_clear(pgde_t *pgdep)
+static inline void pgd_clear(pgd_t *pgdp)
 {
-	pgde_val(*pgdep) = 0;
+	pgd_val(*pgdp) = 0;
 }
 
-#define PMDE_SHIFT 21
+#define PMD_SHIFT 21
 /* Number of entries in the page middle directory */
-#define PTRS_PER_PMD (PAGE_SIZE / sizeof(pmde_t))
-#define PMDE_FLAGS_MASK 0x3ff
-#define pmde_val(x) ((x).pmde)
+#define PTRS_PER_PMD (PAGE_SIZE / sizeof(pmd_t))
+#define PMD_FLAGS_MASK 0x3ff
 
-static inline unsigned int pmde_flags(pmde_t pmde)
+static inline unsigned int pmd_flags(pmd_t pmd)
 {
-	return pmde_val(pmde) & PMDE_FLAGS_MASK;
+	return pmd_val(pmd) & PMD_FLAGS_MASK;
 }
 
-static inline bool pmde_present(pmde_t pmde)
+static inline bool pmd_present(pmd_t pmd)
 {
-	return pmde_flags(pmde) & PTE_V;
+	return pmd_flags(pmd) & PTE_V;
 }
 
-static inline bool pmde_large(pmde_t pmde)
+static inline bool pmd_large(pmd_t pmd)
 {
-	return pmde_present(pmde) && pmde_flags(pmde) != PTE_V;
+	return pmd_present(pmd) && pmd_flags(pmd) != PTE_V;
 }
 
-static inline size_t pmde_index(uint64_t vaddr)
+static inline size_t pmd_index(uint64_t vaddr)
 {
-	return (vaddr >> PMDE_SHIFT) & (PTRS_PER_PMD - 1);
+	return (vaddr >> PMD_SHIFT) & (PTRS_PER_PMD - 1);
 }
 
-static inline void pmde_set_pt(pmde_t *pmdep, uint64_t pt_phys)
+static inline void pmd_set_pte(pmd_t *pmdp, uint64_t pt_phys)
 {
-	pmde_val(*pmdep) = ((pt_phys >> PAGE_SHIFT) << 10) | PTE_V;
+	pmd_val(*pmdp) = ((pt_phys >> PAGE_SHIFT) << 10) | PTE_V;
 }
 
-static inline void pmde_set_large(pmde_t *pmdep, uint64_t phys,
-				  unsigned int flags)
+static inline void pmd_set_large(pmd_t *pmdp, uint64_t phys, unsigned int flags)
 {
-	pmde_val(*pmdep) = ((phys >> PMDE_SHIFT) << 19) | PTE_V | flags;
+	pmd_val(*pmdp) = ((phys >> PMD_SHIFT) << 19) | PTE_V | flags;
 }
 
-static inline uint64_t pmde_get_pt(pmde_t pmde)
+static inline uint64_t pmd_get_pte(pmd_t pmd)
 {
-	return (pmde_val(pmde) >> 10) << PAGE_SHIFT;
+	return (pmd_val(pmd) >> 10) << PAGE_SHIFT;
 }
 
-static inline uint64_t pmde_get_large(pmde_t pmde)
+static inline uint64_t pmd_get_large(pmd_t pmd)
 {
-	return (pmde_val(pmde) >> 19) << PMDE_SHIFT;
+	return (pmd_val(pmd) >> 19) << PMD_SHIFT;
 }
 
-static inline void pmde_clear(pmde_t *pmdep)
+static inline void pmd_clear(pmd_t *pmdp)
 {
-	pmde_val(*pmdep) = 0;
+	pmd_val(*pmdp) = 0;
 }
 
 #define PTE_SHIFT 12
 /* Number of entries in the page table */
 #define PTRS_PER_PT (PAGE_SIZE / sizeof(pte_t))
 #define PTE_FLAGS_MASK 0x3ff
-#define pte_val(x) ((x).pte)
 
 static inline unsigned int pte_flags(pte_t pte)
 {
@@ -154,12 +149,12 @@ static inline void pte_clear(pte_t *ptep)
 	pte_val(*ptep) = 0;
 }
 
-extern pgde_t early_pgdir[];
-extern pgde_t kernel_pgdir[];
+extern pgd_t early_pgdir[];
+extern pgd_t kernel_pgdir[];
 extern spinlock_t kernel_pgdir_lock;
 
-pgde_t *create_user_pgtable(void);
-void destroy_user_pgtable(pgde_t *pgd);
-int copy_user_pgtable(pgde_t *dst, pgde_t *src);
+pgd_t *create_user_pgtable(void);
+void destroy_user_pgtable(pgd_t *pgd);
+int copy_user_pgtable(pgd_t *dst, pgd_t *src);
 
 #endif

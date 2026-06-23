@@ -123,7 +123,7 @@ void paging_init(void)
 	vmemmap_init();
 }
 
-void switch_pgtable(pgde_t *pgd)
+void switch_pgtable(pgd_t *pgd)
 {
 	uint64_t paddr = virt_to_phys((uint64_t)pgd);
 	uint64_t satp = make_satp_sv39(paddr);

@@ -65,15 +65,15 @@ static uint64_t alloc_pt(enum vmap_mode mode)
 	return alloc_pgtable(mode);
 }
 
-static pmde_t *get_pmd_virt(uint64_t pmd_phys, enum vmap_mode mode)
+static pmd_t *get_pmd_virt(uint64_t pmd_phys, enum vmap_mode mode)
 {
 	switch (mode) {
 	case VMAP_MODE_EARLY:
-		return (pmde_t *)pmd_phys;
+		return (pmd_t *)pmd_phys;
 	case VMAP_MODE_INTERIM:
-		return (pmde_t *)phys_to_virt(pmd_phys);
+		return (pmd_t *)phys_to_virt(pmd_phys);
 	case VMAP_MODE_FINAL:
-		return (pmde_t *)phys_to_virt(pmd_phys);
+		return (pmd_t *)phys_to_virt(pmd_phys);
 	}
 	panic("%s(): unexpected mode: %d\n", __func__, mode);
 }
@@ -91,32 +91,32 @@ static pte_t *get_pt_virt(uint64_t pt_phys, enum vmap_mode mode)
 	panic("%s(): unexpected mode: %d\n", __func__, mode);
 }
 
-static void vunmap_range(pgde_t *pgd, uint64_t addr, uint64_t end_addr,
+static void vunmap_range(pgd_t *pgd, uint64_t addr, uint64_t end_addr,
 			 enum vmap_mode mode)
 {
-	pgde_t *pgdep;
-	pmde_t *pmd, *pmdep;
+	pgd_t *pgdep;
+	pmd_t *pmd, *pmdep;
 	pte_t *pt, *ptep;
 
 	while (addr < end_addr) {
-		pgdep = pgd + pgde_index(addr);
-		if (pgde_large(*pgdep)) {
+		pgdep = pgd + pgd_index(addr);
+		if (pgd_large(*pgdep)) {
 			ASSERT(end_addr - addr >= PAGE_SIZE_1G);
-			pgde_clear(pgdep);
+			pgd_clear(pgdep);
 			addr += PAGE_SIZE_1G;
 			continue;
 		}
-		ASSERT(pgde_present(*pgdep));
-		pmd = get_pmd_virt(pgde_get_pmd(*pgdep), mode);
-		pmdep = pmd + pmde_index(addr);
-		if (pmde_large(*pmdep)) {
+		ASSERT(pgd_present(*pgdep));
+		pmd = get_pmd_virt(pgd_get_pmd(*pgdep), mode);
+		pmdep = pmd + pmd_index(addr);
+		if (pmd_large(*pmdep)) {
 			ASSERT(end_addr - addr >= PAGE_SIZE_2M);
-			pmde_clear(pmdep);
+			pmd_clear(pmdep);
 			addr += PAGE_SIZE_2M;
 			continue;
 		}
-		ASSERT(pmde_present(*pmdep));
-		pt = get_pt_virt(pmde_get_pt(*pmdep), mode);
+		ASSERT(pmd_present(*pmdep));
+		pt = get_pt_virt(pmd_get_pte(*pmdep), mode);
 		ptep = pt + pte_index(addr);
 		ASSERT(pte_present(*ptep));
 		pte_clear(ptep);
@@ -124,50 +124,50 @@ static void vunmap_range(pgde_t *pgd, uint64_t addr, uint64_t end_addr,
 	}
 }
 
-static int vmap_range(pgde_t *pgd, uint64_t addr, uint64_t end_addr,
+static int vmap_range(pgd_t *pgd, uint64_t addr, uint64_t end_addr,
 		      uint64_t paddr, size_t page_size, unsigned int flags,
 		      enum vmap_mode mode)
 {
-	pgde_t *pgdep;
-	pmde_t *pmd, *pmdep;
+	pgd_t *pgdep;
+	pmd_t *pmd, *pmdep;
 	pte_t *pt, *ptep;
 	uint64_t pmd_phys, pt_phys;
 	uint64_t start_addr = addr;
 
 	for (; addr < end_addr; addr += page_size, paddr += page_size) {
-		pgdep = pgd + pgde_index(addr);
+		pgdep = pgd + pgd_index(addr);
 		if (page_size == PAGE_SIZE_1G) {
-			ASSERT(!pgde_present(*pgdep));
-			pgde_set_large(pgdep, paddr, flags);
+			ASSERT(!pgd_present(*pgdep));
+			pgd_set_large(pgdep, paddr, flags);
 			continue;
 		}
-		if (!pgde_present(*pgdep)) {
+		if (!pgd_present(*pgdep)) {
 			pmd_phys = alloc_pmd(mode);
 			if (!pmd_phys) {
 				vunmap_range(pgd, start_addr, addr, mode);
 				return -ENOMEM;
 			}
 			pmd = get_pmd_virt(pmd_phys, mode);
-			pgde_set_pmd(pgdep, pmd_phys);
+			pgd_set_pmd(pgdep, pmd_phys);
 		} else {
-			pmd = get_pmd_virt(pgde_get_pmd(*pgdep), mode);
+			pmd = get_pmd_virt(pgd_get_pmd(*pgdep), mode);
 		}
-		pmdep = pmd + pmde_index(addr);
+		pmdep = pmd + pmd_index(addr);
 		if (page_size == PAGE_SIZE_2M) {
-			ASSERT(!pmde_present(*pmdep));
-			pmde_set_large(pmdep, paddr, flags);
+			ASSERT(!pmd_present(*pmdep));
+			pmd_set_large(pmdep, paddr, flags);
 			continue;
 		}
-		if (!pmde_present(*pmdep)) {
+		if (!pmd_present(*pmdep)) {
 			pt_phys = alloc_pt(mode);
 			if (!pt_phys) {
 				vunmap_range(pgd, start_addr, addr, mode);
 				return -ENOMEM;
 			}
 			pt = get_pt_virt(pt_phys, mode);
-			pmde_set_pt(pmdep, pt_phys);
+			pmd_set_pte(pmdep, pt_phys);
 		} else {
-			pt = get_pt_virt(pmde_get_pt(*pmdep), mode);
+			pt = get_pt_virt(pmd_get_pte(*pmdep), mode);
 		}
 		ptep = pt + pte_index(addr);
 		ASSERT(!pte_present(*ptep));
@@ -177,7 +177,7 @@ static int vmap_range(pgde_t *pgd, uint64_t addr, uint64_t end_addr,
 	return 0;
 }
 
-int vmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
+int vmap(pgd_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 	 unsigned int flags, enum vmap_mode mode)
 {
 	uint64_t end_addr;
@@ -220,7 +220,7 @@ int vmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 	return 0;
 }
 
-void vunmap(pgde_t *pgd, uint64_t addr, size_t size, enum vmap_mode mode)
+void vunmap(pgd_t *pgd, uint64_t addr, size_t size, enum vmap_mode mode)
 {
 	ASSERT(is_aligned(addr, PAGE_SIZE));
 	ASSERT(is_aligned(size, PAGE_SIZE));
@@ -250,13 +250,13 @@ void kvunmap(uint64_t addr, size_t size)
 	spinlock_release(&kernel_pgdir_lock);
 }
 
-int uvmap(pgde_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
+int uvmap(pgd_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 	  unsigned int flags)
 {
 	return vmap(pgd, addr, size, paddr, flags | PTE_U, VMAP_MODE_FINAL);
 }
 
-void uvunmap(pgde_t *pgd, uint64_t addr, size_t size)
+void uvunmap(pgd_t *pgd, uint64_t addr, size_t size)
 {
 	vunmap(pgd, addr, size, VMAP_MODE_FINAL);
 }
