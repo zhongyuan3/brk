@@ -4,15 +4,15 @@
 #include <brk/types.h>
 
 typedef struct __pgde {
-	u64 pgde;
+	uint64_t pgde;
 } pgde_t;
 
 typedef struct __pmde {
-	u64 pmde;
+	uint64_t pmde;
 } pmde_t;
 
 typedef struct __pte {
-	u64 pte;
+	uint64_t pte;
 } pte_t;
 
 #endif

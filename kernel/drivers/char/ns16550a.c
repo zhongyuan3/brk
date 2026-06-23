@@ -54,20 +54,20 @@ void ns16550a_device_free(struct ns16550a_device *dev)
 	kfree(dev);
 }
 
-static volatile u8 *ns16550a_device_reg(struct ns16550a_device *dev,
-					unsigned int reg)
+static volatile uint8_t *ns16550a_device_reg(struct ns16550a_device *dev,
+					     unsigned int reg)
 {
 	return dev->mem_base + reg;
 }
 
 static void ns16550a_device_write_reg(struct ns16550a_device *dev,
-				      unsigned int reg, u8 val)
+				      unsigned int reg, uint8_t val)
 {
 	writeb(val, ns16550a_device_reg(dev, reg));
 }
 
-static u8 ns16550a_device_read_reg(struct ns16550a_device *dev,
-				   unsigned int reg)
+static uint8_t ns16550a_device_read_reg(struct ns16550a_device *dev,
+					unsigned int reg)
 {
 	return readb(ns16550a_device_reg(dev, reg));
 }
@@ -148,7 +148,8 @@ void ns16550a_device_finalize(struct ns16550a_device *dev)
 	iounmap((void *)dev->mem_base, dev->size);
 }
 
-static int ns16550a_device_enable_irq(struct ns16550a_device *dev, u32 hart_id)
+static int ns16550a_device_enable_irq(struct ns16550a_device *dev,
+				      uint32_t hart_id)
 {
 	int err;
 	err = irq_enable_source(hart_id, dev->irq);
@@ -269,7 +270,7 @@ int ns16550a_add_device(struct ns16550a_device *dev)
 	return 0;
 }
 
-int ns16550a_enable_irq(u32 hart_id)
+int ns16550a_enable_irq(uint32_t hart_id)
 {
 	struct ns16550a_device *dev;
 

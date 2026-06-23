@@ -8,12 +8,13 @@
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
 
-int brkfs_get_block(struct brkfs_sb_info *sbi, u32 bno, struct brkfs_block *bb)
+int brkfs_get_block(struct brkfs_sb_info *sbi, uint32_t bno,
+		    struct brkfs_block *bb)
 {
 	pgoff_t index;
 	struct cached_page *cp;
-	u8 *data;
-	u32 bsize = sbi->s_sb.s_blocksize;
+	uint8_t *data;
+	uint32_t bsize = sbi->s_sb.s_blocksize;
 
 	if (bno >= sbi->s_sb.s_blocks_count)
 		return -EINVAL;
@@ -36,9 +37,9 @@ void brkfs_put_block(struct brkfs_block *bb)
 	bb->data = NULL;
 }
 
-int brkfs_data_alloc(struct brkfs_sb_info *sbi, u32 *bno)
+int brkfs_data_alloc(struct brkfs_sb_info *sbi, uint32_t *bno)
 {
-	u32 bit = 0;
+	uint32_t bit = 0;
 	int err;
 
 	err = brkfs_bitmap_alloc(sbi, sbi->s_sb.s_data_block_bitmap,
@@ -49,9 +50,9 @@ int brkfs_data_alloc(struct brkfs_sb_info *sbi, u32 *bno)
 	return 0;
 }
 
-int brkfs_data_free(struct brkfs_sb_info *sbi, u32 bno)
+int brkfs_data_free(struct brkfs_sb_info *sbi, uint32_t bno)
 {
-	u32 bit = bno - sbi->s_sb.s_first_data_block;
+	uint32_t bit = bno - sbi->s_sb.s_first_data_block;
 
 	if (bno < sbi->s_sb.s_first_data_block) {
 		klog_warn("%s(): Invalid bno: %u, first data block: %u\n",
@@ -63,13 +64,13 @@ int brkfs_data_free(struct brkfs_sb_info *sbi, u32 bno)
 				 sbi->s_sb.s_data_blocks_count, bit);
 }
 
-int brkfs_bitmap_alloc(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
-		       u32 *out_bit)
+int brkfs_bitmap_alloc(struct brkfs_sb_info *sbi, uint32_t start_bno,
+		       uint32_t nbits, uint32_t *out_bit)
 {
-	u32 bits_per_blk = sbi->s_bits_per_block;
-	u32 nblks = div_ceil(nbits, bits_per_blk);
-	u32 bno = start_bno;
-	u32 end_bno = start_bno + nblks;
+	uint32_t bits_per_blk = sbi->s_bits_per_block;
+	uint32_t nblks = div_ceil(nbits, bits_per_blk);
+	uint32_t bno = start_bno;
+	uint32_t end_bno = start_bno + nblks;
 	int err;
 	struct brkfs_block curr_bb, next_bb;
 
@@ -78,7 +79,7 @@ int brkfs_bitmap_alloc(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
 		return err;
 
 	while (1) {
-		u32 n = nbits > bits_per_blk ? bits_per_blk : nbits;
+		uint32_t n = nbits > bits_per_blk ? bits_per_blk : nbits;
 		size_t bit = 0;
 		cached_page_lock(curr_bb.cp);
 		if (bitmap_alloc_bit(curr_bb.data, n, &bit)) {
@@ -108,8 +109,8 @@ int brkfs_bitmap_alloc(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
 	return -ENOSPC;
 }
 
-int brkfs_bitmap_free(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
-		      u32 bit)
+int brkfs_bitmap_free(struct brkfs_sb_info *sbi, uint32_t start_bno,
+		      uint32_t nbits, uint32_t bit)
 {
 	if (bit >= nbits) {
 		klog_warn("%s(): Invalid bit: %u, nbits: %u\n", __func__, bit,
@@ -117,10 +118,10 @@ int brkfs_bitmap_free(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
 		return -EINVAL;
 	}
 
-	u32 bits_per_blk = sbi->s_bits_per_block;
-	u32 bno = start_bno + bit / bits_per_blk;
-	u32 lb = bit / bits_per_blk * bits_per_blk;
-	u32 n = nbits - lb;
+	uint32_t bits_per_blk = sbi->s_bits_per_block;
+	uint32_t bno = start_bno + bit / bits_per_blk;
+	uint32_t lb = bit / bits_per_blk * bits_per_blk;
+	uint32_t n = nbits - lb;
 	if (n > bits_per_blk)
 		n = bits_per_blk;
 	int err;
@@ -137,7 +138,7 @@ int brkfs_bitmap_free(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
 	return 0;
 }
 
-int brkfs_block_read(struct brkfs_sb_info *sb, u32 bno, void *buf)
+int brkfs_block_read(struct brkfs_sb_info *sb, uint32_t bno, void *buf)
 {
 	struct brkfs_block bb;
 	int err;
@@ -150,7 +151,7 @@ int brkfs_block_read(struct brkfs_sb_info *sb, u32 bno, void *buf)
 	return 0;
 }
 
-int brkfs_block_write(struct brkfs_sb_info *sb, u32 bno, const void *buf)
+int brkfs_block_write(struct brkfs_sb_info *sb, uint32_t bno, const void *buf)
 {
 	struct brkfs_block bb;
 	int err;

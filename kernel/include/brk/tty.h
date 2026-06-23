@@ -61,7 +61,7 @@ int tty_mknod(void);
 
 struct tty {
 	struct tty_port *port;
-	u8 *rx_buf;
+	uint8_t *rx_buf;
 	size_t rx_size;
 	size_t rx_r;
 	size_t rx_w;

@@ -73,15 +73,15 @@ static void __inode_free(struct fs_inode *inode)
 		slab_free(&inode_cache, inode);
 }
 
-static u32 __inode_hash(const struct fs_super_block *sb, unsigned long ino)
+static uint32_t __inode_hash(const struct fs_super_block *sb, unsigned long ino)
 {
-	const u8 *k = (u8 *)&sb;
-	u32 h = 0x811c9dc5;
+	const uint8_t *k = (uint8_t *)&sb;
+	uint32_t h = 0x811c9dc5;
 	for (size_t i = 0; i < sizeof(void *); ++i) {
 		h ^= k[i];
 		h *= 0x01000193;
 	}
-	k = (u8 *)&ino;
+	k = (uint8_t *)&ino;
 	for (size_t i = 0; i < sizeof(ino); ++i) {
 		h ^= k[i];
 		h *= 0x01000193;

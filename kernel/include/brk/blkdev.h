@@ -9,14 +9,14 @@ struct page_cache;
 struct cached_page;
 
 struct block_dev_ops {
-	int (*read)(struct block_dev *, u64, void *, u32);
-	int (*write)(struct block_dev *, u64, const void *, u32);
+	int (*read)(struct block_dev *, uint64_t, void *, uint32_t);
+	int (*write)(struct block_dev *, uint64_t, const void *, uint32_t);
 };
 
 struct block_dev {
 	dev_t dev;
-	u32 phy_bsize;
-	u64 phy_bcnt;
+	uint32_t phy_bsize;
+	uint64_t phy_bcnt;
 	struct block_dev_ops ops;
 	void *priv;
 	struct page_cache *bd_mapping;
@@ -25,10 +25,12 @@ struct block_dev {
 
 void blkdev_registry_init(void);
 
-int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt);
-int blkdev_read(struct block_dev *bd, u64 blk_id, void *buf, u32 blk_cnt);
-int blkdev_write(struct block_dev *bd, u64 blk_id, const void *buf,
-		 u32 blk_cnt);
+int blkdev_check_bounds(struct block_dev *bd, uint64_t blk_id,
+			uint32_t blk_cnt);
+int blkdev_read(struct block_dev *bd, uint64_t blk_id, void *buf,
+		uint32_t blk_cnt);
+int blkdev_write(struct block_dev *bd, uint64_t blk_id, const void *buf,
+		 uint32_t blk_cnt);
 
 struct block_dev *blkdev_alloc(void);
 void blkdev_free(struct block_dev *bd);

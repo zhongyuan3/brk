@@ -85,7 +85,7 @@ static const char *skip_component(const char *pathname,
 	while (*p != '\0' && *p != '/')
 		p++;
 
-	u32 len = p - start;
+	uint32_t len = p - start;
 
 	*component_name = QSTR_MAKE(start, len);
 

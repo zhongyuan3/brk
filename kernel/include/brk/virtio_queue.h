@@ -22,26 +22,26 @@
 /* Virtqueue descriptors: 16 bytes.
  * These can chain together via "next". */
 struct virtq_desc {
-	u64 addr;
-	u32 len;
-	u16 flags;
-	u16 next;
+	uint64_t addr;
+	uint32_t len;
+	uint16_t flags;
+	uint16_t next;
 };
 
 struct virtq_avail {
-	u16 flags;
-	u16 idx;
-	u16 ring[];
+	uint16_t flags;
+	uint16_t idx;
+	uint16_t ring[];
 };
 
 struct virtq_used_elem {
-	u32 id;
-	u32 len;
+	uint32_t id;
+	uint32_t len;
 };
 
 struct virtq_used {
-	u16 flags;
-	u16 idx;
+	uint16_t flags;
+	uint16_t idx;
 	struct virtq_used_elem ring[];
 };
 
@@ -51,10 +51,10 @@ struct virtq {
 	struct virtq_avail *avail;
 	struct virtq_used *used;
 	bool *desc_used;
-	u16 used_idx;
+	uint16_t used_idx;
 };
 
-typedef void (*virtq_used_fn)(struct virtq *vq, u32 id, void *ctx);
+typedef void (*virtq_used_fn)(struct virtq *vq, uint32_t id, void *ctx);
 
 int virtq_alloc(struct virtq *vq, unsigned int num);
 void virtq_free(struct virtq *vq);
@@ -63,22 +63,22 @@ int virtq_alloc_desc_chain(struct virtq *vq, unsigned int *idx,
 			   unsigned int num);
 void virtq_free_desc(struct virtq *vq, unsigned int idx);
 void virtq_free_desc_chain(struct virtq *vq, unsigned int idx);
-void virtq_submit(struct virtq *vq, u16 head_idx);
+void virtq_submit(struct virtq *vq, uint16_t head_idx);
 void virtq_process_used(struct virtq *vq, virtq_used_fn fn, void *ctx);
 
-static inline int virtq_need_event(u16 event_idx, u16 new_idx, u16 old_idx)
+static inline int virtq_need_event(uint16_t event_idx, uint16_t new_idx, uint16_t old_idx)
 {
-	return (u16)(new_idx - event_idx - 1) < (u16)(new_idx - old_idx);
+	return (uint16_t)(new_idx - event_idx - 1) < (uint16_t)(new_idx - old_idx);
 }
 
-static inline u16 *virtq_used_event(struct virtq *vq)
+static inline uint16_t *virtq_used_event(struct virtq *vq)
 {
 	return &vq->avail->ring[vq->num];
 }
 
-static inline u16 *virtq_avail_event(struct virtq *vq)
+static inline uint16_t *virtq_avail_event(struct virtq *vq)
 {
-	return (u16 *)&vq->used->ring[vq->num];
+	return (uint16_t *)&vq->used->ring[vq->num];
 }
 
 #endif

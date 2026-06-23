@@ -43,8 +43,8 @@ static int slab_add_page(struct slab_allocator *allocator)
 
 	slab_mark_page_range(pg, allocator->page_order, allocator);
 
-	u64 addr = page_to_virt(pg);
-	u64 end_addr = addr + (1 << (PAGE_SHIFT + allocator->page_order));
+	uint64_t addr = page_to_virt(pg);
+	uint64_t end_addr = addr + (1 << (PAGE_SHIFT + allocator->page_order));
 
 	if (!is_aligned(addr, align))
 		addr = round_up(addr, align);
@@ -173,7 +173,7 @@ void *slab_alloc_zero(struct slab_allocator *allocator)
 void slab_free(struct slab_allocator *allocator, void *obj)
 {
 	struct page *curr;
-	u64 start, end;
+	uint64_t start, end;
 	struct list_head *list;
 
 	if (!obj)
@@ -181,13 +181,13 @@ void slab_free(struct slab_allocator *allocator, void *obj)
 
 	spinlock_acquire(&allocator->lock);
 
-	ASSERT(is_aligned((u64)obj, allocator->align));
+	ASSERT(is_aligned((uint64_t)obj, allocator->align));
 
 	list = &allocator->slab_list;
 	list_for_each_entry(curr, list, slab_list) {
 		start = page_to_virt(curr);
 		end = start + (PAGE_SIZE << curr->slab_cache->page_order);
-		if (start <= (u64)obj && (u64)obj < end) {
+		if (start <= (uint64_t)obj && (uint64_t)obj < end) {
 			*(void **)obj = curr->slab_free_objs;
 			curr->slab_free_objs = obj;
 			curr->slab_free_count++;

@@ -223,7 +223,7 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 	struct fs_dentry *dentry, *tmp;
 	struct hlist_head *head;
 
-	u32 idx = name->hash & (DENTRY_HTABLE_SIZE - 1);
+	uint32_t idx = name->hash & (DENTRY_HTABLE_SIZE - 1);
 	head = &dentry_htable[idx];
 
 	klog_debug("%s(): Looking up %.*s in %.*s\n", __func__, name->len,

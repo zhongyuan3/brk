@@ -12,7 +12,8 @@
 static LIST_DEFINE(vdevs);
 static SPINLOCK_DEFINE(vdevs_lock);
 
-struct virtio_device *virtio_dev_create(u64 phys_base, size_t size, u32 irq)
+struct virtio_device *virtio_dev_create(uint64_t phys_base, size_t size,
+					uint32_t irq)
 {
 	struct virtio_device *dev;
 	int err;
@@ -65,7 +66,7 @@ void virtio_dev_remove(struct virtio_device *dev)
 	spinlock_release(&vdevs_lock);
 }
 
-struct virtio_device *virtio_dev_get(u32 id)
+struct virtio_device *virtio_dev_get(uint32_t id)
 {
 	struct virtio_device *dev;
 

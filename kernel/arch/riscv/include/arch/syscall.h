@@ -3,17 +3,17 @@
 
 #include <arch/trapframe.h>
 
-static inline u64 arch_syscall_get_nr(struct trap_frame *tf)
+static inline uint64_t arch_syscall_get_nr(struct trap_frame *tf)
 {
 	return arch_tf_get_syscall_nr(tf);
 }
 
-static inline void arch_syscall_set_ret(struct trap_frame *tf, u64 val)
+static inline void arch_syscall_set_ret(struct trap_frame *tf, uint64_t val)
 {
 	arch_tf_set_a0(tf, val);
 }
 
-static inline u64 arch_syscall_get_arg(struct trap_frame *tf, int argno)
+static inline uint64_t arch_syscall_get_arg(struct trap_frame *tf, int argno)
 {
 	return arch_tf_get_arg(tf, argno);
 }

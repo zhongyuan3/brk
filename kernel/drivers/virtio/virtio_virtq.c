@@ -12,7 +12,7 @@ int virtq_alloc(struct virtq *vq, unsigned int num)
 	if (!vq->desc)
 		return -ENOMEM;
 
-	size = sizeof(struct virtq_avail) + sizeof(u16) * num;
+	size = sizeof(struct virtq_avail) + sizeof(uint16_t) * num;
 	vq->avail = kzalloc(size);
 	if (!vq->avail)
 		goto err_desc;
@@ -106,7 +106,7 @@ int virtq_alloc_desc_chain(struct virtq *vq, unsigned int *idx,
 	return 0;
 }
 
-void virtq_submit(struct virtq *vq, u16 head_idx)
+void virtq_submit(struct virtq *vq, uint16_t head_idx)
 {
 	vq->avail->ring[vq->avail->idx % vq->num] = head_idx;
 
@@ -119,10 +119,10 @@ void virtq_submit(struct virtq *vq, u16 head_idx)
 
 void virtq_process_used(struct virtq *vq, virtq_used_fn fn, void *ctx)
 {
-	u16 curr_used_idx = vq->used->idx;
+	uint16_t curr_used_idx = vq->used->idx;
 
 	while (vq->used_idx != curr_used_idx) {
-		u32 id;
+		uint32_t id;
 
 		__sync_synchronize();
 		id = vq->used->ring[vq->used_idx % vq->num].id;

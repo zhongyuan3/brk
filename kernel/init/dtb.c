@@ -12,7 +12,7 @@
 #include <libfdt.h>
 #include <uapi/brk/errno.h>
 
-u64 dtb_phys;
+uint64_t dtb_phys;
 
 static int dtb_get_cells(void *dtb_virt, int node, int *addr_cells,
 			 int *size_cells)
@@ -43,12 +43,12 @@ static int dtb_get_parent_cells(void *dtb_virt, int node, int *addr_cells,
 
 static int dtb_for_each_reg(void *dtb_virt, int node, int addr_cells,
 			    int size_cells,
-			    int (*callback)(u64 addr, size_t size))
+			    int (*callback)(uint64_t addr, size_t size))
 {
-	const u32 *reg;
-	u64 addr, size;
+	const uint32_t *reg;
+	uint64_t addr, size;
 	int len = 0;
-	int reg_bytes = (addr_cells + size_cells) * sizeof(u32);
+	int reg_bytes = (addr_cells + size_cells) * sizeof(uint32_t);
 	int nr_regs;
 	int err;
 
@@ -130,8 +130,8 @@ int dtb_early_init_scan_reserved_mem(void)
 int dtb_init_scan_cpu(void)
 {
 	int node;
-	u32 timebase_freq = 0;
-	const u32 *freq;
+	uint32_t timebase_freq = 0;
+	const uint32_t *freq;
 	int len;
 	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
@@ -140,7 +140,7 @@ int dtb_init_scan_cpu(void)
 		return -EINVAL;
 
 	freq = fdt_getprop(dtb_virt, node, "timebase-frequency", &len);
-	if (!freq || len != sizeof(u32))
+	if (!freq || len != sizeof(uint32_t))
 		return -EINVAL;
 
 	timebase_freq = fdt32_to_cpu(*freq);
@@ -149,17 +149,17 @@ int dtb_init_scan_cpu(void)
 	return 0;
 }
 
-static int dtb_get_one_reg(int node, u64 *addr, u64 *size)
+static int dtb_get_one_reg(int node, uint64_t *addr, uint64_t *size)
 {
 	int len;
-	u32 const *reg;
+	uint32_t const *reg;
 	int addr_cells, size_cells;
 	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
 	if (dtb_get_parent_cells(dtb_virt, node, &addr_cells, &size_cells))
 		return -EINVAL;
 
-	int cell_bytes = (addr_cells + size_cells) * sizeof(u32);
+	int cell_bytes = (addr_cells + size_cells) * sizeof(uint32_t);
 
 	reg = fdt_getprop(dtb_virt, node, "reg", &len);
 	if (!reg || len < cell_bytes || len % cell_bytes != 0)
@@ -176,10 +176,10 @@ static int dtb_get_one_reg(int node, u64 *addr, u64 *size)
 int dtb_parse_plic(struct plic_device *plic)
 {
 	int node;
-	const u32 *ndev;
+	const uint32_t *ndev;
 	int len;
-	u64 addr = 0;
-	u64 size = 0;
+	uint64_t addr = 0;
+	uint64_t size = 0;
 	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
 	node = fdt_path_offset(dtb_virt, "/soc/plic");
@@ -193,7 +193,7 @@ int dtb_parse_plic(struct plic_device *plic)
 	plic->size = size;
 
 	ndev = fdt_getprop(dtb_virt, node, "riscv,ndev", &len);
-	if (!ndev || len != sizeof(u32))
+	if (!ndev || len != sizeof(uint32_t))
 		return -EINVAL;
 
 	plic->ndev = fdt32_to_cpu(*ndev);
@@ -201,14 +201,14 @@ int dtb_parse_plic(struct plic_device *plic)
 	return 0;
 }
 
-static int dtb_get_irq(int node, u32 *irq)
+static int dtb_get_irq(int node, uint32_t *irq)
 {
 	int len;
-	const u32 *prop;
+	const uint32_t *prop;
 	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
 	prop = fdt_getprop(dtb_virt, node, "interrupts", &len);
-	if (!prop || len != sizeof(u32))
+	if (!prop || len != sizeof(uint32_t))
 		return -EINVAL;
 
 	*irq = fdt32_to_cpu(*prop);
@@ -218,11 +218,11 @@ static int dtb_get_irq(int node, u32 *irq)
 int dtb_parse_uart(struct ns16550a_device *uart)
 {
 	int node;
-	const u32 *clock_freq;
+	const uint32_t *clock_freq;
 	int len;
-	u64 addr = 0;
-	u64 size = 0;
-	u32 irq = 0;
+	uint64_t addr = 0;
+	uint64_t size = 0;
+	uint32_t irq = 0;
 	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
 	node = fdt_path_offset(dtb_virt, "/soc/serial");
@@ -241,7 +241,7 @@ int dtb_parse_uart(struct ns16550a_device *uart)
 	uart->irq = irq;
 
 	clock_freq = fdt_getprop(dtb_virt, node, "clock-frequency", &len);
-	if (!clock_freq || len != sizeof(u32))
+	if (!clock_freq || len != sizeof(uint32_t))
 		return -EINVAL;
 
 	uart->clock_freq = fdt32_to_cpu(*clock_freq);
@@ -252,9 +252,9 @@ int dtb_parse_uart(struct ns16550a_device *uart)
 int dtb_parse_rtc(struct rtc_device *rtc)
 {
 	int node;
-	u64 addr = 0;
-	u64 size = 0;
-	u32 irq = 0;
+	uint64_t addr = 0;
+	uint64_t size = 0;
+	uint32_t irq = 0;
 	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
 	node = fdt_node_offset_by_compatible(dtb_virt, -1,
@@ -278,9 +278,9 @@ int dtb_parse_rtc(struct rtc_device *rtc)
 int dtb_init_scan_virtio_dev(void)
 {
 	int node;
-	u64 addr = 0;
-	u64 size = 0;
-	u32 irq = 0;
+	uint64_t addr = 0;
+	uint64_t size = 0;
+	uint32_t irq = 0;
 	struct virtio_device *vdev;
 	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
@@ -307,11 +307,11 @@ int dtb_init_scan_virtio_dev(void)
 void dtb_init_scan_serial(void)
 {
 	int parent;
-	const u32 *clock_freq;
+	const uint32_t *clock_freq;
 	int len;
-	u64 addr = 0;
-	u64 size = 0;
-	u32 irq = 0;
+	uint64_t addr = 0;
+	uint64_t size = 0;
+	uint32_t irq = 0;
 	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 	int err = 0;
 	int subnode;
@@ -343,7 +343,7 @@ void dtb_init_scan_serial(void)
 			}
 			clock_freq = fdt_getprop(dtb_virt, subnode,
 						 "clock-frequency", &len);
-			if (!clock_freq || len != sizeof(u32)) {
+			if (!clock_freq || len != sizeof(uint32_t)) {
 				klog_debug(
 					"failed to get clock frequency: %d\n",
 					(int)(unsigned long)clock_freq);

@@ -16,6 +16,6 @@ int dtb_parse_plic(struct plic_device *plic);
 int dtb_parse_uart(struct ns16550a_device *uart);
 int dtb_parse_rtc(struct rtc_device *rtc);
 
-extern u64 dtb_phys;
+extern uint64_t dtb_phys;
 
 #endif

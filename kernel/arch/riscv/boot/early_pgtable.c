@@ -12,11 +12,12 @@
 
 static void early_pgtable_hang(const char *msg)
 	__attribute__((section(".text.head"), noreturn));
-static u64 early_pgtable_alloc_pmd(u64) __attribute__((section(".text.head")));
-static void early_pgtable_map_range(u64 addr, size_t size, u64 paddr,
+static uint64_t early_pgtable_alloc_pmd(uint64_t)
+	__attribute__((section(".text.head")));
+static void early_pgtable_map_range(uint64_t addr, size_t size, uint64_t paddr,
 				    unsigned int flags)
 	__attribute__((section(".text.head")));
-void early_pgtable_map(u64 dtb, size_t load_offset)
+void early_pgtable_map(uint64_t dtb, size_t load_offset)
 	__attribute__((section(".text.head")));
 void early_pgtable_enable(size_t load_offset)
 	__attribute__((section(".text.head")));
@@ -28,25 +29,25 @@ static void early_pgtable_hang(const char *msg)
 		asm volatile("wfi");
 }
 
-static u64 early_pgtable_alloc_pmd(u64 prev)
+static uint64_t early_pgtable_alloc_pmd(uint64_t prev)
 {
-	u64 end;
+	uint64_t end;
 
-	end = (u64)early_pgdir + NR_EARLY_PGDIR_PAGES * PAGE_SIZE;
+	end = (uint64_t)early_pgdir + NR_EARLY_PGDIR_PAGES * PAGE_SIZE;
 	if (prev + PAGE_SIZE < end)
 		return prev + PAGE_SIZE;
 
 	early_pgtable_hang("early pgtable OOM\n");
 }
 
-static void early_pgtable_map_range(u64 addr, size_t size, u64 paddr,
+static void early_pgtable_map_range(uint64_t addr, size_t size, uint64_t paddr,
 				    unsigned int flags)
 {
 	pgde_t *pgdep;
 	pmde_t *pmdep;
-	u64 pmd_phys;
-	u64 end_addr = addr + size;
-	u64 prev = (u64)early_pgdir;
+	uint64_t pmd_phys;
+	uint64_t end_addr = addr + size;
+	uint64_t prev = (uint64_t)early_pgdir;
 
 	while (addr < end_addr) {
 		pgdep = (pgde_t *)early_pgdir + pgde_index(addr);
@@ -64,40 +65,41 @@ static void early_pgtable_map_range(u64 addr, size_t size, u64 paddr,
 	}
 }
 
-void early_pgtable_map(u64 dtb, size_t load_offset)
+void early_pgtable_map(uint64_t dtb, size_t load_offset)
 {
-	u64 kern_end;
+	uint64_t kern_end;
 	size_t size;
 	unsigned int flags;
 
 	/*
 	 * Before paging is enabled, linker symbols resolve to physical
 	 * addresses via PC-relative access. load_offset is passed from
-	 * head.S and matches (u64)_skernel - KERNEL_LINK_ADDR.
+	 * head.S and matches (uint64_t)_skernel - KERNEL_LINK_ADDR.
 	 */
 	(void)load_offset;
 
-	kern_end = round_up((u64)_ekernel, PAGE_SIZE_2M);
-	size = kern_end - (u64)_skernel;
+	kern_end = round_up((uint64_t)_ekernel, PAGE_SIZE_2M);
+	size = kern_end - (uint64_t)_skernel;
 	flags = PTE_R | PTE_W | PTE_X;
 
 	/* Identity map so execution continues after satp is enabled. */
-	early_pgtable_map_range((u64)_skernel, size, (u64)_skernel, flags);
-	/* Map the kernel link address to the physical load address. */
-	early_pgtable_map_range((u64)KERNEL_LINK_ADDR, size, (u64)_skernel,
+	early_pgtable_map_range((uint64_t)_skernel, size, (uint64_t)_skernel,
 				flags);
+	/* Map the kernel link address to the physical load address. */
+	early_pgtable_map_range((uint64_t)KERNEL_LINK_ADDR, size,
+				(uint64_t)_skernel, flags);
 
 	size_t dtb_end = dtb + fdt_totalsize(dtb);
-	if (dtb >= (u64)_skernel && dtb_end <= kern_end)
+	if (dtb >= (uint64_t)_skernel && dtb_end <= kern_end)
 		return;
 
-	if (dtb < (u64)_skernel)
-		dtb_end = min(dtb_end, (u64)_skernel);
+	if (dtb < (uint64_t)_skernel)
+		dtb_end = min(dtb_end, (uint64_t)_skernel);
 	else
 		dtb = max(dtb, kern_end);
 
-	u64 map_start = round_down(dtb, PAGE_SIZE_2M);
-	u64 map_end = round_up(dtb_end, PAGE_SIZE_2M);
+	uint64_t map_start = round_down(dtb, PAGE_SIZE_2M);
+	uint64_t map_end = round_up(dtb_end, PAGE_SIZE_2M);
 	size = map_end - map_start;
 	flags = PTE_R | PTE_W;
 	early_pgtable_map_range(map_start, size, map_start, flags);
@@ -110,7 +112,7 @@ void early_pgtable_enable(size_t load_offset)
 	 * access; load_offset is unused but kept for a uniform boot ABI.
 	 */
 	(void)load_offset;
-	write_satp(make_satp_sv39((u64)early_pgdir));
+	write_satp(make_satp_sv39((uint64_t)early_pgdir));
 	sfence_vma();
 	fence_i();
 }

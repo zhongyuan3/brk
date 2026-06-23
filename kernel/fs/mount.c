@@ -21,11 +21,11 @@ static SLEEPLOCK_DEFINE(mount_lock);
 static HLIST_HEAD_DEFINE(kernel_mounts);
 static SPINLOCK_DEFINE(kernel_mounts_lock);
 
-static u32 __mount_state_hash(struct fs_mount_state *mnt,
-			      struct fs_dentry *dentry)
+static uint32_t __mount_state_hash(struct fs_mount_state *mnt,
+				   struct fs_dentry *dentry)
 {
-	u32 h1 = fnv1a_32(&mnt, sizeof(struct fs_mount_state *));
-	u32 h2 = fnv1a_32(&dentry, sizeof(struct fs_dentry *));
+	uint32_t h1 = fnv1a_32(&mnt, sizeof(struct fs_mount_state *));
+	uint32_t h2 = fnv1a_32(&dentry, sizeof(struct fs_dentry *));
 	return hash_combine32(h1, h2) & (MOUNT_HTABLE_SIZE - 1);
 }
 
@@ -59,7 +59,7 @@ static bool mount_point_busy(struct fs_mount_state *mp_mnt,
 			     struct fs_dentry *mp_dentry)
 {
 	struct fs_mount_state *mnt;
-	u32 h = __mount_state_hash(mp_mnt, mp_dentry);
+	uint32_t h = __mount_state_hash(mp_mnt, mp_dentry);
 
 	hlist_for_each_entry(mnt, &mount_hashtable[h], hash) {
 		if (mnt->parent == mp_mnt && mnt->mount_point == mp_dentry)
@@ -74,7 +74,7 @@ static int graft_tree(struct fs_mount_state *new_mnt,
 {
 	struct fs_dentry *mp_dentry = mountpoint->dentry;
 	struct fs_mount_state *mp_mnt = mountpoint->mnt;
-	u32 h = __mount_state_hash(mp_mnt, mp_dentry);
+	uint32_t h = __mount_state_hash(mp_mnt, mp_dentry);
 
 	sleeplock_acquire(&mount_lock);
 
@@ -130,7 +130,7 @@ struct fs_mount_state *fs_mount_state_lookup(const struct fs_path *path)
 	struct fs_mount_state *mnt = NULL;
 	struct fs_mount_state *mp_mnt = path->mnt;
 	struct fs_dentry *mp_dentry = path->dentry;
-	u32 h = __mount_state_hash(mp_mnt, mp_dentry);
+	uint32_t h = __mount_state_hash(mp_mnt, mp_dentry);
 	struct hlist_head *head = &mount_hashtable[h];
 	spinlock_acquire(&mount_hashtable_lock);
 	hlist_for_each_entry(mnt, head, hash) {
