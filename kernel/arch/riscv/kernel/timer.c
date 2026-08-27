@@ -1,9 +1,9 @@
 #include <arch/csr.h>
 #include <arch/sbi.h>
-#include <brk/clocksource.h>
-#include <brk/task.h>
-#include <brk/timekeeper.h>
-#include <brk/timer.h>
+#include <brk/process/task.h>
+#include <brk/time/clocksource.h>
+#include <brk/time/timekeeper.h>
+#include <brk/time/timer.h>
 
 static uint64_t timer_interval;
 

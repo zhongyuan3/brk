@@ -1,7 +1,7 @@
-#include <brk/fs.h>
-#include <brk/list.h>
-#include <brk/spinlock.h>
-#include <brk/string.h>
+#include <brk/base/list.h>
+#include <brk/fs/fs.h>
+#include <brk/lib/string.h>
+#include <brk/lock/spinlock.h>
 
 static LIST_DEFINE(filesystems);
 static SPINLOCK_DEFINE(filesystems_lock);

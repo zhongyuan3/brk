@@ -3,15 +3,15 @@
 #include <arch/pgtable.h>
 #include <arch/sbi.h>
 #include <arch/smp.h>
-#include <brk/init.h>
-#include <brk/irq.h>
-#include <brk/kernel.h>
-#include <brk/mm.h>
-#include <brk/printk.h>
-#include <brk/processor.h>
-#include <brk/task.h>
-#include <brk/trap.h>
-#include <brk/types.h>
+#include <brk/base/kernel.h>
+#include <brk/base/types.h>
+#include <brk/init/init.h>
+#include <brk/irq/irq.h>
+#include <brk/mm/mm.h>
+#include <brk/printk/printk.h>
+#include <brk/process/processor.h>
+#include <brk/process/task.h>
+#include <brk/process/trap.h>
 
 #if ENABLE_SMP
 

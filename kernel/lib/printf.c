@@ -1,6 +1,6 @@
-#include <brk/printf.h>
-#include <brk/string.h>
-#include <brk/types.h>
+#include <brk/base/types.h>
+#include <brk/lib/printf.h>
+#include <brk/lib/string.h>
 #include <limits.h>
 #include <uapi/brk/errno.h>
 

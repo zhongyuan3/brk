@@ -1,9 +1,9 @@
 #include <arch/irqflags.h>
-#include <brk/assert.h>
-#include <brk/earlycon.h>
-#include <brk/panic.h>
-#include <brk/printf.h>
-#include <brk/string.h>
+#include <brk/base/assert.h>
+#include <brk/lib/printf.h>
+#include <brk/lib/string.h>
+#include <brk/printk/earlycon.h>
+#include <brk/printk/panic.h>
 
 static volatile int in_panic;
 static char panic_buf[512];

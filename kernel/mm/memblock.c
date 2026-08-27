@@ -1,10 +1,10 @@
-#include <brk/assert.h>
-#include <brk/kernel.h>
-#include <brk/memblock.h>
-#include <brk/panic.h>
-#include <brk/pgalloc.h>
-#include <brk/printk.h>
-#include <brk/string.h>
+#include <brk/base/assert.h>
+#include <brk/base/kernel.h>
+#include <brk/lib/string.h>
+#include <brk/mm/memblock.h>
+#include <brk/mm/pgalloc.h>
+#include <brk/printk/panic.h>
+#include <brk/printk/printk.h>
 
 #define for_each_memblock_region_set(set, idx, rgn)           \
 	for (idx = 0, rgn = &set->regions[0]; idx < set->cnt; \

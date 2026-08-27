@@ -1,5 +1,5 @@
-#include <brk/clocksource.h>
-#include <brk/types.h>
+#include <brk/base/types.h>
+#include <brk/time/clocksource.h>
 
 static uint32_t timebase_freq;
 

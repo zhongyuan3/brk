@@ -2,9 +2,9 @@
 #define TMPFS_H
 
 #include <arch/page.h>
-#include <brk/mm_types.h>
-#include <brk/sleeplock_types.h>
-#include <brk/types.h>
+#include <brk/base/types.h>
+#include <brk/lock/sleeplock_types.h>
+#include <brk/mm/mm_types.h>
 
 struct tmpfs_dir_entry {
 	uint32_t d_ino;

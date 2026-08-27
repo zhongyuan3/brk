@@ -1,16 +1,16 @@
-#include <brk/assert.h>
-#include <brk/fs.h>
-#include <brk/kernel.h>
-#include <brk/ktime.h>
-#include <brk/list.h>
-#include <brk/pagecache.h>
-#include <brk/refcnt.h>
-#include <brk/slab.h>
-#include <brk/sleeplock.h>
-#include <brk/spinlock.h>
-#include <brk/string.h>
-#include <brk/task.h>
-#include <brk/types.h>
+#include <brk/base/assert.h>
+#include <brk/base/kernel.h>
+#include <brk/base/list.h>
+#include <brk/base/types.h>
+#include <brk/fs/fs.h>
+#include <brk/lib/refcnt.h>
+#include <brk/lib/string.h>
+#include <brk/lock/sleeplock.h>
+#include <brk/lock/spinlock.h>
+#include <brk/mm/pagecache.h>
+#include <brk/mm/slab.h>
+#include <brk/process/task.h>
+#include <brk/time/ktime.h>
 #include <uapi/brk/errno.h>
 
 static struct hlist_head inode_hash_table[INODE_HTABLE_SIZE];

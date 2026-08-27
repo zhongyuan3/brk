@@ -1,12 +1,12 @@
 #ifndef ARCH_MM_H
 #define ARCH_MM_H
 
-#include <arch/pgtable_types.h>
 #include <arch/page.h>
+#include <arch/pgtable_types.h>
 #include <arch/vas_layout.h>
-#include <brk/kernel.h>
-#include <brk/mm_types.h>
-#include <brk/types.h>
+#include <brk/base/kernel.h>
+#include <brk/base/types.h>
+#include <brk/mm/mm_types.h>
 
 extern size_t load_offset; /* LOAD_OFFSET = VMA - LMA */
 extern uint64_t phys_ram_base;

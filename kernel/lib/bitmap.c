@@ -1,7 +1,7 @@
-#include <brk/bitmap.h>
-#include <brk/bits.h>
-#include <brk/kernel.h>
-#include <brk/string.h>
+#include <brk/base/bits.h>
+#include <brk/base/kernel.h>
+#include <brk/lib/bitmap.h>
+#include <brk/lib/string.h>
 
 static unsigned long bitmap_last_word_mask(size_t nbits)
 {
@@ -59,7 +59,7 @@ size_t bitmap_find_first_zero_bit(const unsigned long *bitmap, size_t nbits)
 }
 
 size_t bitmap_find_next_zero_bit(const unsigned long *bitmap, size_t nbits,
-				  size_t start)
+				 size_t start)
 {
 	size_t bit;
 

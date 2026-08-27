@@ -1,5 +1,5 @@
-#include <brk/sort.h>
-#include <brk/string.h>
+#include <brk/lib/sort.h>
+#include <brk/lib/string.h>
 
 static void heapify(void *base, size_t nmemb, size_t size, size_t i,
 		    int (*compar)(const void *, const void *))

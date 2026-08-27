@@ -1,9 +1,9 @@
-#include <brk/console.h>
-#include <brk/device.h>
-#include <brk/list.h>
-#include <brk/spinlock.h>
-#include <brk/tty.h>
-#include <brk/uart.h>
+#include <brk/base/list.h>
+#include <brk/drivers/device.h>
+#include <brk/drivers/tty.h>
+#include <brk/drivers/uart.h>
+#include <brk/lock/spinlock.h>
+#include <brk/printk/console.h>
 
 static LIST_DEFINE(console_list);
 static SPINLOCK_DEFINE(console_lock);

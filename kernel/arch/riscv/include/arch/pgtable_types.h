@@ -1,7 +1,7 @@
 #ifndef ARCH_PGTABLE_TYPES_H
 #define ARCH_PGTABLE_TYPES_H
 
-#include <brk/types.h>
+#include <brk/base/types.h>
 
 typedef struct __pgd {
 	uint64_t pgd;

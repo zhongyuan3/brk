@@ -1,7 +1,7 @@
 #ifndef ARCH_PROCESSOR_H
 #define ARCH_PROCESSOR_H
 
-#include <brk/types.h>
+#include <brk/base/types.h>
 
 struct switch_frame {
 	uint64_t ra;

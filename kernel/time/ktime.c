@@ -1,6 +1,6 @@
-#include <brk/fs.h>
-#include <brk/ktime.h>
-#include <brk/timekeeper.h>
+#include <brk/fs/fs.h>
+#include <brk/time/ktime.h>
+#include <brk/time/timekeeper.h>
 #include <uapi/brk/stat.h>
 
 void ktime_get_mono_ts(struct timespec *ts)

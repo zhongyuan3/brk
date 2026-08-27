@@ -1,7 +1,7 @@
 #ifndef ARCH_TRAP_H
 #define ARCH_TRAP_H
 
-#include <brk/types.h>
+#include <brk/base/types.h>
 
 #define TRAP_IS_INTERRUPT(scause) ((scause) & (1ULL << 63))
 #define TRAP_IS_EXCEPTION(scause) (!TRAP_IS_INTERRUPT(scause))
