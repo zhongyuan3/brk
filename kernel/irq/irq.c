@@ -1,19 +1,26 @@
 #include <brk/irq.h>
 #include <brk/kmalloc.h>
 #include <brk/panic.h>
-#include <brk/plic.h>
 #include <brk/spinlock.h>
 #include <uapi/brk/errno.h>
 
+static struct irq_chip *irq_chip;
 static irq_handler_t *irq_handlers;
 static void **irq_handlers_ctx;
 static uint32_t irq_handlers_num;
 static SPINLOCK_DEFINE(irq_handlers_lock);
 
+void irq_register_chip(struct irq_chip *chip)
+{
+	irq_chip = chip;
+}
+
 void irq_init(void)
 {
-	plic_init();
-	uint32_t ndev = plic_get_ndev();
+	if (!irq_chip)
+		panic("%s(): no irqchip registered\n", __func__);
+
+	uint32_t ndev = irq_chip->get_ndev();
 	irq_handlers = kcalloc(ndev, sizeof(irq_handler_t));
 	if (!irq_handlers)
 		panic("%s(): kcalloc() failed\n", __func__);
@@ -25,7 +32,9 @@ void irq_init(void)
 
 void irq_init_hart(uint32_t hart_id)
 {
-	plic_set_threshold(hart_id, 0);
+	if (!irq_chip)
+		return;
+	irq_chip->init_hart(hart_id);
 }
 
 int irq_register_handler(uint32_t source, irq_handler_t handler, void *ctx,
@@ -66,11 +75,14 @@ int irq_unregister_handler(uint32_t source, irq_handler_t *old_handler,
 
 int irq_handle_external(uint32_t hart_id)
 {
+	if (!irq_chip)
+		return -EINVAL;
+
 	uint32_t source = 0;
 	irq_handler_t handler;
 	void *ctx;
 
-	int err = plic_claim(hart_id, &source);
+	int err = irq_chip->claim(hart_id, &source);
 	if (err)
 		return err;
 
@@ -78,7 +90,7 @@ int irq_handle_external(uint32_t hart_id)
 		return 0;
 
 	if (!irq_handlers || source >= irq_handlers_num) {
-		plic_complete(hart_id, source);
+		irq_chip->complete(hart_id, source);
 		return -EINVAL;
 	}
 
@@ -90,20 +102,26 @@ int irq_handle_external(uint32_t hart_id)
 	if (handler)
 		handler(ctx);
 
-	return plic_complete(hart_id, source);
+	return irq_chip->complete(hart_id, source);
 }
 
 int irq_set_priority(uint32_t source, unsigned int priority)
 {
-	return plic_set_priority(source, priority);
+	if (!irq_chip)
+		return -EINVAL;
+	return irq_chip->set_priority(source, priority);
 }
 
 int irq_enable_source(uint32_t hart_id, uint32_t source)
 {
-	return plic_enable(hart_id, source);
+	if (!irq_chip)
+		return -EINVAL;
+	return irq_chip->enable(hart_id, source);
 }
 
 int irq_disable_source(uint32_t hart_id, uint32_t source)
 {
-	return plic_disable(hart_id, source);
+	if (!irq_chip)
+		return -EINVAL;
+	return irq_chip->disable(hart_id, source);
 }

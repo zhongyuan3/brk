@@ -14,6 +14,7 @@
 #include <brk/mm.h>
 #include <brk/pagecache.h>
 #include <brk/pgalloc.h>
+#include <brk/plic.h>
 #include <brk/printk.h>
 #include <brk/processor.h>
 #include <brk/rtc.h>
@@ -46,6 +47,7 @@ void start_kernel(void)
 	dtb_init_scan_cpu();
 	dtb_init_scan_virtio_dev();
 
+	plic_init();
 	irq_init();
 	rtc_init();
 	timekeeper_init();

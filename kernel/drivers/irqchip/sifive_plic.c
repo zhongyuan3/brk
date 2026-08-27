@@ -1,12 +1,19 @@
 #include <arch/pgtable.h>
 #include <brk/dtb.h>
 #include <brk/ioremap.h>
+#include <brk/irq.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/plic.h>
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
+
+#define PLIC_PRIORITY_OFFSET 0x000000
+#define PLIC_PENDING_OFFSET 0x001000
+#define PLIC_ENABLE_OFFSET 0x002000
+#define PLIC_THRESHOLD_OFFSET 0x200000
+#define PLIC_CLAIM_COMPLETE_OFFSET 0x200004
 
 static struct plic_device plic;
 static uint64_t mem_base;
@@ -21,24 +28,13 @@ static bool plic_source_is_valid(uint32_t source)
 	return source < plic.ndev;
 }
 
-void plic_init(void)
-{
-	dtb_parse_plic(&plic);
-	mem_base = (uint64_t)ioremap(plic.phys_base, plic.size, PTE_R | PTE_W);
-	priority_base = mem_base + PLIC_PRIORITY_OFFSET;
-	pending_base = mem_base + PLIC_PENDING_OFFSET;
-	enable_base = mem_base + PLIC_ENABLE_OFFSET;
-	threshold_base = mem_base + PLIC_THRESHOLD_OFFSET;
-	claim_complete_base = mem_base + PLIC_CLAIM_COMPLETE_OFFSET;
-}
-
 static volatile uint32_t *plic_senable(uint32_t hart_id)
 {
 	size_t ctx = 2 * hart_id + 1;
 	return (volatile uint32_t *)(enable_base + ctx * 0x80);
 }
 
-int plic_enable(uint32_t hart_id, uint32_t source)
+static int plic_enable(uint32_t hart_id, uint32_t source)
 {
 	volatile uint32_t *senable;
 
@@ -53,7 +49,7 @@ int plic_enable(uint32_t hart_id, uint32_t source)
 	return 0;
 }
 
-int plic_disable(uint32_t hart_id, uint32_t source)
+static int plic_disable(uint32_t hart_id, uint32_t source)
 {
 	volatile uint32_t *senable;
 
@@ -68,7 +64,7 @@ int plic_disable(uint32_t hart_id, uint32_t source)
 	return 0;
 }
 
-int plic_set_priority(uint32_t source, unsigned int priority)
+static int plic_set_priority(uint32_t source, unsigned int priority)
 {
 	if (!plic_source_is_valid(source))
 		return -EINVAL;
@@ -84,7 +80,7 @@ static volatile uint32_t *plic_sthreshold(uint32_t hart_id)
 	return (volatile uint32_t *)(threshold_base + ctx * 0x1000);
 }
 
-int plic_set_threshold(uint32_t hart_id, unsigned int threshold)
+static int plic_set_threshold(uint32_t hart_id, unsigned int threshold)
 {
 	volatile uint32_t *sthreshold;
 
@@ -102,7 +98,7 @@ static volatile uint32_t *plic_sclaim_complete(uint32_t hart_id)
 	return (volatile uint32_t *)(claim_complete_base + ctx * 0x1000);
 }
 
-int plic_claim(uint32_t hart_id, uint32_t *source)
+static int plic_claim(uint32_t hart_id, uint32_t *source)
 {
 	volatile uint32_t *sclaim;
 
@@ -114,7 +110,7 @@ int plic_claim(uint32_t hart_id, uint32_t *source)
 	return 0;
 }
 
-int plic_complete(uint32_t hart_id, uint32_t source)
+static int plic_complete(uint32_t hart_id, uint32_t source)
 {
 	volatile uint32_t *scomplete;
 
@@ -129,7 +125,34 @@ int plic_complete(uint32_t hart_id, uint32_t source)
 	return 0;
 }
 
-uint32_t plic_get_ndev(void)
+static uint32_t plic_get_ndev(void)
 {
 	return plic.ndev;
+}
+
+static int plic_init_hart(uint32_t hart_id)
+{
+	return plic_set_threshold(hart_id, 0);
+}
+
+static struct irq_chip plic_irq_chip = {
+	.get_ndev = plic_get_ndev,
+	.init_hart = plic_init_hart,
+	.claim = plic_claim,
+	.complete = plic_complete,
+	.set_priority = plic_set_priority,
+	.enable = plic_enable,
+	.disable = plic_disable,
+};
+
+void plic_init(void)
+{
+	dtb_parse_plic(&plic);
+	mem_base = (uint64_t)ioremap(plic.phys_base, plic.size, PTE_R | PTE_W);
+	priority_base = mem_base + PLIC_PRIORITY_OFFSET;
+	pending_base = mem_base + PLIC_PENDING_OFFSET;
+	enable_base = mem_base + PLIC_ENABLE_OFFSET;
+	threshold_base = mem_base + PLIC_THRESHOLD_OFFSET;
+	claim_complete_base = mem_base + PLIC_CLAIM_COMPLETE_OFFSET;
+	irq_register_chip(&plic_irq_chip);
 }

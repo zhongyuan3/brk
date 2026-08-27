@@ -9,7 +9,6 @@
 #include <brk/mm.h>
 #include <brk/mmio.h>
 #include <brk/panic.h>
-#include <brk/plic.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
 #include <brk/tty.h>
