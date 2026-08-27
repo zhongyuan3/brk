@@ -21,8 +21,8 @@
 #include <brk/virtio_mmio.h>
 #include <brk/virtio_queue.h>
 #include <uapi/brk/errno.h>
-#include <uapi/fcntl.h>
-#include <uapi/types.h>
+#include <uapi/brk/fcntl.h>
+#include <uapi/brk/types.h>
 
 static struct virtio_blk_registry __vblk_registry;
 static struct virtio_blk_registry *vblk_registry;

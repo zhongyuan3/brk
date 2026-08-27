@@ -2,7 +2,7 @@
 #define BRK_FS_TYPES_H
 
 #include <brk/types.h>
-#include <uapi/time.h>
+#include <uapi/brk/time.h>
 
 struct fs_driver;
 struct fs_super_block;

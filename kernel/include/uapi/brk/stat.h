@@ -1,7 +1,7 @@
 #ifndef UAPI_STAT_H
 #define UAPI_STAT_H
 
-#include <uapi/types.h>
+#include <uapi/brk/types.h>
 
 #define S_IFMT 00170000
 #define S_IFSOCK 0140000 /* Socket */

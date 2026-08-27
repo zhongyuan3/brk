@@ -2,8 +2,8 @@
 #define BRK_PGALLOC_H
 
 #include <arch/mm.h>
-#include <asm/page.h>
-#include <asm/vas_layout.h>
+#include <arch/page.h>
+#include <arch/vas_layout.h>
 #include <brk/mm_types.h>
 
 #define PAGE_ORDER_MAX 12

@@ -3,8 +3,8 @@
 
 #include <brk/timeconst.h>
 #include <brk/types.h>
-#include <uapi/stat.h>
-#include <uapi/time.h>
+#include <uapi/brk/stat.h>
+#include <uapi/brk/time.h>
 
 struct fs_inode;
 

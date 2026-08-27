@@ -1,7 +1,7 @@
 #ifndef UAPI_BRK_TIMES_H
 #define UAPI_BRK_TIMES_H
 
-#include <uapi/types.h>
+#include <uapi/brk/types.h>
 
 struct tms {
 	clock_t tms_utime; /* user time */

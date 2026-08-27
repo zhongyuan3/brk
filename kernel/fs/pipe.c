@@ -1,4 +1,4 @@
-#include <asm/page.h>
+#include <arch/page.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
@@ -14,8 +14,8 @@
 #include <brk/task.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
-#include <uapi/fcntl.h>
-#include <uapi/stat.h>
+#include <uapi/brk/fcntl.h>
+#include <uapi/brk/stat.h>
 
 #define PIPEFS_MAGIC 0x50495045 /* "PIPE" */
 #define PIPE_RING_CAP 4096

@@ -3,7 +3,7 @@
 #include <brk/kmalloc.h>
 #include <brk/string.h>
 #include <uapi/brk/errno.h>
-#include <uapi/dirent.h>
+#include <uapi/brk/dirent.h>
 
 static int brkfs_dir_open(struct fs_inode *inode, struct fs_file *file)
 {

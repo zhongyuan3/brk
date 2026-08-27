@@ -11,8 +11,8 @@
 #include <brk/timekeeper.h>
 #include <brk/vmalloc.h>
 #include <uapi/brk/errno.h>
-#include <uapi/resource.h>
-#include <uapi/time.h>
+#include <uapi/brk/resource.h>
+#include <uapi/brk/time.h>
 
 uint64_t sys_gettimeofday(void)
 {

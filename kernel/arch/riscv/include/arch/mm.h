@@ -2,8 +2,8 @@
 #define ARCH_MM_H
 
 #include <arch/pgtable_types.h>
-#include <asm/page.h>
-#include <asm/vas_layout.h>
+#include <arch/page.h>
+#include <arch/vas_layout.h>
 #include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/types.h>

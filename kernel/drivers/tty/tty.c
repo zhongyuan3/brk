@@ -8,9 +8,9 @@
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
-#include <uapi/ioctl.h>
-#include <uapi/signal.h>
-#include <uapi/types.h>
+#include <uapi/brk/ioctl.h>
+#include <uapi/brk/signal.h>
+#include <uapi/brk/types.h>
 
 #define CTRL(x) ((x) - '@')
 

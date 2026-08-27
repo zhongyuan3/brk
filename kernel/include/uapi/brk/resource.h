@@ -1,7 +1,7 @@
 #ifndef UAPI_RESOURCE_H
 #define UAPI_RESOURCE_H
 
-#include <uapi/time.h>
+#include <uapi/brk/time.h>
 
 struct rusage {
 	struct timeval ru_utime; /* user time used */

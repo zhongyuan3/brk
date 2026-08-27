@@ -1,5 +1,5 @@
 #include <arch/pgtable.h>
-#include <asm/large_page.h>
+#include <arch/large_page.h>
 #include <brk/assert.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>

@@ -1,7 +1,7 @@
 #include <brk/fs.h>
 #include <brk/ktime.h>
 #include <brk/timekeeper.h>
-#include <uapi/stat.h>
+#include <uapi/brk/stat.h>
 
 void ktime_get_mono_ts(struct timespec *ts)
 {

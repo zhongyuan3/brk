@@ -1,4 +1,4 @@
-#include <asm/vas_layout.h>
+#include <arch/vas_layout.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -9,7 +9,7 @@
 #include <brk/task.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
-#include <uapi/signal.h>
+#include <uapi/brk/signal.h>
 
 static bool sig_valid(int sig)
 {

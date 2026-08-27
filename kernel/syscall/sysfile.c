@@ -18,11 +18,11 @@
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
 #include <uapi/brk/limits.h>
-#include <uapi/dirent.h>
-#include <uapi/fcntl.h>
-#include <uapi/stat.h>
-#include <uapi/types.h>
-#include <uapi/utsname.h>
+#include <uapi/brk/dirent.h>
+#include <uapi/brk/fcntl.h>
+#include <uapi/brk/stat.h>
+#include <uapi/brk/types.h>
+#include <uapi/brk/utsname.h>
 
 uint64_t sys_read(void)
 {

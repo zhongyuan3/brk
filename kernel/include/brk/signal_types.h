@@ -4,7 +4,7 @@
 #include <arch/trapframe.h>
 #include <brk/refcnt_types.h>
 #include <brk/spinlock_types.h>
-#include <uapi/signal.h>
+#include <uapi/brk/signal.h>
 
 struct sigaction_table {
 	struct sigaction actions[NSIG];

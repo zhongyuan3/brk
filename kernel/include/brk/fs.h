@@ -6,8 +6,8 @@
 #include <brk/refcnt_types.h>
 #include <brk/sleeplock_types.h>
 #include <brk/types.h>
-#include <uapi/stat.h>
-#include <uapi/time.h>
+#include <uapi/brk/stat.h>
+#include <uapi/brk/time.h>
 
 #define SEEK_SET 0
 #define SEEK_CUR 1

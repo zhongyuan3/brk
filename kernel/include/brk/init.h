@@ -1,7 +1,7 @@
 #ifndef BRK_INIT_H
 #define BRK_INIT_H
 
-#include <asm/smp.h>
+#include <arch/smp.h>
 
 void arch_init(void);
 

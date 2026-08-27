@@ -4,7 +4,6 @@ subdir-y += drivers
 subdir-y += fs
 subdir-y += lib
 subdir-y += init
-subdir-y += ipc
 subdir-y += irq
 subdir-y += lock
 subdir-y += printk

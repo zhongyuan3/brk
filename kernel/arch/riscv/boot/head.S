@@ -1,7 +1,7 @@
-#include <asm/boot.h>
-#include <asm/page_table.h>
-#include <asm/page.h>
-#include <asm/smp.h>
+#include <arch/boot.h>
+#include <arch/page_table.h>
+#include <arch/page.h>
+#include <arch/smp.h>
 
 #define HART_ID_SAVED_REG s2
 #define DTB_PHYS_SAVED_REG s3

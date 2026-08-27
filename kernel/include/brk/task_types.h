@@ -5,8 +5,8 @@
 #include <arch/trapframe.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
-#include <uapi/times.h>
-#include <uapi/types.h>
+#include <uapi/brk/times.h>
+#include <uapi/brk/types.h>
 
 #define TASK_NAME_MAX 32
 

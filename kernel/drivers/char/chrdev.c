@@ -11,7 +11,7 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
-#include <uapi/types.h>
+#include <uapi/brk/types.h>
 
 struct char_dev_region {
 	struct hlist_node entry;

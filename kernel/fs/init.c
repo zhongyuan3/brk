@@ -12,8 +12,8 @@
 #include <brk/tty.h>
 #include <brk/virtio_blk.h>
 #include <uapi/brk/errno.h>
-#include <uapi/fcntl.h>
-#include <uapi/stat.h>
+#include <uapi/brk/fcntl.h>
+#include <uapi/brk/stat.h>
 
 static void register_builtin_filesystems(void)
 {

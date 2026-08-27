@@ -11,8 +11,8 @@
 #include <brk/task.h>
 #include <uapi/brk/errno.h>
 #include <uapi/brk/limits.h>
-#include <uapi/fcntl.h>
-#include <uapi/stat.h>
+#include <uapi/brk/fcntl.h>
+#include <uapi/brk/stat.h>
 
 static void follow_mount(struct fs_path *path)
 {

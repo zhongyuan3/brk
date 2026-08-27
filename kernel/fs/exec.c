@@ -1,7 +1,7 @@
 #include <arch/pgtable.h>
 #include <arch/trapframe.h>
-#include <asm/page.h>
-#include <asm/vas_layout.h>
+#include <arch/page.h>
+#include <arch/vas_layout.h>
 #include <brk/assert.h>
 #include <brk/error.h>
 #include <brk/fs.h>
@@ -20,8 +20,8 @@
 #include <brk/vmalloc.h>
 #include <uapi/brk/errno.h>
 #include <uapi/brk/limits.h>
-#include <uapi/elf.h>
-#include <uapi/fcntl.h>
+#include <uapi/brk/elf.h>
+#include <uapi/brk/fcntl.h>
 
 struct exec_args {
 	char **argv;

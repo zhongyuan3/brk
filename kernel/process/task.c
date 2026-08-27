@@ -26,7 +26,7 @@
 #include <brk/vmalloc.h>
 #include <uapi/brk/errno.h>
 #include <uapi/brk/limits.h>
-#include <uapi/signal.h>
+#include <uapi/brk/signal.h>
 
 cpuid_t boot_cpuid;
 struct task_control_block *initial_task;

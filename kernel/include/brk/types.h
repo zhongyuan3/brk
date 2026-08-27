@@ -1,7 +1,7 @@
 #ifndef BRK_TYPES_H
 #define BRK_TYPES_H
 
-#include <uapi/types.h>
+#include <uapi/brk/types.h>
 
 typedef unsigned int fmode_t;
 typedef int cpuid_t;
