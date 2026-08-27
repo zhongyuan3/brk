@@ -4,7 +4,6 @@
 #include <arch/trap.h>
 #include <arch/trapframe.h>
 #include <brk/assert.h>
-#include <brk/cpu.h>
 #include <brk/irq.h>
 #include <brk/kernel.h>
 #include <brk/panic.h>

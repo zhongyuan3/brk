@@ -1,5 +1,5 @@
 #include <arch/mm.h>
-#include <brk/cpu.h>
+#include <brk/clocksource.h>
 #include <brk/dtb.h>
 #include <brk/kmalloc.h>
 #include <brk/memblock.h>
@@ -144,7 +144,7 @@ int dtb_init_scan_cpu(void)
 		return -EINVAL;
 
 	timebase_freq = fdt32_to_cpu(*freq);
-	cpu_set_timebase_freq(timebase_freq);
+	clocksource_set_timebase_freq(timebase_freq);
 
 	return 0;
 }

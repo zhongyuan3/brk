@@ -1,5 +1,4 @@
 #include <arch/syscall.h>
-#include <brk/cpu.h>
 #include <brk/kernel.h>
 #include <brk/panic.h>
 #include <brk/printk.h>

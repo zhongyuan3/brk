@@ -1,6 +1,5 @@
 #include <arch/pgtable.h>
 #include <brk/chrdev.h>
-#include <brk/cpu.h>
 #include <brk/dtb.h>
 #include <brk/ioremap.h>
 #include <brk/irq.h>

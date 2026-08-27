@@ -1,3 +1,4 @@
+subdir-y += base
 subdir-y += block
 subdir-y += char
 subdir-y += tty
