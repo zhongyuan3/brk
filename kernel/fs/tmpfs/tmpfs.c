@@ -1,5 +1,5 @@
 #include "tmpfs.h"
-#include <asm/page.h>
+#include <arch/page.h>
 #include <brk/assert.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
@@ -17,9 +17,9 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
-#include <uapi/dirent.h>
-#include <uapi/stat.h>
-#include <uapi/time.h>
+#include <uapi/brk/dirent.h>
+#include <uapi/brk/stat.h>
+#include <uapi/brk/time.h>
 
 static void tmpfs_stamp_times(struct tmpfs_inode *ip)
 {

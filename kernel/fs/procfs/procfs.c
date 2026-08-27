@@ -62,8 +62,8 @@
 #include <brk/task.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
-#include <uapi/dirent.h>
-#include <uapi/stat.h>
+#include <uapi/brk/dirent.h>
+#include <uapi/brk/stat.h>
 
 #define PROCFS_MAGIC 0x9fa0
 #define PROCFS_BUF_SIZE PAGE_SIZE

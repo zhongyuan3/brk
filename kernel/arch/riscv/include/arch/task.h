@@ -1,7 +1,7 @@
 #ifndef ARCH_TASK_H
 #define ARCH_TASK_H
 
-#include <asm/page.h>
+#include <arch/page.h>
 
 #define KSTACK_PAGE_ORDER 1
 #define KSTACK_SIZE (PAGE_SIZE * (1 << KSTACK_PAGE_ORDER))

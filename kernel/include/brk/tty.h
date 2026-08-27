@@ -4,8 +4,8 @@
 #include <brk/refcnt_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
-#include <uapi/ioctl.h>
-#include <uapi/types.h>
+#include <uapi/brk/ioctl.h>
+#include <uapi/brk/types.h>
 
 #define TTY_RX_BUF_SIZE 1024
 

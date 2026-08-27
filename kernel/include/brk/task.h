@@ -2,7 +2,7 @@
 #define BRK_TASK_H
 
 #include <arch/task.h>
-#include <asm/smp.h>
+#include <arch/smp.h>
 #include <brk/fdtable.h>
 #include <brk/fs_types.h>
 #include <brk/kernel.h>
@@ -14,10 +14,10 @@
 #include <brk/task_types.h>
 #include <brk/types.h>
 #include <uapi/brk/limits.h>
-#include <uapi/resource.h>
-#include <uapi/signal.h>
-#include <uapi/times.h>
-#include <uapi/types.h>
+#include <uapi/brk/resource.h>
+#include <uapi/brk/signal.h>
+#include <uapi/brk/times.h>
+#include <uapi/brk/types.h>
 
 #define TIME_SLICE_MAX 5
 

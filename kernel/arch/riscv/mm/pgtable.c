@@ -1,6 +1,6 @@
 #include <arch/pgtable.h>
-#include <asm/large_page.h>
-#include <asm/page.h>
+#include <arch/large_page.h>
+#include <arch/page.h>
 #include <brk/assert.h>
 #include <brk/kernel.h>
 #include <brk/mm.h>

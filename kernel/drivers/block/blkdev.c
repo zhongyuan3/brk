@@ -1,4 +1,4 @@
-#include <asm/page.h>
+#include <arch/page.h>
 #include <brk/bitmap.h>
 #include <brk/blkdev.h>
 #include <brk/device.h>
@@ -14,7 +14,7 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
-#include <uapi/types.h>
+#include <uapi/brk/types.h>
 
 struct block_dev_region {
 	struct hlist_node entry;

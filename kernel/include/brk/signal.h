@@ -5,8 +5,8 @@
 #include <brk/signal_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
-#include <uapi/signal.h>
-#include <uapi/types.h>
+#include <uapi/brk/signal.h>
+#include <uapi/brk/types.h>
 
 struct task_control_block;
 

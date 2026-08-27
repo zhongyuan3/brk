@@ -3,7 +3,7 @@
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <uapi/brk/errno.h>
-#include <uapi/signal.h>
+#include <uapi/brk/signal.h>
 
 uint64_t sys_rt_sigaction(void)
 {

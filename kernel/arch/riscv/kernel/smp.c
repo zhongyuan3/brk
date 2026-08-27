@@ -2,7 +2,7 @@
 #include <arch/mm.h>
 #include <arch/pgtable.h>
 #include <arch/sbi.h>
-#include <asm/smp.h>
+#include <arch/smp.h>
 #include <brk/init.h>
 #include <brk/irq.h>
 #include <brk/kernel.h>

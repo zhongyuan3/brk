@@ -1,4 +1,4 @@
-#include <asm/page.h>
+#include <arch/page.h>
 #include <brk/ioremap.h>
 #include <brk/kernel.h>
 #include <brk/vmalloc.h>

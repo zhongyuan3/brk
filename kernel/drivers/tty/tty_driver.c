@@ -12,8 +12,8 @@
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
-#include <uapi/fcntl.h>
-#include <uapi/types.h>
+#include <uapi/brk/fcntl.h>
+#include <uapi/brk/types.h>
 
 static HLIST_HEAD_DEFINE(tty_driver_list);
 static SPINLOCK_DEFINE(tty_driver_lock);

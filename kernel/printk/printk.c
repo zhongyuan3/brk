@@ -7,7 +7,7 @@
 #include <brk/string.h>
 #include <brk/tty.h>
 #include <uapi/brk/errno.h>
-#include <uapi/time.h>
+#include <uapi/brk/time.h>
 
 static SPINLOCK_DEFINE(printk_lock);
 static char printk_buf[1024];

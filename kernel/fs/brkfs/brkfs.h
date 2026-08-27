@@ -5,7 +5,7 @@
 #include <brk/fs_types.h>
 #include <brk/pagecache.h>
 #include <brk/types.h>
-#include <uapi/types.h>
+#include <uapi/brk/types.h>
 
 #define BRKFS_DIRECT_BLOCKS 7 /* Total number of direct block pointers */
 #define BRKFS_INDIRECT_BLOCK \

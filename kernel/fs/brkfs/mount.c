@@ -1,6 +1,6 @@
 #include "brkfs.h"
 #include <arch/pgtable.h>
-#include <asm/page.h>
+#include <arch/page.h>
 #include <brk/dcache.h>
 #include <brk/device.h>
 #include <brk/error.h>
@@ -15,7 +15,7 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
-#include <uapi/stat.h>
+#include <uapi/brk/stat.h>
 
 static int brkfs_read_super(struct brkfs_super_block *sb,
 			    struct block_dev *bdev)

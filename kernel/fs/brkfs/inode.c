@@ -12,7 +12,7 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/brk/errno.h>
-#include <uapi/stat.h>
+#include <uapi/brk/stat.h>
 
 #define ATTR_MODE (1u << 0)
 #define ATTR_SIZE (1u << 3)

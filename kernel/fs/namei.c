@@ -4,7 +4,7 @@
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <uapi/brk/errno.h>
-#include <uapi/fcntl.h>
+#include <uapi/brk/fcntl.h>
 
 struct fs_file *do_openat(int dirfd, const char *pathname, int flags,
 			  umode_t mode)

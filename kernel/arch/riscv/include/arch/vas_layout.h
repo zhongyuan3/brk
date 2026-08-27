@@ -1,7 +1,7 @@
 #ifndef ASM_VAS_LAYOUT_H
 #define ASM_VAS_LAYOUT_H
 
-#include <asm/page.h>
+#include <arch/page.h>
 
 #define USER_SPACE_SIZE_MAX ((1UL << 38) - PAGE_SIZE)
 

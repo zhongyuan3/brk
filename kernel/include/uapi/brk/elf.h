@@ -1,7 +1,7 @@
 #ifndef UAPI_ELF_H
 #define UAPI_ELF_H
 
-#include <uapi/types.h>
+#include <uapi/brk/types.h>
 
 #define EI_NIDENT 16
 

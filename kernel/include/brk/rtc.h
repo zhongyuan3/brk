@@ -2,7 +2,7 @@
 #define BRK_RTC_H
 
 #include <brk/types.h>
-#include <uapi/time.h>
+#include <uapi/brk/time.h>
 
 struct rtc_device {
 	uint64_t phys_base;
