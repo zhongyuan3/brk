@@ -2,7 +2,6 @@
 #include <brk/blkdev.h>
 #include <brk/chrdev.h>
 #include <brk/console.h>
-#include <brk/cpu.h>
 #include <brk/dcache.h>
 #include <brk/device.h>
 #include <brk/dtb.h>

@@ -12,6 +12,7 @@
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
+#include <brk/rand.h>
 #include <brk/signal.h>
 #include <brk/string.h>
 #include <brk/task.h>
@@ -119,8 +120,8 @@ static uint64_t random_ustack(void)
 {
 	uint64_t ustack_top = USER_SPACE_SIZE_MAX;
 
-	timer_srand();
-	ustack_top -= (timer_rand() % 32 + 1) * PAGE_SIZE;
+	rand_seed(timer_get_time());
+	ustack_top -= (rand_u32() % 32 + 1) * PAGE_SIZE;
 	ustack_top -= USTACK_SIZE;
 	return ustack_top;
 }

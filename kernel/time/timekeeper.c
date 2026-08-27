@@ -1,4 +1,4 @@
-#include <brk/cpu.h>
+#include <brk/clocksource.h>
 #include <brk/rtc.h>
 #include <brk/spinlock.h>
 #include <brk/task.h>
@@ -14,7 +14,7 @@ static SPINLOCK_DEFINE(tk_lock);
 
 static uint64_t cycles_to_ns(uint64_t cycles)
 {
-	uint32_t freq = cpu_get_timebase_freq();
+	uint32_t freq = clocksource_get_timebase_freq();
 	uint64_t sec = cycles / freq;
 	uint64_t rem = cycles % freq;
 
