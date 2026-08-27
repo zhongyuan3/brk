@@ -26,6 +26,15 @@ SECTIONS
     *(.srodata.*)
     *(.rodata)
     *(.rodata.*)
+
+    . = ALIGN(8);
+    __initcall_start = .;
+    KEEP(*(.initcall0))
+    KEEP(*(.initcall1))
+    KEEP(*(.initcall2))
+    KEEP(*(.initcall3))
+    __initcall_end = .;
+
     _erodata = .;
   }
 

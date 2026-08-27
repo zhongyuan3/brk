@@ -1,5 +1,5 @@
 #include <arch/mm.h>
-#include <brk/init/dtb.h>
+#include <brk/drivers/of.h>
 #include <brk/init/init.h>
 #include <brk/mm/memblock.h>
 #include <libfdt.h>

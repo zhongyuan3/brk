@@ -1,6 +1,7 @@
 #ifndef BRK_CONSOLE_H
 #define BRK_CONSOLE_H
 
+#include <brk/base/list.h>
 #include <brk/base/types.h>
 
 struct console {

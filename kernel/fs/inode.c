@@ -3,6 +3,7 @@
 #include <brk/base/list.h>
 #include <brk/base/types.h>
 #include <brk/fs/fs.h>
+#include <brk/init/initcall.h>
 #include <brk/lib/refcnt.h>
 #include <brk/lib/string.h>
 #include <brk/lock/sleeplock.h>
@@ -22,6 +23,7 @@ void fs_inode_cache_init(void)
 	slab_init(&inode_cache, sizeof(struct fs_inode),
 		  alignof(struct fs_inode), "inode_cache");
 }
+core_initcall(fs_inode_cache_init);
 
 static struct fs_inode *__inode_alloc(struct fs_super_block *sb,
 				      unsigned long ino)

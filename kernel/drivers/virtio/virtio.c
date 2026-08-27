@@ -3,6 +3,7 @@
 #include <brk/drivers/virtio.h>
 #include <brk/drivers/virtio_blk.h>
 #include <brk/drivers/virtio_mmio.h>
+#include <brk/init/initcall.h>
 #include <brk/lock/spinlock.h>
 #include <brk/mm/ioremap.h>
 #include <brk/mm/kmalloc.h>
@@ -104,3 +105,4 @@ void virtio_init_scan(void)
 	}
 	spinlock_release(&vdevs_lock);
 }
+subsys_initcall(virtio_init_scan);

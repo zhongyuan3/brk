@@ -3,6 +3,7 @@
 #include <brk/base/error.h>
 #include <brk/base/list.h>
 #include <brk/base/types.h>
+#include <brk/init/initcall.h>
 #include <brk/lib/refcnt.h>
 #include <brk/lib/string.h>
 #include <brk/mm/kmalloc.h>
@@ -21,6 +22,7 @@ void uvm_space_cache_init(void)
 	slab_init(&uvms_cache, sizeof(struct uvm_space),
 		  alignof(struct uvm_space), "uvms_cache");
 }
+core_initcall(uvm_space_cache_init);
 
 struct uvm_space *uvm_space_create(void)
 {

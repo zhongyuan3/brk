@@ -1,6 +1,6 @@
 #include <arch/pgtable.h>
+#include <brk/drivers/of.h>
 #include <brk/drivers/rtc.h>
-#include <brk/init/dtb.h>
 #include <brk/lock/spinlock.h>
 #include <brk/mm/ioremap.h>
 #include <brk/mm/mm.h>

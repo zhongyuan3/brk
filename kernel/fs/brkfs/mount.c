@@ -4,7 +4,6 @@
 #include <brk/base/error.h>
 #include <brk/base/list.h>
 #include <brk/base/types.h>
-#include <brk/drivers/device.h>
 #include <brk/fs/dcache.h>
 #include <brk/fs/fs.h>
 #include <brk/fs/path.h>

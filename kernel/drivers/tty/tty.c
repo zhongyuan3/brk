@@ -1,5 +1,4 @@
 #include <brk/base/types.h>
-#include <brk/drivers/device.h>
 #include <brk/drivers/tty.h>
 #include <brk/lib/refcnt.h>
 #include <brk/lib/string.h>

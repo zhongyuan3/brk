@@ -1,5 +1,5 @@
-#ifndef BRK_DTB_H
-#define BRK_DTB_H
+#ifndef BRK_OF_H
+#define BRK_OF_H
 
 #include <brk/base/types.h>
 #include <brk/drivers/plic.h>

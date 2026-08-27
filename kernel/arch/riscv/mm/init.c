@@ -4,7 +4,7 @@
 #include <brk/base/assert.h>
 #include <brk/base/kernel.h>
 #include <brk/base/types.h>
-#include <brk/init/dtb.h>
+#include <brk/drivers/of.h>
 #include <brk/mm/memblock.h>
 #include <brk/mm/mm.h>
 #include <brk/mm/mm_types.h>
