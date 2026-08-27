@@ -4,6 +4,7 @@
 #include <brk/base/list.h>
 #include <brk/base/types.h>
 #include <brk/fs/fs.h>
+#include <brk/init/initcall.h>
 #include <brk/lib/refcnt.h>
 #include <brk/lib/string.h>
 #include <brk/lock/sleeplock.h>
@@ -54,6 +55,7 @@ void page_cache_init(void)
 	slab_init(&cached_page_cache, sizeof(struct cached_page),
 		  alignof(struct cached_page), "cached_page");
 }
+core_initcall(page_cache_init);
 
 static unsigned int mapping_hash(pgoff_t index)
 {

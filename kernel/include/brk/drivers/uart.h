@@ -29,7 +29,7 @@ struct ns16550a_driver_data {
 	struct hlist_head devices;
 };
 
-int ns16550a_driver_init(void);
+void ns16550a_driver_init(void);
 int ns16550a_add_device(struct ns16550a_device *dev);
 
 int ns16550a_enable_irq(uint32_t hart_id);

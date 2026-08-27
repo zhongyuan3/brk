@@ -1,5 +1,4 @@
 #include <brk/base/error.h>
-#include <brk/drivers/device.h>
 #include <brk/drivers/tty.h>
 #include <brk/drivers/virtio_blk.h>
 #include <brk/fs/dcache.h>

@@ -4,11 +4,11 @@
 #include <brk/drivers/chrdev.h>
 #include <brk/drivers/device.h>
 #include <brk/fs/fs.h>
+#include <brk/init/initcall.h>
 #include <brk/lib/bitmap.h>
 #include <brk/lib/string.h>
 #include <brk/lock/spinlock.h>
 #include <brk/mm/kmalloc.h>
-#include <brk/mm/slab.h>
 #include <brk/printk/printk.h>
 #include <uapi/brk/errno.h>
 #include <uapi/brk/types.h>
@@ -116,6 +116,7 @@ void chrdev_registry_init(void)
 {
 	bitmap_fill(cd_major_pooled, FIRST_DYNAMIC_CHRDEV_MAJOR);
 }
+core_initcall(chrdev_registry_init);
 
 struct char_dev *chrdev_alloc(void)
 {

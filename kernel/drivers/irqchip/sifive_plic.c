@@ -1,7 +1,7 @@
 #include <arch/pgtable.h>
 #include <brk/base/types.h>
+#include <brk/drivers/of.h>
 #include <brk/drivers/plic.h>
-#include <brk/init/dtb.h>
 #include <brk/irq/irq.h>
 #include <brk/lib/string.h>
 #include <brk/mm/ioremap.h>

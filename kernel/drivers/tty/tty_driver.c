@@ -346,3 +346,17 @@ int tty_mknod(void)
 	spinlock_release(&tty_driver_lock);
 	return 0;
 }
+
+struct tty_port *tty_port_alloc(void)
+{
+	struct tty_port *port = kzalloc(sizeof(struct tty_port));
+	if (!port)
+		return NULL;
+	spinlock_init(&port->lock, "tty_port");
+	return port;
+}
+
+void tty_port_free(struct tty_port *port)
+{
+	kfree(port);
+}

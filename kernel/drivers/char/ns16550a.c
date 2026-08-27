@@ -3,15 +3,17 @@
 #include <brk/base/list.h>
 #include <brk/base/types.h>
 #include <brk/drivers/chrdev.h>
+#include <brk/drivers/of.h>
 #include <brk/drivers/tty.h>
 #include <brk/drivers/uart.h>
-#include <brk/init/dtb.h>
+#include <brk/init/initcall.h>
 #include <brk/irq/irq.h>
 #include <brk/lock/spinlock.h>
 #include <brk/mm/ioremap.h>
 #include <brk/mm/kmalloc.h>
 #include <brk/mm/mm.h>
 #include <brk/mm/mmio.h>
+#include <brk/printk/console.h>
 #include <brk/printk/panic.h>
 #include <brk/printk/printk.h>
 #include <uapi/brk/errno.h>
@@ -173,6 +175,20 @@ static int ns16550a_device_putc(struct ns16550a_device *dev, int c)
 	return ret;
 }
 
+static int ns16550a_console_put_char(struct console *console, int c)
+{
+	struct ns16550a_device *dev = console->client_data;
+
+	if (!dev)
+		return -EIO;
+	return ns16550a_device_putc(dev, c);
+}
+
+static struct console ns16550a_console = {
+	.put_char = ns16550a_console_put_char,
+	.active = true,
+};
+
 static int ns16550a_tty_put_char(struct tty *tty, int c)
 {
 	struct ns16550a_device *dev = tty->port->client_data;
@@ -195,7 +211,7 @@ static const struct tty_ops ns16550a_ops = {
 
 static struct tty_driver *ns16550a_driver;
 
-int ns16550a_driver_init(void)
+void ns16550a_driver_init(void)
 {
 	struct tty_driver *driver;
 	int err;
@@ -204,20 +220,15 @@ int ns16550a_driver_init(void)
 
 	data = kzalloc(sizeof(*data));
 	if (!data)
-		return -ENOMEM;
+		panic("%s(): kzalloc failed\n", __func__);
 
 	driver = tty_alloc_driver(NS16550A_NUM_PORTS);
-	if (!driver) {
-		kfree(data);
-		return -ENOMEM;
-	}
+	if (!driver)
+		panic("%s(): tty_alloc_driver failed\n", __func__);
 
 	err = chrdev_alloc_region(NS16550A_MAJOR, 0, NS16550A_NUM_PORTS, &dev);
-	if (err) {
-		tty_free_driver(driver);
-		kfree(data);
-		return err;
-	}
+	if (err)
+		panic("%s(): chrdev_alloc_region failed\n", __func__);
 	driver->major = MAJOR(dev);
 	driver->minor_start = MINOR(dev);
 	driver->name = "ns16550a";
@@ -225,16 +236,12 @@ int ns16550a_driver_init(void)
 	driver->driver_data = data;
 
 	err = tty_register_driver(driver);
-	if (err) {
-		kfree(data);
-		tty_free_driver(driver);
-		return err;
-	}
+	if (err)
+		panic("%s(): tty_register_driver failed\n", __func__);
 
 	ns16550a_driver = driver;
-
-	return 0;
 }
+postcore_initcall(ns16550a_driver_init);
 
 int ns16550a_add_device(struct ns16550a_device *dev)
 {
@@ -262,8 +269,14 @@ int ns16550a_add_device(struct ns16550a_device *dev)
 	data = ns16550a_driver->driver_data;
 
 	spinlock_acquire(&ns16550a_driver->lock);
+	bool first = hlist_empty(&data->devices);
 	hlist_add_head(&dev->node, &data->devices);
 	spinlock_release(&ns16550a_driver->lock);
+
+	if (first) {
+		ns16550a_console.client_data = dev;
+		console_register(&ns16550a_console);
+	}
 
 	return 0;
 }

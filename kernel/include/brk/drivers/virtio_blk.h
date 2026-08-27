@@ -169,7 +169,7 @@ struct virtio_blk_registry {
 	unsigned minor_start;
 };
 
-int virtio_blk_init(void);
+void virtio_blk_init(void);
 struct virtio_blk_dev *virtio_blk_create(struct virtio_device *vdev,
 					 unsigned queue_size);
 void virtio_blk_destroy(struct virtio_blk_dev *vblk);

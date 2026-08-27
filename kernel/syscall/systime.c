@@ -2,7 +2,6 @@
 #include <brk/base/kernel.h>
 #include <brk/lib/string.h>
 #include <brk/mm/kmalloc.h>
-#include <brk/mm/mm_types.h>
 #include <brk/mm/pgalloc.h>
 #include <brk/mm/vmalloc.h>
 #include <brk/printk/printk.h>

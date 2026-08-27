@@ -1,7 +1,4 @@
 #include <brk/base/list.h>
-#include <brk/drivers/device.h>
-#include <brk/drivers/tty.h>
-#include <brk/drivers/uart.h>
 #include <brk/lock/spinlock.h>
 #include <brk/printk/console.h>
 

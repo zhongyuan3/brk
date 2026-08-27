@@ -9,13 +9,13 @@
 #include <brk/drivers/virtio_mmio.h>
 #include <brk/drivers/virtio_queue.h>
 #include <brk/fs/fs.h>
+#include <brk/init/initcall.h>
 #include <brk/irq/irq.h>
 #include <brk/lib/printf.h>
 #include <brk/lib/string.h>
 #include <brk/lock/spinlock.h>
 #include <brk/mm/kmalloc.h>
 #include <brk/mm/mm.h>
-#include <brk/mm/slab.h>
 #include <brk/printk/panic.h>
 #include <brk/printk/printk.h>
 #include <brk/process/task.h>
@@ -405,7 +405,7 @@ void virtio_blk_unregister(struct virtio_blk_dev *vblk)
 	spinlock_release(&vblk_registry->lock);
 }
 
-int virtio_blk_init(void)
+void virtio_blk_init(void)
 {
 	dev_t dev = 0;
 	int err;
@@ -415,25 +415,24 @@ int virtio_blk_init(void)
 	vblk_registry->vblks = kcalloc(VIRTIO_BLK_MINOR_COUNT,
 				       sizeof(vblk_registry->vblks[0]));
 	if (!vblk_registry->vblks)
-		return -ENOMEM;
+		panic("%s(): kcalloc failed\n", __func__);
 	vblk_registry->bdevs = kcalloc(VIRTIO_BLK_MINOR_COUNT,
 				       sizeof(vblk_registry->bdevs[0]));
 	if (!vblk_registry->bdevs)
-		return -ENOMEM;
+		panic("%s(): kcalloc failed\n", __func__);
 	vblk_registry->num_vblks = VIRTIO_BLK_MINOR_COUNT;
 
 	err = blkdev_alloc_region(VIRTIO_BLK_MAJOR, VIRTIO_BLK_MINOR_START,
 				  VIRTIO_BLK_MINOR_COUNT, &dev);
 	if (err)
-		return err;
+		panic("%s(): blkdev_alloc_region failed\n", __func__);
 	vblk_registry->major = MAJOR(dev);
 	vblk_registry->minor_start = MINOR(dev);
 
 	klog_info("%s: major: %u\n", __func__, vblk_registry->major);
 	klog_info("%s: minor: %u\n", __func__, vblk_registry->minor_start);
-
-	return 0;
 }
+postcore_initcall(virtio_blk_init);
 
 int virtio_blk_enable_irq(uint32_t hart_id)
 {

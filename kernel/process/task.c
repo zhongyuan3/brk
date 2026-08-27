@@ -9,6 +9,7 @@
 #include <brk/fs/fs.h>
 #include <brk/fs/fsinfo.h>
 #include <brk/init/init.h>
+#include <brk/init/initcall.h>
 #include <brk/lib/string.h>
 #include <brk/lock/spinlock.h>
 #include <brk/mm/kmalloc.h>
@@ -23,7 +24,6 @@
 #include <brk/process/signal.h>
 #include <brk/process/task.h>
 #include <brk/process/trap.h>
-#include <brk/time/timer.h>
 #include <uapi/brk/errno.h>
 #include <uapi/brk/limits.h>
 #include <uapi/brk/signal.h>
@@ -36,11 +36,30 @@ LIST_DEFINE(tasks);
 SPINLOCK_DEFINE(tasks_lock);
 static struct slab_allocator task_cache;
 
+static SPINLOCK_DEFINE(pid_lock);
+static pid_t curr_pid = 1;
+
+pid_t pid_alloc(void)
+{
+	pid_t pid;
+
+	spinlock_acquire(&pid_lock);
+	pid = curr_pid++;
+	spinlock_release(&pid_lock);
+	return pid;
+}
+
+void pid_free(pid_t pid)
+{
+	(void)pid;
+}
+
 void task_cache_init(void)
 {
 	slab_init(&task_cache, sizeof(struct task_control_block),
 		  alignof(struct task_control_block), "task_cache");
 }
+core_initcall(task_cache_init);
 
 static uint64_t kstack_alloc(void)
 {
@@ -248,6 +267,7 @@ void task_init_user(void)
 	spinlock_release(&initial_task->lock);
 	task_join(initial_task);
 }
+device_initcall(task_init_user);
 
 void task_set_killed(struct task_control_block *task)
 {

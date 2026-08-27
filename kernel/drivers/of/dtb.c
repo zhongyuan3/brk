@@ -1,8 +1,9 @@
 #include <arch/mm.h>
 #include <brk/base/types.h>
+#include <brk/drivers/of.h>
 #include <brk/drivers/uart.h>
 #include <brk/drivers/virtio.h>
-#include <brk/init/dtb.h>
+#include <brk/init/initcall.h>
 #include <brk/mm/kmalloc.h>
 #include <brk/mm/memblock.h>
 #include <brk/mm/mm.h>
@@ -382,3 +383,4 @@ void dtb_init_scan_serial(void)
 		}
 	}
 }
+subsys_initcall(dtb_init_scan_serial);

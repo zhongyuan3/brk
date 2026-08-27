@@ -5,6 +5,7 @@
 #include <brk/drivers/blkdev.h>
 #include <brk/drivers/device.h>
 #include <brk/fs/fs.h>
+#include <brk/init/initcall.h>
 #include <brk/lib/bitmap.h>
 #include <brk/lib/string.h>
 #include <brk/lock/spinlock.h>
@@ -119,6 +120,7 @@ void blkdev_registry_init(void)
 {
 	bitmap_fill(bd_major_pooled, FIRST_DYNAMIC_BLKDEV_MAJOR);
 }
+core_initcall(blkdev_registry_init);
 
 int blkdev_register(struct block_dev *bd)
 {

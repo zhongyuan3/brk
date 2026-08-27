@@ -1,3 +1,4 @@
+#include <arch/csr.h>
 #include <arch/large_page.h>
 #include <arch/page.h>
 #include <arch/pgtable.h>
@@ -249,4 +250,14 @@ void destroy_user_pgtable(pgd_t *pgd)
 {
 	destroy_user_pgd(pgd);
 	free_pgtable(virt_to_phys((uint64_t)pgd));
+}
+
+void user_access_enable(void)
+{
+	write_sstatus(read_sstatus() | SSTATUS_SUM);
+}
+
+void user_access_disable(void)
+{
+	write_sstatus(read_sstatus() & ~SSTATUS_SUM);
 }
