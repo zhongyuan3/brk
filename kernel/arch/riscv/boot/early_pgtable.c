@@ -1,13 +1,13 @@
-#include <arch/csr.h>
-#include <arch/pgtable.h>
-#include <arch/sbi.h>
 #include <arch/boot.h>
+#include <arch/csr.h>
 #include <arch/large_page.h>
 #include <arch/page.h>
 #include <arch/page_table.h>
-#include <brk/kernel.h>
-#include <brk/mm.h>
-#include <brk/types.h>
+#include <arch/pgtable.h>
+#include <arch/sbi.h>
+#include <brk/base/kernel.h>
+#include <brk/base/types.h>
+#include <brk/mm/mm.h>
 #include <libfdt.h>
 
 static void early_pgtable_hang(const char *msg)

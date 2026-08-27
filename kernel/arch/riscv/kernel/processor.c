@@ -1,8 +1,8 @@
 #include <arch/csr.h>
-#include <brk/panic.h>
-#include <brk/processor.h>
-#include <brk/task.h>
-#include <brk/task_types.h>
+#include <brk/printk/panic.h>
+#include <brk/process/processor.h>
+#include <brk/process/task.h>
+#include <brk/process/task_types.h>
 
 struct task_control_block *current_task(void)
 {

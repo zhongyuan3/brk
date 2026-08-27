@@ -10,7 +10,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <brk/string.h>
+#include <brk/lib/string.h>
 #include <limits.h>
 
 #ifdef __CHECKER__

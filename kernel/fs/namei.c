@@ -1,8 +1,8 @@
-#include <brk/error.h>
-#include <brk/fs.h>
-#include <brk/path.h>
-#include <brk/sleeplock.h>
-#include <brk/spinlock.h>
+#include <brk/base/error.h>
+#include <brk/fs/fs.h>
+#include <brk/fs/path.h>
+#include <brk/lock/sleeplock.h>
+#include <brk/lock/spinlock.h>
 #include <uapi/brk/errno.h>
 #include <uapi/brk/fcntl.h>
 

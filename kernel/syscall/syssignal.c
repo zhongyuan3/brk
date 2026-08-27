@@ -1,7 +1,7 @@
-#include <brk/kernel.h>
-#include <brk/signal.h>
-#include <brk/syscall.h>
-#include <brk/task.h>
+#include <brk/base/kernel.h>
+#include <brk/process/signal.h>
+#include <brk/process/task.h>
+#include <brk/syscall/syscall.h>
 #include <uapi/brk/errno.h>
 #include <uapi/brk/signal.h>
 

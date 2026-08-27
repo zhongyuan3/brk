@@ -1,7 +1,7 @@
 #ifndef ARCH_CSR_H
 #define ARCH_CSR_H
 
-#include <brk/types.h>
+#include <brk/base/types.h>
 
 static inline uint64_t read_tp(void)
 {

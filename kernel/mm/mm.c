@@ -1,17 +1,17 @@
 #include <arch/pgtable.h>
-#include <brk/assert.h>
-#include <brk/error.h>
-#include <brk/kmalloc.h>
-#include <brk/list.h>
-#include <brk/mm.h>
-#include <brk/mm_types.h>
-#include <brk/pgalloc.h>
-#include <brk/refcnt.h>
-#include <brk/slab.h>
-#include <brk/string.h>
-#include <brk/task.h>
-#include <brk/types.h>
-#include <brk/vmalloc.h>
+#include <brk/base/assert.h>
+#include <brk/base/error.h>
+#include <brk/base/list.h>
+#include <brk/base/types.h>
+#include <brk/lib/refcnt.h>
+#include <brk/lib/string.h>
+#include <brk/mm/kmalloc.h>
+#include <brk/mm/mm.h>
+#include <brk/mm/mm_types.h>
+#include <brk/mm/pgalloc.h>
+#include <brk/mm/slab.h>
+#include <brk/mm/vmalloc.h>
+#include <brk/process/task.h>
 #include <uapi/brk/errno.h>
 
 static struct slab_allocator uvms_cache;

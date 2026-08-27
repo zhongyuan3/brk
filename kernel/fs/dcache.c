@@ -1,18 +1,18 @@
 #define KLOG_LEVEL KLOG_INFO
-#include <brk/assert.h>
-#include <brk/dcache.h>
-#include <brk/error.h>
-#include <brk/fs.h>
-#include <brk/kernel.h>
-#include <brk/kmalloc.h>
-#include <brk/list.h>
-#include <brk/printk.h>
-#include <brk/refcnt.h>
-#include <brk/slab.h>
-#include <brk/sleeplock.h>
-#include <brk/spinlock.h>
-#include <brk/string.h>
-#include <brk/types.h>
+#include <brk/base/assert.h>
+#include <brk/base/error.h>
+#include <brk/base/kernel.h>
+#include <brk/base/list.h>
+#include <brk/base/types.h>
+#include <brk/fs/dcache.h>
+#include <brk/fs/fs.h>
+#include <brk/lib/refcnt.h>
+#include <brk/lib/string.h>
+#include <brk/lock/sleeplock.h>
+#include <brk/lock/spinlock.h>
+#include <brk/mm/kmalloc.h>
+#include <brk/mm/slab.h>
+#include <brk/printk/printk.h>
 #include <uapi/brk/errno.h>
 
 static struct hlist_head dentry_htable[DENTRY_HTABLE_SIZE];

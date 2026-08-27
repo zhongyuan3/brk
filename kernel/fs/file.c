@@ -1,13 +1,13 @@
-#include <brk/dcache.h>
-#include <brk/error.h>
-#include <brk/fs.h>
-#include <brk/kernel.h>
-#include <brk/path.h>
-#include <brk/refcnt.h>
-#include <brk/slab.h>
-#include <brk/sleeplock.h>
-#include <brk/spinlock.h>
-#include <brk/types.h>
+#include <brk/base/error.h>
+#include <brk/base/kernel.h>
+#include <brk/base/types.h>
+#include <brk/fs/dcache.h>
+#include <brk/fs/fs.h>
+#include <brk/fs/path.h>
+#include <brk/lib/refcnt.h>
+#include <brk/lock/sleeplock.h>
+#include <brk/lock/spinlock.h>
+#include <brk/mm/slab.h>
 #include <uapi/brk/errno.h>
 
 static struct slab_allocator file_cache;

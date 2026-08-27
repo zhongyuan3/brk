@@ -1,5 +1,5 @@
 #include <arch/sbi.h>
-#include <brk/console.h>
+#include <brk/printk/console.h>
 
 static int early_console_put_char(struct console *console, int c)
 {

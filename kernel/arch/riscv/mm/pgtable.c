@@ -1,14 +1,14 @@
-#include <arch/pgtable.h>
 #include <arch/large_page.h>
 #include <arch/page.h>
-#include <brk/assert.h>
-#include <brk/kernel.h>
-#include <brk/mm.h>
-#include <brk/mm_types.h>
-#include <brk/panic.h>
-#include <brk/pgalloc.h>
-#include <brk/spinlock.h>
-#include <brk/string.h>
+#include <arch/pgtable.h>
+#include <brk/base/assert.h>
+#include <brk/base/kernel.h>
+#include <brk/lib/string.h>
+#include <brk/lock/spinlock.h>
+#include <brk/mm/mm.h>
+#include <brk/mm/mm_types.h>
+#include <brk/mm/pgalloc.h>
+#include <brk/printk/panic.h>
 #include <uapi/brk/errno.h>
 
 SPINLOCK_DEFINE(kernel_pgdir_lock);

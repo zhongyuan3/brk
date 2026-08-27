@@ -1,17 +1,17 @@
-#include <brk/assert.h>
-#include <brk/dcache.h>
-#include <brk/error.h>
-#include <brk/fdtable.h>
-#include <brk/fs.h>
-#include <brk/fsinfo.h>
-#include <brk/mount.h>
-#include <brk/path.h>
-#include <brk/printk.h>
-#include <brk/string.h>
-#include <brk/task.h>
+#include <brk/base/assert.h>
+#include <brk/base/error.h>
+#include <brk/fs/dcache.h>
+#include <brk/fs/fdtable.h>
+#include <brk/fs/fs.h>
+#include <brk/fs/fsinfo.h>
+#include <brk/fs/mount.h>
+#include <brk/fs/path.h>
+#include <brk/lib/string.h>
+#include <brk/printk/printk.h>
+#include <brk/process/task.h>
 #include <uapi/brk/errno.h>
-#include <uapi/brk/limits.h>
 #include <uapi/brk/fcntl.h>
+#include <uapi/brk/limits.h>
 #include <uapi/brk/stat.h>
 
 static void follow_mount(struct fs_path *path)
