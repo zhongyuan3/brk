@@ -7,7 +7,6 @@
 #include <brk/irq.h>
 #include <brk/kernel.h>
 #include <brk/panic.h>
-#include <brk/plic.h>
 #include <brk/printk.h>
 #include <brk/signal.h>
 #include <brk/syscall.h>

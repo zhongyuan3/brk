@@ -8,7 +8,6 @@
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
-#include <brk/plic.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
