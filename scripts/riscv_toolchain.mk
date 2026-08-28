@@ -1,11 +1,16 @@
 riscv-toolchain-prefixes := \
+	riscv32-unknown-elf- \
+	riscv32-elf- \
+	riscv32-none-elf- \
+	riscv32-linux-gnu- \
+	riscv32-unknown-linux-gnu- \
 	riscv64-unknown-elf- \
 	riscv64-elf- \
 	riscv64-none-elf- \
 	riscv64-linux-gnu- \
 	riscv64-unknown-linux-gnu-
 
-TOOLCHAIN_CACHE := $(BUILD_ROOT)/.toolchain-$(ARCH).mk
+TOOLCHAIN_CACHE := $(BUILD_ROOT)/.toolchain-$(ARCH)-$(XLEN).mk
 DETECT_SCRIPT := scripts/detect-riscv-toolchain.sh
 __need_gdb := $(strip $(filter gdb-client,$(MAKECMDGOALS)))
 
@@ -21,7 +26,7 @@ endif
 
 ifeq ($(__cross_ok),)
 __cross_detected := $(shell CROSS_COMPILE='$(CROSS_COMPILE)' \
-	$(DETECT_SCRIPT) '$(TOOLCHAIN_CACHE)' cross)
+	$(DETECT_SCRIPT) '$(TOOLCHAIN_CACHE)' cross '$(XLEN)')
 ifeq ($(__cross_detected),)
 $(error \
 	*** RISC-V cross compiler not found. \

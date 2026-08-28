@@ -4,7 +4,14 @@ set -eu
 
 cache=$1
 mode=${2:-cross}
+xlen=${3:-64}
 cross=${CROSS_COMPILE:-}
+
+# The compiler must be able to target the requested XLEN: a riscv32-only
+# toolchain cannot build rv64 and vice versa (unless multilib).
+compiler_supports_xlen() {
+	"$1" -march=rv${xlen}gc -x c -c -o /dev/null /dev/null 2>/dev/null
+}
 
 prefixes="
 riscv32-unknown-elf-
@@ -26,7 +33,8 @@ detect_cross() {
 	else
 		for p in $prefixes; do
 			if command -v "${p}gcc" >/dev/null 2>&1 &&
-				"${p}gcc" -dumpmachine 2>/dev/null | grep -Eq '^riscv(32|64)'; then
+				"${p}gcc" -dumpmachine 2>/dev/null | grep -Eq '^riscv(32|64)' &&
+				compiler_supports_xlen "$(command -v "${p}gcc")"; then
 				cross=$p
 				gcc=$(command -v "${p}gcc")
 				break
@@ -36,6 +44,7 @@ detect_cross() {
 	fi
 
 	"$gcc" -dumpmachine 2>/dev/null | grep -Eq '^riscv(32|64)' || return 1
+	compiler_supports_xlen "$gcc" || return 1
 
 	{
 		printf 'CROSS_COMPILE := %s\n' "$cross"
@@ -54,7 +63,6 @@ detect_gdb() {
 	mkdir -p "$(dirname "$cache")"
 	[ -n "$cross" ] || return 1
 
-	xlen=${3:-64}
 	gdb=
 	for g in "${cross}gdb" gdb-multiarch; do
 		if command -v "$g" >/dev/null 2>&1; then
@@ -80,6 +88,6 @@ detect_gdb() {
 
 case "$mode" in
 cross) detect_cross ;;
-gdb) detect_gdb "$@" ;;
+gdb) detect_gdb ;;
 *) return 1 2>/dev/null || exit 1 ;;
 esac
