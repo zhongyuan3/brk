@@ -49,10 +49,10 @@ rm -f "$IMG"
 dd if=/dev/zero of="$IMG" bs=$BLOCK_SIZE count=$BLOCK_COUNT status=none
 "$MKFS" -bs $BLOCK_SIZE "$IMG"
 
-mapfile -t bins < <(ls $USER_ROOT/build-${XLEN:-64}/bin)
+mapfile -t bins < <(ls $USER_ROOT/build/${XLEN:-64}/bin)
 
 for name in "${bins[@]}"; do
-	src=$USER_ROOT/build-${XLEN:-64}/bin/$name
+	src=$USER_ROOT/build/${XLEN:-64}/bin/$name
 	"$CP" -r "$src" "/bin/$name" "$IMG"
 done
 "$CP" "$KERNEL_ROOT/README.md" "/README.md" "$IMG"
