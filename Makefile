@@ -7,7 +7,7 @@ ARCH ?= riscv
 CFLAGS :=
 
 ifeq ($(ARCH),riscv)
-include kernel/arch/$(ARCH)/config.mk
+include src/arch/$(ARCH)/config.mk
 else
 $(error Unknown ARCH value '$(ARCH)')
 endif
@@ -64,8 +64,8 @@ endif
 
 CFLAGS += -MMD
 CFLAGS += -MP
-CFLAGS += -Ikernel/arch/$(ARCH)/include
-CFLAGS += -Ikernel/include
+CFLAGS += -Isrc/arch/$(ARCH)/include
+CFLAGS += -Isrc/include
 CFLAGS += -Ivendor/libfdt
 
 LDFLAGS := -z max-page-size=4096
@@ -74,12 +74,12 @@ export ARCH
 export BUILD_ROOT KERNEL_BUILD_ROOT
 export CROSS_COMPILE CC LD AS AR CFLAGS LDFLAGS
 
-LINKER_SCRIPT_SRC := kernel/arch/$(ARCH)/kernel/brk.ld.S
+LINKER_SCRIPT_SRC := src/arch/$(ARCH)/kernel/brk.ld.S
 LINKER_SCRIPT := $(KERNEL_BUILD_ROOT)/brk.ld
 KERNEL_ELF := $(KERNEL_BUILD_ROOT)/brk.elf
 ROOTFS_IMG := $(BUILD_ROOT)/rootfs.img
 
-core-y := kernel
+core-y := src
 core-y += vendor
 
 BUILT_IN_OBJS := $(addprefix $(KERNEL_BUILD_ROOT)/,$(patsubst %,%/built-in.o,$(core-y)))
