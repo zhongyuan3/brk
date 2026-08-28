@@ -71,7 +71,7 @@ static uint64_t kstack_alloc(void)
 
 static void kstack_free(uint64_t stack)
 {
-	struct page *pg = virt_to_page(stack);
+	struct page *pg = virt_to_page((uintptr_t)stack);
 	ASSERT(pg);
 	page_free(pg, KSTACK_PAGE_ORDER);
 }
@@ -127,7 +127,7 @@ struct task_control_block *task_create(struct task_create_args *args)
 
 	kstack_top = task->kstack_base + KSTACK_SIZE;
 	kstack_top -= TRAP_FRAME_ON_STACK_SIZE;
-	ext_tf = (struct extended_trap_frame *)kstack_top;
+	ext_tf = (struct extended_trap_frame *)(uintptr_t)kstack_top;
 	ext_tf->task = task;
 	task->tf = &ext_tf->tf;
 	arch_tf_init(task->tf);
@@ -181,9 +181,9 @@ struct task_control_block *task_create(struct task_create_args *args)
 		goto signal_init_failed;
 
 	if (args && args->fn)
-		task->ctx.ra = (uint64_t)args->fn;
+		task->ctx.ra = (uintptr_t)args->fn;
 	else
-		task->ctx.ra = (uint64_t)default_new_task_entry;
+		task->ctx.ra = (uintptr_t)default_new_task_entry;
 	task->ctx.sp = task->kstack_top;
 
 	spinlock_acquire(&tasks_lock);
@@ -260,7 +260,7 @@ void task_init_user(void)
 		      strerror(PTR_ERR(initial_task)));
 	spinlock_acquire(&initial_task->lock);
 	strlcpy(initial_task->name, "init", sizeof(initial_task->name));
-	initial_task->ctx.ra = (uint64_t)initial_task_return;
+	initial_task->ctx.ra = (uintptr_t)initial_task_return;
 	initial_task->ctx.sp = initial_task->kstack_top;
 	initial_task->state = TASK_STATE_RUNNING;
 	initial_task->irq_enabled = true;
@@ -517,7 +517,7 @@ int task_fork(void)
 	spinlock_acquire(&child->lock);
 	cpid = child->tgid;
 	child->state = TASK_STATE_RUNNING;
-	child->ctx.ra = (uint64_t)task_fork_return;
+	child->ctx.ra = (uintptr_t)task_fork_return;
 	child->ctx.sp = child->kstack_top;
 	spinlock_release(&child->lock);
 

@@ -36,7 +36,7 @@ static uint64_t alloc_pgtable(enum vmap_mode mode)
 		paddr = memblock_alloc(PAGE_SIZE, _EKERNEL_PHYS, PAGE_SIZE);
 		if (!paddr)
 			panic("%s(): memblock_alloc() failed\n", __func__);
-		memset((void *)paddr, 0, PAGE_SIZE);
+		memset((void *)(uintptr_t)paddr, 0, PAGE_SIZE);
 		return paddr;
 	case VMAP_MODE_INTERIM:
 		paddr = memblock_alloc(PAGE_SIZE, _EKERNEL_PHYS, PAGE_SIZE);
@@ -65,6 +65,7 @@ static uint64_t alloc_pt(enum vmap_mode mode)
 	return alloc_pgtable(mode);
 }
 
+#if __riscv_xlen == 64
 static pmd_t *get_pmd_virt(uint64_t pmd_phys, enum vmap_mode mode)
 {
 	switch (mode) {
@@ -77,12 +78,13 @@ static pmd_t *get_pmd_virt(uint64_t pmd_phys, enum vmap_mode mode)
 	}
 	panic("%s(): unexpected mode: %d\n", __func__, mode);
 }
+#endif
 
 static pte_t *get_pt_virt(uint64_t pt_phys, enum vmap_mode mode)
 {
 	switch (mode) {
 	case VMAP_MODE_EARLY:
-		return (pte_t *)pt_phys;
+		return (pte_t *)(uintptr_t)pt_phys;
 	case VMAP_MODE_INTERIM:
 		return (pte_t *)phys_to_virt(pt_phys);
 	case VMAP_MODE_FINAL:
@@ -100,15 +102,30 @@ static void vunmap_range(pgd_t *pgd, uint64_t addr, uint64_t end_addr,
 
 	while (addr < end_addr) {
 		pgdep = pgd + pgd_index(addr);
+#if __riscv_xlen == 32
+		if (pgd_large(*pgdep)) {
+			ASSERT(end_addr - addr >= PAGE_SIZE_4M);
+			pgd_clear(pgdep);
+			addr += PAGE_SIZE_4M;
+			continue;
+		}
+#else
 		if (pgd_large(*pgdep)) {
 			ASSERT(end_addr - addr >= PAGE_SIZE_1G);
 			pgd_clear(pgdep);
 			addr += PAGE_SIZE_1G;
 			continue;
 		}
+#endif
 		ASSERT(pgd_present(*pgdep));
+#if __riscv_xlen == 32
+		/* Sv32: PMD is folded onto the PGD entry. */
+		pmd = (pmd_t *)pgdep;
+#else
 		pmd = get_pmd_virt(pgd_get_pmd(*pgdep), mode);
+#endif
 		pmdep = pmd + pmd_index(addr);
+#if __riscv_xlen == 64
 		if (pmd_large(*pmdep)) {
 			ASSERT(end_addr - addr >= PAGE_SIZE_2M);
 			pmd_clear(pmdep);
@@ -116,6 +133,7 @@ static void vunmap_range(pgd_t *pgd, uint64_t addr, uint64_t end_addr,
 			continue;
 		}
 		ASSERT(pmd_present(*pmdep));
+#endif
 		pt = get_pt_virt(pmd_get_pte(*pmdep), mode);
 		ptep = pt + pte_index(addr);
 		ASSERT(pte_present(*ptep));
@@ -136,28 +154,48 @@ static int vmap_range(pgd_t *pgd, uint64_t addr, uint64_t end_addr,
 
 	for (; addr < end_addr; addr += page_size, paddr += page_size) {
 		pgdep = pgd + pgd_index(addr);
+#if __riscv_xlen == 32
+		if (page_size == PAGE_SIZE_4M) {
+			ASSERT(!pgd_present(*pgdep));
+			pgd_set_large(pgdep, paddr, flags);
+			continue;
+		}
+#else
 		if (page_size == PAGE_SIZE_1G) {
 			ASSERT(!pgd_present(*pgdep));
 			pgd_set_large(pgdep, paddr, flags);
 			continue;
 		}
+#endif
 		if (!pgd_present(*pgdep)) {
 			pmd_phys = alloc_pmd(mode);
 			if (!pmd_phys) {
 				vunmap_range(pgd, start_addr, addr, mode);
 				return -ENOMEM;
 			}
+#if __riscv_xlen == 32
+			/* Sv32: PMD is folded onto the PGD entry. */
+			pmd = (pmd_t *)pgdep;
+#else
 			pmd = get_pmd_virt(pmd_phys, mode);
+#endif
 			pgd_set_pmd(pgdep, pmd_phys);
 		} else {
+#if __riscv_xlen == 32
+			/* Sv32: PMD is folded onto the PGD entry. */
+			pmd = (pmd_t *)pgdep;
+#else
 			pmd = get_pmd_virt(pgd_get_pmd(*pgdep), mode);
+#endif
 		}
 		pmdep = pmd + pmd_index(addr);
+#if __riscv_xlen == 64
 		if (page_size == PAGE_SIZE_2M) {
 			ASSERT(!pmd_present(*pmdep));
 			pmd_set_large(pmdep, paddr, flags);
 			continue;
 		}
+#endif
 		if (!pmd_present(*pmdep)) {
 			pt_phys = alloc_pt(mode);
 			if (!pt_phys) {
@@ -193,6 +231,14 @@ int vmap(pgd_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 	while (addr < end_addr) {
 		rem_size = end_addr - addr;
 
+#if __riscv_xlen == 32
+		if (is_aligned(addr, PAGE_SIZE_4M) &&
+		    is_aligned(paddr, PAGE_SIZE_4M) &&
+		    rem_size >= PAGE_SIZE_4M) {
+			page_size = PAGE_SIZE_4M;
+			rem_size = round_down(rem_size, PAGE_SIZE_4M);
+		} else {
+#else
 		if (is_aligned(addr, PAGE_SIZE_1G) &&
 		    is_aligned(paddr, PAGE_SIZE_1G) &&
 		    rem_size >= PAGE_SIZE_1G) {
@@ -204,6 +250,7 @@ int vmap(pgd_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 			page_size = PAGE_SIZE_2M;
 			rem_size = round_down(rem_size, PAGE_SIZE_2M);
 		} else {
+#endif
 			page_size = PAGE_SIZE;
 			rem_size = round_down(rem_size, PAGE_SIZE);
 		}
@@ -390,7 +437,7 @@ void *vmalloc(size_t size)
 	}
 
 	spinlock_release(&vma_lock);
-	return (void *)area->addr;
+	return (void *)(uintptr_t)area->addr;
 
 out_cleanup:
 	for (size_t j = 0; j < i; ++j) {
@@ -408,7 +455,7 @@ void vfree(void *ptr)
 	struct vmalloc_region *area;
 
 	spinlock_acquire(&vma_lock);
-	area = find_vm_area((uint64_t)ptr);
+	area = find_vm_area((uintptr_t)ptr);
 	if (!area || area->is_free) {
 		spinlock_release(&vma_lock);
 		return;
@@ -434,7 +481,7 @@ void *vmalloc_nomap(size_t size)
 	if (!area)
 		return NULL;
 
-	return (void *)area->addr;
+	return (void *)(uintptr_t)area->addr;
 }
 
 void vfree_nomap(void *ptr)
@@ -442,7 +489,7 @@ void vfree_nomap(void *ptr)
 	struct vmalloc_region *area;
 
 	spinlock_acquire(&vma_lock);
-	area = find_vm_area((uint64_t)ptr);
+	area = find_vm_area((uintptr_t)ptr);
 	if (!area || area->is_free) {
 		spinlock_release(&vma_lock);
 		return;

@@ -49,7 +49,7 @@ static int slab_add_page(struct slab_allocator *allocator)
 	if (!is_aligned(addr, align))
 		addr = round_up(addr, align);
 
-	pg->slab_free_objs = (void *)addr;
+	pg->slab_free_objs = (void *)(uintptr_t)addr;
 
 	pg->slab_objs_count = pg->slab_free_count = (end_addr - addr) / size;
 	if (pg->slab_objs_count == 0) {
@@ -59,13 +59,13 @@ static int slab_add_page(struct slab_allocator *allocator)
 	}
 
 	while (addr + size < end_addr) {
-		void **curr_next_ptr = (void **)addr;
-		void *next = (void *)(addr + size);
+		void **curr_next_ptr = (void **)(uintptr_t)addr;
+		void *next = (void *)(uintptr_t)(addr + size);
 
 		*curr_next_ptr = next;
 		addr += size;
 	}
-	*(void **)addr = NULL;
+	*(void **)(uintptr_t)addr = NULL;
 
 	list_add(&pg->slab_list, &allocator->slab_list);
 
@@ -181,13 +181,13 @@ void slab_free(struct slab_allocator *allocator, void *obj)
 
 	spinlock_acquire(&allocator->lock);
 
-	ASSERT(is_aligned((uint64_t)obj, allocator->align));
+	ASSERT(is_aligned((uintptr_t)obj, allocator->align));
 
 	list = &allocator->slab_list;
 	list_for_each_entry(curr, list, slab_list) {
 		start = page_to_virt(curr);
 		end = start + (PAGE_SIZE << curr->slab_cache->page_order);
-		if (start <= (uint64_t)obj && (uint64_t)obj < end) {
+		if (start <= (uintptr_t)obj && (uintptr_t)obj < end) {
 			*(void **)obj = curr->slab_free_objs;
 			curr->slab_free_objs = obj;
 			curr->slab_free_count++;

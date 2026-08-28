@@ -17,11 +17,11 @@ RAM ?= 128M
 ENABLE_SMP ?= 1
 ifeq ($(ENABLE_SMP),1)
 CPU ?= 3
-KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(BUILD)-smp
+KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(BUILD)-smp-$(XLEN)
 CFLAGS += -DENABLE_SMP=1
 else
 CPU := 1
-KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(BUILD)
+KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(BUILD)-$(XLEN)
 endif
 
 CC := $(CROSS_COMPILE)gcc
@@ -68,7 +68,11 @@ CFLAGS += -Isrc/arch/$(ARCH)/include
 CFLAGS += -Isrc/include
 CFLAGS += -Ivendor/libfdt
 
-LDFLAGS := -z max-page-size=4096
+LDFLAGS += -z max-page-size=4096
+
+# 64-bit integer helpers (__udivdi3 & co) for 32-bit builds; empty on 64-bit
+# where the instructions are native.
+LIBGCC := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name 2>/dev/null)
 
 export ARCH
 export BUILD_ROOT KERNEL_BUILD_ROOT
@@ -77,7 +81,7 @@ export CROSS_COMPILE CC LD AS AR CFLAGS LDFLAGS
 LINKER_SCRIPT_SRC := src/arch/$(ARCH)/kernel/brk.ld.S
 LINKER_SCRIPT := $(KERNEL_BUILD_ROOT)/brk.ld
 KERNEL_ELF := $(KERNEL_BUILD_ROOT)/brk.elf
-ROOTFS_IMG := $(BUILD_ROOT)/rootfs.img
+ROOTFS_IMG := $(BUILD_ROOT)/rootfs-$(XLEN).img
 
 core-y := src
 core-y += vendor
@@ -108,6 +112,7 @@ help:
 	@echo "  clean-kernel           Remove current variant build directory"
 	@echo "Configurable vars:"
 	@echo "  ARCH=<name>"
+	@echo "  XLEN={32|64}             (default 64)"
 	@echo "  CROSS_COMPILE=<prefix>"
 	@echo "  BUILD={debug|release}  (default: debug)"
 	@echo "  BUILD_ROOT=<path>      (default: build)"
@@ -122,7 +127,7 @@ $(LINKER_SCRIPT): $(LINKER_SCRIPT_SRC)
 
 $(KERNEL_ELF): $(BUILT_IN_OBJS) $(LINKER_SCRIPT)
 	@echo "  LD      $@"
-	@$(LD) $(LDFLAGS) -T $(LINKER_SCRIPT) -static -o $@ $(BUILT_IN_OBJS)
+	@$(LD) $(LDFLAGS) -T $(LINKER_SCRIPT) -static -o $@ $(BUILT_IN_OBJS) $(LIBGCC)
 
 $(KERNEL_BUILD_ROOT)/%/built-in.o: FORCE
 	@$(MAKE) -f scripts/Makefile.build build=$*

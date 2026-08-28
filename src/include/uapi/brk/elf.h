@@ -17,7 +17,43 @@
 #define ET_LOPROC 0xff00
 #define ET_HIPROC 0xffff
 
-struct elf64_hdr {
+#define ELFCLASS32 1
+#define ELFCLASS64 2
+#define EI_CLASS 4
+
+#if __riscv_xlen == 32
+
+struct elf_hdr {
+	uint8_t e_ident[EI_NIDENT];
+	uint16_t e_type; /* Object file type */
+	uint16_t e_machine; /* Architecture */
+	uint32_t e_version; /* Object file version */
+	uint32_t e_entry; /* Enter point virtual address */
+	uint32_t e_phoff; /* Program header table file offset */
+	uint32_t e_shoff; /* Section header table file offset */
+	uint32_t e_flags; /* Processor-specific flags */
+	uint16_t e_ehsize; /* ELF header size in bytes */
+	uint16_t e_phentsize; /* Program header table entry size */
+	uint16_t e_phnum; /* Program header table entry count */
+	uint16_t e_shentsize; /* Section header table entry size */
+	uint16_t e_shnum; /* Section header table entry count */
+	uint16_t e_shstrndx; /* Section header string table index */
+};
+
+struct elf_phdr {
+	uint32_t p_type;
+	uint32_t p_offset; /* Segment file offset */
+	uint32_t p_vaddr; /* Segment virtual address */
+	uint32_t p_paddr; /* Segment physical address */
+	uint32_t p_filesz; /* Segment size in file */
+	uint32_t p_memsz; /* Segment size int memory */
+	uint32_t p_flags;
+	uint32_t p_align; /* Segment alignment */
+};
+
+#else
+
+struct elf_hdr {
 	uint8_t e_ident[EI_NIDENT];
 	uint16_t e_type; /* Object file type */
 	uint16_t e_machine; /* Architecture */
@@ -34,7 +70,7 @@ struct elf64_hdr {
 	uint16_t e_shstrndx; /* Section header string table index */
 };
 
-struct elf64_phdr {
+struct elf_phdr {
 	uint32_t p_type;
 	uint32_t p_flags;
 	uint64_t p_offset; /* Segment file offset */
@@ -44,6 +80,8 @@ struct elf64_phdr {
 	uint64_t p_memsz; /* Segment size int memory */
 	uint64_t p_align; /* Segment alignment */
 };
+
+#endif
 
 /* These constants are for the segment types stored in the image headers */
 #define PT_NULL 0

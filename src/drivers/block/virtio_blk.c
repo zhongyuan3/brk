@@ -145,7 +145,7 @@ static int virtio_blk_submit(struct virtio_blk_dev *vblk,
 	req->reserved = 0;
 	req->sector = io->sector;
 
-	vblk->vq.desc[idx[0]].addr = virt_to_phys((uint64_t)req);
+	vblk->vq.desc[idx[0]].addr = virt_to_phys((uintptr_t)req);
 	vblk->vq.desc[idx[0]].len = sizeof(*req);
 	vblk->vq.desc[idx[0]].flags = VIRTQ_DESC_F_NEXT;
 	vblk->vq.desc[idx[0]].next = idx[1];
@@ -158,7 +158,7 @@ static int virtio_blk_submit(struct virtio_blk_dev *vblk,
 
 	status = &vblk->slots[idx[0]].status;
 	*status = 0xff;
-	vblk->vq.desc[idx[2]].addr = virt_to_phys((uint64_t)status);
+	vblk->vq.desc[idx[2]].addr = virt_to_phys((uintptr_t)status);
 	vblk->vq.desc[idx[2]].len = sizeof(*status);
 	vblk->vq.desc[idx[2]].flags = VIRTQ_DESC_F_WRITE;
 	vblk->vq.desc[idx[2]].next = 0;
@@ -209,7 +209,7 @@ static int virtio_blk_bdev_rw(struct block_dev *bdev, uint64_t blk_id,
 	if (!vbd)
 		return -EINVAL;
 
-	buf_phys = virt_to_phys((uint64_t)buf);
+	buf_phys = virt_to_phys((uintptr_t)buf);
 	return virtio_blk_io(vbd, blk_id, buf_phys, blk_cnt, write);
 }
 
@@ -354,7 +354,8 @@ int virtio_blk_register(struct virtio_blk_dev *vblk)
 	if (!bdev)
 		return -ENOMEM;
 
-	klog_info("%s: capacity: %lu\n", __func__, vblk->config.capacity);
+	klog_info("%s: capacity: %" PRIu64 "\n", __func__,
+		  vblk->config.capacity);
 
 	bdev->ops.read = virtio_blk_bdev_read;
 	bdev->ops.write = virtio_blk_bdev_write;

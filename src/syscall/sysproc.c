@@ -28,9 +28,9 @@ uint64_t sys_clone(void)
 uint64_t sys_wait4(void)
 {
 	pid_t pid = syscall_arg_raw(0);
-	int *wstatus = (int *)syscall_arg_raw(1);
+	int *wstatus = (int *)(uintptr_t)syscall_arg_raw(1);
 	int opts = syscall_arg_raw(2);
-	struct rusage *rus = (struct rusage *)syscall_arg_raw(3);
+	struct rusage *rus = (struct rusage *)(uintptr_t)syscall_arg_raw(3);
 	return task_wait(pid, wstatus, opts, rus);
 }
 

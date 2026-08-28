@@ -49,8 +49,13 @@ _start:
 	la t1, _ebss
 .Lclear_bss:
 	bgeu t0, t1, .Lclear_bss_done
+#if __riscv_xlen == 32
+	sw zero, 0(t0)
+	addi t0, t0, 4
+#else
 	sd zero, 0(t0)
 	addi t0, t0, 8
+#endif
 	j .Lclear_bss
 .Lclear_bss_done:
 
@@ -64,11 +69,25 @@ _start:
 	call early_pgtable_enable
 
 	la a0, boot_cpuid
+#if __riscv_xlen == 32
+	sw HART_ID_SAVED_REG, 0(a0)
+#else
 	sd HART_ID_SAVED_REG, 0(a0)
+#endif
 	la a0, dtb_phys
+#if __riscv_xlen == 32
+	/* dtb_phys is uint64_t: store the low word; the high word is
+	 * already zeroed by the BSS clear above. */
+	sw DTB_PHYS_SAVED_REG, 0(a0)
+#else
 	sd DTB_PHYS_SAVED_REG, 0(a0)
+#endif
 	la a0, load_offset
+#if __riscv_xlen == 32
+	sw LOAD_OFFSET_SAVED_REG, 0(a0)
+#else
 	sd LOAD_OFFSET_SAVED_REG, 0(a0)
+#endif
 
 	jump_to_kernel_virt start_kernel
 

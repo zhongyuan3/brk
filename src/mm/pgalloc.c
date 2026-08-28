@@ -70,7 +70,7 @@ struct page *page_zalloc(unsigned int order)
 	if (!pg)
 		return NULL;
 	virt = page_to_virt(pg);
-	memset((void *)virt, 0, PAGE_SIZE * (1 << order));
+	memset((void *)(uintptr_t)virt, 0, PAGE_SIZE * (1 << order));
 	return pg;
 }
 

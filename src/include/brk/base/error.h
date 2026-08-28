@@ -6,12 +6,12 @@
 
 static inline __must_check void *__err_ptr(int err)
 {
-	return (void *)((unsigned long long)(err));
+	return (void *)(uintptr_t)(err);
 }
 
 static inline __must_check int __ptr_err(const void *ptr)
 {
-	return (int)(unsigned long long)(ptr);
+	return (int)(uintptr_t)(ptr);
 }
 
 static inline __must_check bool __is_err(const void *ptr)

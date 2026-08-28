@@ -14,7 +14,7 @@ subdir-built-in := $(addprefix $(obj)/,$(patsubst %,%/built-in.o,$(subdir-y)))
 
 $(obj)/built-in.o: $(obj-y-full) $(subdir-built-in)
 	@echo "  LD      $@"
-	@$(LD) -r -o $@ $^
+	@$(LD) $(LDFLAGS) -r -o $@ $^
 
 $(subdir-built-in): FORCE
 	@$(MAKE) -f scripts/Makefile.build build=$(patsubst $(KERNEL_BUILD_ROOT)/%,%,$(@D))

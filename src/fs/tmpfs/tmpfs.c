@@ -473,7 +473,7 @@ static int tmpfs_read_file_at(struct tmpfs_inode *inode, void *buf, size_t n,
 	uint8_t *data, *b;
 	off_t off = *pos;
 
-	if (off >= inode->i_size) {
+	if (off >= (off_t)inode->i_size) {
 		if (wcnt)
 			*wcnt = 0;
 		return 0;

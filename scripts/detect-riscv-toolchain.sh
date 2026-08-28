@@ -7,6 +7,11 @@ mode=${2:-cross}
 cross=${CROSS_COMPILE:-}
 
 prefixes="
+riscv32-unknown-elf-
+riscv32-elf-
+riscv32-none-elf-
+riscv32-linux-gnu-
+riscv32-unknown-linux-gnu-
 riscv64-unknown-elf-
 riscv64-elf-
 riscv64-none-elf-
@@ -21,7 +26,7 @@ detect_cross() {
 	else
 		for p in $prefixes; do
 			if command -v "${p}gcc" >/dev/null 2>&1 &&
-				"${p}gcc" -dumpmachine 2>/dev/null | grep -q '^riscv64'; then
+				"${p}gcc" -dumpmachine 2>/dev/null | grep -Eq '^riscv(32|64)'; then
 				cross=$p
 				gcc=$(command -v "${p}gcc")
 				break
@@ -30,7 +35,7 @@ detect_cross() {
 		[ -n "${cross:-}" ] || return 1
 	fi
 
-	"$gcc" -dumpmachine 2>/dev/null | grep -q '^riscv64' || return 1
+	"$gcc" -dumpmachine 2>/dev/null | grep -Eq '^riscv(32|64)' || return 1
 
 	{
 		printf 'CROSS_COMPILE := %s\n' "$cross"
@@ -49,6 +54,7 @@ detect_gdb() {
 	mkdir -p "$(dirname "$cache")"
 	[ -n "$cross" ] || return 1
 
+	xlen=${3:-64}
 	gdb=
 	for g in "${cross}gdb" gdb-multiarch; do
 		if command -v "$g" >/dev/null 2>&1; then
@@ -56,7 +62,7 @@ detect_gdb() {
 				gdb=$(command -v "$g")
 				break
 			fi
-			if "$g" --batch -quiet -ex "set architecture riscv:rv64" -ex quit >/dev/null 2>&1; then
+			if "$g" --batch -quiet -ex "set architecture riscv:rv$xlen" -ex quit >/dev/null 2>&1; then
 				gdb=$(command -v "$g")
 				break
 			fi
@@ -74,6 +80,6 @@ detect_gdb() {
 
 case "$mode" in
 cross) detect_cross ;;
-gdb) detect_gdb ;;
+gdb) detect_gdb "$@" ;;
 *) return 1 2>/dev/null || exit 1 ;;
 esac

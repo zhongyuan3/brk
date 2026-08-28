@@ -276,13 +276,14 @@ int blkdev_check_bounds(struct block_dev *bd, uint64_t blk_id, uint32_t blk_cnt)
 	if (blk_cnt == 0)
 		return 0;
 	if (blk_id >= bd->phy_bcnt) {
-		klog_warn("%s(): invalid blk_id %lu, phy_bcnt %lu\n", __func__,
-			  blk_id, bd->phy_bcnt);
+		klog_warn("%s(): invalid blk_id %" PRIu64 ", phy_bcnt %" PRIu64
+			  "\n",
+			  __func__, blk_id, bd->phy_bcnt);
 		return -ENXIO;
 	}
 	if (bd->phy_bcnt - blk_id < blk_cnt) {
-		klog_warn("%s(): invalid blk_cnt %u, phy_bcnt %lu\n", __func__,
-			  blk_cnt, bd->phy_bcnt);
+		klog_warn("%s(): invalid blk_cnt %u, phy_bcnt %" PRIu64 "\n",
+			  __func__, blk_cnt, bd->phy_bcnt);
 		return -ENXIO;
 	}
 	return 0;

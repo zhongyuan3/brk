@@ -55,16 +55,26 @@ static inline struct sbiret sbi_ecall(unsigned long eid, unsigned long fid,
 
 static inline long sbi_set_timer(uint64_t stime_value)
 {
-	register uint64_t a0 asm("a0") = stime_value;
-	register uint64_t a7 asm("a7") = SBI_LEGACY_SET_TIMER;
+#if __riscv_xlen == 32
+	/* Legacy SBI passes the 64-bit stime in the a0:a1 register pair. */
+	register unsigned long a0 asm("a0") = (unsigned long)stime_value;
+	register unsigned long a1 asm("a1") =
+		(unsigned long)(stime_value >> 32);
+	register unsigned long a7 asm("a7") = SBI_LEGACY_SET_TIMER;
+	asm volatile("ecall" : "+r"(a0), "+r"(a1) : "r"(a7) : "memory");
+	return a0;
+#else
+	register unsigned long a0 asm("a0") = (unsigned long)stime_value;
+	register unsigned long a7 asm("a7") = SBI_LEGACY_SET_TIMER;
 	asm volatile("ecall" : "+r"(a0) : "r"(a7) : "memory");
 	return a0;
+#endif
 }
 
 static inline long sbi_console_putchar(int ch)
 {
-	register uint64_t a0 asm("a0") = (uint64_t)(unsigned char)ch;
-	register uint64_t a7 asm("a7") = SBI_LEGACY_CONSOLE_PUTCHAR;
+	register unsigned long a0 asm("a0") = (unsigned long)(unsigned char)ch;
+	register unsigned long a7 asm("a7") = SBI_LEGACY_CONSOLE_PUTCHAR;
 	asm volatile("ecall" : "+r"(a0) : "r"(a7) : "memory");
 	return a0;
 }
@@ -72,14 +82,14 @@ static inline long sbi_console_putchar(int ch)
 static inline long sbi_console_getchar(void)
 {
 	long ch;
-	register uint64_t a7 asm("a7") = SBI_LEGACY_CONSOLE_GETCHAR;
+	register unsigned long a7 asm("a7") = SBI_LEGACY_CONSOLE_GETCHAR;
 	asm volatile("ecall" : "=r"(ch) : "r"(a7) : "memory");
 	return ch;
 }
 
 static inline void sbi_shutdown(void)
 {
-	register uint64_t a7 asm("a7") = SBI_LEGACY_SHUTDOWN;
+	register unsigned long a7 asm("a7") = SBI_LEGACY_SHUTDOWN;
 	asm volatile("ecall" : : "r"(a7) : "memory");
 }
 

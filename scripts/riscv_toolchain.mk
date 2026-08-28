@@ -40,7 +40,7 @@ endif
 ifneq ($(__need_gdb),)
 ifeq ($(wildcard $(GDB)),)
 __gdb_detected := $(shell CROSS_COMPILE='$(CROSS_COMPILE)' \
-	$(DETECT_SCRIPT) '$(TOOLCHAIN_CACHE)' gdb)
+	$(DETECT_SCRIPT) '$(TOOLCHAIN_CACHE)' gdb '$(XLEN)')
 ifeq ($(__gdb_detected),)
 $(error \
 	*** GDB with RISC-V support not found. \

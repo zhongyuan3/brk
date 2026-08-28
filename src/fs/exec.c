@@ -64,17 +64,23 @@ static int exec_read_exact(struct fs_file *fp, uint64_t off, void *buf,
 	return 0;
 }
 
-static int elf_validate_exec_hdr(const struct elf64_hdr *h)
+static int elf_validate_exec_hdr(const struct elf_hdr *h)
 {
 	if (memcmp(h->e_ident, ELFMAG, SELFMAG) != 0)
 		return -ENOEXEC;
+#if __riscv_xlen == 32
+	if (h->e_ident[EI_CLASS] != ELFCLASS32)
+		return -ENOEXEC;
+#else
+	if (h->e_ident[EI_CLASS] != ELFCLASS64)
+		return -ENOEXEC;
+#endif
 	if (h->e_type != ET_EXEC)
 		return -ENOEXEC;
 	return 0;
 }
 
-static int elf_read_phdr(struct fs_file *f, uint64_t off,
-			 struct elf64_phdr *phdr)
+static int elf_read_phdr(struct fs_file *f, uint64_t off, struct elf_phdr *phdr)
 {
 	ssize_t r;
 	loff_t ret = fs_file_lseek(f, off, SEEK_SET);
@@ -89,7 +95,7 @@ static int elf_read_phdr(struct fs_file *f, uint64_t off,
 	return 0;
 }
 
-static int exec_read_elf_header(struct fs_file *f, struct elf64_hdr *elf_hdr)
+static int exec_read_elf_header(struct fs_file *f, struct elf_hdr *elf_hdr)
 {
 	ssize_t r = fs_file_read(f, elf_hdr, sizeof(*elf_hdr));
 
@@ -118,7 +124,7 @@ static int exec_accum_strings(char **arr, size_t *total_size,
 
 static uint64_t random_ustack(void)
 {
-	uint64_t ustack_top = USER_SPACE_SIZE_MAX;
+	uintptr_t ustack_top = USER_SPACE_SIZE_MAX;
 
 	rand_seed(timer_get_time());
 	ustack_top -= (rand_u32() % 32 + 1) * PAGE_SIZE;
@@ -126,7 +132,7 @@ static uint64_t random_ustack(void)
 	return ustack_top;
 }
 
-static uint64_t stack_push_ptr_slots(uint64_t *ksp, uint64_t *sp, int nptr)
+static uintptr_t stack_push_ptr_slots(uintptr_t *ksp, uintptr_t *sp, int nptr)
 {
 	size_t n = (size_t)(nptr + 1) * sizeof(char *);
 
@@ -137,8 +143,8 @@ static uint64_t stack_push_ptr_slots(uint64_t *ksp, uint64_t *sp, int nptr)
 	return *sp;
 }
 
-static void copy_exec_strings(char **src, int n, uint64_t *k_pos,
-			      uint64_t *u_pos, char **dst_ptr_array)
+static void copy_exec_strings(char **src, int n, uintptr_t *k_pos,
+			      uintptr_t *u_pos, char **dst_ptr_array)
 {
 	for (int i = 0; i < n; ++i) {
 		size_t l = strlen(src[i]) + 1;
@@ -150,21 +156,21 @@ static void copy_exec_strings(char **src, int n, uint64_t *k_pos,
 	}
 }
 
-static void push_args(struct exec_args *args, uint64_t *psp,
-		      uint64_t stack_virt, struct task_control_block *task)
+static void push_args(struct exec_args *args, uintptr_t *psp,
+		      uintptr_t stack_virt, struct task_control_block *task)
 {
-	uint64_t sp = *psp;
-	uint64_t ksp = stack_virt + USTACK_SIZE;
+	uintptr_t sp = *psp;
+	uintptr_t ksp = stack_virt + USTACK_SIZE;
 
 	ksp -= args->envp_size;
 	sp -= args->envp_size;
-	uint64_t envp_strs_kstart = ksp;
-	uint64_t envp_strs_ustart = sp;
+	uintptr_t envp_strs_kstart = ksp;
+	uintptr_t envp_strs_ustart = sp;
 
 	ksp -= args->argv_size;
 	sp -= args->argv_size;
-	uint64_t argv_strs_kstart = ksp;
-	uint64_t argv_strs_ustart = sp;
+	uintptr_t argv_strs_kstart = ksp;
+	uintptr_t argv_strs_ustart = sp;
 
 	arch_tf_set_a2(task->tf, stack_push_ptr_slots(&ksp, &sp, args->envc));
 	char **envp_kstart = (char **)ksp;
@@ -204,7 +210,7 @@ static unsigned int flags_to_perm(unsigned int flags)
 }
 
 static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
-		   struct elf64_phdr *ph, struct fs_file *fp)
+		   struct elf_phdr *ph, struct fs_file *fp)
 {
 	int err = 0;
 	size_t npgs = vma->size >> PAGE_SHIFT;
@@ -271,7 +277,7 @@ failed:
 	return err;
 }
 
-static int load_seg(struct uvm_space *mm, struct elf64_phdr *ph,
+static int load_seg(struct uvm_space *mm, struct elf_phdr *ph,
 		    struct fs_file *fp)
 {
 	uint64_t start, end;
@@ -353,8 +359,8 @@ static int map_stack(struct uvm_space *mm)
 
 static int __do_execve(const char *path, struct exec_args *args)
 {
-	struct elf64_hdr elf_hdr = { 0 };
-	struct elf64_phdr phdr = { 0 };
+	struct elf_hdr elf_hdr = { 0 };
+	struct elf_phdr phdr = { 0 };
 	struct task_control_block *task = current_task();
 	struct fs_file *f = NULL;
 	struct uvm_space *new_mm = NULL;
@@ -405,10 +411,10 @@ static int __do_execve(const char *path, struct exec_args *args)
 		goto err;
 
 	{
-		uint64_t sp = new_mm->stack->addr + new_mm->stack->size;
+		uintptr_t sp = new_mm->stack->addr + new_mm->stack->size;
 		struct page *stack_pg = new_mm->stack->pages[0];
 		uint64_t stack_phys = page_to_phys(stack_pg);
-		uint64_t stack_virt = phys_to_virt(stack_phys);
+		uintptr_t stack_virt = phys_to_virt(stack_phys);
 
 		push_args(args, &sp, stack_virt, task);
 		strlcpy(task->name, args->argv[0], sizeof(task->name));

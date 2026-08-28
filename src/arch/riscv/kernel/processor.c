@@ -6,7 +6,7 @@
 
 struct task_control_block *current_task(void)
 {
-	return (struct task_control_block *)read_tp();
+	return (struct task_control_block *)(uintptr_t)read_tp();
 }
 
 cpuid_t current_cpuid(void)
@@ -44,7 +44,7 @@ void pop_off(void)
 
 void set_current_task(struct task_control_block *task)
 {
-	write_tp((uint64_t)task);
+	write_tp((uintptr_t)task);
 }
 
 void set_current_cpuid(cpuid_t cpuid)
@@ -59,5 +59,9 @@ void arch_cpu_idle(void)
 
 const char *arch_uname_machine(void)
 {
+#if __riscv_xlen == 32
+	return "riscv32";
+#else
 	return "riscv64";
+#endif
 }

@@ -49,7 +49,7 @@ static const char *const interrupt_strs[] = {
 void trap_init_hart(uint32_t hart_id)
 {
 	(void)hart_id;
-	write_stvec((uint64_t)kernel_trap_vector);
+	write_stvec((uintptr_t)kernel_trap_vector);
 	write_sie(read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
 	timer_set_next();
 }
@@ -89,12 +89,14 @@ void kernel_trap_handler(void)
 		} else if (code == 9) {
 			irq_handle_external(current_cpuid());
 		} else {
-			panic("%s: cpu=%d scause=%#lx,sepc=%#lx,stval=%#lx\n",
+			panic("%s: cpu=%d scause=%#" PRIx64 ",sepc=%#" PRIx64
+			      ",stval=%#" PRIx64 "\n",
 			      cause_to_str(scause), current_cpuid(), scause,
 			      sepc, stval);
 		}
 	} else {
-		panic("%s: cpu=%d scause=%#lx,sepc=%#lx,stval=%#lx\n",
+		panic("%s: cpu=%d scause=%#" PRIx64 ",sepc=%#" PRIx64
+		      ",stval=%#" PRIx64 "\n",
 		      cause_to_str(scause), current_cpuid(), scause, sepc,
 		      stval);
 	}
@@ -113,9 +115,9 @@ struct trap_frame *user_trap_handler(void)
 	uint64_t stval = read_stval();
 	uint64_t code = TRAP_CAUSE_CODE(scause);
 
-	write_stvec((uint64_t)kernel_trap_vector);
+	write_stvec((uintptr_t)kernel_trap_vector);
 
-	tf = (struct trap_frame *)read_sscratch();
+	tf = (struct trap_frame *)(uintptr_t)read_sscratch();
 	task = ((struct extended_trap_frame *)tf)->task;
 	set_current_task(task);
 	set_current_cpuid(arch_tf_get_cpuid(tf));
@@ -138,10 +140,10 @@ struct trap_frame *user_trap_handler(void)
 		} else if (code == 9) {
 			irq_handle_external(current_cpuid());
 		} else {
-			klog_warn(
-				"%s: pid=%ld,scause=%#lx,sepc=%#lx,stval=%#lx\n",
-				cause_to_str(scause), task->pid, scause, sepc,
-				stval);
+			klog_warn("%s: pid=%ld,scause=%#" PRIx64
+				  ",sepc=%#" PRIx64 ",stval=%#" PRIx64 "\n",
+				  cause_to_str(scause), task->pid, scause, sepc,
+				  stval);
 			task_set_killed(task);
 		}
 	} else {
@@ -151,10 +153,10 @@ struct trap_frame *user_trap_handler(void)
 			intr_on();
 			syscall();
 		} else {
-			klog_warn(
-				"%s: pid=%ld,scause=%#lx,sepc=%#lx,stval=%#lx\n",
-				cause_to_str(scause), task->pid, scause, sepc,
-				stval);
+			klog_warn("%s: pid=%ld,scause=%#" PRIx64
+				  ",sepc=%#" PRIx64 ",stval=%#" PRIx64 "\n",
+				  cause_to_str(scause), task->pid, scause, sepc,
+				  stval);
 			task_set_killed(task);
 		}
 	}
@@ -175,7 +177,7 @@ void prepare_to_return(void)
 
 	intr_off();
 
-	write_stvec((uint64_t)user_trap_vector);
+	write_stvec((uintptr_t)user_trap_vector);
 
 	task = current_task();
 

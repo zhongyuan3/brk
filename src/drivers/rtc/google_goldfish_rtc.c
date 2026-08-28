@@ -116,7 +116,8 @@ void rtc_init(void)
 	rtc_mmio = (uint8_t volatile *)ioremap(dev.phys_base, dev.size,
 					       PTE_R | PTE_W);
 	if (!rtc_mmio) {
-		klog_warn("rtc: ioremap failed for phys %#lx\n", dev.phys_base);
+		klog_warn("rtc: ioremap failed for phys %#" PRIx64 "\n",
+			  dev.phys_base);
 		return;
 	}
 

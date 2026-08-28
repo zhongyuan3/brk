@@ -49,12 +49,12 @@ static inline struct page *phys_to_page(uint64_t paddr)
 	return pfn_to_page(phys_to_pfn(paddr));
 }
 
-static inline uint64_t page_to_virt(struct page *pg)
+static inline uintptr_t page_to_virt(struct page *pg)
 {
 	return phys_to_virt(page_to_phys(pg));
 }
 
-static inline struct page *virt_to_page(uint64_t vaddr)
+static inline struct page *virt_to_page(uintptr_t vaddr)
 {
 	return phys_to_page(virt_to_phys(vaddr));
 }
