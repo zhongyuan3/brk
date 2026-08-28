@@ -31,7 +31,7 @@ static bool plic_source_is_valid(uint32_t source)
 static volatile uint32_t *plic_senable(uint32_t hart_id)
 {
 	size_t ctx = 2 * hart_id + 1;
-	return (volatile uint32_t *)(enable_base + ctx * 0x80);
+	return (volatile uint32_t *)(uintptr_t)(enable_base + ctx * 0x80);
 }
 
 static int plic_enable(uint32_t hart_id, uint32_t source)
@@ -69,7 +69,7 @@ static int plic_set_priority(uint32_t source, unsigned int priority)
 	if (!plic_source_is_valid(source))
 		return -EINVAL;
 
-	((volatile uint32_t *)(priority_base))[source] = priority;
+	((volatile uint32_t *)(uintptr_t)(priority_base))[source] = priority;
 
 	return 0;
 }
@@ -77,7 +77,7 @@ static int plic_set_priority(uint32_t source, unsigned int priority)
 static volatile uint32_t *plic_sthreshold(uint32_t hart_id)
 {
 	size_t ctx = 2 * hart_id + 1;
-	return (volatile uint32_t *)(threshold_base + ctx * 0x1000);
+	return (volatile uint32_t *)(uintptr_t)(threshold_base + ctx * 0x1000);
 }
 
 static int plic_set_threshold(uint32_t hart_id, unsigned int threshold)
@@ -95,7 +95,8 @@ static int plic_set_threshold(uint32_t hart_id, unsigned int threshold)
 static volatile uint32_t *plic_sclaim_complete(uint32_t hart_id)
 {
 	size_t ctx = 2 * hart_id + 1;
-	return (volatile uint32_t *)(claim_complete_base + ctx * 0x1000);
+	return (volatile uint32_t *)(uintptr_t)(claim_complete_base +
+						ctx * 0x1000);
 }
 
 static int plic_claim(uint32_t hart_id, uint32_t *source)
@@ -148,7 +149,7 @@ static struct irq_chip plic_irq_chip = {
 void plic_init(void)
 {
 	dtb_parse_plic(&plic);
-	mem_base = (uint64_t)ioremap(plic.phys_base, plic.size, PTE_R | PTE_W);
+	mem_base = (uintptr_t)ioremap(plic.phys_base, plic.size, PTE_R | PTE_W);
 	priority_base = mem_base + PLIC_PRIORITY_OFFSET;
 	pending_base = mem_base + PLIC_PENDING_OFFSET;
 	enable_base = mem_base + PLIC_ENABLE_OFFSET;

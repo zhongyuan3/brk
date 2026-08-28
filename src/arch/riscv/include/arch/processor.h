@@ -3,21 +3,27 @@
 
 #include <brk/base/types.h>
 
+#if __riscv_xlen == 32
+typedef uint32_t reg_t;
+#else
+typedef uint64_t reg_t;
+#endif
+
 struct switch_frame {
-	uint64_t ra;
-	uint64_t sp;
-	uint64_t s0;
-	uint64_t s1;
-	uint64_t s2;
-	uint64_t s3;
-	uint64_t s4;
-	uint64_t s5;
-	uint64_t s6;
-	uint64_t s7;
-	uint64_t s8;
-	uint64_t s9;
-	uint64_t s10;
-	uint64_t s11;
+	reg_t ra;
+	reg_t sp;
+	reg_t s0;
+	reg_t s1;
+	reg_t s2;
+	reg_t s3;
+	reg_t s4;
+	reg_t s5;
+	reg_t s6;
+	reg_t s7;
+	reg_t s8;
+	reg_t s9;
+	reg_t s10;
+	reg_t s11;
 };
 
 void switch_context(struct switch_frame *prev, struct switch_frame *next);

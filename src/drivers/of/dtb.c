@@ -85,7 +85,7 @@ int dtb_early_init_scan_mem(void)
 	int err;
 	int node;
 	int addr_cells, size_cells;
-	void *dtb_virt = (void *)dtb_phys;
+	void *dtb_virt = (void *)(uintptr_t)dtb_phys;
 
 	node = fdt_path_offset(dtb_virt, "/memory");
 	if (node < 0)
@@ -108,7 +108,7 @@ int dtb_early_init_scan_reserved_mem(void)
 	int err;
 	int node, subnode;
 	int addr_cells, size_cells;
-	void *dtb_virt = (void *)dtb_phys;
+	void *dtb_virt = (void *)(uintptr_t)dtb_phys;
 
 	node = fdt_path_offset(dtb_virt, "/reserved-memory");
 	if (node < 0)

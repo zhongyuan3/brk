@@ -371,6 +371,6 @@ void memblock_dump(struct memblock_region_set *set)
 		size_t size = rgn->size;
 		uint64_t end = start + size;
 		printk(" %s[%zu]\t[%p-%p], %zx bytes\n", set->name, idx,
-		       (void *)start, (void *)end, size);
+		       (void *)(uintptr_t)start, (void *)(uintptr_t)end, size);
 	}
 }

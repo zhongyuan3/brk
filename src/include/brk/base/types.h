@@ -21,4 +21,13 @@ struct hlist_node {
 	struct hlist_node *next, **pprev;
 };
 
+/* printf() format specifiers for uint64_t on the current XLEN. */
+#if __riscv_xlen == 32
+#define PRIx64 "llx"
+#define PRIu64 "llu"
+#else
+#define PRIx64 "lx"
+#define PRIu64 "lu"
+#endif
+
 #endif

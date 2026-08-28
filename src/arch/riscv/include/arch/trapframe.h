@@ -1,6 +1,7 @@
 #ifndef ARCH_TRAPFRAME_H
 #define ARCH_TRAPFRAME_H
 
+#include <arch/processor.h>
 #include <brk/base/types.h>
 #include <brk/lib/string.h>
 #include <brk/printk/panic.h>
@@ -8,40 +9,40 @@
 struct task_control_block;
 
 struct trap_frame {
-	/* 0   */ uint64_t kernel_sp;
-	/* 8   */ uint64_t ra;
-	/* 16  */ uint64_t sp;
-	/* 24  */ uint64_t gp;
-	/* 32  */ uint64_t tp;
-	/* 40  */ uint64_t t0;
-	/* 48  */ uint64_t t1;
-	/* 56  */ uint64_t t2;
-	/* 64  */ uint64_t s0;
-	/* 72  */ uint64_t s1;
-	/* 80  */ uint64_t a0;
-	/* 88  */ uint64_t a1;
-	/* 96  */ uint64_t a2;
-	/* 104 */ uint64_t a3;
-	/* 112 */ uint64_t a4;
-	/* 120 */ uint64_t a5;
-	/* 128 */ uint64_t a6;
-	/* 136 */ uint64_t a7;
-	/* 144 */ uint64_t s2;
-	/* 152 */ uint64_t s3;
-	/* 160 */ uint64_t s4;
-	/* 168 */ uint64_t s5;
-	/* 176 */ uint64_t s6;
-	/* 184 */ uint64_t s7;
-	/* 192 */ uint64_t s8;
-	/* 200 */ uint64_t s9;
-	/* 208 */ uint64_t s10;
-	/* 216 */ uint64_t s11;
-	/* 224 */ uint64_t t3;
-	/* 232 */ uint64_t t4;
-	/* 240 */ uint64_t t5;
-	/* 248 */ uint64_t t6;
-	/* 256 */ uint64_t epc;
-	/* 264 */ uint64_t cpuid;
+	/* 0   */ reg_t kernel_sp;
+	/* 8   */ reg_t ra;
+	/* 16  */ reg_t sp;
+	/* 24  */ reg_t gp;
+	/* 32  */ reg_t tp;
+	/* 40  */ reg_t t0;
+	/* 48  */ reg_t t1;
+	/* 56  */ reg_t t2;
+	/* 64  */ reg_t s0;
+	/* 72  */ reg_t s1;
+	/* 80  */ reg_t a0;
+	/* 88  */ reg_t a1;
+	/* 96  */ reg_t a2;
+	/* 104 */ reg_t a3;
+	/* 112 */ reg_t a4;
+	/* 120 */ reg_t a5;
+	/* 128 */ reg_t a6;
+	/* 136 */ reg_t a7;
+	/* 144 */ reg_t s2;
+	/* 152 */ reg_t s3;
+	/* 160 */ reg_t s4;
+	/* 168 */ reg_t s5;
+	/* 176 */ reg_t s6;
+	/* 184 */ reg_t s7;
+	/* 192 */ reg_t s8;
+	/* 200 */ reg_t s9;
+	/* 208 */ reg_t s10;
+	/* 216 */ reg_t s11;
+	/* 224 */ reg_t t3;
+	/* 232 */ reg_t t4;
+	/* 240 */ reg_t t5;
+	/* 248 */ reg_t t6;
+	/* 256 */ reg_t epc;
+	/* 264 */ reg_t cpuid;
 };
 
 struct extended_trap_frame {

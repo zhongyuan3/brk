@@ -95,7 +95,7 @@ uint64_t syscall_arg_raw(int argno)
 
 void *syscall_arg_ptr(int argno)
 {
-	return (void *)syscall_arg_raw(argno);
+	return (void *)(uintptr_t)syscall_arg_raw(argno);
 }
 
 int syscall_arg_int(int argno)

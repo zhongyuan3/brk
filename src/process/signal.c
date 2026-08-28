@@ -217,7 +217,7 @@ static bool setup_signal_frame_locked(struct task_control_block *task, int sig,
 	if (!user_access_ok(sp, sizeof(*frame)))
 		return false;
 
-	frame = (struct user_sigframe *)sp;
+	frame = (struct user_sigframe *)(uintptr_t)sp;
 	arch_tf_copy(&frame->tf, task->tf);
 	frame->blocked = task->blocked;
 	frame->signo = sig;
@@ -322,7 +322,7 @@ uint64_t signal_do_sigreturn(struct task_control_block *task)
 		goto unlock_and_return;
 	}
 
-	frame = (struct user_sigframe *)task->sigframe_sp;
+	frame = (struct user_sigframe *)(uintptr_t)task->sigframe_sp;
 	if (!user_access_ok(task->sigframe_sp, sizeof(*frame))) {
 		ret = -EFAULT;
 		goto unlock_and_return;

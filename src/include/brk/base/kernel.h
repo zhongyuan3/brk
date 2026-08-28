@@ -4,6 +4,8 @@
 #include <stdalign.h>
 #include <stdint.h>
 
+#define BRK_VERSION "0.0.1"
+
 #define max(x, y)                      \
 	({                             \
 		__auto_type __x = (x); \
@@ -58,20 +60,21 @@
 #define round_up_to_pow_of_two(x)                    \
 	({                                           \
 		__auto_type __x = (x);               \
-		if (__x == 0) {                      \
-			__x = 1;                     \
-		} else if ((__x & (__x - 1)) == 0) { \
+		unsigned long long __v = __x;        \
+		if (__v == 0) {                      \
+			__v = 1;                     \
+		} else if ((__v & (__v - 1)) == 0) { \
 		} else {                             \
-			--__x;                       \
-			__x |= __x >> 1;             \
-			__x |= __x >> 2;             \
-			__x |= __x >> 4;             \
-			__x |= __x >> 8;             \
-			__x |= __x >> 16;            \
-			if (sizeof(__x) == 8)        \
-				__x |= __x >> 32;    \
-			++__x;                       \
+			--__v;                       \
+			__v |= __v >> 1;             \
+			__v |= __v >> 2;             \
+			__v |= __v >> 4;             \
+			__v |= __v >> 8;             \
+			__v |= __v >> 16;            \
+			__v |= __v >> 32;            \
+			++__v;                       \
 		}                                    \
+		__x = (__typeof__(__x))__v;          \
 		__x;                                 \
 	})
 

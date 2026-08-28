@@ -8,7 +8,7 @@
 
 static uint64_t virtio_mmio_base(struct virtio_device *dev)
 {
-	return (uint64_t)dev->mem_base;
+	return (uintptr_t)dev->mem_base;
 }
 
 static void virtio_mmio_write_addr(struct virtio_device *dev, uint32_t low_off,
@@ -102,13 +102,13 @@ int virtio_mmio_setup_queue(struct virtio_device *dev, uint32_t queue_id,
 
 	virtio_mmio_write_addr(dev, VIRTIO_QUEUE_DESC_LOW_OFFSET,
 			       VIRTIO_QUEUE_DESC_HIGH_OFFSET,
-			       virt_to_phys((uint64_t)vq->desc));
+			       virt_to_phys((uintptr_t)vq->desc));
 	virtio_mmio_write_addr(dev, VIRTIO_QUEUE_DRIVER_LOW_OFFSET,
 			       VIRTIO_QUEUE_DRIVER_HIGH_OFFSET,
-			       virt_to_phys((uint64_t)vq->avail));
+			       virt_to_phys((uintptr_t)vq->avail));
 	virtio_mmio_write_addr(dev, VIRTIO_QUEUE_DEVICE_LOW_OFFSET,
 			       VIRTIO_QUEUE_DEVICE_HIGH_OFFSET,
-			       virt_to_phys((uint64_t)vq->used));
+			       virt_to_phys((uintptr_t)vq->used));
 
 	writel(1, base + VIRTIO_QUEUE_READY_OFFSET);
 	return 0;

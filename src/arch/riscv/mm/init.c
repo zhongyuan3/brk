@@ -28,8 +28,8 @@ static void map_mem(void)
 		++regs_cnt;
 
 	size = round_up(sizeof(struct memblock_region) * regs_cnt, PAGE_SIZE);
-	regs = (struct memblock_region *)memblock_alloc(size, _EKERNEL_PHYS,
-							PAGE_SIZE);
+	regs = (struct memblock_region *)(uintptr_t)memblock_alloc(
+		size, _EKERNEL_PHYS, PAGE_SIZE);
 
 	reg = regs;
 	for_each_mem_range(idx, start, end) {
@@ -47,23 +47,23 @@ static void map_mem(void)
 				VMAP_MODE_EARLY);
 	}
 
-	vaddr = phys_to_virt((uint64_t)regs);
-	kvmap_with_mode(vaddr, size, (uint64_t)regs, flags, VMAP_MODE_EARLY);
+	vaddr = phys_to_virt((uintptr_t)regs);
+	kvmap_with_mode(vaddr, size, (uintptr_t)regs, flags, VMAP_MODE_EARLY);
 
-	memblock_free((uint64_t)regs, size);
+	memblock_free((uintptr_t)regs, size);
 }
 
 static void map_kernel(void)
 {
 	uint64_t virt;
 
-	kvmap_with_mode((uint64_t)_stext, _TEXT_SIZE, _STEXT_PHYS,
+	kvmap_with_mode((uintptr_t)_stext, _TEXT_SIZE, _STEXT_PHYS,
 			PTE_R | PTE_X, VMAP_MODE_EARLY);
-	kvmap_with_mode((uint64_t)_srodata, _RODATA_SIZE, _SRODATA_PHYS, PTE_R,
+	kvmap_with_mode((uintptr_t)_srodata, _RODATA_SIZE, _SRODATA_PHYS, PTE_R,
 			VMAP_MODE_EARLY);
-	kvmap_with_mode((uint64_t)_sdata, _DATA_SIZE, _SDATA_PHYS,
+	kvmap_with_mode((uintptr_t)_sdata, _DATA_SIZE, _SDATA_PHYS,
 			PTE_R | PTE_W, VMAP_MODE_EARLY);
-	kvmap_with_mode((uint64_t)_sbss, _BSS_SIZE, _SBSS_PHYS, PTE_R | PTE_W,
+	kvmap_with_mode((uintptr_t)_sbss, _BSS_SIZE, _SBSS_PHYS, PTE_R | PTE_W,
 			VMAP_MODE_EARLY);
 
 	virt = phys_to_virt(_SRODATA_PHYS);
@@ -80,7 +80,7 @@ static void map_kernel(void)
 static void map_dtb(void)
 {
 	uint64_t dtb_virt = phys_to_virt(dtb_phys);
-	size_t dtb_size = fdt_totalsize(dtb_phys);
+	size_t dtb_size = fdt_totalsize((uintptr_t)dtb_phys);
 	kvmap_with_mode(dtb_virt, dtb_size, dtb_phys, PTE_R | PTE_W,
 			VMAP_MODE_EARLY);
 }
@@ -104,14 +104,14 @@ static void vmemmap_init(void)
 		paddr = memblock_alloc(sz, 0, PAGE_SIZE);
 		ASSERT(paddr);
 		memset((void *)phys_to_virt(paddr), 0, sz);
-		kvmap_with_mode((uint64_t)pfn_to_page(start), sz, paddr,
+		kvmap_with_mode((uintptr_t)pfn_to_page(start), sz, paddr,
 				PTE_R | PTE_W, VMAP_MODE_INTERIM);
 	}
 }
 
 void final_pgtable_enable(void)
 {
-	uint64_t satp = make_satp_sv39(symbol_phys(kernel_pgdir));
+	uint64_t satp = make_satp(symbol_phys(kernel_pgdir));
 	write_satp(satp);
 	sfence_vma();
 }
@@ -125,8 +125,8 @@ void paging_init(void)
 
 void switch_pgtable(pgd_t *pgd)
 {
-	uint64_t paddr = virt_to_phys((uint64_t)pgd);
-	uint64_t satp = make_satp_sv39(paddr);
+	uint64_t paddr = virt_to_phys((uintptr_t)pgd);
+	uint64_t satp = make_satp(paddr);
 	write_satp(satp);
 	sfence_vma();
 }

@@ -261,11 +261,14 @@ uint64_t sys_uname(void)
 	struct utsname name = {
 		.sysname = "BRK",
 		.nodename = "none",
-		.release = "0.0.1",
-		.version = "0.0.1",
+		.release = BRK_VERSION,
+		.version = BRK_VERSION,
 		.domainname = "none",
 	};
 	struct utsname *buf = syscall_arg_ptr(0);
+
+	if (!buf)
+		return -EFAULT;
 
 	strlcpy(name.machine, arch_uname_machine(), sizeof(name.machine));
 	*buf = name;
