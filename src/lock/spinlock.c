@@ -21,6 +21,21 @@ void spinlock_acquire(spinlock_t *lock)
 	lock->cpuid = current_cpuid();
 }
 
+bool spinlock_tryacquire(spinlock_t *lock)
+{
+	push_off();
+	if (spinlock_holding(lock))
+		panic("spinlock_tryacquire: name=%s,cpu=%d\n", lock->name,
+		      lock->cpuid);
+	if (__sync_lock_test_and_set(&lock->locked, 1) != 0) {
+		pop_off();
+		return false;
+	}
+	__sync_synchronize();
+	lock->cpuid = current_cpuid();
+	return true;
+}
+
 void spinlock_release(spinlock_t *lock)
 {
 	if (!spinlock_holding(lock))

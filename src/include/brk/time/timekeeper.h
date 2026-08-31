@@ -8,6 +8,7 @@ void timekeeper_init(void);
 void timekeeper_tick(void);
 
 uint64_t jiffies_get(void);
+uint64_t timekeeper_mono_ns(void);
 void *timekeeper_wait_chan(void);
 
 void timekeeper_get_mono_ts(struct timespec *ts);

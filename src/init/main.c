@@ -13,7 +13,6 @@
 #include <brk/mm/mm.h>
 #include <brk/mm/pgalloc.h>
 #include <brk/mm/vmalloc.h>
-#include <brk/printk/console.h>
 #include <brk/printk/printk.h>
 #include <brk/process/processor.h>
 #include <brk/process/task.h>
@@ -32,8 +31,6 @@ void start_kernel(void)
 
 	kmalloc_init();
 	vmalloc_init();
-
-	console_register(&early_console);
 
 	dtb_init_scan_cpu();
 	dtb_init_scan_virtio_dev();

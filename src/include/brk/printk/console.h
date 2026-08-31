@@ -11,11 +11,20 @@ struct console {
 	bool active;
 };
 
-extern struct console early_console;
-
 void console_register(struct console *console);
 void console_unregister(struct console *console);
 
-void console_write_all(const char *s, size_t n);
+bool console_has_active(void);
+
+/* Output one formatted record (<level>[sec.nsec] text) to all consoles. */
+void console_write_record(uint8_t level, uint64_t ts_nsec, const char *text,
+			  size_t len);
+
+/*
+ * Best-effort, lock-free variant used on the panic path when the printk
+ * lock cannot be taken; it may race with concurrent console output.
+ */
+void console_write_record_direct(uint8_t level, uint64_t ts_nsec,
+				 const char *text, size_t len);
 
 #endif

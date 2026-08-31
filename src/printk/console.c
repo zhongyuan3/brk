@@ -1,6 +1,9 @@
 #include <brk/base/list.h>
+#include <brk/lib/printf.h>
 #include <brk/lock/spinlock.h>
 #include <brk/printk/console.h>
+#include <brk/printk/printk.h>
+#include <brk/time/timeconst.h>
 
 static LIST_DEFINE(console_list);
 static SPINLOCK_DEFINE(console_lock);
@@ -10,6 +13,9 @@ void console_register(struct console *console)
 	spinlock_acquire(&console_lock);
 	list_add_tail(&console->list, &console_list);
 	spinlock_release(&console_lock);
+
+	/* Print any messages logged before a console was available. */
+	printk_flush_pending();
 }
 
 void console_unregister(struct console *console)
@@ -19,17 +25,54 @@ void console_unregister(struct console *console)
 	spinlock_release(&console_lock);
 }
 
-void console_write_all(const char *s, size_t n)
+bool console_has_active(void)
 {
 	struct console *con;
+	bool active = false;
 
 	spinlock_acquire(&console_lock);
+	list_for_each_entry(con, &console_list, list)
+		if (con->active)
+			active = true;
+	spinlock_release(&console_lock);
+	return active;
+}
+
+static void console_write_record_locked(uint8_t level, uint64_t ts_nsec,
+					const char *text, size_t len)
+{
+	struct console *con;
+	char prefix[32];
+	int pn;
+
+	pn = snprintf(prefix, sizeof(prefix), "<%d>[%9ld.%09ld] ", level,
+		      (long)(ts_nsec / NS_PER_SEC),
+		      (long)(ts_nsec % NS_PER_SEC));
+	if (pn < 0)
+		return;
+	if ((size_t)pn > sizeof(prefix))
+		pn = sizeof(prefix);
+
 	list_for_each_entry(con, &console_list, list) {
 		if (!con->active)
 			continue;
-		for (size_t i = 0; i < n; i++) {
-			con->put_char(con, s[i]);
-		}
+		for (int i = 0; i < pn; i++)
+			con->put_char(con, prefix[i]);
+		for (size_t i = 0; i < len; i++)
+			con->put_char(con, text[i]);
 	}
+}
+
+void console_write_record(uint8_t level, uint64_t ts_nsec, const char *text,
+			  size_t len)
+{
+	spinlock_acquire(&console_lock);
+	console_write_record_locked(level, ts_nsec, text, len);
 	spinlock_release(&console_lock);
+}
+
+void console_write_record_direct(uint8_t level, uint64_t ts_nsec,
+				 const char *text, size_t len)
+{
+	console_write_record_locked(level, ts_nsec, text, len);
 }

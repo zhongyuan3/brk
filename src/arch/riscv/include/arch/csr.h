@@ -131,9 +131,22 @@ static inline void write_sie(unsigned long x)
 
 static inline uint64_t read_time(void)
 {
+#if __riscv_xlen == 32
+	/*
+	 * The time CSR is 64 bits wide on RV32; the high half is exposed
+	 * through the timeh CSR (re-reading time would return the low half
+	 * again). Read hi first so lo cannot wrap between the two reads.
+	 */
+	uint32_t lo, hi;
+
+	asm volatile("csrr %0, timeh" : "=r"(hi));
+	asm volatile("csrr %0, time" : "=r"(lo));
+	return ((uint64_t)hi << 32) | lo;
+#else
 	uint64_t time;
 	asm volatile("csrr %0, time" : "=r"(time));
 	return time;
+#endif
 }
 
 static inline void intr_on(void)
