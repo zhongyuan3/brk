@@ -2,8 +2,8 @@
 #include <brk/base/assert.h>
 #include <brk/lib/printf.h>
 #include <brk/lib/string.h>
-#include <brk/printk/earlycon.h>
 #include <brk/printk/panic.h>
+#include <brk/printk/printk.h>
 
 static volatile int in_panic;
 static char panic_buf[512];
@@ -11,16 +11,16 @@ static char panic_buf[512];
 void panic(char const *fmt, ...)
 {
 	va_list ap;
+	size_t len;
 
 	intr_off();
 
 	/*
-	 * Never route panic through printk()/printk_lock: a panic may fire
-	 * while the current CPU already holds printk_lock, in which case
-	 * re-entering spinlock_acquire() would itself panic and recurse
-	 * forever (overflowing the stack and corrupting memory). Render the
-	 * message into a local buffer and push it straight to the SBI
-	 * console instead.
+	 * Never route panic through printk() itself: a panic may fire while
+	 * the current CPU already holds printk_lock, in which case re-entering
+	 * spinlock_acquire() would recurse forever. Render the message into a
+	 * local buffer and hand it to printk_panic_text(), which tolerates the
+	 * lock states found on the panic path.
 	 */
 	if (__sync_lock_test_and_set(&in_panic, 1)) {
 		for (;;)
@@ -28,13 +28,15 @@ void panic(char const *fmt, ...)
 	}
 
 	memset(panic_buf, 0, sizeof(panic_buf));
+	strlcpy(panic_buf, "PANIC: ", sizeof(panic_buf));
 
 	va_start(ap, fmt);
-	vsnprintf(panic_buf, sizeof(panic_buf) - 1, fmt, ap);
+	vsnprintf(panic_buf + 7, sizeof(panic_buf) - 7 - 1, fmt, ap);
 	va_end(ap);
 
-	earlycon_putstr("PANIC: ");
-	earlycon_putstr(panic_buf);
+	len = strnlen(panic_buf, sizeof(panic_buf));
+
+	printk_panic_text(panic_buf, len);
 
 	for (;;)
 		;

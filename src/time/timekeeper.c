@@ -21,7 +21,7 @@ static uint64_t cycles_to_ns(uint64_t cycles)
 	return sec * NS_PER_SEC + rem * NS_PER_SEC / freq;
 }
 
-static uint64_t timekeeper_mono_ns(void)
+uint64_t timekeeper_mono_ns(void)
 {
 	return cycles_to_ns(timer_get_time() - mono_base_cycles);
 }
