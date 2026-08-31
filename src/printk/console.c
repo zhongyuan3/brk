@@ -38,16 +38,25 @@ bool console_has_active(void)
 	return active;
 }
 
+static const char *const console_level_strs[] = {
+	[KLOG_DEBUG] = "DEBUG",
+	[KLOG_INFO] = "INFO",
+	[KLOG_WARN] = "WARN",
+	[KLOG_ERROR] = "ERR",
+};
+
 static void console_write_record_locked(uint8_t level, uint64_t ts_nsec,
 					const char *text, size_t len)
 {
 	struct console *con;
-	char prefix[32];
+	const char *lvl;
+	char prefix[48];
 	int pn;
 
-	pn = snprintf(prefix, sizeof(prefix), "<%d>[%9ld.%09ld] ", level,
-		      (long)(ts_nsec / NS_PER_SEC),
-		      (long)(ts_nsec % NS_PER_SEC));
+	lvl = level <= KLOG_ERROR ? console_level_strs[level] : "?";
+	pn = snprintf(prefix, sizeof(prefix), "[%5lu.%06lu] [%5s] ",
+		      (unsigned long)(ts_nsec / NS_PER_SEC),
+		      (unsigned long)((ts_nsec % NS_PER_SEC) / NS_PER_US), lvl);
 	if (pn < 0)
 		return;
 	if ((size_t)pn > sizeof(prefix))
