@@ -1,23 +1,23 @@
 #include <arch/pgtable.h>
-#include <brk/base/kernel.h>
-#include <brk/base/list.h>
-#include <brk/base/types.h>
-#include <brk/drivers/chrdev.h>
-#include <brk/drivers/of.h>
-#include <brk/drivers/tty.h>
-#include <brk/drivers/uart.h>
-#include <brk/init/initcall.h>
-#include <brk/irq/irq.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/ioremap.h>
-#include <brk/mm/kmalloc.h>
-#include <brk/mm/mm.h>
-#include <brk/mm/mmio.h>
-#include <brk/printk/console.h>
-#include <brk/printk/panic.h>
-#include <brk/printk/printk.h>
-#include <uapi/brk/errno.h>
-#include <uapi/brk/types.h>
+#include <brk/chrdev.h>
+#include <brk/console.h>
+#include <brk/initcall.h>
+#include <brk/ioremap.h>
+#include <brk/irq.h>
+#include <brk/kernel.h>
+#include <brk/kmalloc.h>
+#include <brk/list.h>
+#include <brk/mm.h>
+#include <brk/mmio.h>
+#include <brk/of.h>
+#include <brk/panic.h>
+#include <brk/printk.h>
+#include <brk/spinlock.h>
+#include <brk/tty.h>
+#include <brk/types.h>
+#include <brk/uart.h>
+#include <uapi/errno.h>
+#include <uapi/types.h>
 
 #define RHR 0 /* Receiver Holding Register */
 #define THR 0 /* Transmitter Holding Register */

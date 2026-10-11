@@ -1,17 +1,17 @@
 #include <arch/mm.h>
-#include <brk/base/types.h>
-#include <brk/drivers/of.h>
-#include <brk/drivers/uart.h>
-#include <brk/drivers/virtio.h>
-#include <brk/init/initcall.h>
-#include <brk/mm/kmalloc.h>
-#include <brk/mm/memblock.h>
-#include <brk/mm/mm.h>
-#include <brk/printk/panic.h>
-#include <brk/printk/printk.h>
-#include <brk/time/clocksource.h>
+#include <brk/clocksource.h>
+#include <brk/initcall.h>
+#include <brk/kmalloc.h>
+#include <brk/memblock.h>
+#include <brk/mm.h>
+#include <brk/of.h>
+#include <brk/panic.h>
+#include <brk/printk.h>
+#include <brk/types.h>
+#include <brk/uart.h>
+#include <brk/virtio.h>
 #include <libfdt.h>
-#include <uapi/brk/errno.h>
+#include <uapi/errno.h>
 
 uint64_t dtb_phys;
 

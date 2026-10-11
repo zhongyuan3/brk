@@ -2,9 +2,9 @@
 #define ARCH_TRAPFRAME_H
 
 #include <arch/processor.h>
-#include <brk/base/types.h>
-#include <brk/lib/string.h>
-#include <brk/printk/panic.h>
+#include <brk/panic.h>
+#include <brk/string.h>
+#include <brk/types.h>
 
 struct task_control_block;
 

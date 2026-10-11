@@ -1,5 +1,5 @@
-#include <brk/base/types.h>
-#include <brk/lib/rand.h>
+#include <brk/rand.h>
+#include <brk/types.h>
 
 static uint64_t xorshift_state;
 

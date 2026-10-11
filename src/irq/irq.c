@@ -1,8 +1,8 @@
-#include <brk/irq/irq.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/kmalloc.h>
-#include <brk/printk/panic.h>
-#include <uapi/brk/errno.h>
+#include <brk/irq.h>
+#include <brk/kmalloc.h>
+#include <brk/panic.h>
+#include <brk/spinlock.h>
+#include <uapi/errno.h>
 
 static struct irq_chip *irq_chip;
 static irq_handler_t *irq_handlers;

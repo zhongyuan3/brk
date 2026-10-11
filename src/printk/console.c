@@ -1,9 +1,9 @@
-#include <brk/base/list.h>
-#include <brk/lib/printf.h>
-#include <brk/lock/spinlock.h>
-#include <brk/printk/console.h>
-#include <brk/printk/printk.h>
-#include <brk/time/timeconst.h>
+#include <brk/console.h>
+#include <brk/list.h>
+#include <brk/printf.h>
+#include <brk/printk.h>
+#include <brk/spinlock.h>
+#include <brk/timeconst.h>
 
 static LIST_DEFINE(console_list);
 static SPINLOCK_DEFINE(console_lock);

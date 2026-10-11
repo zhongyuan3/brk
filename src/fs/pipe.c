@@ -1,21 +1,21 @@
 #include <arch/page.h>
-#include <brk/base/error.h>
-#include <brk/base/list.h>
-#include <brk/base/types.h>
-#include <brk/fs/dcache.h>
-#include <brk/fs/fdtable.h>
-#include <brk/fs/fs.h>
-#include <brk/fs/mount.h>
-#include <brk/fs/path.h>
-#include <brk/lib/string.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/kmalloc.h>
-#include <brk/printk/panic.h>
-#include <brk/process/task.h>
-#include <brk/time/ktime.h>
-#include <uapi/brk/errno.h>
-#include <uapi/brk/fcntl.h>
-#include <uapi/brk/stat.h>
+#include <brk/dcache.h>
+#include <brk/error.h>
+#include <brk/fdtable.h>
+#include <brk/fs.h>
+#include <brk/kmalloc.h>
+#include <brk/ktime.h>
+#include <brk/list.h>
+#include <brk/mount.h>
+#include <brk/panic.h>
+#include <brk/path.h>
+#include <brk/spinlock.h>
+#include <brk/string.h>
+#include <brk/task.h>
+#include <brk/types.h>
+#include <uapi/errno.h>
+#include <uapi/fcntl.h>
+#include <uapi/stat.h>
 
 #define PIPEFS_MAGIC 0x50495045 /* "PIPE" */
 #define PIPE_RING_CAP 4096

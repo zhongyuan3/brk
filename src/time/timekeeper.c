@@ -1,11 +1,11 @@
-#include <brk/drivers/rtc.h>
-#include <brk/lock/spinlock.h>
-#include <brk/process/task.h>
-#include <brk/time/clocksource.h>
-#include <brk/time/timeconst.h>
-#include <brk/time/timekeeper.h>
-#include <brk/time/timer.h>
-#include <uapi/brk/errno.h>
+#include <brk/clocksource.h>
+#include <brk/rtc.h>
+#include <brk/spinlock.h>
+#include <brk/task.h>
+#include <brk/timeconst.h>
+#include <brk/timekeeper.h>
+#include <brk/timer.h>
+#include <uapi/errno.h>
 
 static uint64_t mono_base_cycles;
 static int64_t wall_to_mono_ns;

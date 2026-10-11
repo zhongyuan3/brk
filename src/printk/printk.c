@@ -1,12 +1,12 @@
-#include <brk/base/kernel.h>
-#include <brk/lib/printf.h>
-#include <brk/lib/string.h>
-#include <brk/lock/spinlock.h>
-#include <brk/printk/console.h>
-#include <brk/printk/logbuf.h>
-#include <brk/printk/printk.h>
-#include <brk/time/ktime.h>
-#include <uapi/brk/errno.h>
+#include <brk/console.h>
+#include <brk/kernel.h>
+#include <brk/ktime.h>
+#include <brk/logbuf.h>
+#include <brk/printf.h>
+#include <brk/printk.h>
+#include <brk/spinlock.h>
+#include <brk/string.h>
+#include <uapi/errno.h>
 
 static SPINLOCK_DEFINE(printk_lock);
 static char printk_buf[1024];

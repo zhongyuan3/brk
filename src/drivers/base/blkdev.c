@@ -1,21 +1,21 @@
 #include <arch/page.h>
-#include <brk/base/error.h>
-#include <brk/base/kernel.h>
-#include <brk/base/types.h>
-#include <brk/drivers/blkdev.h>
-#include <brk/drivers/device.h>
-#include <brk/fs/fs.h>
-#include <brk/init/initcall.h>
-#include <brk/lib/bitmap.h>
-#include <brk/lib/string.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/kmalloc.h>
-#include <brk/mm/mm.h>
-#include <brk/mm/pagecache.h>
-#include <brk/mm/slab.h>
-#include <brk/printk/printk.h>
-#include <uapi/brk/errno.h>
-#include <uapi/brk/types.h>
+#include <brk/bitmap.h>
+#include <brk/blkdev.h>
+#include <brk/device.h>
+#include <brk/error.h>
+#include <brk/fs.h>
+#include <brk/initcall.h>
+#include <brk/kernel.h>
+#include <brk/kmalloc.h>
+#include <brk/mm.h>
+#include <brk/pagecache.h>
+#include <brk/printk.h>
+#include <brk/slab.h>
+#include <brk/spinlock.h>
+#include <brk/string.h>
+#include <brk/types.h>
+#include <uapi/errno.h>
+#include <uapi/types.h>
 
 struct block_dev_region {
 	struct hlist_node entry;

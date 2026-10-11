@@ -1,15 +1,15 @@
-#include <brk/base/types.h>
-#include <brk/drivers/tty.h>
-#include <brk/lib/refcnt.h>
-#include <brk/lib/string.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/kmalloc.h>
-#include <brk/process/signal.h>
-#include <brk/process/task.h>
-#include <uapi/brk/errno.h>
-#include <uapi/brk/ioctl.h>
-#include <uapi/brk/signal.h>
-#include <uapi/brk/types.h>
+#include <brk/kmalloc.h>
+#include <brk/refcnt.h>
+#include <brk/signal.h>
+#include <brk/spinlock.h>
+#include <brk/string.h>
+#include <brk/task.h>
+#include <brk/tty.h>
+#include <brk/types.h>
+#include <uapi/errno.h>
+#include <uapi/ioctl.h>
+#include <uapi/signal.h>
+#include <uapi/types.h>
 
 #define CTRL(x) ((x) - '@')
 

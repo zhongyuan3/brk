@@ -1,7 +1,7 @@
 #ifndef ARCH_TRAP_H
 #define ARCH_TRAP_H
 
-#include <brk/base/types.h>
+#include <brk/types.h>
 
 /*
  * scause is XLEN-wide: the interrupt bit is bit 63 on RV64 and bit 31

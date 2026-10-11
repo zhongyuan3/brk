@@ -1,8 +1,8 @@
-#include <brk/base/kernel.h>
-#include <brk/lib/string.h>
-#include <brk/printk/console.h>
-#include <brk/printk/logbuf.h>
-#include <brk/time/ktime.h>
+#include <brk/console.h>
+#include <brk/kernel.h>
+#include <brk/ktime.h>
+#include <brk/logbuf.h>
+#include <brk/string.h>
 
 /*
  * Log ring buffer, modeled on Linux's log_buf. Every printk() record is
