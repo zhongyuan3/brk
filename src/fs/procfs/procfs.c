@@ -45,25 +45,25 @@
  * once dcache prunes the dentry.
  */
 
-#include <brk/base/error.h>
-#include <brk/base/kernel.h>
-#include <brk/base/list.h>
-#include <brk/base/types.h>
-#include <brk/fs/dcache.h>
-#include <brk/fs/fs.h>
-#include <brk/fs/path.h>
-#include <brk/lib/printf.h>
-#include <brk/lib/string.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/kmalloc.h>
-#include <brk/mm/pagecache.h>
-#include <brk/mm/pgalloc.h>
-#include <brk/printk/printk.h>
-#include <brk/process/task.h>
-#include <brk/time/ktime.h>
-#include <uapi/brk/dirent.h>
-#include <uapi/brk/errno.h>
-#include <uapi/brk/stat.h>
+#include <brk/dcache.h>
+#include <brk/error.h>
+#include <brk/fs.h>
+#include <brk/kernel.h>
+#include <brk/kmalloc.h>
+#include <brk/ktime.h>
+#include <brk/list.h>
+#include <brk/pagecache.h>
+#include <brk/path.h>
+#include <brk/pgalloc.h>
+#include <brk/printf.h>
+#include <brk/printk.h>
+#include <brk/spinlock.h>
+#include <brk/string.h>
+#include <brk/task.h>
+#include <brk/types.h>
+#include <uapi/dirent.h>
+#include <uapi/errno.h>
+#include <uapi/stat.h>
 
 #define PROCFS_MAGIC 0x9fa0
 #define PROCFS_BUF_SIZE PAGE_SIZE

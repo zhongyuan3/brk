@@ -1,12 +1,12 @@
 #include "brkfs.h"
-#include <brk/base/error.h>
-#include <brk/base/types.h>
-#include <brk/fs/fs.h>
-#include <brk/lib/bitmap.h>
-#include <brk/lib/string.h>
-#include <brk/mm/pagecache.h>
-#include <brk/printk/printk.h>
-#include <uapi/brk/errno.h>
+#include <brk/bitmap.h>
+#include <brk/error.h>
+#include <brk/fs.h>
+#include <brk/pagecache.h>
+#include <brk/printk.h>
+#include <brk/string.h>
+#include <brk/types.h>
+#include <uapi/errno.h>
 
 int brkfs_get_block(struct brkfs_sb_info *sbi, uint32_t bno,
 		    struct brkfs_block *bb)

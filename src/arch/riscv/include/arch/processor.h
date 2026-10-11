@@ -1,7 +1,7 @@
 #ifndef ARCH_PROCESSOR_H
 #define ARCH_PROCESSOR_H
 
-#include <brk/base/types.h>
+#include <brk/types.h>
 
 #if __riscv_xlen == 32
 typedef uint32_t reg_t;

@@ -1,8 +1,8 @@
-#include <brk/base/types.h>
-#include <brk/lib/printf.h>
-#include <brk/lib/string.h>
+#include <brk/printf.h>
+#include <brk/string.h>
+#include <brk/types.h>
 #include <limits.h>
-#include <uapi/brk/errno.h>
+#include <uapi/errno.h>
 
 #define FMT_F_ZERO_PAD (1U << 0)
 #define FMT_F_LEFT_ALIGN (1U << 1)

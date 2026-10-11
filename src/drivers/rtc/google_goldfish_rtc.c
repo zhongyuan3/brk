@@ -1,13 +1,13 @@
 #include <arch/pgtable.h>
-#include <brk/drivers/of.h>
-#include <brk/drivers/rtc.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/ioremap.h>
-#include <brk/mm/mm.h>
-#include <brk/mm/mmio.h>
-#include <brk/printk/printk.h>
-#include <brk/time/timeconst.h>
-#include <uapi/brk/time.h>
+#include <brk/ioremap.h>
+#include <brk/mm.h>
+#include <brk/mmio.h>
+#include <brk/of.h>
+#include <brk/printk.h>
+#include <brk/rtc.h>
+#include <brk/spinlock.h>
+#include <brk/timeconst.h>
+#include <uapi/time.h>
 
 /* Android Goldfish RTC (QEMU virt), see QEMU hw/rtc/goldfish_rtc.c */
 #define RTC_TIME_LOW 0x00u

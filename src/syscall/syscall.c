@@ -1,10 +1,10 @@
 #include <arch/syscall.h>
-#include <brk/base/kernel.h>
-#include <brk/printk/panic.h>
-#include <brk/printk/printk.h>
-#include <brk/process/task.h>
-#include <brk/syscall/syscall.h>
-#include <uapi/brk/errno.h>
+#include <brk/kernel.h>
+#include <brk/panic.h>
+#include <brk/printk.h>
+#include <brk/syscall.h>
+#include <brk/task.h>
+#include <uapi/errno.h>
 
 static uint64_t (*systable[])(void) = {
 	[SYS_read] = sys_read,

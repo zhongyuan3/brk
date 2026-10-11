@@ -1,10 +1,10 @@
-#include <brk/base/error.h>
-#include <brk/fs/fdtable.h>
-#include <brk/fs/fs.h>
-#include <brk/lib/refcnt.h>
-#include <brk/lock/spinlock.h>
-#include <brk/mm/kmalloc.h>
-#include <uapi/brk/errno.h>
+#include <brk/error.h>
+#include <brk/fdtable.h>
+#include <brk/fs.h>
+#include <brk/kmalloc.h>
+#include <brk/refcnt.h>
+#include <brk/spinlock.h>
+#include <uapi/errno.h>
 
 struct file_desc_table *fdtable_alloc(void)
 {

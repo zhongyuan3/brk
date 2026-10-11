@@ -1,7 +1,7 @@
 #ifndef ARCH_PGTABLE_TYPES_H
 #define ARCH_PGTABLE_TYPES_H
 
-#include <brk/base/types.h>
+#include <brk/types.h>
 
 /*
  * RV64/SV39: three-level page table (PGD -> PMD -> PTE), 64-bit entries.

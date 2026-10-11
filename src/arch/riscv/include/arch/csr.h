@@ -1,7 +1,7 @@
 #ifndef ARCH_CSR_H
 #define ARCH_CSR_H
 
-#include <brk/base/types.h>
+#include <brk/types.h>
 
 /*
  * XLEN-wide CSRs are read/written through unsigned long: on RV32 these

@@ -1,13 +1,13 @@
 #include <arch/pgtable.h>
-#include <brk/base/types.h>
-#include <brk/drivers/of.h>
-#include <brk/drivers/plic.h>
-#include <brk/irq/irq.h>
-#include <brk/lib/string.h>
-#include <brk/mm/ioremap.h>
-#include <brk/mm/mm.h>
-#include <brk/printk/panic.h>
-#include <uapi/brk/errno.h>
+#include <brk/ioremap.h>
+#include <brk/irq.h>
+#include <brk/mm.h>
+#include <brk/of.h>
+#include <brk/panic.h>
+#include <brk/plic.h>
+#include <brk/string.h>
+#include <brk/types.h>
+#include <uapi/errno.h>
 
 #define PLIC_PRIORITY_OFFSET 0x000000
 #define PLIC_PENDING_OFFSET 0x001000

@@ -1,4 +1,4 @@
-#include <brk/init/initcall.h>
+#include <brk/initcall.h>
 
 extern initcall_t __initcall_start[];
 extern initcall_t __initcall_end[];
