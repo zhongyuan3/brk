@@ -10,48 +10,32 @@
 #include <brk/types.h>
 #include <libfdt.h>
 
-static void early_pgtable_hang(const char *msg)
-	__attribute__((section(".text.head"), noreturn));
-static uint64_t early_pgtable_alloc_table(void)
-	__attribute__((section(".text.head")));
-static void early_pgtable_map_range(uint64_t addr, size_t size, uint64_t paddr,
-				    unsigned int flags)
-	__attribute__((section(".text.head")));
-void early_pgtable_map(uintptr_t dtb, size_t load_offset)
-	__attribute__((section(".text.head")));
-void early_pgtable_enable(size_t load_offset)
-	__attribute__((section(".text.head")));
-
-static void early_pgtable_hang(const char *msg)
-{
-	sbi_console_putstr(msg);
-	for (;;)
-		asm volatile("wfi");
-}
-
 /*
  * All page tables below the top-level PGD are carved out of the early_pgdir
  * region. The frontier must be global: the identity, link and DTB mappings
  * are built by separate map_range() calls that must not reuse each other's
  * tables.
  */
-static uint64_t early_pgtable_next_table;
+static uint64_t rsv_page_next;
 
-static uint64_t early_pgtable_alloc_table(void)
+static uint64_t alloc_early_rsv_page(void)
 {
 	uint64_t end =
 		(uintptr_t)early_pgdir + NR_EARLY_PGDIR_PAGES * PAGE_SIZE;
 
-	if (early_pgtable_next_table + PAGE_SIZE < end) {
-		early_pgtable_next_table += PAGE_SIZE;
-		return early_pgtable_next_table;
+	if (rsv_page_next + PAGE_SIZE < end) {
+		rsv_page_next += PAGE_SIZE;
+		return rsv_page_next;
 	}
 
-	early_pgtable_hang("early pgtable OOM\n");
+	sbi_console_putstr("early pgtable OOM\n");
+	intr_off();
+	for (;;) {
+	}
 }
 
-static void early_pgtable_map_range(uint64_t addr, size_t size, uint64_t paddr,
-				    unsigned int flags)
+static void map_early(uint64_t addr, size_t size, uint64_t paddr,
+		      unsigned int flags)
 {
 #if __riscv_xlen == 32
 	/*
@@ -69,7 +53,7 @@ static void early_pgtable_map_range(uint64_t addr, size_t size, uint64_t paddr,
 		if (pgd_present(*pgdep)) {
 			pt_phys = pgd_get_pmd(*pgdep);
 		} else {
-			pt_phys = early_pgtable_alloc_table();
+			pt_phys = alloc_early_rsv_page();
 			pgd_set_pmd(pgdep, pt_phys);
 		}
 		ptep = (pte_t *)(uintptr_t)pt_phys + pte_index(addr);
@@ -88,7 +72,7 @@ static void early_pgtable_map_range(uint64_t addr, size_t size, uint64_t paddr,
 		if (pgd_present(*pgdep)) {
 			pmd_phys = pgd_get_pmd(*pgdep);
 		} else {
-			pmd_phys = early_pgtable_alloc_table();
+			pmd_phys = alloc_early_rsv_page();
 			pgd_set_pmd(pgdep, pmd_phys);
 		}
 		pmdep = (pmd_t *)pmd_phys + pmd_index(addr);
@@ -99,7 +83,7 @@ static void early_pgtable_map_range(uint64_t addr, size_t size, uint64_t paddr,
 #endif
 }
 
-void early_pgtable_map(uintptr_t dtb, size_t load_offset)
+static void __setup_vm_early(uintptr_t dtb, size_t load_offset)
 {
 	uint64_t kern_end;
 	size_t size;
@@ -112,7 +96,7 @@ void early_pgtable_map(uintptr_t dtb, size_t load_offset)
 	 */
 	(void)load_offset;
 
-	early_pgtable_next_table = (uintptr_t)early_pgdir;
+	rsv_page_next = (uintptr_t)early_pgdir;
 
 #if __riscv_xlen == 32
 	kern_end = round_up((uintptr_t)_ekernel, PAGE_SIZE_4M);
@@ -123,11 +107,10 @@ void early_pgtable_map(uintptr_t dtb, size_t load_offset)
 	flags = PTE_R | PTE_W | PTE_X;
 
 	/* Identity map so execution continues after satp is enabled. */
-	early_pgtable_map_range((uintptr_t)_skernel, size, (uintptr_t)_skernel,
-				flags);
+	map_early((uintptr_t)_skernel, size, (uintptr_t)_skernel, flags);
 	/* Map the kernel link address to the physical load address. */
-	early_pgtable_map_range((uintptr_t)KERNEL_LINK_ADDR, size,
-				(uintptr_t)_skernel, flags);
+	map_early((uintptr_t)KERNEL_LINK_ADDR, size, (uintptr_t)_skernel,
+		  flags);
 
 	size_t dtb_end = dtb + fdt_totalsize((uintptr_t)dtb);
 	if (dtb >= (uintptr_t)_skernel && dtb_end <= kern_end)
@@ -147,16 +130,15 @@ void early_pgtable_map(uintptr_t dtb, size_t load_offset)
 #endif
 	size = map_end - map_start;
 	flags = PTE_R | PTE_W;
-	early_pgtable_map_range(map_start, size, map_start, flags);
+	map_early(map_start, size, map_start, flags);
 }
 
-void early_pgtable_enable(size_t load_offset)
+void setup_vm_early(uintptr_t dtb, size_t load_offset, int boot)
 {
-	/*
-	 * early_pgdir resolves to a physical address here via PC-relative
-	 * access; load_offset is unused but kept for a uniform boot ABI.
-	 */
-	(void)load_offset;
+	if (boot) {
+		__setup_vm_early(dtb, load_offset);
+	}
+
 	write_satp(make_satp((uintptr_t)early_pgdir));
 	sfence_vma();
 	fence_i();
