@@ -24,6 +24,14 @@ CPU := 1
 KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(BUILD)-$(XLEN)
 endif
 
+# Toolchain selection follows the Linux kernel: the user names the cross
+# compiler with CROSS_COMPILE on the command line or in the environment, e.g.
+#
+#   make CROSS_COMPILE=riscv64-unknown-elf-
+#
+# Leave it empty to use the host tools. Individual tools may be overridden
+# (CC, LD, GDB, ...) just like with the kernel.
+CROSS_COMPILE ?=
 CC := $(CROSS_COMPILE)gcc
 CPP := $(CC) -E
 LD := $(CROSS_COMPILE)ld
@@ -31,6 +39,7 @@ AS := $(CROSS_COMPILE)as
 AR := $(CROSS_COMPILE)ar
 OBJCOPY := $(CROSS_COMPILE)objcopy
 OBJDUMP := $(CROSS_COMPILE)objdump
+GDB ?= $(CROSS_COMPILE)gdb
 
 CFLAGS += -Wall
 CFLAGS += -Wextra

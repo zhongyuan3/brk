@@ -19,5 +19,3 @@ $(error invalid XLEN '$(XLEN)' (expected 32 or 64))
 endif
 
 QEMU_OPTS := -machine virt -nographic
-
-include scripts/riscv_toolchain.mk
