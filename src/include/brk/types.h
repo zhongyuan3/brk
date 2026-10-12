@@ -1,6 +1,7 @@
 #ifndef BRK_TYPES_H
 #define BRK_TYPES_H
 
+#include <brk/static_assert.h>
 #include <uapi/types.h>
 
 typedef unsigned int fmode_t;
@@ -21,6 +22,8 @@ struct hlist_node {
 	struct hlist_node *next, **pprev;
 };
 
+typedef unsigned long long paddr_t;
+
 /*
  * printf() format specifiers for the fixed-width integer types, mirroring
  * the PRI* macros from <inttypes.h>.  The prefix length modifiers follow
@@ -35,12 +38,37 @@ struct hlist_node {
 #define __PRIL64 "ll"
 #define __PRILPTR ""
 #define __PRILMAX "ll"
+
+typedef signed char i8;
+typedef signed short i16;
+typedef signed long i32;
+typedef signed long long i64;
+
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned long u32;
+typedef unsigned long long u64;
 #else
 #define __PRIL32 ""
 #define __PRIL64 "l"
 #define __PRILPTR "l"
 #define __PRILMAX "l"
+
+typedef signed char i8;
+typedef signed short i16;
+typedef signed int i32;
+typedef signed long i64;
+
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef unsigned long u64;
 #endif
+
+static_assert(sizeof(i8) == 1, "size of i8 is not equal to 1 byte");
+static_assert(sizeof(i16) == 2, "size of i16 is not equal to 2 bytes");
+static_assert(sizeof(i32) == 4, "size of i32 is not equal to 4 bytes");
+static_assert(sizeof(i64) == 8, "size of i64 is not equal to 8 bytes");
 
 #define PRId8 "hhd"
 #define PRIi8 "hhi"
