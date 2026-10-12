@@ -105,7 +105,7 @@ static void virtio_blk_vq_used(struct virtq *vq, uint32_t id, void *ctx)
 	(void)vq;
 
 	if (id >= vblk->vq.num || !vblk->slots[id].trans)
-		panic("%s(): invalid used id %u\n", __func__, id);
+		panic("%s(): invalid used id %" PRIu32 "\n", __func__, id);
 
 	io = vblk->slots[id].trans;
 	io->completed = true;

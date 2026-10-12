@@ -54,9 +54,10 @@ static void console_write_record_locked(uint8_t level, uint64_t ts_nsec,
 	int pn;
 
 	lvl = level <= KLOG_ERROR ? console_level_strs[level] : "?";
-	pn = snprintf(prefix, sizeof(prefix), "[%5lu.%06lu] [%5s] ",
-		      (unsigned long)(ts_nsec / NS_PER_SEC),
-		      (unsigned long)((ts_nsec % NS_PER_SEC) / NS_PER_US), lvl);
+	pn = snprintf(prefix, sizeof(prefix),
+		      "[%5" PRIu64 ".%06" PRIu64 "] [%5s] ",
+		      (uint64_t)(ts_nsec / NS_PER_SEC),
+		      (uint64_t)((ts_nsec % NS_PER_SEC) / NS_PER_US), lvl);
 	if (pn < 0)
 		return;
 	if ((size_t)pn > sizeof(prefix))
