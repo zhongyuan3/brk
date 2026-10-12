@@ -451,14 +451,13 @@ static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
 			"Pid:\t%ld\n"
 			"PPid:\t%ld\n"
 			"Killed:\t%d\n"
-			"Brk:\t0x%lx\n"
-			"Utime:\t%lu\n"
-			"Stime:\t%lu\n",
+			"Brk:\t0x%" PRIx64 "\n"
+			"Utime:\t%" PRIu64 "\n"
+			"Stime:\t%" PRIu64 "\n",
 			info.name, procfs_state_letter(info.state),
 			procfs_state_name(info.state), (long)info.pid,
-			(long)info.ppid, info.killed ? 1 : 0,
-			(unsigned long)info.brk, (unsigned long)info.utime,
-			(unsigned long)info.ktime);
+			(long)info.ppid, info.killed ? 1 : 0, info.brk,
+			info.utime, info.ktime);
 }
 
 static int procfs_show_pid_stat(const struct procfs_entry *e, pid_t pid,
@@ -475,11 +474,12 @@ static int procfs_show_pid_stat(const struct procfs_entry *e, pid_t pid,
 	 * tools (ps, top) can parse us:
 	 *   pid (comm) state ppid utime stime brk
 	 */
-	return snprintf(buf, size, "%ld (%s) %c %ld %lu %lu 0x%lx\n",
+	return snprintf(buf, size,
+			"%ld (%s) %c %ld %" PRIu64 " %" PRIu64 " 0x%" PRIx64
+			"\n",
 			(long)info.pid, info.name,
 			procfs_state_letter(info.state), (long)info.ppid,
-			(unsigned long)info.utime, (unsigned long)info.ktime,
-			(unsigned long)info.brk);
+			info.utime, info.ktime, info.brk);
 }
 
 static int procfs_show_pid_cmdline(const struct procfs_entry *e, pid_t pid,

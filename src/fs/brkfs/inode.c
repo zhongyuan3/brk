@@ -503,7 +503,7 @@ int brkfs_inode_read(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 	struct brkfs_block bb;
 
 	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
-		klog_warn("%s(): Invalid ino: %u\n", __func__, ino);
+		klog_warn("%s(): Invalid ino: %" PRIu32 "\n", __func__, ino);
 		return -EINVAL;
 	}
 
@@ -550,7 +550,7 @@ int brkfs_inode_write(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 	struct brkfs_block bb;
 
 	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
-		klog_warn("%s(): Invalid ino: %u\n", __func__, ino);
+		klog_warn("%s(): Invalid ino: %" PRIu32 "\n", __func__, ino);
 		return -EINVAL;
 	}
 
@@ -603,7 +603,7 @@ int brkfs_inode_alloc(struct brkfs_sb_info *sbi, uint32_t *ino)
 int brkfs_inode_free(struct brkfs_sb_info *sbi, uint32_t ino)
 {
 	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
-		klog_warn("%s(): Invalid ino: %u\n", __func__, ino);
+		klog_warn("%s(): Invalid ino: %" PRIu32 "\n", __func__, ino);
 		return -EINVAL;
 	}
 	ino -= 1;

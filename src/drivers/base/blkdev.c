@@ -282,7 +282,8 @@ int blkdev_check_bounds(struct block_dev *bd, uint64_t blk_id, uint32_t blk_cnt)
 		return -ENXIO;
 	}
 	if (bd->phy_bcnt - blk_id < blk_cnt) {
-		klog_warn("%s(): invalid blk_cnt %u, phy_bcnt %" PRIu64 "\n",
+		klog_warn("%s(): invalid blk_cnt %" PRIu32 ", phy_bcnt %" PRIu64
+			  "\n",
 			  __func__, blk_cnt, bd->phy_bcnt);
 		return -ENXIO;
 	}
