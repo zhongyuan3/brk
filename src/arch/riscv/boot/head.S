@@ -15,8 +15,7 @@
 	.endm
 
 	.macro setup_per_hart_stack hart_reg
-	li t0, 1
-	slli t0, t0, PAGE_SHIFT
+	li t0, PAGE_SIZE
 	li t1, NR_INIT_STACK_PAGES
 	mul t0, t0, t1
 	addi t1, \hart_reg, 1
@@ -40,7 +39,12 @@ _start:
 	mv HART_ID_SAVED_REG, a0
 	mv DTB_PHYS_SAVED_REG, a1
 
+	/* Make sure current_cpuid() can read the hart id through the sscratch
+	 * register. */
 	csrw sscratch, a0
+
+	/* Set the current task pointer to NULL to prevent scheduling errors
+	 * during clock interrupts. */
 	li tp, 0
 
 	compute_load_offset
@@ -63,10 +67,8 @@ _start:
 
 	mv a0, DTB_PHYS_SAVED_REG
 	mv a1, LOAD_OFFSET_SAVED_REG
-	call early_pgtable_map
-
-	mv a0, LOAD_OFFSET_SAVED_REG
-	call early_pgtable_enable
+	li a2, 1
+	call setup_vm_early
 
 	la a0, boot_cpuid
 #if __riscv_xlen == 32
@@ -96,14 +98,23 @@ _start:
 hart_entry:
 	mv HART_ID_SAVED_REG, a0
 
+	/* Make sure current_cpuid() can read the hart id through the sscratch
+	 * register. */
 	csrw sscratch, a0
+
+	/* Set the current task pointer to NULL to prevent scheduling errors
+	 * during clock interrupts. */
 	li tp, 0
 
 	compute_load_offset
 	setup_per_hart_stack HART_ID_SAVED_REG
 
-	mv a0, LOAD_OFFSET_SAVED_REG
-	call early_pgtable_enable
+	/* Non-boot hart ignore the first and second arguments. */
+	li a0, 0
+	li a1, 0
+
+	li a2, 0
+	call setup_vm_early
 
 	jump_to_kernel_virt start_hart
 #endif
