@@ -138,8 +138,8 @@ ssize_t tty_read(struct tty *tty, void *buf, size_t n)
 ssize_t tty_write(struct tty *tty, const void *buf, size_t n)
 {
 	const struct tty_ops *ops = tty->port->driver->ops;
-	const uint8_t *p = buf;
-	const uint8_t *end = p + n;
+	const u8 *p = buf;
+	const u8 *end = p + n;
 	int err = 0;
 
 	spinlock_acquire(&tty->port->lock);
@@ -150,7 +150,7 @@ ssize_t tty_write(struct tty *tty, const void *buf, size_t n)
 		p++;
 	}
 	spinlock_release(&tty->port->lock);
-	return err ? err : p - (const uint8_t *)buf;
+	return err ? err : p - (const u8 *)buf;
 }
 
 void tty_receive(struct tty *tty, int c)

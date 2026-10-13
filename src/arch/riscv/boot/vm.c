@@ -16,12 +16,11 @@
  * are built by separate map_range() calls that must not reuse each other's
  * tables.
  */
-static uint64_t rsv_page_next;
+static u64 rsv_page_next;
 
-static uint64_t alloc_early_rsv_page(void)
+static u64 alloc_early_rsv_page(void)
 {
-	uint64_t end =
-		(uintptr_t)early_pgdir + NR_EARLY_PGDIR_PAGES * PAGE_SIZE;
+	u64 end = (uintptr_t)early_pgdir + NR_EARLY_PGDIR_PAGES * PAGE_SIZE;
 
 	if (rsv_page_next + PAGE_SIZE < end) {
 		rsv_page_next += PAGE_SIZE;
@@ -34,8 +33,7 @@ static uint64_t alloc_early_rsv_page(void)
 	}
 }
 
-static void map_early(uint64_t addr, size_t size, uint64_t paddr,
-		      unsigned int flags)
+static void map_early(u64 addr, size_t size, u64 paddr, unsigned int flags)
 {
 #if __riscv_xlen == 32
 	/*
@@ -45,8 +43,8 @@ static void map_early(uint64_t addr, size_t size, uint64_t paddr,
 	 */
 	pgd_t *pgdep;
 	pte_t *ptep;
-	uint64_t pt_phys;
-	uint64_t end_addr = addr + size;
+	u64 pt_phys;
+	u64 end_addr = addr + size;
 
 	while (addr < end_addr) {
 		pgdep = (pgd_t *)early_pgdir + pgd_index(addr);
@@ -64,8 +62,8 @@ static void map_early(uint64_t addr, size_t size, uint64_t paddr,
 #else
 	pgd_t *pgdep;
 	pmd_t *pmdep;
-	uint64_t pmd_phys;
-	uint64_t end_addr = addr + size;
+	u64 pmd_phys;
+	u64 end_addr = addr + size;
 
 	while (addr < end_addr) {
 		pgdep = (pgd_t *)early_pgdir + pgd_index(addr);
@@ -85,7 +83,7 @@ static void map_early(uint64_t addr, size_t size, uint64_t paddr,
 
 static void __setup_vm_early(uintptr_t dtb, size_t load_offset)
 {
-	uint64_t kern_end;
+	u64 kern_end;
 	size_t size;
 	unsigned int flags;
 
@@ -122,11 +120,11 @@ static void __setup_vm_early(uintptr_t dtb, size_t load_offset)
 		dtb = max(dtb, kern_end);
 
 #if __riscv_xlen == 32
-	uint64_t map_start = round_down(dtb, PAGE_SIZE_4M);
-	uint64_t map_end = round_up(dtb_end, PAGE_SIZE_4M);
+	u64 map_start = round_down(dtb, PAGE_SIZE_4M);
+	u64 map_end = round_up(dtb_end, PAGE_SIZE_4M);
 #else
-	uint64_t map_start = round_down(dtb, PAGE_SIZE_2M);
-	uint64_t map_end = round_up(dtb_end, PAGE_SIZE_2M);
+	u64 map_start = round_down(dtb, PAGE_SIZE_2M);
+	u64 map_end = round_up(dtb_end, PAGE_SIZE_2M);
 #endif
 	size = map_end - map_start;
 	flags = PTE_R | PTE_W;

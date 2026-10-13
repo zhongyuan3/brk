@@ -14,17 +14,17 @@
 
 SPINLOCK_DEFINE(kernel_pgdir_lock);
 
-static uint64_t alloc_pgtable(void)
+static u64 alloc_pgtable(void)
 {
 	struct page *pg = page_alloc(0);
 	if (!pg)
 		return 0;
-	uint64_t pa = page_to_phys(pg);
+	u64 pa = page_to_phys(pg);
 	memset((void *)phys_to_virt(pa), 0, PAGE_SIZE);
 	return pa;
 }
 
-static void free_pgtable(uint64_t paddr)
+static void free_pgtable(u64 paddr)
 {
 	struct page *pg = phys_to_page(paddr);
 	ASSERT(pg);
@@ -48,7 +48,7 @@ static pte_t *pmde_to_pt_virt(pmd_t pmde)
 
 pgd_t *create_user_pgtable(void)
 {
-	uint64_t pa = alloc_pgtable();
+	u64 pa = alloc_pgtable();
 	void *pgtable = (void *)phys_to_virt(pa);
 	spinlock_acquire(&kernel_pgdir_lock);
 	memcpy(pgtable, kernel_pgdir, PAGE_SIZE);
@@ -58,8 +58,8 @@ pgd_t *create_user_pgtable(void)
 
 static int copy_user_pt(pte_t *dst, pte_t *src)
 {
-	uint64_t spg_pa;
-	uint64_t dpg_pa;
+	u64 spg_pa;
+	u64 dpg_pa;
 	struct page *pg;
 
 	for (size_t i = 0; i < PTRS_PER_PT; ++i) {
@@ -85,8 +85,8 @@ static int copy_user_pmde_large(pmd_t *dst, pmd_t src)
 	struct page *pg = page_alloc(page_order(PAGE_SIZE_2M));
 	if (!pg)
 		return -ENOMEM;
-	uint64_t dpg_pa = page_to_phys(pg);
-	uint64_t spg_pa = pmd_get_large(src);
+	u64 dpg_pa = page_to_phys(pg);
+	u64 spg_pa = pmd_get_large(src);
 	void *dpg_va = (void *)phys_to_virt(dpg_pa);
 	void *spg_va = (void *)phys_to_virt(spg_pa);
 	memcpy(dpg_va, spg_va, PAGE_SIZE_2M);
@@ -113,7 +113,7 @@ static int copy_user_pmd(pmd_t *dst, pmd_t *src)
 #endif
 
 		if (!pmd_present(dst[i])) {
-			uint64_t pt_pa = alloc_pgtable();
+			u64 pt_pa = alloc_pgtable();
 			if (!pt_pa)
 				return -ENOMEM;
 			pmd_set_pte(dst + i, pt_pa);
@@ -134,8 +134,8 @@ static int copy_user_pgde_large(pgd_t *dst, pgd_t src)
 	struct page *dpg = page_alloc(page_order(PAGE_SIZE_4M));
 	if (!dpg)
 		return -ENOMEM;
-	uint64_t dpg_pa = page_to_phys(dpg);
-	uint64_t spg_pa = pgd_get_large(src);
+	u64 dpg_pa = page_to_phys(dpg);
+	u64 spg_pa = pgd_get_large(src);
 	void *dpg_va = (void *)phys_to_virt(dpg_pa);
 	void *spg_va = (void *)phys_to_virt(spg_pa);
 	memcpy(dpg_va, spg_va, PAGE_SIZE_4M);
@@ -144,8 +144,8 @@ static int copy_user_pgde_large(pgd_t *dst, pgd_t src)
 	struct page *dpg = page_alloc(page_order(PAGE_SIZE_1G));
 	if (!dpg)
 		return -ENOMEM;
-	uint64_t dpg_pa = page_to_phys(dpg);
-	uint64_t spg_pa = pgd_get_large(src);
+	u64 dpg_pa = page_to_phys(dpg);
+	u64 spg_pa = pgd_get_large(src);
 	void *dpg_va = (void *)phys_to_virt(dpg_pa);
 	void *spg_va = (void *)phys_to_virt(spg_pa);
 	memcpy(dpg_va, spg_va, PAGE_SIZE_1G);
@@ -173,7 +173,7 @@ static int copy_user_pgd(pgd_t *dst, pgd_t *src)
 		}
 
 		if (!pgd_present(dst[i])) {
-			uint64_t pmd_pa = alloc_pgtable();
+			u64 pmd_pa = alloc_pgtable();
 			if (!pmd_pa)
 				goto failed;
 			pgd_set_pmd(dst + i, pmd_pa);
@@ -201,10 +201,9 @@ static void destroy_user_pt(pte_t *pt, size_t pgde_idx, size_t pmde_idx)
 {
 	for (size_t i = 0; i < PTRS_PER_PT; ++i) {
 		if (pte_present(pt[i])) {
-			uint64_t pa = pte_get(pt[i]);
-			uint64_t va = (pgde_idx << PGD_SHIFT) |
-				      (pmde_idx << PMD_SHIFT) |
-				      (i << PAGE_SHIFT);
+			u64 pa = pte_get(pt[i]);
+			u64 va = (pgde_idx << PGD_SHIFT) |
+				 (pmde_idx << PMD_SHIFT) | (i << PAGE_SHIFT);
 #if __riscv_xlen == 64
 			if (va & (1UL << 38))
 				va = (~((1UL << 39) - 1)) | va;
@@ -219,7 +218,7 @@ static void destroy_user_pt(pte_t *pt, size_t pgde_idx, size_t pmde_idx)
 #if __riscv_xlen == 64
 static void destroy_user_pmd(pmd_t *pmd, size_t pgde_idx)
 {
-	uint64_t pa;
+	u64 pa;
 	pte_t *pt;
 
 	for (size_t i = 0; i < PTRS_PER_PMD; ++i) {
@@ -228,7 +227,7 @@ static void destroy_user_pmd(pmd_t *pmd, size_t pgde_idx)
 
 		if (pmd_large(pmd[i])) {
 			pa = pmd_get_large(pmd[i]);
-			uint64_t va = pgde_idx << 30;
+			u64 va = pgde_idx << 30;
 			va = va | (i << 21);
 			if (va & (1UL << 38))
 				va = (~((1UL << 39) - 1)) | va;
@@ -247,7 +246,7 @@ static void destroy_user_pmd(pmd_t *pmd, size_t pgde_idx)
 
 static void destroy_user_pgd(pgd_t *pgd)
 {
-	uint64_t pa;
+	u64 pa;
 #if __riscv_xlen == 64
 	pmd_t *pmd;
 #endif
@@ -262,9 +261,9 @@ static void destroy_user_pgd(pgd_t *pgd)
 		if (pgd_large(pgd[i])) {
 			pa = pgd_get_large(pgd[i]);
 #if __riscv_xlen == 32
-			uint64_t va = i << PGD_SHIFT;
+			u64 va = i << PGD_SHIFT;
 #else
-			uint64_t va = i << 30;
+			u64 va = i << 30;
 			if (va & (1UL << 38))
 				va = (~((1UL << 39) - 1)) | va;
 #endif

@@ -12,20 +12,20 @@
 #include <uapi/resource.h>
 #include <uapi/time.h>
 
-uint64_t sys_brk(void)
+u64 sys_brk(void)
 {
-	uint64_t addr = syscall_arg_raw(0);
+	u64 addr = syscall_arg_raw(0);
 	if (addr == 0)
 		return current_task()->mm->brk;
 	return task_set_brk(addr);
 }
 
-uint64_t sys_clone(void)
+u64 sys_clone(void)
 {
 	return -ENOSYS;
 }
 
-uint64_t sys_wait4(void)
+u64 sys_wait4(void)
 {
 	pid_t pid = syscall_arg_raw(0);
 	int *wstatus = (int *)(uintptr_t)syscall_arg_raw(1);
@@ -34,12 +34,12 @@ uint64_t sys_wait4(void)
 	return task_wait(pid, wstatus, opts, rus);
 }
 
-uint64_t sys_fork(void)
+u64 sys_fork(void)
 {
 	return task_fork();
 }
 
-uint64_t sys_exit(void)
+u64 sys_exit(void)
 {
 	int status = syscall_arg_raw(0);
 
@@ -47,7 +47,7 @@ uint64_t sys_exit(void)
 	return 0;
 }
 
-uint64_t sys_kill(void)
+u64 sys_kill(void)
 {
 	pid_t pid = syscall_arg_int(0);
 	int sig = syscall_arg_int(1);
@@ -55,25 +55,25 @@ uint64_t sys_kill(void)
 	return signal_do_kill(pid, sig);
 }
 
-uint64_t sys_sched_yield(void)
+u64 sys_sched_yield(void)
 {
 	task_yield();
 	return 0;
 }
 
-uint64_t sys_getpid(void)
+u64 sys_getpid(void)
 {
 	return current_task()->tgid;
 }
 
-uint64_t sys_getppid(void)
+u64 sys_getppid(void)
 {
 	struct task_control_block *par = current_task()->parent;
 
 	return par ? par->tgid : 0;
 }
 
-uint64_t sys_gettid(void)
+u64 sys_gettid(void)
 {
 	return current_task()->pid;
 }

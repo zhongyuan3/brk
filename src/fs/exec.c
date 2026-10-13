@@ -38,8 +38,7 @@ struct exec_strings_acc {
 	size_t bytes;
 };
 
-static int exec_read_exact(struct fs_file *fp, uint64_t off, void *buf,
-			   size_t n)
+static int exec_read_exact(struct fs_file *fp, u64 off, void *buf, size_t n)
 {
 	loff_t ret = fs_file_lseek(fp, off, SEEK_SET);
 
@@ -80,7 +79,7 @@ static int elf_validate_exec_hdr(const struct elf_hdr *h)
 	return 0;
 }
 
-static int elf_read_phdr(struct fs_file *f, uint64_t off, struct elf_phdr *phdr)
+static int elf_read_phdr(struct fs_file *f, u64 off, struct elf_phdr *phdr)
 {
 	ssize_t r;
 	loff_t ret = fs_file_lseek(f, off, SEEK_SET);
@@ -122,7 +121,7 @@ static int exec_accum_strings(char **arr, size_t *total_size,
 	return 0;
 }
 
-static uint64_t random_ustack(void)
+static u64 random_ustack(void)
 {
 	uintptr_t ustack_top = USER_SPACE_SIZE_MAX;
 
@@ -216,10 +215,10 @@ static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 	size_t npgs = vma->size >> PAGE_SHIFT;
 	struct page **pgs = kcalloc(npgs, sizeof(struct page *));
 	size_t i = 0;
-	uint64_t addr = vma->addr;
+	u64 addr = vma->addr;
 	unsigned int flags = vma->flags;
-	uint64_t seg_vstart = ph->p_vaddr;
-	uint64_t seg_fend = ph->p_vaddr + ph->p_filesz;
+	u64 seg_vstart = ph->p_vaddr;
+	u64 seg_fend = ph->p_vaddr + ph->p_filesz;
 
 	if (!pgs)
 		return -ENOMEM;
@@ -231,17 +230,17 @@ static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 			err = -ENOMEM;
 			goto failed;
 		}
-		uint64_t pa = page_to_phys(pg);
+		u64 pa = page_to_phys(pg);
 		void *va = (void *)phys_to_virt(pa);
-		uint64_t page_lo = addr;
-		uint64_t page_hi = addr + PAGE_SIZE;
-		uint64_t file_lo = page_lo > seg_vstart ? page_lo : seg_vstart;
-		uint64_t file_hi = page_hi < seg_fend ? page_hi : seg_fend;
+		u64 page_lo = addr;
+		u64 page_hi = addr + PAGE_SIZE;
+		u64 file_lo = page_lo > seg_vstart ? page_lo : seg_vstart;
+		u64 file_hi = page_hi < seg_fend ? page_hi : seg_fend;
 
 		memset(va, 0, PAGE_SIZE);
 		if (file_lo < file_hi) {
 			size_t n = (size_t)(file_hi - file_lo);
-			uint64_t fo = ph->p_offset + (file_lo - seg_vstart);
+			u64 fo = ph->p_offset + (file_lo - seg_vstart);
 			size_t dst_off = (size_t)(file_lo - page_lo);
 
 			err = exec_read_exact(fp, fo, (char *)va + dst_off, n);
@@ -267,7 +266,7 @@ static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 	return 0;
 
 failed:
-	for (uint64_t a = vma->addr; a < addr; a += PAGE_SIZE)
+	for (u64 a = vma->addr; a < addr; a += PAGE_SIZE)
 		uvunmap(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = 0; j < i; ++j) {
 		ASSERT(pgs[j]);
@@ -280,7 +279,7 @@ failed:
 static int load_seg(struct uvm_space *mm, struct elf_phdr *ph,
 		    struct fs_file *fp)
 {
-	uint64_t start, end;
+	u64 start, end;
 	struct uvm_region *vma;
 	int err;
 
@@ -306,13 +305,13 @@ static int load_seg(struct uvm_space *mm, struct elf_phdr *ph,
 	return 0;
 }
 
-static uint64_t find_brk(struct uvm_space *mm)
+static u64 find_brk(struct uvm_space *mm)
 {
 	struct uvm_region *vma = NULL;
-	uint64_t brk = 0;
+	u64 brk = 0;
 
 	list_for_each_entry(vma, &mm->seg, list) {
-		uint64_t end = vma->addr + vma->size;
+		u64 end = vma->addr + vma->size;
 
 		if (end >= brk)
 			brk = end;
@@ -324,8 +323,8 @@ static int map_stack(struct uvm_space *mm)
 {
 	struct page *pg = page_alloc(USTACK_PAGE_ORDER);
 	struct page **pgs;
-	uint64_t pa;
-	uint64_t base;
+	u64 pa;
+	u64 base;
 	int err;
 
 	if (!pg)
@@ -383,9 +382,9 @@ static int __do_execve(const char *path, struct exec_args *args)
 	}
 
 	{
-		uint64_t phoff = elf_hdr.e_phoff;
+		u64 phoff = elf_hdr.e_phoff;
 
-		for (uint16_t i = 0; i < elf_hdr.e_phnum;
+		for (u16 i = 0; i < elf_hdr.e_phnum;
 		     ++i, phoff += sizeof(phdr)) {
 			err = elf_read_phdr(f, phoff, &phdr);
 			if (err)
@@ -413,7 +412,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 	{
 		uintptr_t sp = new_mm->stack->addr + new_mm->stack->size;
 		struct page *stack_pg = new_mm->stack->pages[0];
-		uint64_t stack_phys = page_to_phys(stack_pg);
+		u64 stack_phys = page_to_phys(stack_pg);
 		uintptr_t stack_virt = phys_to_virt(stack_phys);
 
 		push_args(args, &sp, stack_virt, task);

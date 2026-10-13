@@ -14,12 +14,12 @@
 #include <libfdt.h>
 
 size_t load_offset;
-uint64_t phys_ram_base;
+u64 phys_ram_base;
 
 static void map_mem(void)
 {
-	uint64_t idx;
-	uint64_t start, end;
+	u64 idx;
+	u64 start, end;
 	struct memblock_region *regs, *reg;
 	size_t regs_cnt = 0;
 	size_t size;
@@ -39,7 +39,7 @@ static void map_mem(void)
 	}
 
 	unsigned int flags = PTE_R | PTE_W;
-	uint64_t vaddr;
+	u64 vaddr;
 
 	for (size_t i = 0; i < regs_cnt; ++i) {
 		vaddr = phys_to_virt(regs[i].base);
@@ -55,7 +55,7 @@ static void map_mem(void)
 
 static void map_kernel(void)
 {
-	uint64_t virt;
+	u64 virt;
 
 	kvmap_with_mode((uintptr_t)_stext, _TEXT_SIZE, _STEXT_PHYS,
 			PTE_R | PTE_X, VMAP_MODE_EARLY);
@@ -79,7 +79,7 @@ static void map_kernel(void)
 
 static void map_dtb(void)
 {
-	uint64_t dtb_virt = phys_to_virt(dtb_phys);
+	u64 dtb_virt = phys_to_virt(dtb_phys);
 	size_t dtb_size = fdt_totalsize((uintptr_t)dtb_phys);
 	kvmap_with_mode(dtb_virt, dtb_size, dtb_phys, PTE_R | PTE_W,
 			VMAP_MODE_EARLY);
@@ -94,10 +94,10 @@ static void final_pgtable_init(void)
 
 static void vmemmap_init(void)
 {
-	uint32_t idx;
-	uint64_t start, end;
+	u32 idx;
+	u64 start, end;
 	size_t sz;
-	uint64_t paddr;
+	u64 paddr;
 
 	for_each_mem_pfn_range(idx, start, end) {
 		sz = round_up((end - start) * sizeof(struct page), PAGE_SIZE);
@@ -111,7 +111,7 @@ static void vmemmap_init(void)
 
 void final_pgtable_enable(void)
 {
-	uint64_t satp = make_satp(symbol_phys(kernel_pgdir));
+	u64 satp = make_satp(symbol_phys(kernel_pgdir));
 	write_satp(satp);
 	sfence_vma();
 }
@@ -125,8 +125,8 @@ void paging_init(void)
 
 void switch_pgtable(pgd_t *pgd)
 {
-	uint64_t paddr = virt_to_phys((uintptr_t)pgd);
-	uint64_t satp = make_satp(paddr);
+	u64 paddr = virt_to_phys((uintptr_t)pgd);
+	u64 satp = make_satp(paddr);
 	write_satp(satp);
 	sfence_vma();
 }

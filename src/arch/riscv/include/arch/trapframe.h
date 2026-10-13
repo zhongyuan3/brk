@@ -66,27 +66,27 @@ static inline void arch_tf_copy(struct trap_frame *dst,
 	memcpy(dst, src, sizeof(*dst));
 }
 
-static inline uint64_t arch_tf_get_sp(const struct trap_frame *tf)
+static inline u64 arch_tf_get_sp(const struct trap_frame *tf)
 {
 	return tf->sp;
 }
 
-static inline void arch_tf_set_sp(struct trap_frame *tf, uint64_t sp)
+static inline void arch_tf_set_sp(struct trap_frame *tf, u64 sp)
 {
 	tf->sp = sp;
 }
 
-static inline uint64_t arch_tf_get_pc(const struct trap_frame *tf)
+static inline u64 arch_tf_get_pc(const struct trap_frame *tf)
 {
 	return tf->epc;
 }
 
-static inline void arch_tf_set_pc(struct trap_frame *tf, uint64_t pc)
+static inline void arch_tf_set_pc(struct trap_frame *tf, u64 pc)
 {
 	tf->epc = pc;
 }
 
-static inline void arch_tf_advance_pc(struct trap_frame *tf, uint64_t delta)
+static inline void arch_tf_advance_pc(struct trap_frame *tf, u64 delta)
 {
 	tf->epc += delta;
 }
@@ -96,39 +96,38 @@ static inline void arch_tf_skip_syscall(struct trap_frame *tf)
 	arch_tf_advance_pc(tf, ARCH_TF_SYSCALL_INSN_SIZE);
 }
 
-static inline void arch_tf_set_user_entry(struct trap_frame *tf, uint64_t pc,
-					  uint64_t sp)
+static inline void arch_tf_set_user_entry(struct trap_frame *tf, u64 pc, u64 sp)
 {
 	arch_tf_set_pc(tf, pc);
 	arch_tf_set_sp(tf, sp);
 }
 
-static inline uint64_t arch_tf_get_a0(const struct trap_frame *tf)
+static inline u64 arch_tf_get_a0(const struct trap_frame *tf)
 {
 	return tf->a0;
 }
 
-static inline void arch_tf_set_a0(struct trap_frame *tf, uint64_t val)
+static inline void arch_tf_set_a0(struct trap_frame *tf, u64 val)
 {
 	tf->a0 = val;
 }
 
-static inline void arch_tf_set_a1(struct trap_frame *tf, uint64_t val)
+static inline void arch_tf_set_a1(struct trap_frame *tf, u64 val)
 {
 	tf->a1 = val;
 }
 
-static inline void arch_tf_set_a2(struct trap_frame *tf, uint64_t val)
+static inline void arch_tf_set_a2(struct trap_frame *tf, u64 val)
 {
 	tf->a2 = val;
 }
 
-static inline uint64_t arch_tf_get_syscall_nr(const struct trap_frame *tf)
+static inline u64 arch_tf_get_syscall_nr(const struct trap_frame *tf)
 {
 	return tf->a7;
 }
 
-static inline uint64_t arch_tf_get_arg(const struct trap_frame *tf, int argno)
+static inline u64 arch_tf_get_arg(const struct trap_frame *tf, int argno)
 {
 	switch (argno) {
 	case 0:
@@ -148,7 +147,7 @@ static inline uint64_t arch_tf_get_arg(const struct trap_frame *tf, int argno)
 	}
 }
 
-static inline void arch_tf_set_kernel_sp(struct trap_frame *tf, uint64_t sp)
+static inline void arch_tf_set_kernel_sp(struct trap_frame *tf, u64 sp)
 {
 	tf->kernel_sp = sp;
 }

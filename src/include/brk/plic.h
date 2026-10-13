@@ -4,9 +4,9 @@
 #include <brk/types.h>
 
 struct plic_device {
-	uint64_t phys_base;
+	u64 phys_base;
 	size_t size;
-	uint32_t ndev;
+	u32 ndev;
 };
 
 void plic_init(void);

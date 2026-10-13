@@ -18,8 +18,8 @@
 
 struct qstr {
 	const char *name;
-	uint32_t hash;
-	uint32_t len;
+	u32 hash;
+	u32 len;
 };
 
 #define QSTR_MAKE(n, l)                                     \

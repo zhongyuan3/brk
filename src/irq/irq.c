@@ -7,7 +7,7 @@
 static struct irq_chip *irq_chip;
 static irq_handler_t *irq_handlers;
 static void **irq_handlers_ctx;
-static uint32_t irq_handlers_num;
+static u32 irq_handlers_num;
 static SPINLOCK_DEFINE(irq_handlers_lock);
 
 void irq_register_chip(struct irq_chip *chip)
@@ -20,7 +20,7 @@ void irq_init(void)
 	if (!irq_chip)
 		panic("%s(): no irqchip registered\n", __func__);
 
-	uint32_t ndev = irq_chip->get_ndev();
+	u32 ndev = irq_chip->get_ndev();
 	irq_handlers = kcalloc(ndev, sizeof(irq_handler_t));
 	if (!irq_handlers)
 		panic("%s(): kcalloc() failed\n", __func__);
@@ -30,14 +30,14 @@ void irq_init(void)
 	irq_handlers_num = ndev;
 }
 
-void irq_init_hart(uint32_t hart_id)
+void irq_init_hart(u32 hart_id)
 {
 	if (!irq_chip)
 		return;
 	irq_chip->init_hart(hart_id);
 }
 
-int irq_register_handler(uint32_t source, irq_handler_t handler, void *ctx,
+int irq_register_handler(u32 source, irq_handler_t handler, void *ctx,
 			 irq_handler_t *old_handler, void **old_ctx)
 {
 	if (source >= irq_handlers_num)
@@ -55,7 +55,7 @@ int irq_register_handler(uint32_t source, irq_handler_t handler, void *ctx,
 	return 0;
 }
 
-int irq_unregister_handler(uint32_t source, irq_handler_t *old_handler,
+int irq_unregister_handler(u32 source, irq_handler_t *old_handler,
 			   void **old_ctx)
 {
 	if (source >= irq_handlers_num)
@@ -73,12 +73,12 @@ int irq_unregister_handler(uint32_t source, irq_handler_t *old_handler,
 	return 0;
 }
 
-int irq_handle_external(uint32_t hart_id)
+int irq_handle_external(u32 hart_id)
 {
 	if (!irq_chip)
 		return -EINVAL;
 
-	uint32_t source = 0;
+	u32 source = 0;
 	irq_handler_t handler;
 	void *ctx;
 
@@ -105,21 +105,21 @@ int irq_handle_external(uint32_t hart_id)
 	return irq_chip->complete(hart_id, source);
 }
 
-int irq_set_priority(uint32_t source, unsigned int priority)
+int irq_set_priority(u32 source, unsigned int priority)
 {
 	if (!irq_chip)
 		return -EINVAL;
 	return irq_chip->set_priority(source, priority);
 }
 
-int irq_enable_source(uint32_t hart_id, uint32_t source)
+int irq_enable_source(u32 hart_id, u32 source)
 {
 	if (!irq_chip)
 		return -EINVAL;
 	return irq_chip->enable(hart_id, source);
 }
 
-int irq_disable_source(uint32_t hart_id, uint32_t source)
+int irq_disable_source(u32 hart_id, u32 source)
 {
 	if (!irq_chip)
 		return -EINVAL;

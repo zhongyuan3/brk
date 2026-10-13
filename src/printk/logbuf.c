@@ -16,18 +16,18 @@
 #define LOG_RECORD_MARK 0xffffffffu
 
 static char log_buf[LOG_BUF_LEN] __attribute__((aligned(8)));
-static uint32_t log_next_off;
-static uint32_t log_first_off;
+static u32 log_next_off;
+static u32 log_first_off;
 
-static uint32_t log_record_used(uint32_t len)
+static u32 log_record_used(u32 len)
 {
 	return sizeof(struct log_record) + round_up(len, 8);
 }
 
-void log_store(uint8_t level, const char *text, uint32_t len)
+void log_store(u8 level, const char *text, u32 len)
 {
 	struct log_record *rec;
-	uint32_t total;
+	u32 total;
 
 	if (len > LOG_BUF_LEN - sizeof(struct log_record))
 		len = LOG_BUF_LEN - sizeof(struct log_record);
@@ -53,11 +53,11 @@ void log_store(uint8_t level, const char *text, uint32_t len)
 
 void log_flush(void)
 {
-	uint32_t off = log_first_off;
+	u32 off = log_first_off;
 
 	while (off != log_next_off) {
 		struct log_record *rec;
-		uint32_t used;
+		u32 used;
 
 		if (off + sizeof(struct log_record) > LOG_BUF_LEN)
 			break;

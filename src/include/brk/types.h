@@ -1,8 +1,24 @@
 #ifndef BRK_TYPES_H
 #define BRK_TYPES_H
 
+#include <brk/limits.h>
 #include <brk/static_assert.h>
+#include <brk/stddef.h>
 #include <uapi/types.h>
+
+typedef _Bool bool;
+
+enum {
+	false = 0,
+	true = 1,
+};
+
+typedef __SIZE_TYPE__ size_t;
+
+typedef __INTPTR_TYPE__ intptr_t;
+typedef __UINTPTR_TYPE__ uintptr_t;
+typedef __INTMAX_TYPE__ intmax_t;
+typedef __UINTMAX_TYPE__ uintmax_t;
 
 typedef unsigned int fmode_t;
 typedef int cpuid_t;

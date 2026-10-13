@@ -47,9 +47,9 @@ static int virtio_blk_validate_dev(struct virtio_device *vdev)
 	return 0;
 }
 
-static uint32_t virtio_blk_select_features(struct virtio_device *vdev)
+static u32 virtio_blk_select_features(struct virtio_device *vdev)
 {
-	uint32_t features = virtio_mmio_read_features(vdev);
+	u32 features = virtio_mmio_read_features(vdev);
 
 	features &= ~(1u << VIRTIO_BLK_F_RO);
 	features &= ~(1u << VIRTIO_BLK_F_SCSI);
@@ -97,7 +97,7 @@ static void virtio_blk_free_vq(struct virtio_blk_dev *vblk)
 	virtq_free(&vblk->vq);
 }
 
-static void virtio_blk_vq_used(struct virtq *vq, uint32_t id, void *ctx)
+static void virtio_blk_vq_used(struct virtq *vq, u32 id, void *ctx)
 {
 	struct virtio_blk_dev *vblk = ctx;
 	struct virtio_blk_io_desc *io;
@@ -181,8 +181,8 @@ static int virtio_blk_submit(struct virtio_blk_dev *vblk,
 	return err;
 }
 
-static int virtio_blk_io(struct virtio_blk_dev *vblk, uint64_t sector,
-			 uint64_t buf_phys, size_t sec_count, bool write)
+static int virtio_blk_io(struct virtio_blk_dev *vblk, u64 sector, u64 buf_phys,
+			 size_t sec_count, bool write)
 {
 	struct virtio_blk_io_desc trans = {
 		.buf_phys = buf_phys,
@@ -195,11 +195,11 @@ static int virtio_blk_io(struct virtio_blk_dev *vblk, uint64_t sector,
 	return virtio_blk_submit(vblk, &trans);
 }
 
-static int virtio_blk_bdev_rw(struct block_dev *bdev, uint64_t blk_id,
-			      void *buf, uint32_t blk_cnt, bool write)
+static int virtio_blk_bdev_rw(struct block_dev *bdev, u64 blk_id, void *buf,
+			      u32 blk_cnt, bool write)
 {
 	int err;
-	uint64_t buf_phys;
+	u64 buf_phys;
 	struct virtio_blk_dev *vbd = bdev->priv;
 
 	err = blkdev_check_bounds(bdev, blk_id, blk_cnt);
@@ -213,14 +213,14 @@ static int virtio_blk_bdev_rw(struct block_dev *bdev, uint64_t blk_id,
 	return virtio_blk_io(vbd, blk_id, buf_phys, blk_cnt, write);
 }
 
-static int virtio_blk_bdev_read(struct block_dev *bdev, uint64_t blk_id,
-				void *buf, uint32_t blk_cnt)
+static int virtio_blk_bdev_read(struct block_dev *bdev, u64 blk_id, void *buf,
+				u32 blk_cnt)
 {
 	return virtio_blk_bdev_rw(bdev, blk_id, buf, blk_cnt, false);
 }
 
-static int virtio_blk_bdev_write(struct block_dev *bdev, uint64_t blk_id,
-				 const void *buf, uint32_t blk_cnt)
+static int virtio_blk_bdev_write(struct block_dev *bdev, u64 blk_id,
+				 const void *buf, u32 blk_cnt)
 {
 	return virtio_blk_bdev_rw(bdev, blk_id, (void *)buf, blk_cnt, true);
 }
@@ -255,7 +255,7 @@ static void virtio_blk_free(struct virtio_blk_dev *vblk)
 static int virtio_blk_setup(struct virtio_blk_dev *vblk,
 			    struct virtio_device *vdev)
 {
-	uint32_t features;
+	u32 features;
 	int err;
 
 	if (!vblk || !vdev)
@@ -435,7 +435,7 @@ void virtio_blk_init(void)
 }
 postcore_initcall(virtio_blk_init);
 
-int virtio_blk_enable_irq(uint32_t hart_id)
+int virtio_blk_enable_irq(u32 hart_id)
 {
 	int err = 0;
 

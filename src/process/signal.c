@@ -29,7 +29,7 @@ static bool sig_default_terminate(int sig)
 	}
 }
 
-static bool user_access_ok(uint64_t addr, size_t len)
+static bool user_access_ok(u64 addr, size_t len)
 {
 	return addr + len <= USER_SPACE_SIZE_MAX;
 }
@@ -52,10 +52,10 @@ void sigaction_table_reset(struct sigaction_table *table)
 
 static int get_next_signal_locked(struct task_control_block *task)
 {
-	uint64_t deliver = task->pending & ~task->blocked;
+	u64 deliver = task->pending & ~task->blocked;
 
 	if (task->in_handler) {
-		uint64_t nodfer = 0;
+		u64 nodfer = 0;
 		int sig;
 
 		deliver &= (1ULL << SIGKILL);
@@ -180,7 +180,7 @@ void signal_send(struct task_control_block *task, int sig)
 }
 
 int signal_init(struct task_control_block *task,
-		struct sigaction_table *sigactions, uint64_t blocked)
+		struct sigaction_table *sigactions, u64 blocked)
 {
 	if (!sigactions) {
 		task->sigactions = sigaction_table_alloc();
@@ -206,9 +206,9 @@ void signal_deinit(struct task_control_block *task)
 }
 
 static bool setup_signal_frame_locked(struct task_control_block *task, int sig,
-				      uint64_t handler)
+				      u64 handler)
 {
-	uint64_t sp;
+	u64 sp;
 	struct user_sigframe *frame;
 
 	sp = arch_tf_get_sp(task->tf);
@@ -238,7 +238,7 @@ static bool setup_signal_frame_locked(struct task_control_block *task, int sig,
 static void signal_deliver_one(struct task_control_block *task, int sig)
 {
 	unsigned long handler;
-	uint64_t user_handler;
+	u64 user_handler;
 
 	spinlock_acquire(&task->sigactions->lock);
 
@@ -311,10 +311,10 @@ void signal_copy(struct task_control_block *dst, struct task_control_block *src)
 	spinlock_release(&src->sigactions->lock);
 }
 
-uint64_t signal_do_sigreturn(struct task_control_block *task)
+u64 signal_do_sigreturn(struct task_control_block *task)
 {
 	struct user_sigframe *frame;
-	uint64_t ret = 0;
+	u64 ret = 0;
 
 	spinlock_acquire(&task->sigactions->lock);
 	if (!task->sigframe_sp) {

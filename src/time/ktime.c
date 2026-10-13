@@ -49,12 +49,12 @@ void ktime_get_boot_ts(struct timespec *ts)
 	timekeeper_get_mono_ts(ts);
 }
 
-uint64_t ktime_get_boot_ns(void)
+u64 ktime_get_boot_ns(void)
 {
 	return timekeeper_mono_ns();
 }
 
-uint64_t ktime_nanosleep(const struct timespec *dur, struct timespec *rem)
+u64 ktime_nanosleep(const struct timespec *dur, struct timespec *rem)
 {
 	return timekeeper_nanosleep(dur, rem);
 }

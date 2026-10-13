@@ -1,9 +1,9 @@
 #include <brk/hash.h>
 
-uint32_t fnv1a_32(const void *data, size_t len)
+u32 fnv1a_32(const void *data, size_t len)
 {
-	uint32_t hash = FNV1A_32_INIT;
-	const uint8_t *k = (const uint8_t *)data;
+	u32 hash = FNV1A_32_INIT;
+	const u8 *k = (const u8 *)data;
 	for (size_t i = 0; i < len; i++) {
 		hash ^= k[i];
 		hash *= FNV1A_32_PRIME;
@@ -11,7 +11,7 @@ uint32_t fnv1a_32(const void *data, size_t len)
 	return hash;
 }
 
-uint32_t hash_combine32(uint32_t a, uint32_t b)
+u32 hash_combine32(u32 a, u32 b)
 {
 	return a ^ (b << 1);
 }

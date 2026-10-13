@@ -15,7 +15,7 @@
 
 struct vmalloc_region {
 	struct list_head list;
-	uint64_t addr;
+	u64 addr;
 	size_t size;
 	struct page **pages;
 	size_t nr_pages;
@@ -26,10 +26,10 @@ static struct slab_allocator vma_cache;
 static struct list_head vma;
 static SPINLOCK_DEFINE(vma_lock);
 
-static uint64_t alloc_pgtable(enum vmap_mode mode)
+static u64 alloc_pgtable(enum vmap_mode mode)
 {
 	struct page *pg;
-	uint64_t paddr;
+	u64 paddr;
 
 	switch (mode) {
 	case VMAP_MODE_EARLY:
@@ -55,18 +55,18 @@ static uint64_t alloc_pgtable(enum vmap_mode mode)
 	panic("%s(): unexpected mode: %d\n", __func__, mode);
 }
 
-static uint64_t alloc_pmd(enum vmap_mode mode)
+static u64 alloc_pmd(enum vmap_mode mode)
 {
 	return alloc_pgtable(mode);
 }
 
-static uint64_t alloc_pt(enum vmap_mode mode)
+static u64 alloc_pt(enum vmap_mode mode)
 {
 	return alloc_pgtable(mode);
 }
 
 #if __riscv_xlen == 64
-static pmd_t *get_pmd_virt(uint64_t pmd_phys, enum vmap_mode mode)
+static pmd_t *get_pmd_virt(u64 pmd_phys, enum vmap_mode mode)
 {
 	switch (mode) {
 	case VMAP_MODE_EARLY:
@@ -80,7 +80,7 @@ static pmd_t *get_pmd_virt(uint64_t pmd_phys, enum vmap_mode mode)
 }
 #endif
 
-static pte_t *get_pt_virt(uint64_t pt_phys, enum vmap_mode mode)
+static pte_t *get_pt_virt(u64 pt_phys, enum vmap_mode mode)
 {
 	switch (mode) {
 	case VMAP_MODE_EARLY:
@@ -93,7 +93,7 @@ static pte_t *get_pt_virt(uint64_t pt_phys, enum vmap_mode mode)
 	panic("%s(): unexpected mode: %d\n", __func__, mode);
 }
 
-static void vunmap_range(pgd_t *pgd, uint64_t addr, uint64_t end_addr,
+static void vunmap_range(pgd_t *pgd, u64 addr, u64 end_addr,
 			 enum vmap_mode mode)
 {
 	pgd_t *pgdep;
@@ -142,15 +142,14 @@ static void vunmap_range(pgd_t *pgd, uint64_t addr, uint64_t end_addr,
 	}
 }
 
-static int vmap_range(pgd_t *pgd, uint64_t addr, uint64_t end_addr,
-		      uint64_t paddr, size_t page_size, unsigned int flags,
-		      enum vmap_mode mode)
+static int vmap_range(pgd_t *pgd, u64 addr, u64 end_addr, u64 paddr,
+		      size_t page_size, unsigned int flags, enum vmap_mode mode)
 {
 	pgd_t *pgdep;
 	pmd_t *pmd, *pmdep;
 	pte_t *pt, *ptep;
-	uint64_t pmd_phys, pt_phys;
-	uint64_t start_addr = addr;
+	u64 pmd_phys, pt_phys;
+	u64 start_addr = addr;
 
 	for (; addr < end_addr; addr += page_size, paddr += page_size) {
 		pgdep = pgd + pgd_index(addr);
@@ -215,10 +214,10 @@ static int vmap_range(pgd_t *pgd, uint64_t addr, uint64_t end_addr,
 	return 0;
 }
 
-int vmap(pgd_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
-	 unsigned int flags, enum vmap_mode mode)
+int vmap(pgd_t *pgd, u64 addr, size_t size, u64 paddr, unsigned int flags,
+	 enum vmap_mode mode)
 {
-	uint64_t end_addr;
+	u64 end_addr;
 	size_t rem_size;
 	size_t page_size;
 	int err;
@@ -267,20 +266,20 @@ int vmap(pgd_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
 	return 0;
 }
 
-void vunmap(pgd_t *pgd, uint64_t addr, size_t size, enum vmap_mode mode)
+void vunmap(pgd_t *pgd, u64 addr, size_t size, enum vmap_mode mode)
 {
 	ASSERT(is_aligned(addr, PAGE_SIZE));
 	ASSERT(is_aligned(size, PAGE_SIZE));
 	vunmap_range(pgd, addr, addr + size, mode);
 }
 
-int kvmap(uint64_t addr, size_t size, uint64_t paddr, unsigned int flags)
+int kvmap(u64 addr, size_t size, u64 paddr, unsigned int flags)
 {
 	return kvmap_with_mode(addr, size, paddr, flags, VMAP_MODE_FINAL);
 }
 
-int kvmap_with_mode(uint64_t addr, size_t size, uint64_t paddr,
-		    unsigned int flags, enum vmap_mode mode)
+int kvmap_with_mode(u64 addr, size_t size, u64 paddr, unsigned int flags,
+		    enum vmap_mode mode)
 {
 	int ret;
 	size = round_up(size, PAGE_SIZE);
@@ -290,20 +289,19 @@ int kvmap_with_mode(uint64_t addr, size_t size, uint64_t paddr,
 	return ret;
 }
 
-void kvunmap(uint64_t addr, size_t size)
+void kvunmap(u64 addr, size_t size)
 {
 	spinlock_acquire(&kernel_pgdir_lock);
 	vunmap(kernel_pgdir, addr, size, VMAP_MODE_FINAL);
 	spinlock_release(&kernel_pgdir_lock);
 }
 
-int uvmap(pgd_t *pgd, uint64_t addr, size_t size, uint64_t paddr,
-	  unsigned int flags)
+int uvmap(pgd_t *pgd, u64 addr, size_t size, u64 paddr, unsigned int flags)
 {
 	return vmap(pgd, addr, size, paddr, flags | PTE_U, VMAP_MODE_FINAL);
 }
 
-void uvunmap(pgd_t *pgd, uint64_t addr, size_t size)
+void uvunmap(pgd_t *pgd, u64 addr, size_t size)
 {
 	vunmap(pgd, addr, size, VMAP_MODE_FINAL);
 }
@@ -323,7 +321,7 @@ static void vmalloc_region_free(struct vmalloc_region *area)
 	slab_free(&vma_cache, area);
 }
 
-static struct vmalloc_region *find_vm_area(uint64_t addr)
+static struct vmalloc_region *find_vm_area(u64 addr)
 {
 	struct vmalloc_region *area;
 
@@ -422,7 +420,7 @@ void *vmalloc(size_t size)
 	area->nr_pages = npgs;
 
 	size_t i = 0;
-	uint64_t vaddr = area->addr;
+	u64 vaddr = area->addr;
 	for (; i < npgs; ++i) {
 		struct page *pg = page_alloc(0);
 		if (!pg)

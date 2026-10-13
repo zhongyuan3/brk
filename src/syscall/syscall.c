@@ -6,7 +6,7 @@
 #include <brk/task.h>
 #include <uapi/errno.h>
 
-static uint64_t (*systable[])(void) = {
+static u64 (*systable[])(void) = {
 	[SYS_read] = sys_read,
 	[SYS_write] = sys_write,
 	[SYS_exit] = sys_exit,
@@ -78,8 +78,8 @@ static uint64_t (*systable[])(void) = {
 void syscall(void)
 {
 	struct task_control_block *task = current_task();
-	uint64_t num = arch_syscall_get_nr(task->tf);
-	uint64_t ret;
+	u64 num = arch_syscall_get_nr(task->tf);
+	u64 ret;
 
 	if (num < countof(systable) && systable[num])
 		ret = systable[num]();
@@ -88,7 +88,7 @@ void syscall(void)
 	arch_syscall_set_ret(task->tf, ret);
 }
 
-uint64_t syscall_arg_raw(int argno)
+u64 syscall_arg_raw(int argno)
 {
 	return arch_syscall_get_arg(current_task()->tf, argno);
 }

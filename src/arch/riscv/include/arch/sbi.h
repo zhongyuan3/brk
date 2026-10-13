@@ -53,7 +53,7 @@ static inline struct sbiret sbi_ecall(unsigned long eid, unsigned long fid,
 	return ret;
 }
 
-static inline long sbi_set_timer(uint64_t stime_value)
+static inline long sbi_set_timer(u64 stime_value)
 {
 #if __riscv_xlen == 32
 	/* Legacy SBI passes the 64-bit stime in the a0:a1 register pair. */
