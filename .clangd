@@ -1,2 +1,5 @@
 Style:
-    AngledHeaders: ["include/.*", "vendor/libfdt/*"]
+    AngledHeaders:
+        - "src/include/.*"
+        - "src/arch/riscv/include/.*"
+        - "vendor/libfdt/*"
