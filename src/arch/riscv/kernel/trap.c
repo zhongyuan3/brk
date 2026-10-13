@@ -46,7 +46,7 @@ static const char *const interrupt_strs[] = {
 	[13] = "Counter-overflow interrupt",
 };
 
-void trap_init_hart(uint32_t hart_id)
+void trap_init_hart(u32 hart_id)
 {
 	(void)hart_id;
 	write_stvec((uintptr_t)kernel_trap_vector);
@@ -54,9 +54,9 @@ void trap_init_hart(uint32_t hart_id)
 	timer_set_next();
 }
 
-static const char *cause_to_str(uint64_t cause)
+static const char *cause_to_str(u64 cause)
 {
-	uint64_t code = TRAP_CAUSE_CODE(cause);
+	u64 code = TRAP_CAUSE_CODE(cause);
 	if (TRAP_IS_INTERRUPT(cause)) {
 		if (code > countof(interrupt_strs) || !interrupt_strs[code])
 			return "Unexpected interrupt";
@@ -72,12 +72,12 @@ static const char *cause_to_str(uint64_t cause)
 
 void kernel_trap_handler(void)
 {
-	uint64_t sstatus = read_sstatus();
-	uint64_t scause = read_scause();
-	uint64_t sepc = read_sepc();
-	uint64_t stval = read_stval();
+	u64 sstatus = read_sstatus();
+	u64 scause = read_scause();
+	u64 sepc = read_sepc();
+	u64 stval = read_stval();
 	struct task_control_block *task = current_task();
-	uint64_t code = TRAP_CAUSE_CODE(scause);
+	u64 code = TRAP_CAUSE_CODE(scause);
 
 	if (TRAP_IS_INTERRUPT(scause)) {
 		if (code == 1) {
@@ -109,11 +109,11 @@ struct trap_frame *user_trap_handler(void)
 {
 	struct trap_frame *tf;
 	struct task_control_block *task;
-	uint64_t jiffies;
-	uint64_t scause = read_scause();
-	uint64_t sepc = read_sepc();
-	uint64_t stval = read_stval();
-	uint64_t code = TRAP_CAUSE_CODE(scause);
+	u64 jiffies;
+	u64 scause = read_scause();
+	u64 sepc = read_sepc();
+	u64 stval = read_stval();
+	u64 code = TRAP_CAUSE_CODE(scause);
 
 	write_stvec((uintptr_t)kernel_trap_vector);
 
@@ -172,7 +172,7 @@ struct trap_frame *user_trap_handler(void)
 
 void prepare_to_return(void)
 {
-	uint64_t sstatus;
+	u64 sstatus;
 	struct task_control_block *task;
 
 	intr_off();

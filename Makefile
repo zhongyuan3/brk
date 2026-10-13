@@ -71,6 +71,7 @@ else
 $(error unknown BUILD value '$(BUILD)')
 endif
 
+CFLAGS += -nostdinc
 CFLAGS += -MMD
 CFLAGS += -MP
 CFLAGS += -Isrc/arch/$(ARCH)/include

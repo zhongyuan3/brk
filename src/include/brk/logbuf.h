@@ -5,14 +5,14 @@
 
 /* One record in the log ring buffer. 8-byte aligned in the buffer. */
 struct log_record {
-	uint32_t len; /* Text length; LOG_RECORD_MARK marks a wrap point */
-	uint8_t level;
-	uint8_t flags;
-	uint16_t pad;
-	uint64_t ts_nsec;
+	u32 len; /* Text length; LOG_RECORD_MARK marks a wrap point */
+	u8 level;
+	u8 flags;
+	u16 pad;
+	u64 ts_nsec;
 };
 
-void log_store(uint8_t level, const char *text, uint32_t len);
+void log_store(u8 level, const char *text, u32 len);
 void log_flush(void);
 
 #endif

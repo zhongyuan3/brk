@@ -2,6 +2,7 @@
 #define BRK_PRINTK_H
 
 #include <brk/compiler.h>
+#include <brk/stdargs.h>
 #include <brk/types.h>
 
 #define KLOG_DEBUG 0

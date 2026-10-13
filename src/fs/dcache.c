@@ -137,8 +137,8 @@ struct fs_dentry *fs_dentry_get(struct fs_dentry *dentry)
 {
 	klog_debug(
 		"%s(): Duplicating dentry: name=%.*s, inode=%ld, refcnt=%d\n",
-		__func__, dentry->name.len, dentry->name.name,
-		dentry->inode->ino, arc_get(&dentry->count));
+		__func__, (int)dentry->name.len, dentry->name.name,
+		dentry->inode->ino, refcnt_read(&dentry->count));
 	refcnt_inc(&dentry->count);
 	return dentry;
 }
@@ -149,14 +149,14 @@ void fs_dentry_put(struct fs_dentry *dentry)
 	struct fs_inode *inode;
 
 	klog_debug("%s(): Putting dentry: name=%.*s, inode=%ld, refcnt=%d\n",
-		   __func__, dentry->name.len, dentry->name.name,
-		   dentry->inode->ino, arc_get(&dentry->count));
+		   __func__, (int)dentry->name.len, dentry->name.name,
+		   dentry->inode->ino, refcnt_read(&dentry->count));
 
 	if (refcnt_dec_fetch(&dentry->count) > 0)
 		return;
 
 	klog_debug("%s(): Freeing dentry: name=%.*s, inode=%ld\n", __func__,
-		   dentry->name.len, dentry->name.name, dentry->inode->ino);
+		   (int)dentry->name.len, dentry->name.name, dentry->inode->ino);
 
 	if (dentry->parent != dentry) {
 		spinlock_acquire(&dentry->parent->lock);
@@ -168,7 +168,7 @@ void fs_dentry_put(struct fs_dentry *dentry)
 	if (!(dentry->flags & DCACHE_UNHASHED)) {
 		klog_debug(
 			"%s(): Removing dentry from hash table: name=%.*s, inode=%ld\n",
-			__func__, dentry->name.len, dentry->name.name,
+			__func__, (int)dentry->name.len, dentry->name.name,
 			dentry->inode->ino);
 		spinlock_acquire(&dentry_htable_lock);
 		ASSERT(!hlist_unhashed(&dentry->hash));
@@ -225,21 +225,21 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 	struct fs_dentry *dentry, *tmp;
 	struct hlist_head *head;
 
-	uint32_t idx = name->hash & (DENTRY_HTABLE_SIZE - 1);
+	u32 idx = name->hash & (DENTRY_HTABLE_SIZE - 1);
 	head = &dentry_htable[idx];
 
-	klog_debug("%s(): Looking up %.*s in %.*s\n", __func__, name->len,
-		   name->name, parent->name.len, parent->name.name);
+	klog_debug("%s(): Looking up %.*s in %.*s\n", __func__, (int)name->len,
+		   name->name, (int)parent->name.len, parent->name.name);
 
 	spinlock_acquire(&dentry_htable_lock);
 	dentry = __dentry_lookup(head, parent, name);
 	spinlock_release(&dentry_htable_lock);
 	if (dentry) {
-		klog_debug("%s(): Cache hit for %.*s\n", __func__, name->len,
+		klog_debug("%s(): Cache hit for %.*s\n", __func__, (int)name->len,
 			   name->name);
 		return dentry;
 	}
-	klog_debug("%s(): Cache miss for %.*s\n", __func__, name->len,
+	klog_debug("%s(): Cache miss for %.*s\n", __func__, (int)name->len,
 		   name->name);
 
 	dentry = fs_dentry_alloc(parent, name);
@@ -270,13 +270,13 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 		spinlock_release(&dentry->lock);
 		klog_debug(
 			"%s(): Added dentry to hash table: name=%.*s, inode=%ld\n",
-			__func__, dentry->name.len, dentry->name.name,
+			__func__, (int)dentry->name.len, dentry->name.name,
 			dentry->inode->ino);
 	} else {
 		spinlock_release(&dentry->lock);
 		klog_debug(
 			"%s(): Dentry already in hash table: name=%.*s, inode=%ld\n",
-			__func__, dentry->name.len, dentry->name.name,
+			__func__, (int)dentry->name.len, dentry->name.name,
 			dentry->inode->ino);
 	}
 

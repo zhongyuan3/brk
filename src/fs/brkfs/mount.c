@@ -20,7 +20,7 @@ static int brkfs_read_super(struct brkfs_super_block *sb,
 			    struct block_dev *bdev)
 {
 	struct cached_page *cp;
-	uint8_t *buf;
+	u8 *buf;
 
 	cp = read_mapping_page(bdev->bd_mapping, 0);
 	if (IS_ERR(cp))

@@ -1,8 +1,7 @@
 #ifndef BRK_KERNEL_H
 #define BRK_KERNEL_H
 
-#include <stdalign.h>
-#include <stdint.h>
+#define alignof _Alignof
 
 #define BRK_VERSION "0.0.1"
 

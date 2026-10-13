@@ -7,11 +7,24 @@
  * Copyright 2012 Kim Phillips, Freescale Semiconductor.
  */
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
 #include <brk/string.h>
-#include <limits.h>
+
+/*
+ * libfdt is written against the C99 integer types.  The kernel is built
+ * with -nostdinc and provides its own fixed-width types (u8..u64) plus
+ * size_t/bool/NULL/limits through its own headers, so map the C99 names
+ * onto those here.  libfdt_env.h is the vendored library's designated
+ * environment shim, which keeps the rest of libfdt unmodified.
+ */
+typedef i8 int8_t;
+typedef i16 int16_t;
+typedef i32 int32_t;
+typedef i64 int64_t;
+
+typedef u8 uint8_t;
+typedef u16 uint16_t;
+typedef u32 uint32_t;
+typedef u64 uint64_t;
 
 #ifdef __CHECKER__
 #define FDT_FORCE __attribute__((force))

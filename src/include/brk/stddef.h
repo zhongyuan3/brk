@@ -1,0 +1,24 @@
+#ifndef BRK_STDDEF_H
+#define BRK_STDDEF_H
+
+/*
+ * Minimal freestanding replacement for the parts of <stddef.h> that the
+ * kernel uses.  size_t and the fixed-width integer types live in
+ * <brk/types.h>.
+ */
+
+#define NULL ((void *)0)
+
+#define offsetof(type, member) __builtin_offsetof(type, member)
+
+typedef __PTRDIFF_TYPE__ ptrdiff_t;
+
+/* Type with the strictest alignment requirement on the target. */
+typedef struct {
+	long long __max_align_ll
+		__attribute__((__aligned__(__alignof__(long long))));
+	long double __max_align_ld
+		__attribute__((__aligned__(__alignof__(long double))));
+} max_align_t;
+
+#endif

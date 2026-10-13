@@ -16,27 +16,27 @@
 #define PLIC_CLAIM_COMPLETE_OFFSET 0x200004
 
 static struct plic_device plic;
-static uint64_t mem_base;
-static uint64_t priority_base;
-static uint64_t pending_base;
-static uint64_t enable_base;
-static uint64_t threshold_base;
-static uint64_t claim_complete_base;
+static u64 mem_base;
+static u64 priority_base;
+static u64 pending_base;
+static u64 enable_base;
+static u64 threshold_base;
+static u64 claim_complete_base;
 
-static bool plic_source_is_valid(uint32_t source)
+static bool plic_source_is_valid(u32 source)
 {
 	return source < plic.ndev;
 }
 
-static volatile uint32_t *plic_senable(uint32_t hart_id)
+static volatile u32 *plic_senable(u32 hart_id)
 {
 	size_t ctx = 2 * hart_id + 1;
-	return (volatile uint32_t *)(uintptr_t)(enable_base + ctx * 0x80);
+	return (volatile u32 *)(uintptr_t)(enable_base + ctx * 0x80);
 }
 
-static int plic_enable(uint32_t hart_id, uint32_t source)
+static int plic_enable(u32 hart_id, u32 source)
 {
-	volatile uint32_t *senable;
+	volatile u32 *senable;
 
 	if (!plic_source_is_valid(source))
 		return -EINVAL;
@@ -49,9 +49,9 @@ static int plic_enable(uint32_t hart_id, uint32_t source)
 	return 0;
 }
 
-static int plic_disable(uint32_t hart_id, uint32_t source)
+static int plic_disable(u32 hart_id, u32 source)
 {
-	volatile uint32_t *senable;
+	volatile u32 *senable;
 
 	if (!plic_source_is_valid(source))
 		return -EINVAL;
@@ -64,25 +64,25 @@ static int plic_disable(uint32_t hart_id, uint32_t source)
 	return 0;
 }
 
-static int plic_set_priority(uint32_t source, unsigned int priority)
+static int plic_set_priority(u32 source, unsigned int priority)
 {
 	if (!plic_source_is_valid(source))
 		return -EINVAL;
 
-	((volatile uint32_t *)(uintptr_t)(priority_base))[source] = priority;
+	((volatile u32 *)(uintptr_t)(priority_base))[source] = priority;
 
 	return 0;
 }
 
-static volatile uint32_t *plic_sthreshold(uint32_t hart_id)
+static volatile u32 *plic_sthreshold(u32 hart_id)
 {
 	size_t ctx = 2 * hart_id + 1;
-	return (volatile uint32_t *)(uintptr_t)(threshold_base + ctx * 0x1000);
+	return (volatile u32 *)(uintptr_t)(threshold_base + ctx * 0x1000);
 }
 
-static int plic_set_threshold(uint32_t hart_id, unsigned int threshold)
+static int plic_set_threshold(u32 hart_id, unsigned int threshold)
 {
-	volatile uint32_t *sthreshold;
+	volatile u32 *sthreshold;
 
 	sthreshold = plic_sthreshold(hart_id);
 	if (!sthreshold)
@@ -92,16 +92,15 @@ static int plic_set_threshold(uint32_t hart_id, unsigned int threshold)
 	return 0;
 }
 
-static volatile uint32_t *plic_sclaim_complete(uint32_t hart_id)
+static volatile u32 *plic_sclaim_complete(u32 hart_id)
 {
 	size_t ctx = 2 * hart_id + 1;
-	return (volatile uint32_t *)(uintptr_t)(claim_complete_base +
-						ctx * 0x1000);
+	return (volatile u32 *)(uintptr_t)(claim_complete_base + ctx * 0x1000);
 }
 
-static int plic_claim(uint32_t hart_id, uint32_t *source)
+static int plic_claim(u32 hart_id, u32 *source)
 {
-	volatile uint32_t *sclaim;
+	volatile u32 *sclaim;
 
 	sclaim = plic_sclaim_complete(hart_id);
 	if (!sclaim)
@@ -111,9 +110,9 @@ static int plic_claim(uint32_t hart_id, uint32_t *source)
 	return 0;
 }
 
-static int plic_complete(uint32_t hart_id, uint32_t source)
+static int plic_complete(u32 hart_id, u32 source)
 {
-	volatile uint32_t *scomplete;
+	volatile u32 *scomplete;
 
 	if (!plic_source_is_valid(source))
 		return -EINVAL;
@@ -126,12 +125,12 @@ static int plic_complete(uint32_t hart_id, uint32_t source)
 	return 0;
 }
 
-static uint32_t plic_get_ndev(void)
+static u32 plic_get_ndev(void)
 {
 	return plic.ndev;
 }
 
-static int plic_init_hart(uint32_t hart_id)
+static int plic_init_hart(u32 hart_id)
 {
 	return plic_set_threshold(hart_id, 0);
 }

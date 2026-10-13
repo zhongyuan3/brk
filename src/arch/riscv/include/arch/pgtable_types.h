@@ -12,34 +12,34 @@
 #if __riscv_xlen == 32
 
 typedef struct __pgd {
-	uint32_t pgd;
+	u32 pgd;
 } pgd_t;
 #define pgd_val(x) ((x).pgd)
 
 typedef struct __pmd {
-	uint32_t pmd;
+	u32 pmd;
 } pmd_t;
 #define pmd_val(x) ((x).pmd)
 
 typedef struct __pte {
-	uint32_t pte;
+	u32 pte;
 } pte_t;
 #define pte_val(x) ((x).pte)
 
 #else
 
 typedef struct __pgd {
-	uint64_t pgd;
+	u64 pgd;
 } pgd_t;
 #define pgd_val(x) ((x).pgd)
 
 typedef struct __pmd {
-	uint64_t pmd;
+	u64 pmd;
 } pmd_t;
 #define pmd_val(x) ((x).pmd)
 
 typedef struct __pte {
-	uint64_t pte;
+	u64 pte;
 } pte_t;
 #define pte_val(x) ((x).pte)
 

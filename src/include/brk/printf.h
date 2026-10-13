@@ -2,6 +2,7 @@
 #define BRK_PRINTF_H
 
 #include <brk/compiler.h>
+#include <brk/stdargs.h>
 #include <brk/types.h>
 
 int snprintf(char *buf, size_t size, const char *fmt, ...)

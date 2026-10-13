@@ -9,7 +9,7 @@
 #include <brk/types.h>
 
 extern size_t load_offset; /* LOAD_OFFSET = VMA - LMA */
-extern uint64_t phys_ram_base;
+extern u64 phys_ram_base;
 
 extern char _skernel[], _ekernel[];
 extern char _stext[], _etext[];
@@ -19,7 +19,7 @@ extern char _sbss[], _ebss[];
 extern char init_stack[];
 extern char hart_entry[];
 
-static inline uint64_t symbol_phys(void *vaddr)
+static inline u64 symbol_phys(void *vaddr)
 {
 	return (uintptr_t)vaddr - load_offset;
 }
@@ -48,12 +48,12 @@ static inline uint64_t symbol_phys(void *vaddr)
 #define _EBSS_ALIGNED_PHYS round_up(_EBSS_PHYS, PAGE_SIZE)
 #define _BSS_SIZE ((uintptr_t)_ebss - (uintptr_t)_sbss)
 
-static inline uintptr_t phys_to_virt(uint64_t paddr)
+static inline uintptr_t phys_to_virt(u64 paddr)
 {
 	return (paddr - phys_ram_base) + PAGE_OFFSET;
 }
 
-static inline uint64_t virt_to_phys(uintptr_t vaddr)
+static inline u64 virt_to_phys(uintptr_t vaddr)
 {
 	return (vaddr - PAGE_OFFSET) + phys_ram_base;
 }

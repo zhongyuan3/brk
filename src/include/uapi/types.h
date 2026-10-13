@@ -1,11 +1,6 @@
 #ifndef UAPI_TYPES_H
 #define UAPI_TYPES_H
 
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-
 typedef unsigned int dev_t;
 typedef int mode_t;
 

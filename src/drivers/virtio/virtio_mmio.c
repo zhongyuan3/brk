@@ -6,15 +6,15 @@
 #include <brk/virtio_mmio.h>
 #include <uapi/errno.h>
 
-static uint64_t virtio_mmio_base(struct virtio_device *dev)
+static u64 virtio_mmio_base(struct virtio_device *dev)
 {
 	return (uintptr_t)dev->mem_base;
 }
 
-static void virtio_mmio_write_addr(struct virtio_device *dev, uint32_t low_off,
-				   uint32_t high_off, uint64_t addr)
+static void virtio_mmio_write_addr(struct virtio_device *dev, u32 low_off,
+				   u32 high_off, u64 addr)
 {
-	uint64_t base = virtio_mmio_base(dev);
+	u64 base = virtio_mmio_base(dev);
 
 	writel(addr & 0xffffffff, base + low_off);
 	writel(addr >> 32, base + high_off);
@@ -22,7 +22,7 @@ static void virtio_mmio_write_addr(struct virtio_device *dev, uint32_t low_off,
 
 int virtio_mmio_probe(struct virtio_device *dev)
 {
-	uint64_t base = virtio_mmio_base(dev);
+	u64 base = virtio_mmio_base(dev);
 
 	if (readl(base + VIRTIO_MAGIC_VALUE_OFFSET) != VIRTIO_MAGIC_VALUE)
 		return -EINVAL;
@@ -43,20 +43,20 @@ void virtio_mmio_reset(struct virtio_device *dev)
 
 int virtio_mmio_start_driver(struct virtio_device *dev)
 {
-	uint64_t base = virtio_mmio_base(dev);
-	uint32_t status;
+	u64 base = virtio_mmio_base(dev);
+	u32 status;
 
 	status = VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER;
 	writel(status, base + VIRTIO_STATUS_OFFSET);
 	return 0;
 }
 
-uint32_t virtio_mmio_read_features(struct virtio_device *dev)
+u32 virtio_mmio_read_features(struct virtio_device *dev)
 {
 	return readl(virtio_mmio_base(dev) + VIRTIO_DEVICE_FEATURES_OFFSET);
 }
 
-int virtio_mmio_write_features(struct virtio_device *dev, uint32_t features)
+int virtio_mmio_write_features(struct virtio_device *dev, u32 features)
 {
 	writel(features, virtio_mmio_base(dev) + VIRTIO_DRIVER_FEATURES_OFFSET);
 	return 0;
@@ -64,8 +64,8 @@ int virtio_mmio_write_features(struct virtio_device *dev, uint32_t features)
 
 int virtio_mmio_features_ok(struct virtio_device *dev)
 {
-	uint64_t base = virtio_mmio_base(dev);
-	uint32_t status;
+	u64 base = virtio_mmio_base(dev);
+	u32 status;
 
 	status = readl(base + VIRTIO_STATUS_OFFSET);
 	status |= VIRTIO_STATUS_FEATURES_OK;
@@ -78,11 +78,11 @@ int virtio_mmio_features_ok(struct virtio_device *dev)
 	return 0;
 }
 
-int virtio_mmio_setup_queue(struct virtio_device *dev, uint32_t queue_id,
-			    struct virtq *vq, uint32_t queue_size)
+int virtio_mmio_setup_queue(struct virtio_device *dev, u32 queue_id,
+			    struct virtq *vq, u32 queue_size)
 {
-	uint64_t base = virtio_mmio_base(dev);
-	uint32_t queue_size_max;
+	u64 base = virtio_mmio_base(dev);
+	u32 queue_size_max;
 
 	writel(queue_id, base + VIRTIO_QUEUE_SEL_OFFSET);
 
@@ -117,8 +117,8 @@ int virtio_mmio_setup_queue(struct virtio_device *dev, uint32_t queue_id,
 
 int virtio_mmio_driver_ok(struct virtio_device *dev)
 {
-	uint64_t base = virtio_mmio_base(dev);
-	uint32_t status;
+	u64 base = virtio_mmio_base(dev);
+	u32 status;
 
 	status = readl(base + VIRTIO_STATUS_OFFSET);
 	status |= VIRTIO_STATUS_DRIVER_OK;
@@ -126,15 +126,15 @@ int virtio_mmio_driver_ok(struct virtio_device *dev)
 	return 0;
 }
 
-void virtio_mmio_queue_notify(struct virtio_device *dev, uint32_t queue_id)
+void virtio_mmio_queue_notify(struct virtio_device *dev, u32 queue_id)
 {
 	writel(queue_id, virtio_mmio_base(dev) + VIRTIO_QUEUE_NOTIFY_OFFSET);
 }
 
-uint32_t virtio_mmio_ack_interrupt(struct virtio_device *dev)
+u32 virtio_mmio_ack_interrupt(struct virtio_device *dev)
 {
-	uint64_t base = virtio_mmio_base(dev);
-	uint32_t status;
+	u64 base = virtio_mmio_base(dev);
+	u32 status;
 
 	status = readl(base + VIRTIO_INTERRUPT_STATUS_OFFSET) & 0x3;
 	writel(status, base + VIRTIO_INTERRUPT_ACK_OFFSET);
@@ -142,16 +142,16 @@ uint32_t virtio_mmio_ack_interrupt(struct virtio_device *dev)
 }
 
 int virtio_mmio_read(struct virtio_device *dev, void *buf, size_t size,
-		     uint32_t offset)
+		     u32 offset)
 {
-	uint64_t base;
+	u64 base;
 
 	if (offset >= dev->size || offset + size > dev->size)
 		return -EINVAL;
 
 	base = virtio_mmio_base(dev) + offset;
 	for (size_t i = 0; i < size; ++i) {
-		((uint8_t *)buf)[i] = readb(base + i);
+		((u8 *)buf)[i] = readb(base + i);
 	}
 
 	return 0;

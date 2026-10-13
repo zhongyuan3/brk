@@ -4,9 +4,9 @@
 #include <brk/types.h>
 
 #if __riscv_xlen == 32
-typedef uint32_t reg_t;
+typedef u32 reg_t;
 #else
-typedef uint64_t reg_t;
+typedef u64 reg_t;
 #endif
 
 struct switch_frame {

@@ -31,7 +31,7 @@ struct page {
 
 struct uvm_region {
 	struct list_head list;
-	uint64_t addr;
+	u64 addr;
 	size_t size;
 	struct page **pages;
 	size_t nr_pages;
@@ -43,7 +43,7 @@ struct uvm_space {
 	struct list_head seg;
 	struct uvm_region *stack;
 	struct uvm_region *heap;
-	uint64_t brk;
+	u64 brk;
 	refcnt_t refcnt;
 };
 

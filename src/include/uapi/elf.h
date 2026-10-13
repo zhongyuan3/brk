@@ -24,61 +24,61 @@
 #if __riscv_xlen == 32
 
 struct elf_hdr {
-	uint8_t e_ident[EI_NIDENT];
-	uint16_t e_type; /* Object file type */
-	uint16_t e_machine; /* Architecture */
-	uint32_t e_version; /* Object file version */
-	uint32_t e_entry; /* Enter point virtual address */
-	uint32_t e_phoff; /* Program header table file offset */
-	uint32_t e_shoff; /* Section header table file offset */
-	uint32_t e_flags; /* Processor-specific flags */
-	uint16_t e_ehsize; /* ELF header size in bytes */
-	uint16_t e_phentsize; /* Program header table entry size */
-	uint16_t e_phnum; /* Program header table entry count */
-	uint16_t e_shentsize; /* Section header table entry size */
-	uint16_t e_shnum; /* Section header table entry count */
-	uint16_t e_shstrndx; /* Section header string table index */
+	u8 e_ident[EI_NIDENT];
+	u16 e_type; /* Object file type */
+	u16 e_machine; /* Architecture */
+	u32 e_version; /* Object file version */
+	u32 e_entry; /* Enter point virtual address */
+	u32 e_phoff; /* Program header table file offset */
+	u32 e_shoff; /* Section header table file offset */
+	u32 e_flags; /* Processor-specific flags */
+	u16 e_ehsize; /* ELF header size in bytes */
+	u16 e_phentsize; /* Program header table entry size */
+	u16 e_phnum; /* Program header table entry count */
+	u16 e_shentsize; /* Section header table entry size */
+	u16 e_shnum; /* Section header table entry count */
+	u16 e_shstrndx; /* Section header string table index */
 };
 
 struct elf_phdr {
-	uint32_t p_type;
-	uint32_t p_offset; /* Segment file offset */
-	uint32_t p_vaddr; /* Segment virtual address */
-	uint32_t p_paddr; /* Segment physical address */
-	uint32_t p_filesz; /* Segment size in file */
-	uint32_t p_memsz; /* Segment size int memory */
-	uint32_t p_flags;
-	uint32_t p_align; /* Segment alignment */
+	u32 p_type;
+	u32 p_offset; /* Segment file offset */
+	u32 p_vaddr; /* Segment virtual address */
+	u32 p_paddr; /* Segment physical address */
+	u32 p_filesz; /* Segment size in file */
+	u32 p_memsz; /* Segment size int memory */
+	u32 p_flags;
+	u32 p_align; /* Segment alignment */
 };
 
 #else
 
 struct elf_hdr {
-	uint8_t e_ident[EI_NIDENT];
-	uint16_t e_type; /* Object file type */
-	uint16_t e_machine; /* Architecture */
-	uint32_t e_version; /* Object file version */
-	uint64_t e_entry; /* Enter point virtual address */
-	uint64_t e_phoff; /* Program header table file offset */
-	uint64_t e_shoff; /* Section header table file offset */
-	uint32_t e_flags; /* Processor-specific flags */
-	uint16_t e_ehsize; /* ELF header size in bytes */
-	uint16_t e_phentsize; /* Program header table entry size */
-	uint16_t e_phnum; /* Program header table entry count */
-	uint16_t e_shentsize; /* Section header table entry size */
-	uint16_t e_shnum; /* Section header table entry count */
-	uint16_t e_shstrndx; /* Section header string table index */
+	u8 e_ident[EI_NIDENT];
+	u16 e_type; /* Object file type */
+	u16 e_machine; /* Architecture */
+	u32 e_version; /* Object file version */
+	u64 e_entry; /* Enter point virtual address */
+	u64 e_phoff; /* Program header table file offset */
+	u64 e_shoff; /* Section header table file offset */
+	u32 e_flags; /* Processor-specific flags */
+	u16 e_ehsize; /* ELF header size in bytes */
+	u16 e_phentsize; /* Program header table entry size */
+	u16 e_phnum; /* Program header table entry count */
+	u16 e_shentsize; /* Section header table entry size */
+	u16 e_shnum; /* Section header table entry count */
+	u16 e_shstrndx; /* Section header string table index */
 };
 
 struct elf_phdr {
-	uint32_t p_type;
-	uint32_t p_flags;
-	uint64_t p_offset; /* Segment file offset */
-	uint64_t p_vaddr; /* Segment virtual address */
-	uint64_t p_paddr; /* Segment physical address */
-	uint64_t p_filesz; /* Segment size in file */
-	uint64_t p_memsz; /* Segment size int memory */
-	uint64_t p_align; /* Segment alignment */
+	u32 p_type;
+	u32 p_flags;
+	u64 p_offset; /* Segment file offset */
+	u64 p_vaddr; /* Segment virtual address */
+	u64 p_paddr; /* Segment physical address */
+	u64 p_filesz; /* Segment size in file */
+	u64 p_memsz; /* Segment size int memory */
+	u64 p_align; /* Segment alignment */
 };
 
 #endif

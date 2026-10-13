@@ -69,11 +69,11 @@ struct task_control_block {
 
 	struct sigaction_table *sigactions;
 	/* protected by @sigactions->lock */
-	uint64_t pending;
+	u64 pending;
 	/* protected by @sigactions->lock */
-	uint64_t blocked;
+	u64 blocked;
 	/* protected by @sigactions->lock */
-	uint64_t sigframe_sp;
+	u64 sigframe_sp;
 	/* protected by @sigactions->lock */
 	bool in_handler;
 
@@ -88,10 +88,10 @@ struct task_control_block {
 
 	/* the following fields are private, not protected by any locks */
 	struct trap_frame *tf; /* points to the trap frame on kernel stack */
-	uint64_t kstack_base;
-	uint64_t kstack_top;
-	uint64_t ktime; /* last time the task was scheduled or entered kernel mode */
-	uint64_t utime; /* last time the task entered user mode */
+	u64 kstack_base;
+	u64 kstack_top;
+	u64 ktime; /* last time the task was scheduled or entered kernel mode */
+	u64 utime; /* last time the task entered user mode */
 	int time_slice;
 	char name[TASK_NAME_MAX];
 	bool irq_enabled;
@@ -114,9 +114,9 @@ struct task_info {
 	enum task_state state;
 	int exit_status;
 	bool killed;
-	uint64_t utime;
-	uint64_t ktime;
-	uint64_t brk;
+	u64 utime;
+	u64 ktime;
+	u64 brk;
 	char name[TASK_NAME_MAX];
 };
 
