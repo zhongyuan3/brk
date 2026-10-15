@@ -1,3 +1,4 @@
+obj-y += head.o
 obj-y += entry.o
 obj-y += switch.o
 obj-y += trap.o
