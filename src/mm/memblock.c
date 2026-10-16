@@ -12,7 +12,16 @@
 
 static struct memblock_region memory[INIT_MEMBLOCK_REGIONS];
 static struct memblock_region reserved[INIT_MEMBLOCK_RESERVED_REGIONS];
-static struct memblock init_memblock;
+static struct memblock init_memblock = {
+	.memory.name = "memory",
+	.memory.regions = memory,
+	.memory.max = INIT_MEMBLOCK_REGIONS,
+	.memory.cnt = 0,
+	.reserved.name = "reserved",
+	.reserved.regions = reserved,
+	.reserved.max = INIT_MEMBLOCK_RESERVED_REGIONS,
+	.reserved.cnt = 0,
+};
 
 static void memblock_move_regions(struct memblock_region_set *set, size_t to,
 				  size_t from, size_t n)
@@ -115,18 +124,6 @@ repeat:
 		memblock_merge_regions(set);
 		return 0;
 	}
-}
-
-void memblock_init(void)
-{
-	init_memblock.memory.name = "memory";
-	init_memblock.memory.regions = memory;
-	init_memblock.memory.max = INIT_MEMBLOCK_REGIONS;
-	init_memblock.memory.cnt = 0;
-	init_memblock.reserved.name = "reserved";
-	init_memblock.reserved.regions = reserved;
-	init_memblock.reserved.max = INIT_MEMBLOCK_RESERVED_REGIONS;
-	init_memblock.reserved.cnt = 0;
 }
 
 int memblock_add(u64 base, size_t size)
