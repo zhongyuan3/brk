@@ -22,8 +22,6 @@
 
 void start_kernel(void)
 {
-	memblock_init();
-
 	arch_init();
 
 	page_alloc_init();

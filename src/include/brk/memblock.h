@@ -23,7 +23,6 @@ struct memblock {
 	struct memblock_region_set reserved;
 };
 
-void memblock_init(void);
 int memblock_add(u64 base, size_t size);
 int memblock_reserve(u64 base, size_t size);
 u64 memblock_alloc(size_t size, u64 min_addr, size_t align);
