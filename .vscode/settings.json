@@ -4,7 +4,8 @@
         "GDB": "gdb-multiarch"
     },
     "files.associations": {
-        "*.h": "c"
+        "*.h": "c",
+        "Makefile.build": "makefile"
     },
     "[c]": {
         "editor.tabSize": 8,

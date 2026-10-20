@@ -5,10 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "riscv-smp-64",
+            "name": "riscv64",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/debug-smp-64/brk.elf",
+            "program": "${workspaceFolder}/build/riscv/x64/debug/brk.elf",
             "cwd": "${workspaceFolder}",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb-multiarch",
@@ -24,48 +24,10 @@
             ]
         },
         {
-            "name": "riscv-smp-32",
+            "name": "riscv32",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/debug-smp-32/brk.elf",
-            "cwd": "${workspaceFolder}",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb-multiarch",
-            "miDebuggerServerAddress": "127.0.0.1:1234",
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "setupCommands": [
-                {
-                    "description": "Enable GDB pretty-printing",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ]
-        },
-        {
-            "name": "riscv-64",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/debug-64/brk.elf",
-            "cwd": "${workspaceFolder}",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb-multiarch",
-            "miDebuggerServerAddress": "127.0.0.1:1234",
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "setupCommands": [
-                {
-                    "description": "Enable GDB pretty-printing",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ]
-        },
-        {
-            "name": "riscv-32",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/debug-32/brk.elf",
+            "program": "${workspaceFolder}/build/riscv/x32/debug/brk.elf",
             "cwd": "${workspaceFolder}",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb-multiarch",

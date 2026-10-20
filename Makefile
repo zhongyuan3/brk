@@ -9,28 +9,15 @@ CFLAGS :=
 ifeq ($(ARCH),riscv)
 include src/arch/$(ARCH)/config.mk
 else
-$(error Unknown ARCH value '$(ARCH)')
+$(error Unsupported architecture '$(ARCH)')
 endif
 
 BUILD ?= debug
 RAM ?= 128M
-ENABLE_SMP ?= 1
-ifeq ($(ENABLE_SMP),1)
 CPU ?= 3
-KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(BUILD)-smp-$(XLEN)
-CFLAGS += -DENABLE_SMP=1
-else
-CPU := 1
-KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(BUILD)-$(XLEN)
-endif
+KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)/x$(XLEN)/$(BUILD)
+ROOTFS_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)/x$(XLEN)
 
-# Toolchain selection follows the Linux kernel: the user names the cross
-# compiler with CROSS_COMPILE on the command line or in the environment, e.g.
-#
-#   make CROSS_COMPILE=riscv64-unknown-elf-
-#
-# Leave it empty to use the host tools. Individual tools may be overridden
-# (CC, LD, GDB, ...) just like with the kernel.
 CROSS_COMPILE ?=
 CC := $(CROSS_COMPILE)gcc
 CPP := $(CC) -E
@@ -68,7 +55,7 @@ CFLAGS += -ffunction-sections
 CFLAGS += -fdata-sections
 LDFLAGS += --gc-sections
 else
-$(error unknown BUILD value '$(BUILD)')
+$(error Unknown build type '$(BUILD)')
 endif
 
 CFLAGS += -nostdinc
@@ -85,13 +72,13 @@ LDFLAGS += -z max-page-size=4096
 LIBGCC := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name 2>/dev/null)
 
 export ARCH
-export BUILD_ROOT KERNEL_BUILD_ROOT
+export BUILD_ROOT KERNEL_BUILD_ROOT ROOTFS_BUILD_ROOT
 export CROSS_COMPILE CC LD AS AR CFLAGS LDFLAGS
 
 LINKER_SCRIPT_SRC := src/arch/$(ARCH)/kernel/brk.ld.S
 LINKER_SCRIPT := $(KERNEL_BUILD_ROOT)/brk.ld
 KERNEL_ELF := $(KERNEL_BUILD_ROOT)/brk.elf
-ROOTFS_IMG := $(BUILD_ROOT)/rootfs-$(XLEN).img
+ROOTFS_IMG := $(ROOTFS_BUILD_ROOT)/rootfs.img
 
 core-y := src
 core-y += vendor
@@ -126,8 +113,7 @@ help:
 	@echo "  CROSS_COMPILE=<prefix>"
 	@echo "  BUILD={debug|release}  (default: debug)"
 	@echo "  BUILD_ROOT=<path>      (default: build)"
-	@echo "  ENABLE_SMP={0|1}       (default 1)"
-	@echo "  CPU=<n>                (default 1, or 3 when ENABLE_SMP=1)"
+	@echo "  CPU=<n>                (default 3)"
 	@echo "  RAM=<size>             (default 128M)"
 
 $(LINKER_SCRIPT): $(LINKER_SCRIPT_SRC)

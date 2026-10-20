@@ -244,9 +244,7 @@ static void initial_task_return(void)
 	if (err < 0)
 		panic("execve %s failed: %s\n", argv[0], strerror(err));
 
-#if ENABLE_SMP
 	smp_boot_release_secondary_harts();
-#endif
 
 	prepare_to_return();
 	user_trap_return(task->tf);

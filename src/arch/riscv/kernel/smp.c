@@ -13,8 +13,6 @@
 #include <brk/trap.h>
 #include <brk/types.h>
 
-#if ENABLE_SMP
-
 void start_hart(void)
 {
 	final_pgtable_enable();
@@ -51,5 +49,3 @@ void smp_boot_release_secondary_harts(void)
 	released = true;
 	smp_wake_secondary_harts(boot_cpuid);
 }
-
-#endif
