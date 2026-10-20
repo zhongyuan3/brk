@@ -1,0 +1,17 @@
+{
+    "terminal.integrated.env.linux": {
+        "CROSS_COMPILE": "riscv64-unknown-elf-",
+        "GDB": "gdb-multiarch"
+    },
+    "files.associations": {
+        "*.h": "c"
+    },
+    "[c]": {
+        "editor.tabSize": 8,
+        "editor.insertSpaces": false
+    },
+    "[makefile]": {
+        "editor.tabSize": 8,
+        "editor.insertSpaces": false
+    }
+}

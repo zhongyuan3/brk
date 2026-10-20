@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/src/arch/riscv/include",
+                "${workspaceFolder}/src/include",
+                "${workspaceFolder}/vendor/libfdt"
+            ],
+            "compilerPath": "/usr/bin/riscv64-unknown-elf-gcc"
+        }
+    ],
+    "version": 4
+}
