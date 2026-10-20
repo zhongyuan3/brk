@@ -93,7 +93,6 @@ _start:
 
 	jump_to_kernel_virt start_kernel
 
-#if ENABLE_SMP
 	.global hart_entry
 hart_entry:
 	mv HART_ID_SAVED_REG, a0
@@ -117,4 +116,3 @@ hart_entry:
 	call setup_vm_early
 
 	jump_to_kernel_virt start_hart
-#endif

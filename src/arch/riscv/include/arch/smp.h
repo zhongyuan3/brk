@@ -3,8 +3,4 @@
 
 #define NR_CPUS 8
 
-#ifndef ENABLE_SMP
-#define ENABLE_SMP 0
-#endif
-
 #endif
