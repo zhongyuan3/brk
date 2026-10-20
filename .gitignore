@@ -10,17 +10,11 @@ compile_commands.json
 *.dts
 *.img
 
-aosd.ld
-aosd.elf
-
 *.dis
 *.a
 *.so
 *.ld
 
-user/bin/*
-
 build/
 
 __pycache__/
-.vscode/
