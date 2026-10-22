@@ -1,12 +1,15 @@
-#include <arch/boot.h>
+#include <arch/asm/page.h>
+#include <arch/asm/vmlayout.h>
 #include <arch/csr.h>
 #include <arch/large_page.h>
 #include <arch/mm.h>
-#include <arch/page.h>
-#include <arch/page_table.h>
 #include <arch/pgtable.h>
 #include <arch/sbi.h>
+#include <brk/asm/cpu.h>
 #include <brk/assert.h>
+#include <brk/cpu.h>
+#include <brk/init.h>
+#include <brk/irq.h>
 #include <brk/kernel.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
@@ -14,24 +17,83 @@
 #include <brk/of.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
+#include <brk/printk.h>
+#include <brk/task.h>
+#include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
 #include <libfdt.h>
 
-size_t load_offset;
+void primary_entry(unsigned long hart_id, unsigned long dtb_pa,
+		   unsigned long kernel_va_pa_offset)
+{
+	boot_cpuid = hart_id;
+	dtb_phys = dtb_pa;
+	kernel_map.kernel_va_pa_offset = kernel_va_pa_offset;
+	cpu_init(hart_id);
+
+	start_kernel();
+}
+
+void secondary_entry(unsigned long hart_id)
+{
+	cpu_init(hart_id);
+	final_pgtable_enable();
+
+	irq_init_hart(hart_id);
+	/* Device IRQs are handled on the boot hart only (no IPI support yet). */
+	trap_init_hart(hart_id);
+
+	intr_on();
+
+	klog_info("hart %lu ready\n", hart_id);
+
+	task_scheduler();
+}
+
+void arch_init(void)
+{
+	memblock_reserve(_SKERNEL_PHYS, _KERNEL_SIZE);
+	size_t dtb_size =
+		round_up(fdt_totalsize((uintptr_t)dtb_phys), PAGE_SIZE);
+	memblock_reserve(dtb_phys, dtb_size);
+	dtb_early_init_scan_mem();
+	dtb_early_init_scan_reserved_mem();
+	phys_ram_base = memblock_get_ram_base();
+	paging_init();
+}
+
+static void smp_wake_secondary_harts(u64 init_hart_id)
+{
+	u64 start_addr = symbol_phys(_secondary_start);
+
+	for (u64 id = 0; id < MAX_CPUS; ++id) {
+		if (id == init_hart_id)
+			continue;
+		sbi_hart_start(id, start_addr, 0);
+	}
+}
+
+void smp_boot_release_secondary_harts(void)
+{
+	static bool released;
+
+	if (released)
+		return;
+	released = true;
+	smp_wake_secondary_harts(boot_cpuid);
+}
+
+struct kernel_mapping kernel_map;
 u64 phys_ram_base;
 
-/*
- * All page tables below the top-level PGD are carved out of the early_pgdir
- * region. The frontier must be global: the identity, link and DTB mappings
- * are built by separate map_range() calls that must not reuse each other's
- * tables.
- */
-static u64 rsv_page_next;
+u64 rsv_page_next;
+u8 rsv_pages[PAGE_SIZE * NR_RSV_PAGES] __attribute__((aligned(PAGE_SIZE)));
 
 static u64 alloc_early_rsv_page(void)
 {
-	u64 end = (uintptr_t)early_pgdir + NR_EARLY_PGDIR_PAGES * PAGE_SIZE;
+	unsigned long base = (unsigned long)rsv_pages;
+	unsigned long end = base + NR_EARLY_PGDIR_PAGES * PAGE_SIZE;
 
 	if (rsv_page_next + PAGE_SIZE < end) {
 		rsv_page_next += PAGE_SIZE;
@@ -52,7 +114,7 @@ static void map_early(u64 addr, size_t size, u64 paddr, unsigned int flags)
 	u64 end_addr = addr + size;
 
 	while (addr < end_addr) {
-		pgdep = (pgd_t *)early_pgdir + pgd_index(addr);
+		pgdep = (pgd_t *)rsv_pages + pgd_index(addr);
 		if (pgd_present(*pgdep)) {
 			pmd_phys = pgd_get_pmd(*pgdep);
 		} else {
@@ -66,20 +128,13 @@ static void map_early(u64 addr, size_t size, u64 paddr, unsigned int flags)
 	}
 }
 
-static void __setup_vm_early(uintptr_t dtb, size_t load_offset)
+static void __setup_vm_early(uintptr_t dtb)
 {
 	u64 kern_end;
 	size_t size;
 	unsigned int flags;
 
-	/*
-	 * Before paging is enabled, linker symbols resolve to physical
-	 * addresses via PC-relative access. load_offset is passed from
-	 * head.S and matches (uintptr_t)_skernel - KERNEL_LINK_ADDR.
-	 */
-	(void)load_offset;
-
-	rsv_page_next = (uintptr_t)early_pgdir;
+	rsv_page_next = (uintptr_t)rsv_pages;
 
 	kern_end = round_up((uintptr_t)_ekernel, PAGE_SIZE_2M);
 	size = kern_end - (uintptr_t)_skernel;
@@ -107,13 +162,13 @@ static void __setup_vm_early(uintptr_t dtb, size_t load_offset)
 	map_early(map_start, size, map_start, flags);
 }
 
-void setup_vm_early(uintptr_t dtb, size_t load_offset, int boot)
+void setup_vm_early(uintptr_t dtb, bool boot)
 {
 	if (boot) {
-		__setup_vm_early(dtb, load_offset);
+		__setup_vm_early(dtb);
 	}
 
-	write_satp(make_satp((uintptr_t)early_pgdir));
+	write_satp(make_satp((uintptr_t)rsv_pages));
 	sfence_vma();
 	fence_i();
 }

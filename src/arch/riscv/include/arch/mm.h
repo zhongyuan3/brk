@@ -1,14 +1,18 @@
 #ifndef ARCH_MM_H
 #define ARCH_MM_H
 
-#include <arch/page.h>
+#include <arch/asm/page.h>
+#include <arch/asm/vmlayout.h>
 #include <arch/pgtable_types.h>
-#include <arch/vas_layout.h>
+#include <brk/asm/cpu.h>
 #include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/types.h>
 
-extern size_t load_offset; /* LOAD_OFFSET = VMA - LMA */
+extern struct kernel_mapping {
+	size_t kernel_va_pa_offset;
+} kernel_map;
+
 extern u64 phys_ram_base;
 
 extern char _skernel[], _ekernel[];
@@ -16,12 +20,23 @@ extern char _stext[], _etext[];
 extern char _srodata[], _erodata[];
 extern char _sdata[], _edata[];
 extern char _sbss[], _ebss[];
-extern char init_stack[];
-extern char hart_entry[];
+extern char _secondary_start[];
+
+#define NR_EARLY_PGDIR_PAGES 8
+#define NR_RSV_PAGES (NR_EARLY_PGDIR_PAGES + MAX_CPUS * INIT_STACK_SIZE)
+
+/*
+ * All page tables below the top-level PGD are carved out of the early_pgdir
+ * region. The frontier must be global: the identity, link and DTB mappings
+ * are built by separate map_range() calls that must not reuse each other's
+ * tables.
+ */
+extern u64 rsv_page_next;
+extern u8 rsv_pages[PAGE_SIZE * NR_RSV_PAGES] __attribute__((aligned(PAGE_SIZE)));
 
 static inline u64 symbol_phys(void *vaddr)
 {
-	return (uintptr_t)vaddr - load_offset;
+	return (uintptr_t)vaddr - kernel_map.kernel_va_pa_offset;
 }
 
 #define _SKERNEL_PHYS symbol_phys(_skernel)

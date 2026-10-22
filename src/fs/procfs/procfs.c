@@ -283,7 +283,7 @@ static int procfs_show_version(const struct procfs_entry *e, pid_t pid,
 	(void)pid;
 	return snprintf(buf, size,
 			"BRK kernel %s " __DATE__ " " __TIME__ " %s\n",
-			BRK_VERSION, arch_uname_machine());
+			BRK_VERSION, uname_machine());
 }
 
 static int procfs_show_uptime(const struct procfs_entry *e, pid_t pid,

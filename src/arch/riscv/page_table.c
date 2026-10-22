@@ -1,6 +1,6 @@
 #include <arch/csr.h>
 #include <arch/large_page.h>
-#include <arch/page.h>
+#include <arch/asm/page.h>
 #include <arch/pgtable.h>
 #include <brk/assert.h>
 #include <brk/kernel.h>

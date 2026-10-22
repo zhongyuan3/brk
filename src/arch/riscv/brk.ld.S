@@ -1,10 +1,9 @@
 OUTPUT_ARCH("riscv")
 ENTRY(_start)
 
-#include <arch/boot.h>
-#include <arch/page_table.h>
-#include <arch/page.h>
-#include <arch/smp.h>
+#include <arch/asm/vmlayout.h>
+#include <arch/asm/page.h>
+#include <brk/asm/cpu.h>
 
 SECTIONS
 {
@@ -55,19 +54,6 @@ SECTIONS
     *(.sbss.*)
     *(.bss)
     *(.bss.*)
-
-    . = ALIGN(PAGE_SIZE);
-    init_stack = .;
-    . += NR_INIT_STACK_PAGES * PAGE_SIZE * NR_CPUS;
-
-    . = ALIGN(PAGE_SIZE);
-    early_pgdir = .;
-    . += NR_EARLY_PGDIR_PAGES * PAGE_SIZE;
-
-    . = ALIGN(PAGE_SIZE);
-    kernel_pgdir = .;
-    . += PAGE_SIZE;
-
     _ebss = .;
   }
 

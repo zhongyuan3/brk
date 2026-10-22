@@ -51,7 +51,7 @@ void tty_init(struct tty *tty, struct tty_port *port)
 	tty_init_winsize(tty);
 }
 
-void tty_set_foreground(struct tty *tty, struct task_control_block *task)
+void tty_set_foreground(struct tty *tty, struct task *task)
 {
 	if (!tty || !tty->port)
 		return;
@@ -63,7 +63,7 @@ void tty_set_foreground(struct tty *tty, struct task_control_block *task)
 long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 {
 	struct winsize *ws = (struct winsize *)arg;
-	struct task_control_block *fg;
+	struct task *fg;
 
 	if (!tty)
 		return -EBADF;

@@ -1,4 +1,4 @@
-#include <arch/page.h>
+#include <arch/asm/page.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
@@ -505,7 +505,7 @@ void pipe_fs_init(void)
 int do_pipe2(int *pipefd, int flags)
 {
 	struct fs_file *rf, *wf;
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	int fd0, fd1, err;
 
 	if (flags & ~(O_CLOEXEC | O_NONBLOCK))

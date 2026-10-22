@@ -48,7 +48,7 @@ static int dir_lookup_entry(struct fs_path *dir, const struct qstr *name,
 
 static int path_init(int dir_fd, const char **pathname, struct fs_path *path)
 {
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 
 	if ((*pathname)[0] == '/') {
 		fsinfo_get_root(task->fsinfo, path);

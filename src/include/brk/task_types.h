@@ -1,7 +1,7 @@
 #ifndef BRK_TASK_TYPES_H
 #define BRK_TASK_TYPES_H
 
-#include <arch/processor.h>
+#include <arch/context.h>
 #include <arch/trapframe.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
@@ -27,7 +27,7 @@ struct task_resource_usage {
 	spinlock_t lock;
 };
 
-struct task_control_block {
+struct task {
 	/* protected by tasks_lock */
 	struct list_head list;
 
@@ -35,7 +35,7 @@ struct task_control_block {
 	struct list_head queue;
 
 	/* protected by wait_lock */
-	struct task_control_block *parent;
+	struct task *parent;
 	/* protected by wait_lock */
 	struct list_head children;
 	/* protected by wait_lock */
@@ -48,7 +48,7 @@ struct task_control_block {
 		};
 		struct { /* non-leader thread */
 			struct list_head sibling;
-			struct task_control_block *leader;
+			struct task *leader;
 		};
 	};
 
@@ -56,7 +56,7 @@ struct task_control_block {
 	/* protected by @lock */
 	void *chan;
 	/* protected by @lock */
-	struct switch_frame ctx;
+	struct context ctx;
 	/* protected by @lock */
 	enum task_state state;
 	/* protected by @lock */
@@ -94,13 +94,6 @@ struct task_control_block {
 	u64 utime; /* last time the task entered user mode */
 	int time_slice;
 	char name[TASK_NAME_MAX];
-	bool irq_enabled;
-};
-
-struct cpu {
-	struct task_control_block *handoff;
-	struct switch_frame ctx;
-	int irq_nest;
 	bool irq_enabled;
 };
 

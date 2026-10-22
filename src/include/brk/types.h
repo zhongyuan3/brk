@@ -21,7 +21,7 @@ typedef __INTMAX_TYPE__ intmax_t;
 typedef __UINTMAX_TYPE__ uintmax_t;
 
 typedef unsigned int fmode_t;
-typedef int cpuid_t;
+typedef unsigned long cpuid_t;
 typedef unsigned int umode_t;
 typedef unsigned int kuid_t;
 typedef unsigned int kgid_t;

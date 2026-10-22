@@ -1,28 +1,28 @@
 #include <arch/csr.h>
+#include <brk/cpu.h>
 #include <brk/panic.h>
-#include <brk/processor.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
 
-struct task_control_block *current_task(void)
+void set_thread_pointer(unsigned long value)
 {
-	return (struct task_control_block *)(uintptr_t)read_tp();
+	write_tp(value);
 }
 
-cpuid_t current_cpuid(void)
+unsigned long get_thread_pointer(void)
 {
-	return read_sscratch();
+	return read_tp();
 }
 
-struct cpu *current_cpu(void)
+struct task *current_task(void)
 {
-	return &cpus[current_cpuid()];
+	return (struct task *)(uintptr_t)read_tp();
 }
 
 void push_off(void)
 {
 	int enabled = intr_off_get();
-	struct cpu *cpu = current_cpu();
+	struct cpu *cpu = this_cpu();
 
 	if (cpu->irq_nest == 0)
 		cpu->irq_enabled = enabled;
@@ -31,7 +31,7 @@ void push_off(void)
 
 void pop_off(void)
 {
-	struct cpu *cpu = current_cpu();
+	struct cpu *cpu = this_cpu();
 
 	if (intr_enabled())
 		panic("%s(): interruptible\n", __func__);
@@ -42,22 +42,17 @@ void pop_off(void)
 		intr_on();
 }
 
-void set_current_task(struct task_control_block *task)
+void set_current_task(struct task *task)
 {
 	write_tp((uintptr_t)task);
 }
 
-void set_current_cpuid(cpuid_t cpuid)
-{
-	write_sscratch(cpuid);
-}
-
-void arch_cpu_idle(void)
+void cpu_idle(void)
 {
 	asm volatile("wfi");
 }
 
-const char *arch_uname_machine(void)
+const char *uname_machine(void)
 {
 	return "riscv64";
 }

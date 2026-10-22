@@ -1,53 +1,52 @@
 #ifndef ARCH_TRAPFRAME_H
 #define ARCH_TRAPFRAME_H
 
-#include <arch/processor.h>
 #include <brk/panic.h>
 #include <brk/string.h>
 #include <brk/types.h>
 
-struct task_control_block;
+struct task;
 
 struct trap_frame {
-	/* 0   */ reg_t kernel_sp;
-	/* 8   */ reg_t ra;
-	/* 16  */ reg_t sp;
-	/* 24  */ reg_t gp;
-	/* 32  */ reg_t tp;
-	/* 40  */ reg_t t0;
-	/* 48  */ reg_t t1;
-	/* 56  */ reg_t t2;
-	/* 64  */ reg_t s0;
-	/* 72  */ reg_t s1;
-	/* 80  */ reg_t a0;
-	/* 88  */ reg_t a1;
-	/* 96  */ reg_t a2;
-	/* 104 */ reg_t a3;
-	/* 112 */ reg_t a4;
-	/* 120 */ reg_t a5;
-	/* 128 */ reg_t a6;
-	/* 136 */ reg_t a7;
-	/* 144 */ reg_t s2;
-	/* 152 */ reg_t s3;
-	/* 160 */ reg_t s4;
-	/* 168 */ reg_t s5;
-	/* 176 */ reg_t s6;
-	/* 184 */ reg_t s7;
-	/* 192 */ reg_t s8;
-	/* 200 */ reg_t s9;
-	/* 208 */ reg_t s10;
-	/* 216 */ reg_t s11;
-	/* 224 */ reg_t t3;
-	/* 232 */ reg_t t4;
-	/* 240 */ reg_t t5;
-	/* 248 */ reg_t t6;
-	/* 256 */ reg_t epc;
-	/* 264 */ reg_t cpuid;
+	/* 0   */ unsigned long kernel_sp;
+	/* 8   */ unsigned long ra;
+	/* 16  */ unsigned long sp;
+	/* 24  */ unsigned long gp;
+	/* 32  */ unsigned long tp;
+	/* 40  */ unsigned long t0;
+	/* 48  */ unsigned long t1;
+	/* 56  */ unsigned long t2;
+	/* 64  */ unsigned long s0;
+	/* 72  */ unsigned long s1;
+	/* 80  */ unsigned long a0;
+	/* 88  */ unsigned long a1;
+	/* 96  */ unsigned long a2;
+	/* 104 */ unsigned long a3;
+	/* 112 */ unsigned long a4;
+	/* 120 */ unsigned long a5;
+	/* 128 */ unsigned long a6;
+	/* 136 */ unsigned long a7;
+	/* 144 */ unsigned long s2;
+	/* 152 */ unsigned long s3;
+	/* 160 */ unsigned long s4;
+	/* 168 */ unsigned long s5;
+	/* 176 */ unsigned long s6;
+	/* 184 */ unsigned long s7;
+	/* 192 */ unsigned long s8;
+	/* 200 */ unsigned long s9;
+	/* 208 */ unsigned long s10;
+	/* 216 */ unsigned long s11;
+	/* 224 */ unsigned long t3;
+	/* 232 */ unsigned long t4;
+	/* 240 */ unsigned long t5;
+	/* 248 */ unsigned long t6;
+	/* 256 */ unsigned long epc;
+	/* 264 */ unsigned long cpuid;
 };
 
 struct extended_trap_frame {
 	struct trap_frame tf;
-	struct task_control_block *task;
+	struct task *task;
 };
 
 #define TRAP_FRAME_ON_STACK_SIZE \
