@@ -1,4 +1,4 @@
-#include <arch/vas_layout.h>
+#include <arch/asm/vmlayout.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -50,7 +50,7 @@ void sigaction_table_reset(struct sigaction_table *table)
 	spinlock_release(&table->lock);
 }
 
-static int get_next_signal_locked(struct task_control_block *task)
+static int get_next_signal_locked(struct task *task)
 {
 	u64 deliver = task->pending & ~task->blocked;
 
@@ -79,7 +79,7 @@ static int get_next_signal_locked(struct task_control_block *task)
 	return 0;
 }
 
-static void signal_reset_signal_sets_locked(struct task_control_block *task)
+static void signal_reset_signal_sets_locked(struct task *task)
 {
 	task->pending = 0;
 	task->blocked = 0;
@@ -87,25 +87,25 @@ static void signal_reset_signal_sets_locked(struct task_control_block *task)
 	task->sigframe_sp = 0;
 }
 
-static void signal_reset_locked(struct task_control_block *task)
+static void signal_reset_locked(struct task *task)
 {
 	signal_reset_signal_sets_locked(task);
 	sigaction_table_reset_locked(task->sigactions);
 }
 
-void signal_reset(struct task_control_block *task)
+void signal_reset(struct task *task)
 {
 	spinlock_acquire(&task->sigactions->lock);
 	signal_reset_locked(task);
 	spinlock_release(&task->sigactions->lock);
 }
 
-static void clear_pending_locked(struct task_control_block *task, int sig)
+static void clear_pending_locked(struct task *task, int sig)
 {
 	task->pending &= ~(1ULL << sig);
 }
 
-bool signal_pending(struct task_control_block *task)
+bool signal_pending(struct task *task)
 {
 	bool pending;
 
@@ -117,7 +117,7 @@ bool signal_pending(struct task_control_block *task)
 
 int signal_do_kill(pid_t pid, int sig)
 {
-	struct task_control_block *p, *target = NULL;
+	struct task *p, *target = NULL;
 
 	if (sig != 0 && !sig_valid(sig))
 		return -EINVAL;
@@ -161,7 +161,7 @@ int signal_do_kill(pid_t pid, int sig)
 	return 0;
 }
 
-void signal_send(struct task_control_block *task, int sig)
+void signal_send(struct task *task, int sig)
 {
 	if (!task || !sig_valid(sig))
 		return;
@@ -179,7 +179,7 @@ void signal_send(struct task_control_block *task, int sig)
 	task_wake_spec(task);
 }
 
-int signal_init(struct task_control_block *task,
+int signal_init(struct task *task,
 		struct sigaction_table *sigactions, u64 blocked)
 {
 	if (!sigactions) {
@@ -197,7 +197,7 @@ int signal_init(struct task_control_block *task,
 	return 0;
 }
 
-void signal_deinit(struct task_control_block *task)
+void signal_deinit(struct task *task)
 {
 	if (!task->sigactions)
 		return;
@@ -205,7 +205,7 @@ void signal_deinit(struct task_control_block *task)
 	sigaction_table_put(task->sigactions);
 }
 
-static bool setup_signal_frame_locked(struct task_control_block *task, int sig,
+static bool setup_signal_frame_locked(struct task *task, int sig,
 				      u64 handler)
 {
 	u64 sp;
@@ -235,7 +235,7 @@ static bool setup_signal_frame_locked(struct task_control_block *task, int sig,
 	return true;
 }
 
-static void signal_deliver_one(struct task_control_block *task, int sig)
+static void signal_deliver_one(struct task *task, int sig)
 {
 	unsigned long handler;
 	u64 user_handler;
@@ -272,7 +272,7 @@ static void signal_deliver_one(struct task_control_block *task, int sig)
 	spinlock_release(&task->sigactions->lock);
 }
 
-void signal_deliver_pending(struct task_control_block *task)
+void signal_deliver_pending(struct task *task)
 {
 	int sig;
 	bool in_handler;
@@ -298,7 +298,7 @@ static void sigaction_table_copy_locked(struct sigaction_table *dst,
 	memcpy(dst->actions, src->actions, sizeof(dst->actions));
 }
 
-void signal_copy(struct task_control_block *dst, struct task_control_block *src)
+void signal_copy(struct task *dst, struct task *src)
 {
 	spinlock_acquire(&src->sigactions->lock);
 	spinlock_acquire(&dst->sigactions->lock);
@@ -311,7 +311,7 @@ void signal_copy(struct task_control_block *dst, struct task_control_block *src)
 	spinlock_release(&src->sigactions->lock);
 }
 
-u64 signal_do_sigreturn(struct task_control_block *task)
+u64 signal_do_sigreturn(struct task *task)
 {
 	struct user_sigframe *frame;
 	u64 ret = 0;
@@ -339,7 +339,7 @@ unlock_and_return:
 	return ret;
 }
 
-int signal_do_sigaction(struct task_control_block *task, int sig,
+int signal_do_sigaction(struct task *task, int sig,
 			const struct sigaction *act, struct sigaction *oact)
 {
 	struct sigaction_table *table = task->sigactions;
@@ -358,7 +358,7 @@ int signal_do_sigaction(struct task_control_block *task, int sig,
 	return 0;
 }
 
-int signal_do_sigprocmask(struct task_control_block *task, int how,
+int signal_do_sigprocmask(struct task *task, int how,
 			  const sigset_t *set, sigset_t *oldset)
 {
 	sigset_t newblocked;

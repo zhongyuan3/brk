@@ -76,7 +76,7 @@ void kernel_trap_handler(void)
 	u64 scause = read_scause();
 	u64 sepc = read_sepc();
 	u64 stval = read_stval();
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	u64 code = TRAP_CAUSE_CODE(scause);
 
 	if (TRAP_IS_INTERRUPT(scause)) {
@@ -87,17 +87,17 @@ void kernel_trap_handler(void)
 			if (task && --task->time_slice <= 0)
 				task_yield();
 		} else if (code == 9) {
-			irq_handle_external(current_cpuid());
+			irq_handle_external(this_cpuid());
 		} else {
-			panic("%s: cpu=%d scause=%#" PRIx64 ",sepc=%#" PRIx64
+			panic("%s: cpu=%lu scause=%#" PRIx64 ",sepc=%#" PRIx64
 			      ",stval=%#" PRIx64 "\n",
-			      cause_to_str(scause), current_cpuid(), scause,
+			      cause_to_str(scause), this_cpuid(), scause,
 			      sepc, stval);
 		}
 	} else {
-		panic("%s: cpu=%d scause=%#" PRIx64 ",sepc=%#" PRIx64
+		panic("%s: cpu=%lu scause=%#" PRIx64 ",sepc=%#" PRIx64
 		      ",stval=%#" PRIx64 "\n",
-		      cause_to_str(scause), current_cpuid(), scause, sepc,
+		      cause_to_str(scause), this_cpuid(), scause, sepc,
 		      stval);
 	}
 
@@ -108,7 +108,7 @@ void kernel_trap_handler(void)
 struct trap_frame *user_trap_handler(void)
 {
 	struct trap_frame *tf;
-	struct task_control_block *task;
+	struct task *task;
 	u64 jiffies;
 	u64 scause = read_scause();
 	u64 sepc = read_sepc();
@@ -120,7 +120,7 @@ struct trap_frame *user_trap_handler(void)
 	tf = (struct trap_frame *)(uintptr_t)read_sscratch();
 	task = ((struct extended_trap_frame *)tf)->task;
 	set_current_task(task);
-	set_current_cpuid(arch_tf_get_cpuid(tf));
+	set_this_cpuid(arch_tf_get_cpuid(tf));
 	write_sstatus(read_sstatus() | SSTATUS_SUM);
 
 	jiffies = jiffies_get();
@@ -138,7 +138,7 @@ struct trap_frame *user_trap_handler(void)
 			if (--task->time_slice <= 0)
 				task_yield();
 		} else if (code == 9) {
-			irq_handle_external(current_cpuid());
+			irq_handle_external(this_cpuid());
 		} else {
 			klog_warn("%s: pid=%ld,scause=%#" PRIx64
 				  ",sepc=%#" PRIx64 ",stval=%#" PRIx64 "\n",
@@ -173,7 +173,7 @@ struct trap_frame *user_trap_handler(void)
 void prepare_to_return(void)
 {
 	u64 sstatus;
-	struct task_control_block *task;
+	struct task *task;
 
 	intr_off();
 
@@ -187,7 +187,7 @@ void prepare_to_return(void)
 	write_sstatus(sstatus);
 
 	arch_tf_set_kernel_sp(task->tf, task->kstack_top);
-	arch_tf_set_cpuid(task->tf, current_cpuid());
+	arch_tf_set_cpuid(task->tf, this_cpuid());
 
 	write_sepc(arch_tf_get_pc(task->tf));
 

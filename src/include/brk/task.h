@@ -1,14 +1,14 @@
 #ifndef BRK_TASK_H
 #define BRK_TASK_H
 
-#include <arch/smp.h>
 #include <arch/task.h>
+#include <brk/asm/cpu.h>
+#include <brk/cpu.h>
 #include <brk/fdtable.h>
 #include <brk/fs_types.h>
 #include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/path.h>
-#include <brk/processor.h>
 #include <brk/signal_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/task_types.h>
@@ -40,10 +40,10 @@ struct task_create_args {
 void task_init_user(void);
 
 void task_cache_init(void);
-struct task_control_block *task_create(struct task_create_args *args);
-void task_destroy(struct task_control_block *task);
-void task_set_killed(struct task_control_block *task);
-bool task_is_killed(struct task_control_block *task);
+struct task *task_create(struct task_create_args *args);
+void task_destroy(struct task *task);
+void task_set_killed(struct task *task);
+bool task_is_killed(struct task *task);
 void task_exit(int status);
 void task_exit_normal(int code);
 void task_exit_signal(int sig);
@@ -55,23 +55,23 @@ void task_yield(void);
 void task_sleep(void *chan, spinlock_t *lock);
 void task_wake_all(void *chan);
 pid_t task_wait(pid_t cpid, int *status, int options, struct rusage *rus);
-void task_wake_spec(struct task_control_block *task);
+void task_wake_spec(struct task *task);
 void task_sched(void);
 void task_sched_resume(void);
 void task_scheduler(void);
-void task_join(struct task_control_block *task);
+void task_join(struct task *task);
 
-int task_get_times(struct task_control_block *task, struct tms *times);
-void task_add_system_time(struct task_control_block *task, u64 time);
-void task_add_user_time(struct task_control_block *task, u64 time);
-void task_add_child_system_time(struct task_control_block *task, u64 time);
-void task_add_child_user_time(struct task_control_block *task, u64 time);
-u64 task_get_system_time(struct task_control_block *task);
-u64 task_get_user_time(struct task_control_block *task);
-u64 task_get_child_system_time(struct task_control_block *task);
-u64 task_get_child_user_time(struct task_control_block *task);
+int task_get_times(struct task *task, struct tms *times);
+void task_add_system_time(struct task *task, u64 time);
+void task_add_user_time(struct task *task, u64 time);
+void task_add_child_system_time(struct task *task, u64 time);
+void task_add_child_user_time(struct task *task, u64 time);
+u64 task_get_system_time(struct task *task);
+u64 task_get_user_time(struct task *task);
+u64 task_get_child_system_time(struct task *task);
+u64 task_get_child_user_time(struct task *task);
 
-static inline bool task_is_leader(struct task_control_block *task)
+static inline bool task_is_leader(struct task *task)
 {
 	return task->pid == task->tgid;
 }
@@ -98,10 +98,9 @@ bool task_get_info(pid_t tgid, struct task_info *info);
 bool task_pid_exists(pid_t tgid);
 
 extern cpuid_t boot_cpuid;
-extern struct task_control_block *initial_task;
+extern struct task *initial_task;
 extern struct list_head tasks;
 extern spinlock_t tasks_lock;
-extern struct cpu cpus[NR_CPUS];
 extern spinlock_t wait_lock;
 
 #endif

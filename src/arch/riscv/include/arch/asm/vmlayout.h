@@ -1,7 +1,7 @@
-#ifndef ASM_VAS_LAYOUT_H
-#define ASM_VAS_LAYOUT_H
+#ifndef ARCH_ASM_VMLAYOUT_H
+#define ARCH_ASM_VMLAYOUT_H
 
-#include <arch/page.h>
+#include <arch/asm/page.h>
 
 #define USER_SPACE_SIZE_MAX ((1UL << 38) - PAGE_SIZE)
 
@@ -13,5 +13,8 @@
 
 #define VMEMMAP_START 0xfffffff000000000
 #define VMEMMAP_SIZE 0x100000000 /* 4G */
+
+#define KERNEL_LOAD_ADDR 0x80200000
+#define KERNEL_LINK_ADDR 0xffffffff80000000
 
 #endif

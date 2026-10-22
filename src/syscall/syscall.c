@@ -77,7 +77,7 @@ static u64 (*systable[])(void) = {
 
 void syscall(void)
 {
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	u64 num = arch_syscall_get_nr(task->tf);
 	u64 ret;
 

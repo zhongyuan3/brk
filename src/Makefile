@@ -10,3 +10,5 @@ subdir-y += printk
 subdir-y += process
 subdir-y += syscall
 subdir-y += time
+
+obj-y += cpu.o

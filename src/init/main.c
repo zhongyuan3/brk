@@ -1,4 +1,5 @@
 #include <arch/irqflags.h>
+#include <brk/cpu.h>
 #include <brk/init.h>
 #include <brk/initcall.h>
 #include <brk/irq.h>
@@ -9,7 +10,6 @@
 #include <brk/pgalloc.h>
 #include <brk/plic.h>
 #include <brk/printk.h>
-#include <brk/processor.h>
 #include <brk/rtc.h>
 #include <brk/task.h>
 #include <brk/timekeeper.h>
@@ -41,7 +41,7 @@ void start_kernel(void)
 
 	do_initcalls();
 
-	cpuid_t hart_id = current_cpuid();
+	cpuid_t hart_id = this_cpuid();
 	irq_init_hart(hart_id);
 	ns16550a_enable_irq(hart_id);
 	virtio_blk_enable_irq(hart_id);

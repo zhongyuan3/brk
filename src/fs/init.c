@@ -24,7 +24,7 @@ static void register_builtin_filesystems(void)
 
 int fs_init(void)
 {
-	struct task_control_block *task;
+	struct task *task;
 	struct fs_mount_state *mnt;
 	struct fs_mount_state *new_root_mnt;
 	struct fs_path new_root_path;

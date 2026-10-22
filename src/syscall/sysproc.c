@@ -68,7 +68,7 @@ u64 sys_getpid(void)
 
 u64 sys_getppid(void)
 {
-	struct task_control_block *par = current_task()->parent;
+	struct task *par = current_task()->parent;
 
 	return par ? par->tgid : 0;
 }

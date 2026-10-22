@@ -1,7 +1,7 @@
-#include <arch/page.h>
+#include <arch/asm/page.h>
 #include <arch/pgtable.h>
 #include <arch/trapframe.h>
-#include <arch/vas_layout.h>
+#include <arch/asm/vmlayout.h>
 #include <brk/assert.h>
 #include <brk/error.h>
 #include <brk/fs.h>
@@ -151,7 +151,7 @@ static void copy_exec_strings(char **src, int n, uintptr_t *k_pos,
 }
 
 static void push_args(struct exec_args *args, uintptr_t *psp,
-		      uintptr_t stack_virt, struct task_control_block *task)
+		      uintptr_t stack_virt, struct task *task)
 {
 	uintptr_t sp = *psp;
 	uintptr_t ksp = stack_virt + USTACK_SIZE;
@@ -355,7 +355,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 {
 	struct elf_hdr elf_hdr = { 0 };
 	struct elf_phdr phdr = { 0 };
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	struct fs_file *f = NULL;
 	struct uvm_space *new_mm = NULL;
 	int err = 0;

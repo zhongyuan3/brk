@@ -1,5 +1,5 @@
 #include "brkfs.h"
-#include <arch/page.h>
+#include <arch/asm/page.h>
 #include <arch/pgtable.h>
 #include <brk/dcache.h>
 #include <brk/error.h>

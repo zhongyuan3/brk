@@ -1,3 +1,4 @@
+#include <brk/cpu.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
@@ -9,7 +10,6 @@
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
-#include <brk/processor.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
@@ -31,7 +31,7 @@ u64 sys_read(void)
 	size_t n;
 	struct fs_file *fp;
 	ssize_t ret;
-	struct task_control_block *task;
+	struct task *task;
 
 	task = current_task();
 	fd = syscall_arg_int(0);
@@ -52,7 +52,7 @@ u64 sys_write(void)
 	size_t n;
 	struct fs_file *fp;
 	ssize_t ret;
-	struct task_control_block *task;
+	struct task *task;
 
 	task = current_task();
 	fd = syscall_arg_int(0);
@@ -114,7 +114,7 @@ u64 sys_openat(void)
 u64 sys_close(void)
 {
 	int fd = syscall_arg_int(0);
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	return fdtable_close_fd(task->fdtable, fd);
 }
 
@@ -157,7 +157,7 @@ u64 sys_fstat(void)
 	struct stat *buf;
 	int ret;
 	int fd;
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 
 	fd = syscall_arg_int(0);
 	fp = fdtable_get_file(task->fdtable, fd);
@@ -270,14 +270,14 @@ u64 sys_uname(void)
 	if (!buf)
 		return -EFAULT;
 
-	strlcpy(name.machine, arch_uname_machine(), sizeof(name.machine));
+	strlcpy(name.machine, uname_machine(), sizeof(name.machine));
 	*buf = name;
 	return 0;
 }
 
 u64 sys_getcwd(void)
 {
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	char *buf = syscall_arg_ptr(0);
 	size_t size = syscall_arg_raw(1);
 	struct fs_path cwd = { 0 };
@@ -290,7 +290,7 @@ u64 sys_getcwd(void)
 u64 sys_chdir(void)
 {
 	char *pathname = syscall_arg_ptr(0);
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	struct fs_path new_path;
 
 	int err = fs_path_lookup(pathname, 0, &new_path);
@@ -315,7 +315,7 @@ u64 sys_fchdir(void)
 {
 	int fd;
 	struct fs_file *fp;
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 
 	fd = syscall_arg_int(0);
 	fp = fdtable_get_file(task->fdtable, fd);
@@ -434,7 +434,7 @@ u64 sys_pipe2(void)
 u64 sys_dup(void)
 {
 	int oldfd = syscall_arg_int(0);
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	return fdtable_dup_fd(task->fdtable, oldfd);
 }
 
@@ -442,7 +442,7 @@ u64 sys_dup2(void)
 {
 	int oldfd = syscall_arg_int(0);
 	int newfd = syscall_arg_int(1);
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	int err = fdtable_dup_fd2(task->fdtable, oldfd, newfd);
 	if (err)
 		return err;

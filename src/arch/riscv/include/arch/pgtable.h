@@ -149,8 +149,6 @@ static inline void pte_clear(pte_t *ptep)
 	pte_val(*ptep) = 0;
 }
 
-extern pgd_t early_pgdir[];
-extern pgd_t kernel_pgdir[];
 extern spinlock_t kernel_pgdir_lock;
 
 pgd_t *create_user_pgtable(void);

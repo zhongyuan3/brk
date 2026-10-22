@@ -1,13 +1,13 @@
 #include <arch/irqflags.h>
 #include <arch/mm.h>
 #include <brk/assert.h>
+#include <brk/cpu.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
 #include <brk/fsinfo.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
-#include <brk/processor.h>
 #include <brk/spinlock.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
@@ -23,20 +23,19 @@ static SPINLOCK_DEFINE(run_queue_lock);
 static LIST_DEFINE(sleep_queue);
 static SPINLOCK_DEFINE(sleep_queue_lock);
 
-void task_join(struct task_control_block *task)
+void task_join(struct task *task)
 {
 	spinlock_acquire(&run_queue_lock);
 	list_add_tail(&task->queue, &run_queue);
 	spinlock_release(&run_queue_lock);
 }
 
-static struct task_control_block *task_pick_next(void)
+static struct task *task_pick_next(void)
 {
-	struct task_control_block *task = NULL;
+	struct task *task = NULL;
 	spinlock_acquire(&run_queue_lock);
 	if (!list_empty(&run_queue)) {
-		task = list_first_entry(&run_queue, struct task_control_block,
-					queue);
+		task = list_first_entry(&run_queue, struct task, queue);
 		list_del_init(&task->queue);
 	}
 	spinlock_release(&run_queue_lock);
@@ -45,8 +44,8 @@ static struct task_control_block *task_pick_next(void)
 
 void task_scheduler(void)
 {
-	struct cpu *cpu = current_cpu();
-	struct task_control_block *next = NULL;
+	struct cpu *cpu = this_cpu();
+	struct task *next = NULL;
 
 	cpu->handoff = NULL;
 	for (;;) {
@@ -58,7 +57,7 @@ void task_scheduler(void)
 		next = task_pick_next();
 		if (!next) {
 			intr_on();
-			arch_cpu_idle();
+			cpu_idle();
 			continue;
 		}
 
@@ -77,12 +76,12 @@ void task_scheduler(void)
 
 void task_sched(void)
 {
-	struct task_control_block *curr = current_task();
-	struct cpu *cpu = current_cpu();
+	struct task *curr = current_task();
+	struct cpu *cpu = this_cpu();
 
 	ASSERT(!intr_enabled());
 	ASSERT(spinlock_holding(&curr->lock));
-	ASSERT(current_cpu()->irq_nest == 1);
+	ASSERT(this_cpu()->irq_nest == 1);
 
 	set_current_task(NULL);
 	curr->irq_enabled = cpu->irq_enabled;
@@ -103,7 +102,7 @@ void task_sched(void)
 		      curr->state);
 	}
 
-	struct task_control_block *next = task_pick_next();
+	struct task *next = task_pick_next();
 	if (next == curr) {
 		curr->time_slice = TIME_SLICE_MAX;
 		set_current_task(curr);
@@ -130,7 +129,7 @@ void task_sched(void)
 
 void task_yield(void)
 {
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	spinlock_acquire(&task->lock);
 	task_sched();
 	spinlock_release(&task->lock);
@@ -138,7 +137,7 @@ void task_yield(void)
 
 void task_sleep(void *chan, spinlock_t *lock)
 {
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	spinlock_acquire(&task->lock);
 	spinlock_release(lock);
 	task->state = TASK_STATE_SLEEPING;
@@ -152,7 +151,7 @@ void task_sleep(void *chan, spinlock_t *lock)
 void task_wake_all(void *chan)
 {
 	for (;;) {
-		struct task_control_block *p, *wakee = NULL;
+		struct task *p, *wakee = NULL;
 
 		spinlock_acquire(&sleep_queue_lock);
 		list_for_each_entry(p, &sleep_queue, queue) {
@@ -175,7 +174,7 @@ void task_wake_all(void *chan)
 	}
 }
 
-void task_wake_spec(struct task_control_block *task)
+void task_wake_spec(struct task *task)
 {
 	spinlock_acquire(&sleep_queue_lock);
 	spinlock_acquire(&task->lock);
@@ -204,8 +203,8 @@ void task_exit_signal(int sig)
 
 void task_exit(int status)
 {
-	struct task_control_block *child;
-	struct task_control_block *task = current_task();
+	struct task *child;
+	struct task *task = current_task();
 
 	if (task == initial_task)
 		panic("%s(): init exit\n", __func__);
@@ -233,8 +232,8 @@ void task_exit(int status)
 
 pid_t task_wait(pid_t pid, int *status, int options, struct rusage *rus)
 {
-	struct task_control_block *child;
-	struct task_control_block *parent = current_task();
+	struct task *child;
+	struct task *parent = current_task();
 	bool found;
 
 	(void)options;
@@ -290,7 +289,7 @@ again:
 
 void task_sched_resume(void)
 {
-	struct cpu *cpu = current_cpu();
+	struct cpu *cpu = this_cpu();
 	if (cpu->handoff) {
 		spinlock_release(&cpu->handoff->lock);
 		cpu->handoff = NULL;

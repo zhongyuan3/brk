@@ -1,5 +1,7 @@
 #include <arch/pgtable.h>
+#include <brk/asm/cpu.h>
 #include <brk/assert.h>
+#include <brk/cpu.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
@@ -15,7 +17,6 @@
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
-#include <brk/processor.h>
 #include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
@@ -29,8 +30,7 @@
 #include <uapi/signal.h>
 
 cpuid_t boot_cpuid;
-struct task_control_block *initial_task;
-struct cpu cpus[NR_CPUS];
+struct task *initial_task;
 
 LIST_DEFINE(tasks);
 SPINLOCK_DEFINE(tasks_lock);
@@ -56,8 +56,8 @@ void pid_free(pid_t pid)
 
 void task_cache_init(void)
 {
-	slab_init(&task_cache, sizeof(struct task_control_block),
-		  alignof(struct task_control_block), "task_cache");
+	slab_init(&task_cache, sizeof(struct task), alignof(struct task),
+		  "task_cache");
 }
 core_initcall(task_cache_init);
 
@@ -76,12 +76,12 @@ static void kstack_free(u64 stack)
 	page_free(pg, KSTACK_PAGE_ORDER);
 }
 
-static struct task_control_block *task_alloc(void)
+static struct task *task_alloc(void)
 {
 	return slab_alloc_zero(&task_cache);
 }
 
-static void task_free(struct task_control_block *task)
+static void task_free(struct task *task)
 {
 	slab_free(&task_cache, task);
 }
@@ -91,11 +91,11 @@ static void default_new_task_entry(void)
 	task_exit_normal(0);
 }
 
-struct task_control_block *task_create(struct task_create_args *args)
+struct task *task_create(struct task_create_args *args)
 {
 	u64 kstack_top;
 	struct extended_trap_frame *ext_tf;
-	struct task_control_block *task;
+	struct task *task;
 	int err = 0;
 
 	if (args && args->tgid < 0)
@@ -211,7 +211,7 @@ pid_alloc_failed:
 	return ERR_PTR(err);
 }
 
-void task_destroy(struct task_control_block *task)
+void task_destroy(struct task *task)
 {
 	spinlock_acquire(&tasks_lock);
 	list_del_init(&task->list);
@@ -231,7 +231,7 @@ void task_destroy(struct task_control_block *task)
 static void initial_task_return(void)
 {
 	task_sched_resume();
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	spinlock_release(&task->lock);
 
 	int err = fs_init();
@@ -267,19 +267,19 @@ void task_init_user(void)
 }
 device_initcall(task_init_user);
 
-void task_set_killed(struct task_control_block *task)
+void task_set_killed(struct task *task)
 {
 	signal_send(task, SIGKILL);
 }
 
-bool task_is_killed(struct task_control_block *task)
+bool task_is_killed(struct task *task)
 {
 	return signal_pending(task);
 }
 
 int task_set_brk(u64 addr)
 {
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	struct uvm_space *mm = task->mm;
 	struct uvm_region *heap = mm->heap;
 	u64 heap_start = heap->addr;
@@ -350,9 +350,9 @@ failed:
  * Find a task by thread-group ID. Prefer the group leader (tid == tgid)
  * when multiple threads share the same tgid. Caller must hold tasks_lock.
  */
-static struct task_control_block *task_find_by_tgid_locked(pid_t tgid)
+static struct task *task_find_by_tgid_locked(pid_t tgid)
 {
-	struct task_control_block *p, *match = NULL;
+	struct task *p, *match = NULL;
 
 	list_for_each_entry(p, &tasks, list) {
 		if (p->tgid != tgid)
@@ -367,7 +367,7 @@ static struct task_control_block *task_find_by_tgid_locked(pid_t tgid)
 
 int task_snapshot_pids(pid_t *out, int max)
 {
-	struct task_control_block *p;
+	struct task *p;
 	int n = 0;
 
 	if (!out || max <= 0)
@@ -406,8 +406,8 @@ bool task_pid_exists(pid_t tgid)
 
 bool task_get_info(pid_t tgid, struct task_info *info)
 {
-	struct task_control_block *target = NULL;
-	struct task_control_block *par;
+	struct task *target = NULL;
+	struct task *par;
 
 	if (!info)
 		return false;
@@ -457,7 +457,7 @@ void task_dump(void)
 		[TASK_STATE_RUNNING] = "running",
 		[TASK_STATE_ZOMBIE] = "zombie ",
 	};
-	struct task_control_block *task;
+	struct task *task;
 	char *state;
 
 	spinlock_acquire(&tasks_lock);
@@ -476,7 +476,7 @@ void task_dump(void)
 static void task_fork_return(void)
 {
 	task_sched_resume();
-	struct task_control_block *task = current_task();
+	struct task *task = current_task();
 	spinlock_release(&task->lock);
 	prepare_to_return();
 	user_trap_return(task->tf);
@@ -486,8 +486,8 @@ int task_fork(void)
 {
 	int err;
 	pid_t cpid;
-	struct task_control_block *child;
-	struct task_control_block *parent = current_task();
+	struct task *child;
+	struct task *parent = current_task();
 
 	child = task_create(NULL);
 	if (IS_ERR(child))
@@ -524,7 +524,7 @@ int task_fork(void)
 	return cpid;
 }
 
-int task_get_times(struct task_control_block *task, struct tms *times)
+int task_get_times(struct task *task, struct tms *times)
 {
 	if (!task || !task->rsrc_usage)
 		return -EINVAL;
@@ -537,7 +537,7 @@ int task_get_times(struct task_control_block *task, struct tms *times)
 	return 0;
 }
 
-void task_add_system_time(struct task_control_block *task, u64 time)
+void task_add_system_time(struct task *task, u64 time)
 {
 	if (!task || !task->rsrc_usage)
 		return;
@@ -547,7 +547,7 @@ void task_add_system_time(struct task_control_block *task, u64 time)
 	spinlock_release(&task->rsrc_usage->lock);
 }
 
-void task_add_user_time(struct task_control_block *task, u64 time)
+void task_add_user_time(struct task *task, u64 time)
 {
 	if (!task || !task->rsrc_usage)
 		return;
@@ -557,7 +557,7 @@ void task_add_user_time(struct task_control_block *task, u64 time)
 	spinlock_release(&task->rsrc_usage->lock);
 }
 
-void task_add_child_system_time(struct task_control_block *task, u64 time)
+void task_add_child_system_time(struct task *task, u64 time)
 {
 	if (!task || !task->rsrc_usage)
 		return;
@@ -567,7 +567,7 @@ void task_add_child_system_time(struct task_control_block *task, u64 time)
 	spinlock_release(&task->rsrc_usage->lock);
 }
 
-void task_add_child_user_time(struct task_control_block *task, u64 time)
+void task_add_child_user_time(struct task *task, u64 time)
 {
 	if (!task || !task->rsrc_usage)
 		return;
@@ -577,7 +577,7 @@ void task_add_child_user_time(struct task_control_block *task, u64 time)
 	spinlock_release(&task->rsrc_usage->lock);
 }
 
-u64 task_get_system_time(struct task_control_block *task)
+u64 task_get_system_time(struct task *task)
 {
 	u64 time;
 
@@ -591,7 +591,7 @@ u64 task_get_system_time(struct task_control_block *task)
 	return time;
 }
 
-u64 task_get_user_time(struct task_control_block *task)
+u64 task_get_user_time(struct task *task)
 {
 	u64 time;
 
@@ -605,7 +605,7 @@ u64 task_get_user_time(struct task_control_block *task)
 	return time;
 }
 
-u64 task_get_child_system_time(struct task_control_block *task)
+u64 task_get_child_system_time(struct task *task)
 {
 	u64 time;
 
@@ -619,7 +619,7 @@ u64 task_get_child_system_time(struct task_control_block *task)
 	return time;
 }
 
-u64 task_get_child_user_time(struct task_control_block *task)
+u64 task_get_child_user_time(struct task *task)
 {
 	u64 time;
 

@@ -25,7 +25,7 @@ void timer_set_next(void)
 
 void timer_handle_int(void)
 {
-	if (current_cpuid() == boot_cpuid)
+	if (this_cpuid() == boot_cpuid)
 		timekeeper_tick();
 
 	task_wake_all(timekeeper_wait_chan());
