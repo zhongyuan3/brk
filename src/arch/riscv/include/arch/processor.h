@@ -3,11 +3,7 @@
 
 #include <brk/types.h>
 
-#if __riscv_xlen == 32
-typedef u32 reg_t;
-#else
 typedef u64 reg_t;
-#endif
 
 struct switch_frame {
 	reg_t ra;

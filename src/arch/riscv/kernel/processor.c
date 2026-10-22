@@ -59,9 +59,5 @@ void arch_cpu_idle(void)
 
 const char *arch_uname_machine(void)
 {
-#if __riscv_xlen == 32
-	return "riscv32";
-#else
 	return "riscv64";
-#endif
 }

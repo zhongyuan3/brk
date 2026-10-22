@@ -55,20 +55,10 @@ static inline struct sbiret sbi_ecall(unsigned long eid, unsigned long fid,
 
 static inline long sbi_set_timer(u64 stime_value)
 {
-#if __riscv_xlen == 32
-	/* Legacy SBI passes the 64-bit stime in the a0:a1 register pair. */
-	register unsigned long a0 asm("a0") = (unsigned long)stime_value;
-	register unsigned long a1 asm("a1") =
-		(unsigned long)(stime_value >> 32);
-	register unsigned long a7 asm("a7") = SBI_LEGACY_SET_TIMER;
-	asm volatile("ecall" : "+r"(a0), "+r"(a1) : "r"(a7) : "memory");
-	return a0;
-#else
 	register unsigned long a0 asm("a0") = (unsigned long)stime_value;
 	register unsigned long a7 asm("a7") = SBI_LEGACY_SET_TIMER;
 	asm volatile("ecall" : "+r"(a0) : "r"(a7) : "memory");
 	return a0;
-#endif
 }
 
 static inline long sbi_console_putchar(int ch)
