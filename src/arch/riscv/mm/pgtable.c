@@ -33,12 +33,7 @@ static void free_pgtable(u64 paddr)
 
 static pmd_t *pgde_to_pmd_virt(pgd_t *pgdep)
 {
-#if __riscv_xlen == 32
-	/* Sv32: PMD is folded onto the PGD entry. */
-	return (pmd_t *)pgdep;
-#else
 	return (pmd_t *)phys_to_virt(pgd_get_pmd(*pgdep));
-#endif
 }
 
 static pte_t *pmde_to_pt_virt(pmd_t pmde)
@@ -79,7 +74,6 @@ static int copy_user_pt(pte_t *dst, pte_t *src)
 	return 0;
 }
 
-#if __riscv_xlen == 64
 static int copy_user_pmde_large(pmd_t *dst, pmd_t src)
 {
 	struct page *pg = page_alloc(page_order(PAGE_SIZE_2M));
@@ -93,7 +87,6 @@ static int copy_user_pmde_large(pmd_t *dst, pmd_t src)
 	pmd_set_large(dst, dpg_pa, pmd_flags(src));
 	return 0;
 }
-#endif
 
 static int copy_user_pmd(pmd_t *dst, pmd_t *src)
 {
@@ -103,14 +96,12 @@ static int copy_user_pmd(pmd_t *dst, pmd_t *src)
 		if (!pmd_present(src[i]))
 			continue;
 
-#if __riscv_xlen == 64
 		if (pmd_large(src[i])) {
 			err = copy_user_pmde_large(&dst[i], src[i]);
 			if (err)
 				return err;
 			continue;
 		}
-#endif
 
 		if (!pmd_present(dst[i])) {
 			u64 pt_pa = alloc_pgtable();
@@ -130,17 +121,6 @@ static int copy_user_pmd(pmd_t *dst, pmd_t *src)
 
 static int copy_user_pgde_large(pgd_t *dst, pgd_t src)
 {
-#if __riscv_xlen == 32
-	struct page *dpg = page_alloc(page_order(PAGE_SIZE_4M));
-	if (!dpg)
-		return -ENOMEM;
-	u64 dpg_pa = page_to_phys(dpg);
-	u64 spg_pa = pgd_get_large(src);
-	void *dpg_va = (void *)phys_to_virt(dpg_pa);
-	void *spg_va = (void *)phys_to_virt(spg_pa);
-	memcpy(dpg_va, spg_va, PAGE_SIZE_4M);
-	pgd_set_large(dst, dpg_pa, pgd_flags(src));
-#else
 	struct page *dpg = page_alloc(page_order(PAGE_SIZE_1G));
 	if (!dpg)
 		return -ENOMEM;
@@ -150,7 +130,6 @@ static int copy_user_pgde_large(pgd_t *dst, pgd_t src)
 	void *spg_va = (void *)phys_to_virt(spg_pa);
 	memcpy(dpg_va, spg_va, PAGE_SIZE_1G);
 	pgd_set_large(dst, dpg_pa, pgd_flags(src));
-#endif
 	return 0;
 }
 
@@ -204,10 +183,8 @@ static void destroy_user_pt(pte_t *pt, size_t pgde_idx, size_t pmde_idx)
 			u64 pa = pte_get(pt[i]);
 			u64 va = (pgde_idx << PGD_SHIFT) |
 				 (pmde_idx << PMD_SHIFT) | (i << PAGE_SHIFT);
-#if __riscv_xlen == 64
 			if (va & (1UL << 38))
 				va = (~((1UL << 39) - 1)) | va;
-#endif
 			panic("%s(): pt[%zu] not empty, vaddr=%#" PRIx64
 			      ",paddr=%#" PRIx64 "\n",
 			      __func__, i, va, pa);
@@ -215,7 +192,6 @@ static void destroy_user_pt(pte_t *pt, size_t pgde_idx, size_t pmde_idx)
 	}
 }
 
-#if __riscv_xlen == 64
 static void destroy_user_pmd(pmd_t *pmd, size_t pgde_idx)
 {
 	u64 pa;
@@ -242,14 +218,11 @@ static void destroy_user_pmd(pmd_t *pmd, size_t pgde_idx)
 		free_pgtable(pa);
 	}
 }
-#endif
 
 static void destroy_user_pgd(pgd_t *pgd)
 {
 	u64 pa;
-#if __riscv_xlen == 64
 	pmd_t *pmd;
-#endif
 
 	for (size_t i = 0; i < PTRS_PER_PGD; ++i) {
 		spinlock_acquire(&kernel_pgdir_lock);
@@ -260,27 +233,17 @@ static void destroy_user_pgd(pgd_t *pgd)
 
 		if (pgd_large(pgd[i])) {
 			pa = pgd_get_large(pgd[i]);
-#if __riscv_xlen == 32
-			u64 va = i << PGD_SHIFT;
-#else
 			u64 va = i << 30;
 			if (va & (1UL << 38))
 				va = (~((1UL << 39) - 1)) | va;
-#endif
 			panic("%s(): pgd[%zu] not empty, vaddr=%#" PRIx64
 			      ",paddr=%#" PRIx64 "\n",
 			      __func__, i, va, pa);
 		}
 
 		pa = pgd_get_pmd(pgd[i]);
-#if __riscv_xlen == 32
-		/* Sv32: the table below a PGD entry is a PTE table. */
-		pte_t *pt = (pte_t *)phys_to_virt(pa);
-		destroy_user_pt(pt, i, 0);
-#else
 		pmd = (pmd_t *)phys_to_virt(pa);
 		destroy_user_pmd(pmd, i);
-#endif
 		free_pgtable(pa);
 	}
 }

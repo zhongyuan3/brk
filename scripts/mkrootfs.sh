@@ -37,8 +37,7 @@ fi
 }
 
 if [[ -z ${SKIP_USER_BUILD:-} ]]; then
-	make -C "$USER_ROOT" ${CROSS_COMPILE:+CROSS_COMPILE="$CROSS_COMPILE"} \
-		${XLEN:+XLEN="$XLEN"}
+	make -C "$USER_ROOT" ${CROSS_COMPILE:+CROSS_COMPILE="$CROSS_COMPILE"}
 fi
 
 BLOCK_SIZE=4096
@@ -49,10 +48,10 @@ rm -f "$IMG"
 dd if=/dev/zero of="$IMG" bs=$BLOCK_SIZE count=$BLOCK_COUNT status=none
 "$MKFS" -bs $BLOCK_SIZE "$IMG"
 
-mapfile -t bins < <(ls $USER_ROOT/build/${XLEN:-64}/bin)
+mapfile -t bins < <(ls $USER_ROOT/build/64/bin)
 
 for name in "${bins[@]}"; do
-	src=$USER_ROOT/build/${XLEN:-64}/bin/$name
+	src=$USER_ROOT/build/64/bin/$name
 	"$CP" -r "$src" "/bin/$name" "$IMG"
 done
 "$CP" "$KERNEL_ROOT/README.md" "/README.md" "$IMG"

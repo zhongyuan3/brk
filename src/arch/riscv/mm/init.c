@@ -46,31 +46,6 @@ static u64 alloc_early_rsv_page(void)
 
 static void map_early(u64 addr, size_t size, u64 paddr, unsigned int flags)
 {
-#if __riscv_xlen == 32
-	/*
-	 * Sv32: the kernel is loaded at 0x80200000, which is not 4MiB
-	 * aligned, so 4MiB superpages cannot encode the link mapping
-	 * correctly. Walk PGD -> PTE and map 4KiB pages instead.
-	 */
-	pgd_t *pgdep;
-	pte_t *ptep;
-	u64 pt_phys;
-	u64 end_addr = addr + size;
-
-	while (addr < end_addr) {
-		pgdep = (pgd_t *)early_pgdir + pgd_index(addr);
-		if (pgd_present(*pgdep)) {
-			pt_phys = pgd_get_pmd(*pgdep);
-		} else {
-			pt_phys = alloc_early_rsv_page();
-			pgd_set_pmd(pgdep, pt_phys);
-		}
-		ptep = (pte_t *)(uintptr_t)pt_phys + pte_index(addr);
-		pte_set(ptep, paddr, flags);
-		addr += PAGE_SIZE;
-		paddr += PAGE_SIZE;
-	}
-#else
 	pgd_t *pgdep;
 	pmd_t *pmdep;
 	u64 pmd_phys;
@@ -89,7 +64,6 @@ static void map_early(u64 addr, size_t size, u64 paddr, unsigned int flags)
 		addr += PAGE_SIZE_2M;
 		paddr += PAGE_SIZE_2M;
 	}
-#endif
 }
 
 static void __setup_vm_early(uintptr_t dtb, size_t load_offset)
@@ -107,11 +81,7 @@ static void __setup_vm_early(uintptr_t dtb, size_t load_offset)
 
 	rsv_page_next = (uintptr_t)early_pgdir;
 
-#if __riscv_xlen == 32
-	kern_end = round_up((uintptr_t)_ekernel, PAGE_SIZE_4M);
-#else
 	kern_end = round_up((uintptr_t)_ekernel, PAGE_SIZE_2M);
-#endif
 	size = kern_end - (uintptr_t)_skernel;
 	flags = PTE_R | PTE_W | PTE_X;
 
@@ -130,13 +100,8 @@ static void __setup_vm_early(uintptr_t dtb, size_t load_offset)
 	else
 		dtb = max(dtb, kern_end);
 
-#if __riscv_xlen == 32
-	u64 map_start = round_down(dtb, PAGE_SIZE_4M);
-	u64 map_end = round_up(dtb_end, PAGE_SIZE_4M);
-#else
 	u64 map_start = round_down(dtb, PAGE_SIZE_2M);
 	u64 map_end = round_up(dtb_end, PAGE_SIZE_2M);
-#endif
 	size = map_end - map_start;
 	flags = PTE_R | PTE_W;
 	map_early(map_start, size, map_start, flags);

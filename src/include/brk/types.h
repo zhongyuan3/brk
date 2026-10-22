@@ -43,28 +43,11 @@ typedef unsigned long long paddr_t;
 /*
  * printf() format specifiers for the fixed-width integer types, mirroring
  * the PRI* macros from <inttypes.h>.  The prefix length modifiers follow
- * the types picked by the compiler's <stdint.h> for the current ABI: on
- * the RV32 ILP32 toolchain int32_t/int_least32_t are 'long' and int64_t is
- * 'long long', while on RV64 LP64 they are 'int' and 'long' respectively.
- * The 8- and 16-bit types are promoted to 'int' when passed to printf(), so
- * their macros keep the 'hh'/'h' modifiers to truncate back to size.
+ * the types picked by the compiler's <stdint.h> for the LP64 ABI: i32 is
+ * 'int' and i64 is 'long'.  The 8- and 16-bit types are promoted to 'int'
+ * when passed to printf(), so their macros keep the 'hh'/'h' modifiers to
+ * truncate back to size.
  */
-#if __riscv_xlen == 32
-#define __PRIL32 "l"
-#define __PRIL64 "ll"
-#define __PRILPTR ""
-#define __PRILMAX "ll"
-
-typedef signed char i8;
-typedef signed short i16;
-typedef signed long i32;
-typedef signed long long i64;
-
-typedef unsigned char u8;
-typedef unsigned short u16;
-typedef unsigned long u32;
-typedef unsigned long long u64;
-#else
 #define __PRIL32 ""
 #define __PRIL64 "l"
 #define __PRILPTR "l"
@@ -79,7 +62,6 @@ typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
 typedef unsigned long u64;
-#endif
 
 static_assert(sizeof(i8) == 1, "size of i8 is not equal to 1 byte");
 static_assert(sizeof(i16) == 2, "size of i16 is not equal to 2 bytes");

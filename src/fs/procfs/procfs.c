@@ -70,11 +70,7 @@
 #define PROCFS_PID_SNAPSHOT_MAX 256
 
 #define PROC_INO_ROOT 1ULL
-#if __riscv_xlen == 32
-#define PROC_INO_KIND_SHIFT 30
-#else
 #define PROC_INO_KIND_SHIFT 60
-#endif
 #define PROC_INO_KIND_MASK 0xfULL
 #define PROC_INO_IDX_MASK 0xffULL
 #define PROC_INO_PID_MASK ((1ULL << PROC_INO_KIND_SHIFT) - 1)

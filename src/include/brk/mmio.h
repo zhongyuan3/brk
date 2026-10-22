@@ -33,7 +33,6 @@ static inline void mmio_write32(u32 val, volatile void *addr)
 	*(volatile u32 *)addr = val;
 }
 
-#if __riscv_xlen == 64
 static inline u64 mmio_read64(volatile void *addr)
 {
 	return *(volatile u64 *)addr;
@@ -43,7 +42,6 @@ static inline void mmio_write64(u64 val, volatile void *addr)
 {
 	*(volatile u64 *)addr = val;
 }
-#endif
 
 #define readb(addr) mmio_read8((volatile void *)(uintptr_t)(addr))
 #define writeb(val, addr) mmio_write8((val), (volatile void *)(uintptr_t)(addr))
@@ -53,10 +51,8 @@ static inline void mmio_write64(u64 val, volatile void *addr)
 #define readl(addr) mmio_read32((volatile void *)(uintptr_t)(addr))
 #define writel(val, addr) \
 	mmio_write32((val), (volatile void *)(uintptr_t)(addr))
-#if __riscv_xlen == 64
 #define readq(addr) mmio_read64((volatile void *)(uintptr_t)(addr))
 #define writeq(val, addr) \
 	mmio_write64((val), (volatile void *)(uintptr_t)(addr))
-#endif
 
 #endif

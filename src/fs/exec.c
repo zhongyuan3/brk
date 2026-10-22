@@ -67,13 +67,8 @@ static int elf_validate_exec_hdr(const struct elf_hdr *h)
 {
 	if (memcmp(h->e_ident, ELFMAG, SELFMAG) != 0)
 		return -ENOEXEC;
-#if __riscv_xlen == 32
-	if (h->e_ident[EI_CLASS] != ELFCLASS32)
-		return -ENOEXEC;
-#else
 	if (h->e_ident[EI_CLASS] != ELFCLASS64)
 		return -ENOEXEC;
-#endif
 	if (h->e_type != ET_EXEC)
 		return -ENOEXEC;
 	return 0;

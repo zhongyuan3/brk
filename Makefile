@@ -15,8 +15,8 @@ endif
 BUILD ?= debug
 RAM ?= 128M
 CPU ?= 3
-KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)/x$(XLEN)/$(BUILD)
-ROOTFS_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)/x$(XLEN)
+KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)/$(BUILD)
+ROOTFS_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)
 
 CROSS_COMPILE ?=
 CC := $(CROSS_COMPILE)gcc
@@ -67,8 +67,7 @@ CFLAGS += -Ivendor/libfdt
 
 LDFLAGS += -z max-page-size=4096
 
-# 64-bit integer helpers (__udivdi3 & co) for 32-bit builds; empty on 64-bit
-# where the instructions are native.
+# Compiler runtime helpers (e.g. 128-bit division) not emitted natively.
 LIBGCC := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name 2>/dev/null)
 
 export ARCH
@@ -109,7 +108,6 @@ help:
 	@echo "  clean-kernel           Remove current variant build directory"
 	@echo "Configurable vars:"
 	@echo "  ARCH=<name>"
-	@echo "  XLEN={32|64}             (default 64)"
 	@echo "  CROSS_COMPILE=<prefix>"
 	@echo "  BUILD={debug|release}  (default: debug)"
 	@echo "  BUILD_ROOT=<path>      (default: build)"

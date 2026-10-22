@@ -3,12 +3,6 @@
 
 #include <brk/types.h>
 
-/*
- * XLEN-wide CSRs are read/written through unsigned long: on RV32 these
- * CSRs are 32 bits wide, and using u64 there would let GCC allocate
- * an uninitialized second register for the high half.
- */
-
 static inline uintptr_t read_tp(void)
 {
 	uintptr_t x;
@@ -49,13 +43,8 @@ static inline unsigned long read_satp(void)
 
 static inline u64 make_satp(u64 pt)
 {
-#if __riscv_xlen == 32
-	/* Sv32: mode 1 (bits 31:30), 22-bit PPN (bits 21:0). */
-	return (1U << 31) | (pt >> 12);
-#else
 	/* Sv39: mode 8 (bits 63:60), 44-bit PPN (bits 43:0). */
 	return ((u64)8 << 60) | (pt >> 12);
-#endif
 }
 
 static inline void write_satp(unsigned long x)
@@ -131,22 +120,9 @@ static inline void write_sie(unsigned long x)
 
 static inline u64 read_time(void)
 {
-#if __riscv_xlen == 32
-	/*
-	 * The time CSR is 64 bits wide on RV32; the high half is exposed
-	 * through the timeh CSR (re-reading time would return the low half
-	 * again). Read hi first so lo cannot wrap between the two reads.
-	 */
-	u32 lo, hi;
-
-	asm volatile("csrr %0, timeh" : "=r"(hi));
-	asm volatile("csrr %0, time" : "=r"(lo));
-	return ((u64)hi << 32) | lo;
-#else
 	u64 time;
 	asm volatile("csrr %0, time" : "=r"(time));
 	return time;
-#endif
 }
 
 static inline void intr_on(void)
