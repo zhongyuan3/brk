@@ -27,7 +27,7 @@ int memblock_add(u64 base, size_t size);
 int memblock_reserve(u64 base, size_t size);
 u64 memblock_alloc(size_t size, u64 min_addr, size_t align);
 void memblock_free(u64 base, size_t size);
-u64 memblock_get_ram_base(void);
+u64 memblock_start_of_dram(void);
 void memblock_free_all(void);
 void memblock_dump(struct memblock_region_set *set);
 void memblock_dump_all(void);

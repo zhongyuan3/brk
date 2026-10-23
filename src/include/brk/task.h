@@ -97,7 +97,6 @@ bool task_get_info(pid_t tgid, struct task_info *info);
 /* Return true if a thread group with @tgid exists. */
 bool task_pid_exists(pid_t tgid);
 
-extern cpuid_t boot_cpuid;
 extern struct task *initial_task;
 extern struct list_head tasks;
 extern spinlock_t tasks_lock;

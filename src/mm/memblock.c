@@ -229,7 +229,7 @@ void memblock_free(u64 base, size_t size)
 			       rgn.size);
 }
 
-u64 memblock_get_ram_base(void)
+u64 memblock_start_of_dram(void)
 {
 	if (init_memblock.memory.cnt == 0)
 		return 0;

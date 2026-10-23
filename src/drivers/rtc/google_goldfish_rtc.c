@@ -107,7 +107,7 @@ void rtc_init(void)
 	struct rtc_device dev;
 	int err;
 
-	err = dtb_parse_rtc(&dev);
+	err = dtb_parse_rtc(0, &dev);
 	if (err) {
 		klog_warn("rtc: no goldfish RTC in device tree (%d)\n", err);
 		return;

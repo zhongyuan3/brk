@@ -29,7 +29,6 @@
 #include <uapi/limits.h>
 #include <uapi/signal.h>
 
-cpuid_t boot_cpuid;
 struct task *initial_task;
 
 LIST_DEFINE(tasks);

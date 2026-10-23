@@ -1,4 +1,4 @@
-#include <arch/csr.h>
+#include <riscv/csr.h>
 #include <brk/cpu.h>
 #include <brk/panic.h>
 #include <brk/task.h>

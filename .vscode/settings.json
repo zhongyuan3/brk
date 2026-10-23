@@ -5,7 +5,9 @@
     },
     "files.associations": {
         "*.h": "c",
-        "Makefile.build": "makefile"
+        "Makefile.build": "makefile",
+        ".clangd": "yaml",
+        ".clang-format": "yaml"
     },
     "[c]": {
         "editor.tabSize": 8,

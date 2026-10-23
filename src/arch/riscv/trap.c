@@ -1,6 +1,4 @@
-#include <arch/csr.h>
 #include <arch/irqflags.h>
-#include <arch/sbi.h>
 #include <arch/trap.h>
 #include <arch/trapframe.h>
 #include <brk/assert.h>
@@ -15,6 +13,8 @@
 #include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>
+#include <riscv/csr.h>
+#include <riscv/sbi.h>
 
 static const char *const exception_strs[] = {
 	[0] = "Instruction address misaligned",
@@ -91,14 +91,13 @@ void kernel_trap_handler(void)
 		} else {
 			panic("%s: cpu=%lu scause=%#" PRIx64 ",sepc=%#" PRIx64
 			      ",stval=%#" PRIx64 "\n",
-			      cause_to_str(scause), this_cpuid(), scause,
-			      sepc, stval);
+			      cause_to_str(scause), this_cpuid(), scause, sepc,
+			      stval);
 		}
 	} else {
 		panic("%s: cpu=%lu scause=%#" PRIx64 ",sepc=%#" PRIx64
 		      ",stval=%#" PRIx64 "\n",
-		      cause_to_str(scause), this_cpuid(), scause, sepc,
-		      stval);
+		      cause_to_str(scause), this_cpuid(), scause, sepc, stval);
 	}
 
 	write_sepc(sepc);
@@ -192,4 +191,43 @@ void prepare_to_return(void)
 	write_sepc(arch_tf_get_pc(task->tf));
 
 	write_sstatus(read_sstatus() & ~SSTATUS_SUM);
+}
+
+static void print_hex(unsigned long num)
+{
+	char hex[] = "0123456789ABCDEF";
+	char buf[32];
+	int i = 0;
+
+	if (num == 0) {
+		sbi_console_putchar('0');
+		return;
+	}
+
+	while (num > 0) {
+		buf[i++] = hex[num & 0xF];
+		num >>= 4;
+	}
+
+	while (i > 0) {
+		sbi_console_putchar(buf[--i]);
+	}
+}
+
+void early_trap_handler(void)
+{
+	u64 scause = read_scause();
+	u64 sepc = read_sepc();
+	u64 stval = read_stval();
+
+	sbi_console_putstr(cause_to_str(scause));
+	sbi_console_putchar('\n');
+	sbi_console_putstr("sepc=");
+	print_hex(sepc);
+	sbi_console_putchar('\n');
+	sbi_console_putstr("stval=");
+	print_hex(stval);
+	sbi_console_putchar('\n');
+	while (1) {
+	}
 }

@@ -6,3 +6,4 @@ obj-y += switch_context.o
 obj-y += timer.o
 obj-y += trap_entry.o
 obj-y += trap.o
+obj-y += mm_init.o

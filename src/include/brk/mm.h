@@ -18,4 +18,16 @@ int uvm_space_copy(struct uvm_space *dst, struct uvm_space *src);
 struct uvm_region *uvm_region_alloc(void);
 void uvm_region_free(struct uvm_region *region);
 
+struct map_pages_context {
+	pgd_t *root;
+	void *addr;
+	unsigned long paddr;
+	unsigned long size;
+	unsigned int flags;
+	unsigned long (*alloc_frame)(void);
+	void *(*phys_to_virt)(unsigned long);
+};
+
+int map_pages(const struct map_pages_context *ctx);
+
 #endif

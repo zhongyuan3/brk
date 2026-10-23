@@ -1,9 +1,10 @@
-#include <arch/csr.h>
-#include <arch/sbi.h>
+#include <riscv/csr.h>
+#include <riscv/sbi.h>
 #include <brk/clocksource.h>
 #include <brk/task.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
+#include <riscv/boot_info.h>
 
 static u64 timer_interval;
 
@@ -25,7 +26,7 @@ void timer_set_next(void)
 
 void timer_handle_int(void)
 {
-	if (this_cpuid() == boot_cpuid)
+	if (this_cpuid() == boot_info.boot_hart_id)
 		timekeeper_tick();
 
 	task_wake_all(timekeeper_wait_chan());

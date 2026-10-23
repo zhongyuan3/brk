@@ -141,3 +141,10 @@ user_trap_return:
 	csrrw a0, sscratch, a0
 
 	sret
+
+	.global early_trap_vector
+	.align 4
+early_trap_vector:
+	call early_trap_handler
+.Lspin:
+	j .Lspin

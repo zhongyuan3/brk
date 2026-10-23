@@ -21,12 +21,12 @@
 
 static inline size_t phys_to_pfn(u64 paddr)
 {
-	return (paddr - phys_ram_base) >> PAGE_SHIFT;
+	return (paddr - phys_offset) >> PAGE_SHIFT;
 }
 
 static inline u64 pfn_to_phys(size_t pfn)
 {
-	return (pfn << PAGE_SHIFT) + phys_ram_base;
+	return (pfn << PAGE_SHIFT) + phys_offset;
 }
 
 static inline size_t page_to_pfn(struct page *pg)
