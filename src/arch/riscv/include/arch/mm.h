@@ -8,12 +8,9 @@
 #include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/types.h>
+#include <riscv/boot_info.h>
 
-extern struct kernel_mapping {
-	size_t kernel_va_pa_offset;
-} kernel_map;
-
-extern u64 phys_ram_base;
+extern unsigned long phys_offset;
 
 extern char _skernel[], _ekernel[];
 extern char _stext[], _etext[];
@@ -22,58 +19,60 @@ extern char _sdata[], _edata[];
 extern char _sbss[], _ebss[];
 extern char _secondary_start[];
 
-#define NR_EARLY_PGDIR_PAGES 8
-#define NR_RSV_PAGES (NR_EARLY_PGDIR_PAGES + MAX_CPUS * INIT_STACK_SIZE)
-
-/*
- * All page tables below the top-level PGD are carved out of the early_pgdir
- * region. The frontier must be global: the identity, link and DTB mappings
- * are built by separate map_range() calls that must not reuse each other's
- * tables.
- */
-extern u64 rsv_page_next;
-extern u8 rsv_pages[PAGE_SIZE * NR_RSV_PAGES] __attribute__((aligned(PAGE_SIZE)));
+extern unsigned long early_pgdir_rsvd_page_next;
+extern char early_pgdir_rsvd_pages[];
+extern char init_stack_rsvd_pages[];
 
 static inline u64 symbol_phys(void *vaddr)
 {
-	return (uintptr_t)vaddr - kernel_map.kernel_va_pa_offset;
+	return (uintptr_t)vaddr - boot_info.kernel_image_offset;
 }
 
+#define _SKERNEL ((unsigned long)_skernel)
+#define _EKERNEL ((unsigned long)_ekernel)
+#define _KERNEL_SIZE (_EKERNEL - _SKERNEL)
 #define _SKERNEL_PHYS symbol_phys(_skernel)
 #define _EKERNEL_PHYS symbol_phys(_ekernel)
-#define _KERNEL_SIZE ((uintptr_t)_ekernel - (uintptr_t)_skernel)
 
+#define _STEXT ((unsigned long)_stext)
+#define _ETEXT ((unsigned long)_etext)
+#define _TEXT_SIZE (_ETEXT - _STEXT)
 #define _STEXT_PHYS symbol_phys(_stext)
 #define _ETEXT_PHYS symbol_phys(_etext)
 #define _ETEXT_ALIGNED_PHYS round_up(_ETEXT_PHYS, PAGE_SIZE)
-#define _TEXT_SIZE ((uintptr_t)_etext - (uintptr_t)_stext)
 
+#define _SRODATA ((unsigned long)_srodata)
+#define _ERODATA ((unsigned long)_erodata)
+#define _RODATA_SIZE (_ERODATA - _SRODATA)
 #define _SRODATA_PHYS symbol_phys(_srodata)
 #define _ERODATA_PHYS symbol_phys(_erodata)
 #define _ERODATA_ALIGNED_PHYS round_up(_ERODATA_PHYS, PAGE_SIZE)
-#define _RODATA_SIZE ((uintptr_t)_erodata - (uintptr_t)_srodata)
 
+#define _SDATA ((unsigned long)_sdata)
+#define _EDATA ((unsigned long)_edata)
+#define _DATA_SIZE (_EDATA - _SDATA)
 #define _SDATA_PHYS symbol_phys(_sdata)
 #define _EDATA_PHYS symbol_phys(_edata)
 #define _EDATA_ALIGNED_PHYS round_up(_EDATA_PHYS, PAGE_SIZE)
-#define _DATA_SIZE ((uintptr_t)_edata - (uintptr_t)_sdata)
 
+#define _SBSS ((unsigned long)_sbss)
+#define _EBSS ((unsigned long)_ebss)
+#define _BSS_SIZE (_EBSS - _SBSS)
 #define _SBSS_PHYS symbol_phys(_sbss)
 #define _EBSS_PHYS symbol_phys(_ebss)
 #define _EBSS_ALIGNED_PHYS round_up(_EBSS_PHYS, PAGE_SIZE)
-#define _BSS_SIZE ((uintptr_t)_ebss - (uintptr_t)_sbss)
 
 static inline uintptr_t phys_to_virt(u64 paddr)
 {
-	return (paddr - phys_ram_base) + PAGE_OFFSET;
+	return (paddr - phys_offset) + PAGE_OFFSET;
 }
 
 static inline u64 virt_to_phys(uintptr_t vaddr)
 {
-	return (vaddr - PAGE_OFFSET) + phys_ram_base;
+	return (vaddr - PAGE_OFFSET) + phys_offset;
 }
 
 void paging_init(void);
-void final_pgtable_enable(void);
+void load_final_page_table(void);
 
 #endif

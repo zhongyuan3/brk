@@ -30,8 +30,8 @@ void start_kernel(void)
 	kmalloc_init();
 	vmalloc_init();
 
-	dtb_init_scan_cpu();
-	dtb_init_scan_virtio_dev();
+	dtb_init_scan_cpu(0);
+	dtb_init_scan_virtio_dev(0);
 
 	plic_init();
 	irq_init();

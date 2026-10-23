@@ -13,19 +13,16 @@
 #include <libfdt.h>
 #include <uapi/errno.h>
 
-u64 dtb_phys;
-
-static int dtb_get_cells(void *dtb_virt, int node, int *addr_cells,
-			 int *size_cells)
+static int get_addr_cells(void *fdt, int node, int *addr_cells, int *size_cells)
 {
 	int ret;
 
-	ret = fdt_address_cells(dtb_virt, node);
+	ret = fdt_address_cells(fdt, node);
 	if (ret < 0)
 		return ret;
 	*addr_cells = ret;
 
-	ret = fdt_size_cells(dtb_virt, node);
+	ret = fdt_size_cells(fdt, node);
 	if (ret < 0)
 		return ret;
 	*size_cells = ret;
@@ -33,18 +30,17 @@ static int dtb_get_cells(void *dtb_virt, int node, int *addr_cells,
 	return 0;
 }
 
-static int dtb_get_parent_cells(void *dtb_virt, int node, int *addr_cells,
-				int *size_cells)
+static int get_parent_addr_cells(void *fdt, int node, int *addr_cells,
+				 int *size_cells)
 {
-	int ret = fdt_parent_offset(dtb_virt, node);
+	int ret = fdt_parent_offset(fdt, node);
 	if (ret < 0)
 		return ret;
-	return dtb_get_cells(dtb_virt, ret, addr_cells, size_cells);
+	return get_addr_cells(fdt, ret, addr_cells, size_cells);
 }
 
-static int dtb_for_each_reg(void *dtb_virt, int node, int addr_cells,
-			    int size_cells,
-			    int (*callback)(u64 addr, size_t size))
+static int for_each_reg(void *fdt, int node, int addr_cells, int size_cells,
+			int (*callback)(u64 addr, size_t size))
 {
 	const u32 *reg;
 	u64 addr, size;
@@ -53,7 +49,7 @@ static int dtb_for_each_reg(void *dtb_virt, int node, int addr_cells,
 	int nr_regs;
 	int err;
 
-	reg = fdt_getprop(dtb_virt, node, "reg", &len);
+	reg = fdt_getprop(fdt, node, "reg", &len);
 
 	if (!reg)
 		return -EINVAL;
@@ -80,47 +76,46 @@ static int dtb_for_each_reg(void *dtb_virt, int node, int addr_cells,
 	return 0;
 }
 
-int dtb_early_init_scan_mem(void)
+int dtb_early_init_scan_mem(unsigned long dtb_addr)
 {
 	int err;
 	int node;
 	int addr_cells, size_cells;
-	void *dtb_virt = (void *)(uintptr_t)dtb_phys;
+	void *fdt = (void *)dtb_addr;
 
-	node = fdt_path_offset(dtb_virt, "/memory");
+	node = fdt_path_offset(fdt, "/memory");
 	if (node < 0)
 		return -EINVAL;
 
-	err = dtb_get_parent_cells(dtb_virt, node, &addr_cells, &size_cells);
+	err = get_parent_addr_cells(fdt, node, &addr_cells, &size_cells);
 	if (err)
 		return err;
 
-	err = dtb_for_each_reg(dtb_virt, node, addr_cells, size_cells,
-			       memblock_add);
+	err = for_each_reg(fdt, node, addr_cells, size_cells, memblock_add);
 	if (err)
 		return err;
 
 	return 0;
 }
 
-int dtb_early_init_scan_reserved_mem(void)
+int dtb_early_init_scan_reserved_mem(unsigned long dtb_addr)
 {
 	int err;
 	int node, subnode;
 	int addr_cells, size_cells;
-	void *dtb_virt = (void *)(uintptr_t)dtb_phys;
+	void *fdt = (void *)dtb_addr;
 
-	node = fdt_path_offset(dtb_virt, "/reserved-memory");
+	node = fdt_path_offset(fdt, "/reserved-memory");
 	if (node < 0)
 		return 0;
 
-	err = dtb_get_cells(dtb_virt, node, &addr_cells, &size_cells);
+	err = get_addr_cells(fdt, node, &addr_cells, &size_cells);
 	if (err)
 		return err;
 
-	fdt_for_each_subnode(subnode, dtb_virt, node) {
-		err = dtb_for_each_reg(dtb_virt, subnode, addr_cells,
-				       size_cells, memblock_reserve);
+	fdt_for_each_subnode(subnode, fdt, node) {
+		err = for_each_reg(fdt, subnode, addr_cells, size_cells,
+				   memblock_reserve);
 		if (err)
 			return err;
 	}
@@ -128,19 +123,19 @@ int dtb_early_init_scan_reserved_mem(void)
 	return 0;
 }
 
-int dtb_init_scan_cpu(void)
+int dtb_init_scan_cpu(unsigned long dtb_addr)
 {
 	int node;
 	u32 timebase_freq = 0;
 	const u32 *freq;
 	int len;
-	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
+	void *fdt = (void *)dtb_addr;
 
-	node = fdt_path_offset(dtb_virt, "/cpus");
+	node = fdt_path_offset(fdt, "/cpus");
 	if (node < 0)
 		return -EINVAL;
 
-	freq = fdt_getprop(dtb_virt, node, "timebase-frequency", &len);
+	freq = fdt_getprop(fdt, node, "timebase-frequency", &len);
 	if (!freq || len != sizeof(u32))
 		return -EINVAL;
 
@@ -150,19 +145,18 @@ int dtb_init_scan_cpu(void)
 	return 0;
 }
 
-static int dtb_get_one_reg(int node, u64 *addr, u64 *size)
+static int dtb_get_one_reg(void *fdt, int node, u64 *addr, u64 *size)
 {
 	int len;
 	u32 const *reg;
 	int addr_cells, size_cells;
-	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
-	if (dtb_get_parent_cells(dtb_virt, node, &addr_cells, &size_cells))
+	if (get_parent_addr_cells(fdt, node, &addr_cells, &size_cells))
 		return -EINVAL;
 
 	int cell_bytes = (addr_cells + size_cells) * sizeof(u32);
 
-	reg = fdt_getprop(dtb_virt, node, "reg", &len);
+	reg = fdt_getprop(fdt, node, "reg", &len);
 	if (!reg || len < cell_bytes || len % cell_bytes != 0)
 		return -EINVAL;
 
@@ -174,26 +168,26 @@ static int dtb_get_one_reg(int node, u64 *addr, u64 *size)
 	return 0;
 }
 
-int dtb_parse_plic(struct plic_device *plic)
+int dtb_parse_plic(unsigned long dtb_addr, struct plic_device *plic)
 {
 	int node;
 	const u32 *ndev;
 	int len;
 	u64 addr = 0;
 	u64 size = 0;
-	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
+	void *fdt = (void *)dtb_addr;
 
-	node = fdt_path_offset(dtb_virt, "/soc/plic");
+	node = fdt_path_offset(fdt, "/soc/plic");
 	if (node < 0)
 		return -EINVAL;
 
-	if (dtb_get_one_reg(node, &addr, &size))
+	if (dtb_get_one_reg(fdt, node, &addr, &size))
 		return -EINVAL;
 
 	plic->phys_base = addr;
 	plic->size = size;
 
-	ndev = fdt_getprop(dtb_virt, node, "riscv,ndev", &len);
+	ndev = fdt_getprop(fdt, node, "riscv,ndev", &len);
 	if (!ndev || len != sizeof(u32))
 		return -EINVAL;
 
@@ -202,13 +196,12 @@ int dtb_parse_plic(struct plic_device *plic)
 	return 0;
 }
 
-static int dtb_get_irq(int node, u32 *irq)
+static int dtb_get_irq(void *fdt, int node, u32 *irq)
 {
 	int len;
 	const u32 *prop;
-	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
 
-	prop = fdt_getprop(dtb_virt, node, "interrupts", &len);
+	prop = fdt_getprop(fdt, node, "interrupts", &len);
 	if (!prop || len != sizeof(u32))
 		return -EINVAL;
 
@@ -216,7 +209,7 @@ static int dtb_get_irq(int node, u32 *irq)
 	return 0;
 }
 
-int dtb_parse_uart(struct ns16550a_device *uart)
+int dtb_parse_uart(unsigned long dtb_addr, struct ns16550a_device *uart)
 {
 	int node;
 	const u32 *clock_freq;
@@ -224,24 +217,24 @@ int dtb_parse_uart(struct ns16550a_device *uart)
 	u64 addr = 0;
 	u64 size = 0;
 	u32 irq = 0;
-	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
+	void *fdt = (void *)dtb_addr;
 
-	node = fdt_path_offset(dtb_virt, "/soc/serial");
+	node = fdt_path_offset(fdt, "/soc/serial");
 	if (node < 0)
 		return -EINVAL;
 
-	if (dtb_get_one_reg(node, &addr, &size))
+	if (dtb_get_one_reg(fdt, node, &addr, &size))
 		return -EINVAL;
 
 	uart->phys_base = addr;
 	uart->size = size;
 
-	if (dtb_get_irq(node, &irq))
+	if (dtb_get_irq(fdt, node, &irq))
 		return -EINVAL;
 
 	uart->irq = irq;
 
-	clock_freq = fdt_getprop(dtb_virt, node, "clock-frequency", &len);
+	clock_freq = fdt_getprop(fdt, node, "clock-frequency", &len);
 	if (!clock_freq || len != sizeof(u32))
 		return -EINVAL;
 
@@ -250,23 +243,22 @@ int dtb_parse_uart(struct ns16550a_device *uart)
 	return 0;
 }
 
-int dtb_parse_rtc(struct rtc_device *rtc)
+int dtb_parse_rtc(unsigned long dtb_addr, struct rtc_device *rtc)
 {
 	int node;
 	u64 addr = 0;
 	u64 size = 0;
 	u32 irq = 0;
-	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
+	void *fdt = (void *)dtb_addr;
 
-	node = fdt_node_offset_by_compatible(dtb_virt, -1,
-					     "google,goldfish-rtc");
+	node = fdt_node_offset_by_compatible(fdt, -1, "google,goldfish-rtc");
 	if (node < 0)
 		return node;
 
-	if (dtb_get_one_reg(node, &addr, &size))
+	if (dtb_get_one_reg(fdt, node, &addr, &size))
 		return -EINVAL;
 
-	if (dtb_get_irq(node, &irq))
+	if (dtb_get_irq(fdt, node, &irq))
 		return -EINVAL;
 
 	rtc->phys_base = addr;
@@ -276,24 +268,24 @@ int dtb_parse_rtc(struct rtc_device *rtc)
 	return 0;
 }
 
-int dtb_init_scan_virtio_dev(void)
+int dtb_init_scan_virtio_dev(unsigned long dtb_addr)
 {
 	int node;
 	u64 addr = 0;
 	u64 size = 0;
 	u32 irq = 0;
 	struct virtio_device *vdev;
-	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
+	void *fdt = (void *)dtb_addr;
 
-	for (node = fdt_node_offset_by_compatible(dtb_virt, -1, "virtio,mmio");
-	     node >= 0; node = fdt_node_offset_by_compatible(dtb_virt, node,
-							     "virtio,mmio")) {
+	for (node = fdt_node_offset_by_compatible(fdt, -1, "virtio,mmio");
+	     node >= 0;
+	     node = fdt_node_offset_by_compatible(fdt, node, "virtio,mmio")) {
 		addr = 0;
 		size = 0;
-		if (dtb_get_one_reg(node, &addr, &size))
+		if (dtb_get_one_reg(fdt, node, &addr, &size))
 			continue;
 
-		if (dtb_get_irq(node, &irq))
+		if (dtb_get_irq(fdt, node, &irq))
 			continue;
 
 		vdev = virtio_dev_create(addr, size, irq);
@@ -305,7 +297,7 @@ int dtb_init_scan_virtio_dev(void)
 	return 0;
 }
 
-void dtb_init_scan_serial(void)
+void dtb_init_scan_serial(unsigned long dtb_addr)
 {
 	int parent;
 	const u32 *clock_freq;
@@ -313,36 +305,34 @@ void dtb_init_scan_serial(void)
 	u64 addr = 0;
 	u64 size = 0;
 	u32 irq = 0;
-	void *dtb_virt = (void *)phys_to_virt(dtb_phys);
+	void *fdt = (void *)dtb_addr;
 	int err = 0;
 	int subnode;
 	struct ns16550a_device *dev;
 
-	parent = fdt_path_offset(dtb_virt, "/soc/");
+	parent = fdt_path_offset(fdt, "/soc/");
 	if (parent < 0) {
 		klog_debug("no /soc/ node found\n");
 		return;
 	}
 
-	fdt_for_each_subnode(subnode, dtb_virt, parent) {
+	fdt_for_each_subnode(subnode, fdt, parent) {
 		klog_debug("subnode: %d, name: %s\n", subnode,
-			   fdt_get_name(dtb_virt, subnode, NULL));
-		if (fdt_node_check_compatible(dtb_virt, subnode, "ns16550a") ==
-		    0) {
+			   fdt_get_name(fdt, subnode, NULL));
+		if (fdt_node_check_compatible(fdt, subnode, "ns16550a") == 0) {
 			klog_debug("found ns16550a node: %d, name: %s\n",
-				   subnode,
-				   fdt_get_name(dtb_virt, subnode, NULL));
+				   subnode, fdt_get_name(fdt, subnode, NULL));
 
-			err = dtb_get_one_reg(subnode, &addr, &size);
+			err = dtb_get_one_reg(fdt, subnode, &addr, &size);
 			if (err) {
 				klog_debug("failed to get one reg: %d\n", err);
 				continue;
 			}
-			if (dtb_get_irq(subnode, &irq)) {
+			if (dtb_get_irq(fdt, subnode, &irq)) {
 				klog_debug("failed to get irq: %d\n", err);
 				continue;
 			}
-			clock_freq = fdt_getprop(dtb_virt, subnode,
+			clock_freq = fdt_getprop(fdt, subnode,
 						 "clock-frequency", &len);
 			if (!clock_freq || len != sizeof(u32)) {
 				klog_debug(
@@ -383,4 +373,3 @@ void dtb_init_scan_serial(void)
 		}
 	}
 }
-subsys_initcall(dtb_init_scan_serial);

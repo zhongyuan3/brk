@@ -3,6 +3,7 @@ ENTRY(_start)
 
 #include <arch/asm/vmlayout.h>
 #include <arch/asm/page.h>
+#include <arch/asm/mm.h>
 #include <brk/asm/cpu.h>
 
 SECTIONS
@@ -15,6 +16,7 @@ SECTIONS
     *(.text.head)
     *(.text)
     *(.text.*)
+    . = ALIGN(PAGE_SIZE);
     _etext = .;
   }
 
@@ -34,6 +36,7 @@ SECTIONS
     KEEP(*(.initcall3))
     __initcall_end = .;
 
+    . = ALIGN(PAGE_SIZE);
     _erodata = .;
   }
 
@@ -44,6 +47,7 @@ SECTIONS
     *(.sdata.*)
     *(.data)
     *(.data.*)
+    . = ALIGN(PAGE_SIZE);
     _edata = .;
   }
 
@@ -54,6 +58,20 @@ SECTIONS
     *(.sbss.*)
     *(.bss)
     *(.bss.*)
+
+    . = ALIGN(PAGE_SIZE);
+    init_stack_rsvd_pages = .;
+    . += NR_INIT_STACK_RSVD_PAGES * PAGE_SIZE;
+
+    . = ALIGN(PAGE_SIZE);
+    early_pgdir_rsvd_pages = .;
+    . += NR_EARLY_PGDIR_RSVD_PAGES * PAGE_SIZE;
+
+    . = ALIGN(PAGE_SIZE);
+    kernel_pgdir = .;
+    . += PAGE_SIZE;
+
+    . = ALIGN(PAGE_SIZE);
     _ebss = .;
   }
 

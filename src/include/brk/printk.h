@@ -11,10 +11,10 @@
 #define KLOG_ERROR 3
 
 /* Level used by plain printk()/vprintk(). */
-#define KLOG_DEFAULT KLOG_INFO
+#define KLOG_DEFAULT KLOG_DEBUG
 
 #ifndef KLOG_LEVEL
-#define KLOG_LEVEL KLOG_INFO
+#define KLOG_LEVEL KLOG_DEBUG
 #endif
 
 void printk(char const *fmt, ...) __printf_format(1, 2);

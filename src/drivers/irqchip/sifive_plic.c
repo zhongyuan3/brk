@@ -147,7 +147,7 @@ static struct irq_chip plic_irq_chip = {
 
 void plic_init(void)
 {
-	dtb_parse_plic(&plic);
+	dtb_parse_plic(0, &plic);
 	mem_base = (uintptr_t)ioremap(plic.phys_base, plic.size, PTE_R | PTE_W);
 	priority_base = mem_base + PLIC_PRIORITY_OFFSET;
 	pending_base = mem_base + PLIC_PENDING_OFFSET;

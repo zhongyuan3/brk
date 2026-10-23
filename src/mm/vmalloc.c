@@ -100,25 +100,25 @@ static void vunmap_range(pgd_t *pgd, u64 addr, u64 end_addr,
 
 	while (addr < end_addr) {
 		pgdep = pgd + pgd_index(addr);
-		if (pgd_large(*pgdep)) {
+		if (pgd_is_leaf(*pgdep)) {
 			ASSERT(end_addr - addr >= PAGE_SIZE_1G);
 			pgd_clear(pgdep);
 			addr += PAGE_SIZE_1G;
 			continue;
 		}
-		ASSERT(pgd_present(*pgdep));
-		pmd = get_pmd_virt(pgd_get_pmd(*pgdep), mode);
+		ASSERT(pgd_is_valid(*pgdep));
+		pmd = get_pmd_virt(pgd_next(*pgdep), mode);
 		pmdep = pmd + pmd_index(addr);
-		if (pmd_large(*pmdep)) {
+		if (pmd_is_leaf(*pmdep)) {
 			ASSERT(end_addr - addr >= PAGE_SIZE_2M);
 			pmd_clear(pmdep);
 			addr += PAGE_SIZE_2M;
 			continue;
 		}
-		ASSERT(pmd_present(*pmdep));
-		pt = get_pt_virt(pmd_get_pte(*pmdep), mode);
+		ASSERT(pmd_is_valid(*pmdep));
+		pt = get_pt_virt(pmd_next(*pmdep), mode);
 		ptep = pt + pte_index(addr);
-		ASSERT(pte_present(*ptep));
+		ASSERT(pte_is_valid(*ptep));
 		pte_clear(ptep);
 		addr += PAGE_SIZE;
 	}
@@ -136,41 +136,41 @@ static int vmap_range(pgd_t *pgd, u64 addr, u64 end_addr, u64 paddr,
 	for (; addr < end_addr; addr += page_size, paddr += page_size) {
 		pgdep = pgd + pgd_index(addr);
 		if (page_size == PAGE_SIZE_1G) {
-			ASSERT(!pgd_present(*pgdep));
-			pgd_set_large(pgdep, paddr, flags);
+			ASSERT(!pgd_is_valid(*pgdep));
+			pgd_set_leaf(pgdep, paddr, flags);
 			continue;
 		}
-		if (!pgd_present(*pgdep)) {
+		if (!pgd_is_valid(*pgdep)) {
 			pmd_phys = alloc_pmd(mode);
 			if (!pmd_phys) {
 				vunmap_range(pgd, start_addr, addr, mode);
 				return -ENOMEM;
 			}
 			pmd = get_pmd_virt(pmd_phys, mode);
-			pgd_set_pmd(pgdep, pmd_phys);
+			pgd_set_next(pgdep, pmd_phys);
 		} else {
-			pmd = get_pmd_virt(pgd_get_pmd(*pgdep), mode);
+			pmd = get_pmd_virt(pgd_next(*pgdep), mode);
 		}
 		pmdep = pmd + pmd_index(addr);
 		if (page_size == PAGE_SIZE_2M) {
-			ASSERT(!pmd_present(*pmdep));
-			pmd_set_large(pmdep, paddr, flags);
+			ASSERT(!pmd_is_valid(*pmdep));
+			pmd_set_leaf(pmdep, paddr, flags);
 			continue;
 		}
-		if (!pmd_present(*pmdep)) {
+		if (!pmd_is_valid(*pmdep)) {
 			pt_phys = alloc_pt(mode);
 			if (!pt_phys) {
 				vunmap_range(pgd, start_addr, addr, mode);
 				return -ENOMEM;
 			}
 			pt = get_pt_virt(pt_phys, mode);
-			pmd_set_pte(pmdep, pt_phys);
+			pmd_set_next(pmdep, pt_phys);
 		} else {
-			pt = get_pt_virt(pmd_get_pte(*pmdep), mode);
+			pt = get_pt_virt(pmd_next(*pmdep), mode);
 		}
 		ptep = pt + pte_index(addr);
-		ASSERT(!pte_present(*ptep));
-		pte_set(ptep, paddr, flags);
+		ASSERT(!pte_is_valid(*ptep));
+		pte_set_leaf(ptep, paddr, flags);
 	}
 
 	return 0;
