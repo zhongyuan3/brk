@@ -16,7 +16,7 @@ int cpu_init(cpuid_t cpuid)
 
 	cpus[cpuid].id = cpuid;
 	cpus[cpuid].initialized = true;
-	set_thread_pointer((unsigned long)cpus + cpuid);
+	set_thread_pointer((unsigned long)&cpus[cpuid]);
 	return 0;
 }
 

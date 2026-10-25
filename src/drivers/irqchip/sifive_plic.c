@@ -2,7 +2,7 @@
 #include <brk/ioremap.h>
 #include <brk/irq.h>
 #include <brk/mm.h>
-#include <brk/of.h>
+#include <brk/dt.h>
 #include <brk/panic.h>
 #include <brk/plic.h>
 #include <brk/string.h>

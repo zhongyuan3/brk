@@ -1,16 +1,22 @@
 #include <arch/mm.h>
+#include <brk/assert.h>
 #include <brk/clocksource.h>
+#include <brk/device.h>
+#include <brk/dt.h>
 #include <brk/initcall.h>
 #include <brk/kmalloc.h>
+#include <brk/ktime.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
-#include <brk/of.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
+#include <brk/stddef.h>
+#include <brk/string.h>
 #include <brk/types.h>
 #include <brk/uart.h>
 #include <brk/virtio.h>
 #include <libfdt.h>
+#include <arch/hart.h>
 #include <uapi/errno.h>
 
 static int get_addr_cells(void *fdt, int node, int *addr_cells, int *size_cells)
@@ -40,7 +46,8 @@ static int get_parent_addr_cells(void *fdt, int node, int *addr_cells,
 }
 
 static int for_each_reg(void *fdt, int node, int addr_cells, int size_cells,
-			int (*callback)(u64 addr, size_t size))
+			int (*callback)(u64 addr, size_t size, void *arg),
+			void *arg)
 {
 	const u32 *reg;
 	u64 addr, size;
@@ -68,12 +75,20 @@ static int for_each_reg(void *fdt, int node, int addr_cells, int size_cells,
 		for (int j = 0; j < size_cells; ++j)
 			size = (size << 32) | fdt32_to_cpu(*reg++);
 
-		err = callback(addr, size);
+		err = callback(addr, size, arg);
 		if (err)
 			return err;
 	}
 
 	return 0;
+}
+
+static int __memblock_add_reserve(u64 addr, size_t size, void *add)
+{
+	if (add == NULL)
+		return memblock_reserve(addr, size);
+	else
+		return memblock_add(addr, size);
 }
 
 int dtb_early_init_scan_mem(unsigned long dtb_addr)
@@ -91,7 +106,8 @@ int dtb_early_init_scan_mem(unsigned long dtb_addr)
 	if (err)
 		return err;
 
-	err = for_each_reg(fdt, node, addr_cells, size_cells, memblock_add);
+	err = for_each_reg(fdt, node, addr_cells, size_cells,
+			   __memblock_add_reserve, (void *)1);
 	if (err)
 		return err;
 
@@ -115,7 +131,7 @@ int dtb_early_init_scan_reserved_mem(unsigned long dtb_addr)
 
 	fdt_for_each_subnode(subnode, fdt, node) {
 		err = for_each_reg(fdt, subnode, addr_cells, size_cells,
-				   memblock_reserve);
+				   __memblock_add_reserve, (void *)0);
 		if (err)
 			return err;
 	}
@@ -141,6 +157,18 @@ int dtb_init_scan_cpu(unsigned long dtb_addr)
 
 	timebase_freq = fdt32_to_cpu(*freq);
 	clocksource_set_timebase_freq(timebase_freq);
+
+	ktime_init();
+
+	int subnode;
+	fdt_for_each_subnode(subnode, fdt, node) {
+		const char *type = fdt_getprop(fdt, subnode, "device_type", 0);
+		if (type && !strcmp(type, "cpu")) {
+			klog_debug("dtb: found cpu: %s\n",
+				   fdt_get_name(fdt, subnode, 0));
+			nr_harts += 1;
+		}
+	}
 
 	return 0;
 }
@@ -372,4 +400,71 @@ void dtb_init_scan_serial(unsigned long dtb_addr)
 			klog_info("ns16550a device added: %d\n", subnode);
 		}
 	}
+}
+
+static int __add_mmio(u64 addr, size_t size, void *arg)
+{
+	struct platform_device *dev = arg;
+
+	if (dev->nr_mmio >= MAX_MMIO_RANGES)
+		return -ENOMEM;
+
+	int i = dev->nr_mmio++;
+	dev->mmio[i].base = addr;
+	dev->mmio[i].size = size;
+	return 0;
+}
+
+int dtb_scan_platform_devices(unsigned long dtb_addr)
+{
+	void *fdt = (void *)dtb_addr;
+	int soc = fdt_path_offset(fdt, "/soc");
+	int sub_node;
+	int len;
+	const char *name;
+	struct platform_device *dev;
+	int addr_cells = 0, size_cells = 0;
+	u32 irq = 0;
+
+	get_addr_cells(fdt, soc, &addr_cells, &size_cells);
+
+	fdt_for_each_subnode(sub_node, fdt, soc) {
+		dev = (void *)phys_to_virt(
+			memblock_alloc(sizeof(struct platform_device), 0,
+				       alignof(struct platform_device)));
+		ASSERT(dev != NULL);
+		memset(dev, 0, sizeof(*dev));
+
+		len = 0;
+		name = NULL;
+		name = fdt_get_name(fdt, sub_node, &len);
+		ASSERT(name != NULL);
+		klog_debug("dtb: found /soc/%.*s\n", len, name);
+		dev->name = name;
+
+		name = NULL;
+		len = 0;
+		name = fdt_getprop(fdt, sub_node, "compatible", &len);
+		ASSERT(name != NULL);
+		klog_debug("dtb: /soc/%s.compatible: %.*s\n", dev->name, len,
+			   name);
+		dev->compatible = name;
+
+		for_each_reg(fdt, sub_node, addr_cells, size_cells, __add_mmio,
+			     dev);
+
+		for (int i = 0; i < dev->nr_mmio; ++i) {
+			klog_debug("dtb: /soc/%s.mmio[%d]: %#lx+%lu\n",
+				   dev->name, i, dev->mmio[i].base,
+				   dev->mmio[i].size);
+		}
+
+		dtb_get_irq(fdt, sub_node, &irq);
+		dev->irq = irq;
+
+		dev->fdt_node = sub_node;
+		platform_device_add(dev);
+	}
+
+	return 0;
 }

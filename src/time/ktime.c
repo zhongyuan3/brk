@@ -1,7 +1,20 @@
 #include <brk/fs.h>
 #include <brk/ktime.h>
 #include <brk/timekeeper.h>
+#include <brk/types.h>
 #include <uapi/stat.h>
+
+static bool initialized = false;
+
+bool ktime_initialized(void)
+{
+	return initialized;
+}
+
+void ktime_init(void)
+{
+	initialized = true;
+}
 
 void ktime_get_mono_ts(struct timespec *ts)
 {

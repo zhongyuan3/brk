@@ -1,5 +1,5 @@
-#include <riscv/csr.h>
-#include <arch/large_page.h>
+#include <arch/csr.h>
+#include <arch/asm/large_page.h>
 #include <arch/asm/page.h>
 #include <arch/pgtable.h>
 #include <brk/assert.h>

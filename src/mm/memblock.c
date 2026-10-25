@@ -1,3 +1,4 @@
+#include <arch/asm/page.h>
 #include <brk/assert.h>
 #include <brk/kernel.h>
 #include <brk/memblock.h>
@@ -6,7 +7,7 @@
 #include <brk/printk.h>
 #include <brk/string.h>
 
-#define for_each_memblock_region_set(set, idx, rgn)           \
+#define for_each_memblock_region(set, idx, rgn)               \
 	for (idx = 0, rgn = &set->regions[0]; idx < set->cnt; \
 	     ++idx, rgn = &set->regions[idx])
 
@@ -89,7 +90,7 @@ repeat:
 	base = old_base;
 	nr_new = 0;
 
-	for_each_memblock_region_set(set, idx, rgn) {
+	for_each_memblock_region(set, idx, rgn) {
 		u64 rbase = rgn->base;
 		u64 rend = rbase + rgn->size;
 
@@ -204,7 +205,7 @@ static bool memblock_find_region(struct memblock_region_set *set, u64 base,
 	struct memblock_region *rgn;
 	u64 end = base + size;
 
-	for_each_memblock_region_set(set, idx, rgn) {
+	for_each_memblock_region(set, idx, rgn) {
 		if (base >= rgn->base && end <= rgn->base + rgn->size) {
 			*pidx = idx;
 			prgn->base = base;
@@ -305,20 +306,29 @@ void __next_mem_range(u64 *pidx, u64 *pstart, u64 *pend)
 void __next_mem_pfn_range(u32 *pidx, u64 *pstart, u64 *pend)
 {
 	struct memblock_region_set *mem = &init_memblock.memory;
-	if (*pidx >= mem->cnt) {
-		*pidx = UINT32_MAX;
-		return;
+	while (*pidx < mem->cnt) {
+		struct memblock_region *rgn = &mem->regions[*pidx];
+		*pidx += 1;
+		*pstart = phys_to_pfn(round_up(rgn->base, PAGE_SIZE));
+		*pend = phys_to_pfn(
+			round_down(rgn->base + rgn->size, PAGE_SIZE));
+		if (*pstart < *pend)
+			return;
 	}
-	struct memblock_region *rgn = &mem->regions[*pidx];
-	*pstart = phys_to_pfn(round_up(rgn->base, PAGE_SIZE));
-	*pend = phys_to_pfn(round_down(rgn->base + rgn->size, PAGE_SIZE));
-	*pidx += 1;
+	if (*pidx >= mem->cnt)
+		*pidx = UINT32_MAX;
 }
 
 static void memblock_free_range(u64 start, u64 end)
 {
 	unsigned int order;
 	size_t npgs;
+
+	start = round_up(start, PAGE_SIZE);
+	end = round_down(end, PAGE_SIZE);
+
+	klog_debug("memblock: free range: %#lx-%#lx\n", start, end);
+	memblock_reserve(start, end - start);
 
 	while (start < end) {
 		order = page_order(end - start);
@@ -343,18 +353,11 @@ void memblock_free_all(void)
 	u64 idx;
 	u64 start, end;
 
-	u64 bases[INIT_MEMBLOCK_REGIONS];
-	size_t sizes[INIT_MEMBLOCK_REGIONS];
-	size_t cnt = 0;
-
 	for_each_mem_range(idx, start, end) {
 		memblock_free_range(start, end);
-		bases[cnt] = start;
-		sizes[cnt++] = end - start;
 	}
 
-	for (size_t i = 0; i < cnt; ++i)
-		memblock_reserve(bases[i], sizes[i]);
+	klog_debug("memblock: %s() done\n", __func__);
 }
 
 void memblock_dump(struct memblock_region_set *set)
@@ -363,11 +366,11 @@ void memblock_dump(struct memblock_region_set *set)
 	struct memblock_region *rgn;
 
 	printk(" %s.cnt=%zu\n", set->name, set->cnt);
-	for_each_memblock_region_set(set, idx, rgn) {
+	for_each_memblock_region(set, idx, rgn) {
 		u64 start = rgn->base;
 		size_t size = rgn->size;
 		u64 end = start + size;
-		printk(" %s[%zu]\t[%p-%p], %zx bytes\n", set->name, idx,
+		printk(" %s[%zu]\t[%p-%p], %zu bytes\n", set->name, idx,
 		       (void *)(uintptr_t)start, (void *)(uintptr_t)end, size);
 	}
 }

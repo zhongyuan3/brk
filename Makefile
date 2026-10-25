@@ -149,3 +149,17 @@ clean-kernel:
 .PHONY: debug
 debug: $(KERNEL_ELF) $(ROOTFS_IMG)
 	$(QEMU) $(QEMU_OPTS) -kernel $(KERNEL_ELF) -d int
+
+DTB := $(ROOTFS_BUILD_ROOT)/qemu_virt.dtb
+DTS := $(ROOTFS_BUILD_ROOT)/qemu_virt.dts
+
+.PHONY: dtb dts
+dtb: $(DTB)
+
+$(DTB):
+	$(QEMU) -M virt,dumpdtb=$(DTB)
+
+dts: $(DTS)
+
+$(DTS): $(DTB)
+	dtc -I dtb -O dts $(DTB) -o $(DTS)

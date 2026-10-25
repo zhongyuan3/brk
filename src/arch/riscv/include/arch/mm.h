@@ -8,7 +8,7 @@
 #include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/types.h>
-#include <riscv/boot_info.h>
+#include <arch/boot_info.h>
 
 extern unsigned long phys_offset;
 

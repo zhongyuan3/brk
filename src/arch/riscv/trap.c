@@ -13,8 +13,8 @@
 #include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>
-#include <riscv/csr.h>
-#include <riscv/sbi.h>
+#include <arch/csr.h>
+#include <arch/sbi.h>
 
 static const char *const exception_strs[] = {
 	[0] = "Instruction address misaligned",
@@ -195,7 +195,7 @@ void prepare_to_return(void)
 
 static void print_hex(unsigned long num)
 {
-	char hex[] = "0123456789ABCDEF";
+	char hex[] = "0123456789abcdef";
 	char buf[32];
 	int i = 0;
 
@@ -222,12 +222,71 @@ void early_trap_handler(void)
 
 	sbi_console_putstr(cause_to_str(scause));
 	sbi_console_putchar('\n');
-	sbi_console_putstr("sepc=");
+	sbi_console_putstr("sepc :");
 	print_hex(sepc);
 	sbi_console_putchar('\n');
-	sbi_console_putstr("stval=");
+	sbi_console_putstr("stval:");
 	print_hex(stval);
 	sbi_console_putchar('\n');
 	while (1) {
 	}
+}
+
+static bool early = true;
+
+static void __early_trap_handler(struct riscv_trap_frame *frame)
+{
+	sbi_console_putstr(cause_to_str(frame->scause));
+	sbi_console_putchar('\n');
+	sbi_console_putstr("sepc :");
+	print_hex(frame->sepc);
+	sbi_console_putchar('\n');
+	sbi_console_putstr("stval:");
+	print_hex(frame->stval);
+	sbi_console_putchar('\n');
+	while (1) {
+	}
+}
+
+static const char *reg_names[] = {
+	"zero", "ra", "sp", "gp", "tp",	 "t0",	"t1", "t2", "s0", "s1", "a0",
+	"a1",	"a2", "a3", "a4", "a5",	 "a6",	"a7", "s2", "s3", "s4", "s5",
+	"s6",	"s7", "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6",
+};
+
+static void trap_panic(const char *name, unsigned long code,
+		       struct riscv_trap_frame *frame)
+{
+	klog_error("trap: unhandled %s (code %lu)\n", name, code);
+	klog_error("trap: sepc=%#018lx stval=%#018lx\n", frame->sepc,
+		   frame->stval);
+	klog_error("trap: scause=%#018lx sstatus=%#018lx\n", frame->scause,
+		   frame->sstatus);
+	for (int i = 0; i < 32; ++i) {
+		klog_error("trap: %-4s %#018lx\n", reg_names[i], frame->x[i]);
+	}
+	panic("trap: unhandled %s (code %lu)\n", name, code);
+}
+
+void __trap_handler(struct riscv_trap_frame *frame)
+{
+	if (early) {
+		__early_trap_handler(frame);
+	} else {
+		trap_panic(cause_to_str(frame->scause),
+			   frame->scause & ~(1UL << 63), frame);
+	}
+}
+
+extern char __trap_entry[];
+
+void setup_trap_entry_early(void)
+{
+	write_stvec((unsigned long)__trap_entry);
+}
+
+void setup_trap_entry(void)
+{
+	write_stvec((unsigned long)__trap_entry);
+	early = false;
 }

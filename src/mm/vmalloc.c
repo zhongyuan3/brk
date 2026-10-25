@@ -1,4 +1,4 @@
-#include <arch/large_page.h>
+#include <arch/asm/large_page.h>
 #include <arch/pgtable.h>
 #include <brk/assert.h>
 #include <brk/kernel.h>
@@ -7,6 +7,7 @@
 #include <brk/memblock.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
+#include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
@@ -348,6 +349,7 @@ void vmalloc_init(void)
 	area->size = VMALLOC_SIZE;
 	area->is_free = true;
 	list_add(&area->list, &vma);
+	klog_debug("kmalloc: %s() done\n", __func__);
 }
 
 void *vmalloc(size_t size)

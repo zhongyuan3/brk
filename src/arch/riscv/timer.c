@@ -1,10 +1,10 @@
-#include <riscv/csr.h>
-#include <riscv/sbi.h>
+#include <arch/csr.h>
+#include <arch/sbi.h>
 #include <brk/clocksource.h>
 #include <brk/task.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
-#include <riscv/boot_info.h>
+#include <arch/boot_info.h>
 
 static u64 timer_interval;
 

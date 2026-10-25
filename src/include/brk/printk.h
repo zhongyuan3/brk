@@ -32,25 +32,25 @@ void printk_flush_pending(void);
 void printk_panic_text(const char *text, size_t len);
 
 #if KLOG_DEBUG >= KLOG_LEVEL
-#define klog_debug(fmt, ...) klog(KLOG_DEBUG, fmt, ##__VA_ARGS__);
+#define klog_debug(fmt, ...) klog(KLOG_DEBUG, fmt, ##__VA_ARGS__)
 #else
 #define klog_debug(fmt, ...) ((void)0)
 #endif
 
 #if KLOG_INFO >= KLOG_LEVEL
-#define klog_info(fmt, ...) klog(KLOG_INFO, fmt, ##__VA_ARGS__);
+#define klog_info(fmt, ...) klog(KLOG_INFO, fmt, ##__VA_ARGS__)
 #else
 #define klog_info(fmt, ...) ((void)0)
 #endif
 
 #if KLOG_WARN >= KLOG_LEVEL
-#define klog_warn(fmt, ...) klog(KLOG_WARN, fmt, ##__VA_ARGS__);
+#define klog_warn(fmt, ...) klog(KLOG_WARN, fmt, ##__VA_ARGS__)
 #else
 #define klog_warn(fmt, ...) ((void)0)
 #endif
 
 #if KLOG_ERROR >= KLOG_LEVEL
-#define klog_error(fmt, ...) klog(KLOG_ERROR, fmt, ##__VA_ARGS__);
+#define klog_error(fmt, ...) klog(KLOG_ERROR, fmt, ##__VA_ARGS__)
 #else
 #define klog_error(fmt, ...) ((void)0)
 #endif

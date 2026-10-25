@@ -8,4 +8,7 @@
 #define TRAP_IS_EXCEPTION(scause) (!TRAP_IS_INTERRUPT(scause))
 #define TRAP_CAUSE_CODE(scause) ((scause) & ~(1ULL << 63))
 
+void setup_trap_entry_early(void);
+void setup_trap_entry(void);
+
 #endif

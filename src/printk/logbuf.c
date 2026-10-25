@@ -46,7 +46,7 @@ void log_store(u8 level, const char *text, u32 len)
 	rec->len = len;
 	rec->level = level;
 	rec->flags = 0;
-	rec->ts_nsec = ktime_get_boot_ns();
+	rec->ts_nsec = ktime_initialized() ? ktime_get_boot_ns() : 0;
 	memcpy(&log_buf[log_next_off + sizeof(struct log_record)], text, len);
 	log_next_off += total;
 }

@@ -9,7 +9,7 @@
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mmio.h>
-#include <brk/of.h>
+#include <brk/dt.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
