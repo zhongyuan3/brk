@@ -1,5 +1,5 @@
 subdir-y += base
-subdir-y += of
+subdir-y += dt
 subdir-y += block
 subdir-y += char
 subdir-y += tty

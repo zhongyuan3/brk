@@ -1,8 +1,11 @@
-#include <riscv/csr.h>
 #include <brk/cpu.h>
 #include <brk/panic.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
+#include <arch/csr.h>
+#include <arch/hart.h>
+
+unsigned long nr_harts = 1;
 
 void set_thread_pointer(unsigned long value)
 {

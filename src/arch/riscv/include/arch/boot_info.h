@@ -1,5 +1,5 @@
-#ifndef RISCV_BOOT_INFO_H
-#define RISCV_BOOT_INFO_H
+#ifndef ARCH_BOOT_INFO_H
+#define ARCH_BOOT_INFO_H
 
 extern struct boot_info {
 	unsigned long kernel_image_offset;

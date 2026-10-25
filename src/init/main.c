@@ -1,12 +1,12 @@
 #include <arch/irqflags.h>
 #include <brk/cpu.h>
+#include <brk/dt.h>
 #include <brk/init.h>
 #include <brk/initcall.h>
 #include <brk/irq.h>
 #include <brk/kmalloc.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
-#include <brk/of.h>
 #include <brk/pgalloc.h>
 #include <brk/plic.h>
 #include <brk/printk.h>
@@ -24,13 +24,15 @@ void start_kernel(void)
 {
 	arch_init();
 
-	page_alloc_init();
-	memblock_free_all();
+	mm_core_init();
 
-	kmalloc_init();
-	vmalloc_init();
+	klog_debug("release secondary harts\n");
 
-	dtb_init_scan_cpu(0);
+	smp_boot_release_secondary_harts();
+
+	while (1) {
+	}
+
 	dtb_init_scan_virtio_dev(0);
 
 	plic_init();

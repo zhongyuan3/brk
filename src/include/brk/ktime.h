@@ -8,6 +8,9 @@
 
 struct fs_inode;
 
+bool ktime_initialized(void);
+void ktime_init(void);
+
 void ktime_get_mono_ts(struct timespec *ts);
 void ktime_get_real_ts(struct timespec *ts);
 void ktime_set_real_ts(const struct timespec *ts);

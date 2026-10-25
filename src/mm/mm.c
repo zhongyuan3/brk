@@ -1,4 +1,4 @@
-#include <arch/large_page.h>
+#include <arch/asm/large_page.h>
 #include <arch/pgtable.h>
 #include <arch/pgtable_types.h>
 #include <brk/assert.h>
@@ -6,6 +6,7 @@
 #include <brk/initcall.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
+#include <brk/memblock.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
@@ -452,6 +453,18 @@ int map_pages(const struct map_pages_context *ctx)
 		addr += rem_size;
 		paddr += rem_size;
 	}
+
+	return 0;
+}
+
+int mm_core_init(void)
+{
+	page_alloc_init();
+	memblock_free_all();
+	kmalloc_init();
+	vmalloc_init();
+
+	memblock_dump_all();
 
 	return 0;
 }

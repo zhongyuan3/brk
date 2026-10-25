@@ -1,25 +1,25 @@
 #include <arch/asm/mm.h>
 #include <arch/asm/page.h>
 #include <arch/asm/vmlayout.h>
-#include <arch/large_page.h>
+#include <arch/asm/large_page.h>
 #include <arch/mm.h>
 #include <arch/pgtable.h>
 #include <arch/pgtable_types.h>
 #include <brk/asm/cpu.h>
 #include <brk/assert.h>
+#include <brk/dt.h>
 #include <brk/kernel.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
-#include <brk/of.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/stddef.h>
 #include <brk/types.h>
 #include <libfdt.h>
-#include <riscv/boot_info.h>
-#include <riscv/csr.h>
-#include <riscv/sbi.h>
+#include <arch/boot_info.h>
+#include <arch/csr.h>
+#include <arch/sbi.h>
 
 unsigned long phys_offset;
 
@@ -187,7 +187,7 @@ static void final_pgtable_init(void)
 	rngs[3].size = _BSS_SIZE;
 	rngs[3].flags = PTE_R | PTE_W;
 	rngs[3].do_map = true;
-	rngs[4].name = "temp_rngs_array";
+	rngs[4].name = "tmp_rngs_list";
 	rngs[4].addr = phys_to_virt((unsigned long)rngs);
 	rngs[4].paddr = (unsigned long)rngs;
 	rngs[4].size = rngs_size;
@@ -202,6 +202,7 @@ static void final_pgtable_init(void)
 	rngs[5].do_map = true;
 	size_t i = 6;
 	for_each_mem_range(idx, start, end) {
+		klog_debug("start=%#lx,end=%#lx\n", start, end);
 		rngs[i].name = "free_memory";
 		rngs[i].addr = phys_to_virt(start);
 		rngs[i].paddr = start;
@@ -254,25 +255,32 @@ static void *phys_to_virt_after_final(unsigned long paddr)
 static void vmemmap_init(void)
 {
 	u32 idx;
-	u64 start, end;
+	unsigned long start, end;
 	size_t sz;
-	u64 paddr;
+	unsigned long paddr;
+	unsigned long vaddr;
+
+	klog_debug("mm: vmemmap: %s() was called\n", __func__);
 
 	for_each_mem_pfn_range(idx, start, end) {
 		sz = round_up((end - start) * sizeof(struct page), PAGE_SIZE);
 		paddr = memblock_alloc(sz, 0, PAGE_SIZE);
 		ASSERT(paddr);
 		memset((void *)phys_to_virt(paddr), 0, sz);
+		vaddr = (unsigned long)pfn_to_page(start);
+		klog_debug("mm: vmemmap: va=%#lx,pa=%#lx,sz=%lu\n", vaddr,
+			   paddr, sz);
 		struct map_pages_context ctx = {
 			.root = kernel_pgdir,
-			.addr = pfn_to_page(start),
+			.addr = (void *)vaddr,
 			.paddr = paddr,
 			.size = sz,
 			.flags = PTE_R | PTE_W,
 			.alloc_frame = alloc_frame_after_final,
 			.phys_to_virt = phys_to_virt_after_final,
 		};
-		map_pages(&ctx);
+		int err = map_pages(&ctx);
+		ASSERT(err == 0);
 	}
 }
 

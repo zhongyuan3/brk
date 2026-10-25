@@ -30,4 +30,6 @@ struct map_pages_context {
 
 int map_pages(const struct map_pages_context *ctx);
 
+int mm_core_init(void);
+
 #endif

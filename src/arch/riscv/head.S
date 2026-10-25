@@ -38,6 +38,9 @@ _start:
 	mv HART_ID_SAVED, a0
 	mv DTB_PA_SAVED, a1
 
+	/* Make sure sscratch is 0 in kernel mode */
+	csrw sscratch, zero
+
 	compute_kernel_image_offset
 
 	la t0, _sbss
@@ -51,11 +54,7 @@ _start:
 
 	setup_per_hart_stack HART_ID_SAVED
 
-.Lspin:
-	bne HART_ID_SAVED, x0, .Lspin
-
-	la t0, early_trap_vector
-	csrw stvec, t0
+	call setup_trap_entry_early
 
 	mv a0, DTB_PA_SAVED
 	li a1, 1
@@ -72,10 +71,13 @@ _start:
 _secondary_start:
 	mv HART_ID_SAVED, a0
 
+	/* Make sure sscratch is 0 in kernel mode */
+	csrw sscratch, zero
+
+	compute_kernel_image_offset
 	setup_per_hart_stack HART_ID_SAVED
 
-	la t0, early_trap_vector
-	csrw stvec, t0
+	call setup_trap_entry_early
 
 	/* Non-boot hart ignore the first argument. */
 	li a0, 0

@@ -87,7 +87,7 @@ ForEachMacros:
     - "hlist_for_each_entry_safe"
     - "for_each_mem_range"
     - "for_each_mem_pfn_range"
-    - "for_each_memblock_region_set"
+    - "for_each_memblock_region"
     - "fdt_for_each_subnode"
     - "fdt_for_each_property_offset"
 
