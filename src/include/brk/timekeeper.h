@@ -6,6 +6,7 @@
 
 void timekeeper_init(void);
 void timekeeper_tick(void);
+bool timekeeper_initialized(void);
 
 u64 jiffies_get(void);
 u64 timekeeper_mono_ns(void);

@@ -18,20 +18,19 @@ void sigaction_table_copy(struct sigaction_table *dst,
 void sigaction_table_reset(struct sigaction_table *table);
 
 void signal_send(struct task *task, int sig);
-int signal_init(struct task *task,
-		struct sigaction_table *sigactions, u64 blocked);
+int signal_init(struct task *task, struct sigaction_table *sigactions,
+		u64 blocked);
 void signal_deinit(struct task *task);
 void signal_reset(struct task *task);
 bool signal_pending(struct task *task);
 void signal_deliver_pending(struct task *task);
-void signal_copy(struct task *dst,
-		 struct task *src);
+void signal_copy(struct task *dst, struct task *src);
 
 int signal_do_kill(pid_t pid, int sig);
 u64 signal_do_sigreturn(struct task *task);
-int signal_do_sigaction(struct task *task, int sig,
-			const struct sigaction *act, struct sigaction *oact);
-int signal_do_sigprocmask(struct task *task, int how,
-			  const sigset_t *set, sigset_t *oldset);
+int signal_do_sigaction(struct task *task, int sig, const struct sigaction *act,
+			struct sigaction *oact);
+int signal_do_sigprocmask(struct task *task, int how, const sigset_t *set,
+			  sigset_t *oldset);
 
 #endif

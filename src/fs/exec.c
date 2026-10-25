@@ -1,7 +1,7 @@
 #include <arch/asm/page.h>
+#include <arch/asm/vmlayout.h>
 #include <arch/pgtable.h>
 #include <arch/trapframe.h>
-#include <arch/asm/vmlayout.h>
 #include <brk/assert.h>
 #include <brk/error.h>
 #include <brk/fs.h>
@@ -120,7 +120,7 @@ static u64 random_ustack(void)
 {
 	uintptr_t ustack_top = USER_SPACE_SIZE_MAX;
 
-	rand_seed(timer_get_time());
+	rand_seed(timer_read());
 	ustack_top -= (rand_u32() % 32 + 1) * PAGE_SIZE;
 	ustack_top -= USTACK_SIZE;
 	return ustack_top;

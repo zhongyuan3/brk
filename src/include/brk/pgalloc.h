@@ -1,9 +1,9 @@
 #ifndef BRK_PGALLOC_H
 #define BRK_PGALLOC_H
 
-#include <arch/mm.h>
 #include <arch/asm/page.h>
 #include <arch/asm/vmlayout.h>
+#include <arch/mm.h>
 #include <brk/mm_types.h>
 
 #define PAGE_ORDER_MAX 12
