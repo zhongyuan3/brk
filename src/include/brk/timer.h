@@ -4,8 +4,6 @@
 #include <brk/types.h>
 
 void timer_init(void);
-u64 timer_get_time(void);
-void timer_set_next(void);
-void timer_handle_int(void);
+u64 timer_read(void);
 
 #endif

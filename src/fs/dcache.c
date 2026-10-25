@@ -156,7 +156,8 @@ void fs_dentry_put(struct fs_dentry *dentry)
 		return;
 
 	klog_debug("%s(): Freeing dentry: name=%.*s, inode=%ld\n", __func__,
-		   (int)dentry->name.len, dentry->name.name, dentry->inode->ino);
+		   (int)dentry->name.len, dentry->name.name,
+		   dentry->inode->ino);
 
 	if (dentry->parent != dentry) {
 		spinlock_acquire(&dentry->parent->lock);
@@ -235,8 +236,8 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 	dentry = __dentry_lookup(head, parent, name);
 	spinlock_release(&dentry_htable_lock);
 	if (dentry) {
-		klog_debug("%s(): Cache hit for %.*s\n", __func__, (int)name->len,
-			   name->name);
+		klog_debug("%s(): Cache hit for %.*s\n", __func__,
+			   (int)name->len, name->name);
 		return dentry;
 	}
 	klog_debug("%s(): Cache miss for %.*s\n", __func__, (int)name->len,

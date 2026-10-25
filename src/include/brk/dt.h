@@ -6,16 +6,21 @@
 #include <brk/types.h>
 #include <brk/uart.h>
 
-int dtb_early_init_scan_mem(unsigned long dtb_addr);
-int dtb_early_init_scan_reserved_mem(unsigned long dtb_addr);
-int dtb_init_scan_cpu(unsigned long dtb_addr);
-int dtb_scan_platform_devices(unsigned long dtb_addr);
+void dt_set_dtb(unsigned long dtb);
 
-int dtb_init_scan_virtio_dev(unsigned long dtb_addr);
-void dtb_init_scan_serial(unsigned long dtb_addr);
+int dt_init_scan_mem(void);
+int dt_init_scan_rsvd_mem(void);
 
-int dtb_parse_plic(unsigned long dtb_addr, struct plic_device *plic);
-int dtb_parse_uart(unsigned long dtb_addr, struct ns16550a_device *uart);
-int dtb_parse_rtc(unsigned long dtb_addr, struct rtc_device *rtc);
+int dt_init_scan_cpu(void);
+int dt_scan_platform_devices(void);
+
+int dt_init_scan_virtio_dev(void);
+void dt_init_scan_serial(void);
+
+int dt_parse_plic(struct plic_device *plic);
+int dt_parse_uart(struct ns16550a_device *uart);
+int dt_parse_rtc(struct rtc_device *rtc);
+
+int dt_setup_timebase_freq(void);
 
 #endif

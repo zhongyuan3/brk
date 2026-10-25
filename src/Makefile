@@ -1,14 +1,6 @@
 subdir-y := arch/$(ARCH)
+subdir-y += kernel
 subdir-y += mm
-subdir-y += drivers
+subdir-y += driver
 subdir-y += fs
 subdir-y += lib
-subdir-y += init
-subdir-y += irq
-subdir-y += lock
-subdir-y += printk
-subdir-y += process
-subdir-y += syscall
-subdir-y += time
-
-obj-y += cpu.o
