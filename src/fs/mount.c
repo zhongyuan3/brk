@@ -342,7 +342,7 @@ int kernel_umount(struct fs_mount_state *mnt)
 
 	refcnt = fs_mount_state_get_refcnt(mnt);
 	if (refcnt > 2) {
-		klog_warn("%s(): %p is busy: %u\n", __func__, mnt, refcnt);
+		pr_warn("%s(): %p is busy: %u\n", __func__, mnt, refcnt);
 		return -EBUSY;
 	}
 	if (refcnt < 2)

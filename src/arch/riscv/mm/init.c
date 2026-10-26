@@ -152,7 +152,7 @@ static void final_pgtable_init(void)
 		rngs_cnt += 1;
 	}
 	rngs_cnt += 7;
-	klog_debug("rngs_cnt = %lu\n", rngs_cnt);
+	pr_debug("rngs_cnt = %lu\n", rngs_cnt);
 
 	rngs_size = sizeof(struct mapping_region) * rngs_cnt;
 	rngs_size = round_up(rngs_size, PAGE_SIZE);
@@ -203,7 +203,7 @@ static void final_pgtable_init(void)
 	rngs[5].do_map = true;
 	size_t i = 6;
 	for_each_mem_range(idx, start, end) {
-		klog_debug("start=%#lx,end=%#lx\n", start, end);
+		pr_debug("start=%#lx,end=%#lx\n", start, end);
 		rngs[i].name = "free_memory";
 		rngs[i].addr = phys_to_virt(start);
 		rngs[i].paddr = start;
@@ -227,7 +227,7 @@ static void final_pgtable_init(void)
 		if (!rngs[i].do_map)
 			break;
 
-		klog_debug("mm: map %s: va=%#lx,pa=%#lx,sz=%lu\n", rngs[i].name,
+		pr_debug("mm: map %s: va=%#lx,pa=%#lx,sz=%lu\n", rngs[i].name,
 			   rngs[i].addr, rngs[i].paddr, rngs[i].size);
 
 		struct map_pages_context ctx = {
@@ -261,7 +261,7 @@ static void vmemmap_init(void)
 	unsigned long paddr;
 	unsigned long vaddr;
 
-	klog_debug("mm: vmemmap: %s() was called\n", __func__);
+	pr_debug("mm: vmemmap: %s() was called\n", __func__);
 
 	for_each_mem_pfn_range(idx, start, end) {
 		sz = round_up((end - start) * sizeof(struct page), PAGE_SIZE);
@@ -269,7 +269,7 @@ static void vmemmap_init(void)
 		ASSERT(paddr);
 		memset((void *)phys_to_virt(paddr), 0, sz);
 		vaddr = (unsigned long)pfn_to_page(start);
-		klog_debug("mm: vmemmap: va=%#lx,pa=%#lx,sz=%lu\n", vaddr,
+		pr_debug("mm: vmemmap: va=%#lx,pa=%#lx,sz=%lu\n", vaddr,
 			   paddr, sz);
 		struct map_pages_context ctx = {
 			.root = kernel_pgdir,

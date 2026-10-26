@@ -349,7 +349,7 @@ void vmalloc_init(void)
 	area->size = VMALLOC_SIZE;
 	area->is_free = true;
 	list_add(&area->list, &vma);
-	klog_debug("kmalloc: %s() done\n", __func__);
+	pr_debug("kmalloc: %s() done\n", __func__);
 }
 
 void *vmalloc(size_t size)

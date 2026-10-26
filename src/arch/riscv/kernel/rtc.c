@@ -57,20 +57,20 @@ void rtc_init(void)
 
 	err = dt_parse_rtc(&dev);
 	if (err) {
-		klog_warn("rtc: no goldfish RTC in device tree (%d)\n", err);
+		pr_warn("rtc: no goldfish RTC in device tree (%d)\n", err);
 		return;
 	}
 
 	rtc.mmio =
 		(u8 volatile *)ioremap(dev.phys_base, dev.size, PTE_R | PTE_W);
 	if (!rtc.mmio) {
-		klog_warn("rtc: ioremap failed for phys %#" PRIx64 "\n",
+		pr_warn("rtc: ioremap failed for phys %#" PRIx64 "\n",
 			  dev.phys_base);
 		return;
 	}
 
 	rtc_ok = true;
 
-	klog_info("rtc: goldfish RTC initialized: mmio=%#lx, ioremap=%p\n",
+	pr_info("rtc: goldfish RTC initialized: mmio=%#lx, ioremap=%p\n",
 		  dev.phys_base, rtc.mmio);
 }

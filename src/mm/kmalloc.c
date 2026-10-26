@@ -71,7 +71,7 @@ void kmalloc_init(void)
 	size_t align = alignof(max_align_t);
 	for (int i = 0; i < NR_KMALLOC_ALLOCATORS; ++i)
 		slab_init(&kmalloc_allocators[i], sz[i], align, "kmalloc");
-	klog_debug("kmalloc: %s() done\n", __func__);
+	pr_debug("kmalloc: %s() done\n", __func__);
 }
 
 void *kmalloc(size_t size)

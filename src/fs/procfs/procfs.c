@@ -426,7 +426,7 @@ static ssize_t procfs_write_pagecache_shrink(const struct procfs_entry *e,
 		return -EINVAL;
 
 	freed = page_cache_shrink(nr);
-	klog_info("pagecache: shrink(%lu) freed %lu pages (%lu remain)\n", nr,
+	pr_info("pagecache: shrink(%lu) freed %lu pages (%lu remain)\n", nr,
 		  freed, page_cache_nr_pages());
 	*pos = (loff_t)size;
 	return (ssize_t)size;

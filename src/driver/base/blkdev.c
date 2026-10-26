@@ -135,7 +135,7 @@ int blkdev_register(struct block_dev *bd)
 	}
 	spinlock_release(&bd_lock);
 
-	klog_debug("%s: devtype=%" PRIu32 ", major=%u, minor=%u\n", __func__,
+	pr_debug("%s: devtype=%" PRIu32 ", major=%u, minor=%u\n", __func__,
 		   DEVTYPE(dev), MAJOR(dev), MINOR(dev));
 
 	spinlock_acquire(&bd_htable_lock);
@@ -168,7 +168,7 @@ struct block_dev *blkdev_get(dev_t dev)
 {
 	struct block_dev *bd;
 
-	klog_debug("%s: devtype=%" PRIu32 ", major=%u, minor=%u\n", __func__,
+	pr_debug("%s: devtype=%" PRIu32 ", major=%u, minor=%u\n", __func__,
 		   DEVTYPE(dev), MAJOR(dev), MINOR(dev));
 
 	spinlock_acquire(&bd_htable_lock);
@@ -261,13 +261,13 @@ void blkdev_free_region(unsigned major, unsigned minor, unsigned count)
 			return;
 		}
 
-		klog_error("%s: region %u+%u does not match %u+%u", __func__,
+		pr_error("%s: region %u+%u does not match %u+%u", __func__,
 			   curr->minor_start, curr->minor_count, minor, count);
 		spinlock_release(&bd_lock);
 		return;
 	}
 	spinlock_release(&bd_lock);
-	klog_error("%s: no region at minor %u count %u", __func__, minor,
+	pr_error("%s: no region at minor %u count %u", __func__, minor,
 		   count);
 }
 
@@ -276,13 +276,13 @@ int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt)
 	if (blk_cnt == 0)
 		return 0;
 	if (blk_id >= bd->phy_bcnt) {
-		klog_warn("%s(): invalid blk_id %" PRIu64 ", phy_bcnt %" PRIu64
+		pr_warn("%s(): invalid blk_id %" PRIu64 ", phy_bcnt %" PRIu64
 			  "\n",
 			  __func__, blk_id, bd->phy_bcnt);
 		return -ENXIO;
 	}
 	if (bd->phy_bcnt - blk_id < blk_cnt) {
-		klog_warn("%s(): invalid blk_cnt %" PRIu32 ", phy_bcnt %" PRIu64
+		pr_warn("%s(): invalid blk_cnt %" PRIu32 ", phy_bcnt %" PRIu64
 			  "\n",
 			  __func__, blk_cnt, bd->phy_bcnt);
 		return -ENXIO;

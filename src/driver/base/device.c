@@ -7,5 +7,5 @@ static LIST_DEFINE(platform_devices);
 void platform_device_add(struct platform_device *dev)
 {
 	list_add(&dev->list, &platform_devices);
-	klog_debug("device: added platform device %s\n", dev->name);
+	pr_debug("device: added platform device %s\n", dev->name);
 }

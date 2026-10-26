@@ -327,7 +327,7 @@ static void memblock_free_range(u64 start, u64 end)
 	start = round_up(start, PAGE_SIZE);
 	end = round_down(end, PAGE_SIZE);
 
-	klog_debug("memblock: free range: %#lx-%#lx\n", start, end);
+	pr_debug("memblock: free range: %#lx-%#lx\n", start, end);
 	memblock_reserve(start, end - start);
 
 	while (start < end) {
@@ -357,7 +357,7 @@ void memblock_free_all(void)
 		memblock_free_range(start, end);
 	}
 
-	klog_debug("memblock: %s() done\n", __func__);
+	pr_debug("memblock: %s() done\n", __func__);
 }
 
 void memblock_dump(struct memblock_region_set *set)

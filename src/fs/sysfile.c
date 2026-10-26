@@ -657,7 +657,7 @@ u64 sys_getdents64(void)
 		return PTR_ERR(fp);
 
 	if (!(fp->mode & FMODE_DIR)) {
-		klog_info("%s(): Not a directory\n", __func__);
+		pr_info("%s(): Not a directory\n", __func__);
 		fs_file_put(fp);
 		return -ENOTDIR;
 	}

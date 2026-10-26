@@ -175,7 +175,7 @@ int dt_init_scan_cpu(void)
 	fdt_for_each_subnode(subnode, fdt, node) {
 		const char *type = fdt_getprop(fdt, subnode, "device_type", 0);
 		if (type && !strcmp(type, "cpu")) {
-			klog_debug("dtb: found cpu: %s\n",
+			pr_debug("dtb: found cpu: %s\n",
 				   fdt_get_name(fdt, subnode, 0));
 			nr_harts += 1;
 		}
@@ -346,30 +346,30 @@ void dt_init_scan_serial(void)
 
 	parent = fdt_path_offset(fdt, "/soc/");
 	if (parent < 0) {
-		klog_debug("no /soc/ node found\n");
+		pr_debug("no /soc/ node found\n");
 		return;
 	}
 
 	fdt_for_each_subnode(subnode, fdt, parent) {
-		klog_debug("subnode: %d, name: %s\n", subnode,
+		pr_debug("subnode: %d, name: %s\n", subnode,
 			   fdt_get_name(fdt, subnode, NULL));
 		if (fdt_node_check_compatible(fdt, subnode, "ns16550a") == 0) {
-			klog_debug("found ns16550a node: %d, name: %s\n",
+			pr_debug("found ns16550a node: %d, name: %s\n",
 				   subnode, fdt_get_name(fdt, subnode, NULL));
 
 			err = dtb_get_one_reg(subnode, &addr, &size);
 			if (err) {
-				klog_debug("failed to get one reg: %d\n", err);
+				pr_debug("failed to get one reg: %d\n", err);
 				continue;
 			}
 			if (dtb_get_irq(subnode, &irq)) {
-				klog_debug("failed to get irq: %d\n", err);
+				pr_debug("failed to get irq: %d\n", err);
 				continue;
 			}
 			clock_freq = fdt_getprop(fdt, subnode,
 						 "clock-frequency", &len);
 			if (!clock_freq || len != sizeof(u32)) {
-				klog_debug(
+				pr_debug(
 					"failed to get clock frequency: %d\n",
 					(int)(unsigned long)clock_freq);
 				continue;
@@ -377,7 +377,7 @@ void dt_init_scan_serial(void)
 
 			dev = ns16550a_device_alloc();
 			if (!dev) {
-				klog_debug(
+				pr_debug(
 					"failed to allocate ns16550a device\n");
 				continue;
 			}
@@ -388,7 +388,7 @@ void dt_init_scan_serial(void)
 			dev->clock_freq = fdt32_to_cpu(*clock_freq);
 			err = ns16550a_device_init(dev);
 			if (err) {
-				klog_debug(
+				pr_debug(
 					"failed to initialize ns16550a device: %d\n",
 					err);
 				ns16550a_device_free(dev);
@@ -396,14 +396,14 @@ void dt_init_scan_serial(void)
 			}
 			err = ns16550a_add_device(dev);
 			if (err) {
-				klog_debug(
+				pr_debug(
 					"failed to add ns16550a device: %d\n",
 					err);
 				ns16550a_device_finalize(dev);
 				ns16550a_device_free(dev);
 				continue;
 			}
-			klog_info("ns16550a device added: %d\n", subnode);
+			pr_info("ns16550a device added: %d\n", subnode);
 		}
 	}
 }
@@ -445,14 +445,14 @@ int dt_scan_platform_devices(void)
 		name = NULL;
 		name = fdt_get_name(fdt, sub_node, &len);
 		ASSERT(name != NULL);
-		klog_debug("dtb: found /soc/%.*s\n", len, name);
+		pr_debug("dtb: found /soc/%.*s\n", len, name);
 		dev->name = name;
 
 		name = NULL;
 		len = 0;
 		name = fdt_getprop(fdt, sub_node, "compatible", &len);
 		ASSERT(name != NULL);
-		klog_debug("dtb: /soc/%s.compatible: %.*s\n", dev->name, len,
+		pr_debug("dtb: /soc/%s.compatible: %.*s\n", dev->name, len,
 			   name);
 		dev->compatible = name;
 
@@ -460,7 +460,7 @@ int dt_scan_platform_devices(void)
 				  dev);
 
 		for (int i = 0; i < dev->nr_mmio; ++i) {
-			klog_debug("dtb: /soc/%s.mmio[%d]: %#lx+%lu\n",
+			pr_debug("dtb: /soc/%s.mmio[%d]: %#lx+%lu\n",
 				   dev->name, i, dev->mmio[i].base,
 				   dev->mmio[i].size);
 		}

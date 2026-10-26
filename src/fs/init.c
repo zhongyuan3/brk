@@ -44,12 +44,12 @@ int fs_init(void)
 	fsinfo_set_root(task->fsinfo, &root_path);
 	fs_path_get(&root_path);
 	fsinfo_set_cwd(task->fsinfo, &root_path);
-	klog_info("root mount point initialized\n");
+	pr_info("root mount point initialized\n");
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
 	if (err)
 		return err;
-	klog_info("/dev directory created\n");
+	pr_info("/dev directory created\n");
 
 	err = virtio_blk_mknod();
 	if (err)
@@ -62,7 +62,7 @@ int fs_init(void)
 	err = do_mount("/dev/virtio_blk0", "/", "brkfs", 0, NULL);
 	if (err)
 		return err;
-	klog_info("/ mounted successfully\n");
+	pr_info("/ mounted successfully\n");
 
 	new_root_mnt = fs_mount_state_lookup(&root_path);
 	if (!new_root_mnt)
@@ -86,7 +86,7 @@ int fs_init(void)
 	err = do_mount(NULL, "/dev", "tmpfs", 0, NULL);
 	if (err)
 		return err;
-	klog_info("/dev mounted successfully\n");
+	pr_info("/dev mounted successfully\n");
 
 	err = do_mkdirat(AT_FDCWD, "/proc", 0755);
 	if (err && err != -EEXIST)
@@ -97,7 +97,7 @@ int fs_init(void)
 	err = do_mount(NULL, "/proc", "procfs", 0, NULL);
 	if (err)
 		return err;
-	klog_info("/proc mounted successfully\n");
+	pr_info("/proc mounted successfully\n");
 
 	err = tty_mknod();
 	if (err)
