@@ -1,3 +1,4 @@
+#define SPINLOCK_IMPL
 #include <brk/console.h>
 #include <brk/kernel.h>
 #include <brk/ktime.h>

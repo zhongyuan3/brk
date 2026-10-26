@@ -1,7 +1,10 @@
+#include <arch/csr.h>
 #include <brk/asm/cpu.h>
+#include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/kernel.h>
 #include <brk/panic.h>
+#include <brk/stddef.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
 
@@ -46,4 +49,41 @@ cpuid_t this_cpuid(void)
 void set_this_cpuid(cpuid_t cpuid)
 {
 	(void)cpuid;
+}
+
+void push_off(void)
+{
+	int enabled = intr_off_get();
+	struct cpu *cpu = this_cpu();
+
+	if (cpu->irq_nest == 0)
+		cpu->irq_enabled = enabled;
+	cpu->irq_nest += 1;
+}
+
+void pop_off(void)
+{
+	struct cpu *cpu = this_cpu();
+
+	if (intr_enabled())
+		panic("%s(): interruptible\n", __func__);
+	if (cpu->irq_nest < 1)
+		panic("%s(): nesting level < 1\n", __func__);
+	cpu->irq_nest -= 1;
+	if (cpu->irq_nest == 0 && cpu->irq_enabled)
+		intr_on();
+}
+
+struct task *current_task(void)
+{
+	struct cpu *c = this_cpu();
+	ASSERT(c != NULL);
+	return c->current;
+}
+
+void set_current_task(struct task *task)
+{
+	struct cpu *c = this_cpu();
+	ASSERT(c != NULL);
+	c->current = task;
 }

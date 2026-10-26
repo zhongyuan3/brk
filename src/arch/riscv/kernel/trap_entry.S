@@ -144,13 +144,6 @@ user_trap_return:
 
 	sret
 
-	.global early_trap_vector
-	.align 4
-early_trap_vector:
-	call early_trap_handler
-.Lspin:
-	j .Lspin
-
 	.global __trap_entry
 	.align 4
 __trap_entry:
@@ -223,6 +216,8 @@ __trap_entry:
 	# with `sp` pointing at their copied frame.
 	.global ret_from_trap
 ret_from_trap:
+	call __prepare_ret_from_trap
+
 	# Restore the CSRs first; `sret` takes the return PC from sepc and the
 	# interrupt enable from sstatus.SPIE.
 	ld x5, 256(sp)

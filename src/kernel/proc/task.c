@@ -1,4 +1,6 @@
+#include <arch/context.h>
 #include <arch/pgtable.h>
+#include <arch/trapframe.h>
 #include <brk/asm/cpu.h>
 #include <brk/assert.h>
 #include <brk/cpu.h>
@@ -20,8 +22,10 @@
 #include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
+#include <brk/stddef.h>
 #include <brk/string.h>
 #include <brk/task.h>
+#include <brk/task_types.h>
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
@@ -92,8 +96,8 @@ static void default_new_task_entry(void)
 
 struct task *task_create(struct task_create_args *args)
 {
-	u64 kstack_top;
-	struct extended_trap_frame *ext_tf;
+	// u64 kstack_top;
+	// struct extended_trap_frame *ext_tf;
 	struct task *task;
 	int err = 0;
 
@@ -108,7 +112,7 @@ struct task *task_create(struct task_create_args *args)
 	list_init(&task->queue);
 	list_init(&task->children);
 	list_init(&task->child);
-	spinlock_init(&task->lock, "task_control_block");
+	spinlock_init(&task->lock, "task");
 	task->state = TASK_STATE_NEW;
 
 	task->pid = pid_alloc();
@@ -123,14 +127,27 @@ struct task *task_create(struct task_create_args *args)
 		err = -ENOMEM;
 		goto kstack_alloc_failed;
 	}
+	task->kstack_top = task->kstack_base + KSTACK_SIZE;
+	unsigned long kernel_sp = task->kstack_top;
+	kernel_sp -= TRAP_FRAME_SIZE;
+	ASSERT(is_aligned(kernel_sp, 16));
+	memset((void *)kernel_sp, 0, TRAP_FRAME_SIZE);
+	kernel_sp -= CONTEXT_SIZE;
+	ASSERT(is_aligned(kernel_sp, 16));
+	struct riscv_context *ctx = (struct riscv_context *)kernel_sp;
+	if (args && args->fn)
+		ctx->ra = (unsigned long)args->fn;
+	else
+		ctx->ra = (unsigned long)default_new_task_entry;
+	task->kernel_sp = kernel_sp;
 
-	kstack_top = task->kstack_base + KSTACK_SIZE;
-	kstack_top -= TRAP_FRAME_ON_STACK_SIZE;
-	ext_tf = (struct extended_trap_frame *)(uintptr_t)kstack_top;
-	ext_tf->task = task;
-	task->tf = &ext_tf->tf;
-	arch_tf_init(task->tf);
-	task->kstack_top = kstack_top;
+	// kstack_top = task->kstack_base + KSTACK_SIZE;
+	// kstack_top -= TRAP_FRAME_ON_STACK_SIZE;
+	// ext_tf = (struct extended_trap_frame *)(uintptr_t)kstack_top;
+	// ext_tf->task = task;
+	// task->tf = &ext_tf->tf;
+	// arch_tf_init(task->tf);
+	// task->kstack_top = kstack_top;
 
 	if (args && args->mm) {
 		task->mm = uvm_space_get(args->mm);
@@ -227,31 +244,42 @@ void task_destroy(struct task *task)
 	task_free(task);
 }
 
-static void initial_task_return(void)
+static void complete_task_switch(void)
 {
 	task_sched_resume();
 	struct task *task = current_task();
 	spinlock_release(&task->lock);
+}
 
-	int err = fs_init();
-	if (err)
-		panic("failed to initialize filesystem: %s\n", strerror(err));
+static void initial_task_return(void)
+{
+	complete_task_switch();
 
-	char *argv[] = { "/bin/init", 0 };
-	char *envp[] = { 0 };
-	err = do_execve(argv[0], argv, envp);
-	if (err < 0)
-		panic("execve %s failed: %s\n", argv[0], strerror(err));
+	while (1) {
+	}
 
-	smp_boot_release_secondary_harts();
+	// int err = fs_init();
+	// if (err)
+	// 	panic("failed to initialize filesystem: %s\n", strerror(err));
 
-	prepare_to_return();
-	user_trap_return(task->tf);
+	// char *argv[] = { "/bin/init", 0 };
+	// char *envp[] = { 0 };
+	// err = do_execve(argv[0], argv, envp);
+	// if (err < 0)
+	// 	panic("execve %s failed: %s\n", argv[0], strerror(err));
+
+	// smp_boot_release_secondary_harts();
+
+	// prepare_to_return();
+	// user_trap_return(task->tf);
 }
 
 void task_init_user(void)
 {
-	initial_task = task_create(NULL);
+	struct task_create_args args = {
+		.fn = initial_task_return,
+	};
+	initial_task = task_create(&args);
 	if (IS_ERR(initial_task))
 		panic("failed to create initial user task: %s\n",
 		      strerror(PTR_ERR(initial_task)));
@@ -474,9 +502,9 @@ void task_dump(void)
 
 static void task_fork_return(void)
 {
-	task_sched_resume();
+	complete_task_switch();
 	struct task *task = current_task();
-	spinlock_release(&task->lock);
+
 	prepare_to_return();
 	user_trap_return(task->tf);
 }
@@ -650,4 +678,39 @@ void task_rusage_free(struct task_resource_usage *rsrc_usage)
 		return;
 
 	kfree(rsrc_usage);
+}
+
+static void kthread_return(void)
+{
+	complete_task_switch();
+	struct task *task = current_task();
+
+	if (task->kthrd_fn) {
+		task->kthrd_fn(task->kthrd_data);
+	}
+	task_exit_normal(0);
+}
+
+struct task *kthread_create(void (*fn)(void *), void *data)
+{
+	struct task *t = task_create(&(struct task_create_args){
+		.fn = kthread_return,
+	});
+	if (!t)
+		return NULL;
+	t->kthrd_fn = fn;
+	t->kthrd_data = data;
+	return t;
+}
+
+void kthread_join(struct task *kthread)
+{
+	spinlock_acquire(&kthread->lock);
+	kthread->state = TASK_STATE_RUNNING;
+	spinlock_release(&kthread->lock);
+	task_join(kthread);
+}
+
+void __prepare_ret_from_trap(void)
+{
 }

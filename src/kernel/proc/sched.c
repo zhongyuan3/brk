@@ -68,7 +68,8 @@ void task_scheduler(void)
 		user_access_enable();
 		next->time_slice = TIME_SLICE_MAX;
 		next->ktime = jiffies_get();
-		switch_context(&cpu->ctx, &next->ctx);
+		__switch_to(&cpu->kernel_sp, &next->kernel_sp);
+		// switch_context(&cpu->ctx, &next->ctx);
 
 		set_current_task(NULL);
 	}
@@ -118,10 +119,12 @@ void task_sched(void)
 		switch_pgtable(next->mm->pgd);
 		next->time_slice = TIME_SLICE_MAX;
 		next->ktime = jiffies_get();
-		switch_context(&curr->ctx, &next->ctx);
+		__switch_to(&curr->kernel_sp, &next->kernel_sp);
+		// switch_context(&curr->ctx, &next->ctx);
 	} else {
 		set_current_task(NULL);
-		switch_context(&curr->ctx, &cpu->ctx);
+		__switch_to(&curr->kernel_sp, &cpu->kernel_sp);
+		// switch_context(&curr->ctx, &cpu->ctx);
 	}
 
 	task_sched_resume();

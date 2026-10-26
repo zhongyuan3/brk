@@ -1,7 +1,7 @@
 #ifndef BRK_TASK_H
 #define BRK_TASK_H
 
-#include <arch/task.h>
+#include <arch/asm/page.h>
 #include <brk/asm/cpu.h>
 #include <brk/cpu.h>
 #include <brk/fdtable.h>
@@ -18,6 +18,11 @@
 #include <uapi/signal.h>
 #include <uapi/times.h>
 #include <uapi/types.h>
+
+#define KSTACK_PAGE_ORDER 1
+#define KSTACK_SIZE (PAGE_SIZE * (1 << KSTACK_PAGE_ORDER))
+#define USTACK_PAGE_ORDER 4
+#define USTACK_SIZE (PAGE_SIZE * (1 << USTACK_PAGE_ORDER))
 
 #define TIME_SLICE_MAX 5
 
@@ -96,6 +101,9 @@ bool task_get_info(pid_t tgid, struct task_info *info);
 
 /* Return true if a thread group with @tgid exists. */
 bool task_pid_exists(pid_t tgid);
+
+struct task *kthread_create(void (*fn)(void *), void *data);
+void kthread_join(struct task *kthread);
 
 extern struct task *initial_task;
 extern struct list_head tasks;

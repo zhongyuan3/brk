@@ -19,8 +19,6 @@
 
 struct boot_info boot_info;
 
-extern char early_trap_vector[];
-
 // static int debug_console_put_char(struct console *cons, int ch)
 // {
 // 	(void)cons;
