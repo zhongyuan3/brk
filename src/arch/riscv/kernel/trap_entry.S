@@ -212,12 +212,20 @@ __trap_entry:
 	mv a0, sp
 	call __trap_handler
 
+	j ret_from_trap
+
+	.global ret_from_init
+ret_from_init:
+	call init_task_do
+	j ret_from_trap
+
 	# Body of a trap return. Newly forked processes are switched into here
 	# with `sp` pointing at their copied frame.
-	.global ret_from_trap
-ret_from_trap:
-	call __prepare_ret_from_trap
+	.global ret_from_fork
+ret_from_fork:
+	call task_schedlue_tail
 
+ret_from_trap:
 	# Restore the CSRs first; `sret` takes the return PC from sepc and the
 	# interrupt enable from sstatus.SPIE.
 	ld x5, 256(sp)

@@ -17,6 +17,7 @@ void user_trap_vector(void);
 void user_trap_return(struct trap_frame *tf);
 void prepare_to_return(void);
 
-void ret_from_trap(void);
+void ret_from_fork(void);
+void ret_from_init(void);
 
 #endif

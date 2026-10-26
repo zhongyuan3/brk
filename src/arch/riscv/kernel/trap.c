@@ -294,13 +294,17 @@ static void trap_panic(const char *name, unsigned long code,
 #define INTERRUPT_SUPERVISOR_TIMER 5
 #define INTERRUPT_SUPERVISOR_EXTERNAL 9
 
-static void handle_interrupt(unsigned long code, struct riscv_trap_frame *frame)
+static void handle_interrupt(unsigned long code, struct riscv_trap_frame *frame,
+			     bool from_user, struct task *task)
 {
-	struct task *task = current_task();
-
 	switch (code) {
+	case INTERRUPT_SUPERVISOR_SOFTWARE:
+		clear_ssip_csr();
+		break;
 	case INTERRUPT_SUPERVISOR_TIMER:
 		handle_tick();
+		if (from_user)
+			signal_deliver_pending(task);
 		if (task && --task->time_slice <= 0)
 			task_yield();
 		break;
@@ -308,26 +312,77 @@ static void handle_interrupt(unsigned long code, struct riscv_trap_frame *frame)
 		irq_handle_external(this_cpuid());
 		break;
 	default:
-		trap_panic(interrupt_name(code), code, frame);
+		if (from_user) {
+			task_set_killed(task);
+			pr_warn("%s: pid=%ld,scause=%#" PRIx64 ",sepc=%#" PRIx64
+				",stval=%#" PRIx64 "\n",
+				interrupt_name(code), task->pid, frame->scause,
+				frame->sepc, frame->stval);
+		} else {
+			trap_panic(interrupt_name(code), code, frame);
+		}
 	}
 }
 
-static void handle_exception(unsigned long code, struct riscv_trap_frame *frame)
+static void handle_exception(unsigned long code, struct riscv_trap_frame *frame,
+			     bool from_user, struct task *task)
 {
-	trap_panic(exception_name(code), code, frame);
+	switch (code) {
+	case EXCEPTION_ECALL_FROM_USER:
+		if (from_user) {
+			signal_deliver_pending(task);
+			frame->sepc += 4;
+			intr_on();
+			syscall();
+		}
+		break;
+	default:
+		if (from_user) {
+			pr_warn("%s: pid=%ld,scause=%#" PRIx64 ",sepc=%#" PRIx64
+				",stval=%#" PRIx64 "\n",
+				interrupt_name(code), task->pid, frame->scause,
+				frame->sepc, frame->stval);
+			task_set_killed(task);
+		} else {
+			trap_panic(exception_name(code), code, frame);
+		}
+	}
 }
 
 void __trap_handler(struct riscv_trap_frame *frame)
 {
 	if (early) {
 		__early_trap_handler(frame);
-	} else {
-		bool is_interrupt = (frame->scause & BIT(63)) != 0;
-		unsigned long code = frame->scause & ~BIT(63);
-		if (is_interrupt)
-			handle_interrupt(code, frame);
-		else
-			handle_exception(code, frame);
+	}
+
+	bool is_interrupt = (frame->scause & BIT(63)) != 0;
+	unsigned long code = frame->scause & ~BIT(63);
+	struct task *task = current_task();
+	bool from_user = (frame->sstatus & SSTATUS_SPP) == 0;
+	u64 jiffies = 0;
+
+	if (from_user) {
+		write_sstatus(read_sstatus() | SSTATUS_SUM);
+		jiffies = jiffies_get();
+		task_add_user_time(task, jiffies - task->utime);
+		task->ktime = jiffies;
+	}
+
+	if (is_interrupt)
+		handle_interrupt(code, frame, from_user, task);
+	else
+		handle_exception(code, frame, from_user, task);
+
+	if (from_user) {
+		unsigned long sstatus = read_sstatus();
+		sstatus &= ~SSTATUS_SPP;
+		sstatus |= SSTATUS_SPIE;
+		sstatus &= ~SSTATUS_SUM;
+		frame->sstatus = sstatus;
+		signal_deliver_pending(task);
+		jiffies = jiffies_get();
+		task_add_system_time(task, jiffies - task->ktime);
+		task->utime = jiffies;
 	}
 }
 
