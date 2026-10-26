@@ -98,6 +98,7 @@ struct task {
 	int time_slice;
 	char name[TASK_NAME_MAX];
 	bool irq_enabled;
+	bool newly_forked;
 	void (*kthrd_fn)(void *);
 	void *kthrd_data;
 };

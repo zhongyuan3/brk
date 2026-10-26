@@ -75,7 +75,7 @@ void task_scheduler(void)
 	}
 }
 
-void task_sched(void)
+static void task_sched(void)
 {
 	struct task *curr = current_task();
 	struct cpu *cpu = this_cpu();

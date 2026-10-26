@@ -61,7 +61,6 @@ void task_sleep(void *chan, spinlock_t *lock);
 void task_wake_all(void *chan);
 pid_t task_wait(pid_t cpid, int *status, int options, struct rusage *rus);
 void task_wake_spec(struct task *task);
-void task_sched(void);
 void task_sched_resume(void);
 void task_scheduler(void);
 void task_join(struct task *task);

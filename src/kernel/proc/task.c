@@ -251,7 +251,7 @@ static void complete_task_switch(void)
 	spinlock_release(&task->lock);
 }
 
-static void initial_task_return(void)
+void init_task_do(void)
 {
 	complete_task_switch();
 
@@ -277,7 +277,7 @@ static void initial_task_return(void)
 void task_init_user(void)
 {
 	struct task_create_args args = {
-		.fn = initial_task_return,
+		.fn = ret_from_init,
 	};
 	initial_task = task_create(&args);
 	if (IS_ERR(initial_task))
@@ -285,7 +285,6 @@ void task_init_user(void)
 		      strerror(PTR_ERR(initial_task)));
 	spinlock_acquire(&initial_task->lock);
 	strlcpy(initial_task->name, "init", sizeof(initial_task->name));
-	initial_task->ctx.ra = (uintptr_t)initial_task_return;
 	initial_task->ctx.sp = initial_task->kstack_top;
 	initial_task->state = TASK_STATE_RUNNING;
 	initial_task->irq_enabled = true;
@@ -500,14 +499,14 @@ void task_dump(void)
 	spinlock_release(&tasks_lock);
 }
 
-static void task_fork_return(void)
-{
-	complete_task_switch();
-	struct task *task = current_task();
+// static void task_fork_return(void)
+// {
+// 	complete_task_switch();
+// 	struct task *task = current_task();
 
-	prepare_to_return();
-	user_trap_return(task->tf);
-}
+// 	prepare_to_return();
+// 	user_trap_return(task->tf);
+// }
 
 int task_fork(void)
 {
@@ -542,9 +541,11 @@ int task_fork(void)
 	spinlock_acquire(&child->lock);
 	cpid = child->tgid;
 	child->state = TASK_STATE_RUNNING;
-	child->ctx.ra = (uintptr_t)task_fork_return;
+	child->ctx.ra = (uintptr_t)ret_from_fork;
 	child->ctx.sp = child->kstack_top;
 	spinlock_release(&child->lock);
+
+	child->newly_forked = true;
 
 	task_join(child);
 
@@ -711,6 +712,11 @@ void kthread_join(struct task *kthread)
 	task_join(kthread);
 }
 
-void __prepare_ret_from_trap(void)
+void task_schedlue_tail(void)
 {
+	struct task *task = current_task();
+	ASSERT(task != NULL);
+	ASSERT(task->newly_forked);
+	task->newly_forked = false;
+	complete_task_switch();
 }
