@@ -55,6 +55,8 @@ struct riscv_trap_frame {
 	/* 280 */ unsigned long stval;
 };
 
+#define TRAP_FRAME_SIZE sizeof(struct riscv_trap_frame)
+
 static_assert(sizeof(struct riscv_trap_frame) == RISCV_TRAP_FRAME_SIZE,
 	      "'struct riscv_trap_frame' size mismatch");
 

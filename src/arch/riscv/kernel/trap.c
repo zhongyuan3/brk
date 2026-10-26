@@ -165,10 +165,10 @@ struct trap_frame *user_trap_handler(void)
 		} else if (code == 9) {
 			irq_handle_external(this_cpuid());
 		} else {
-			pr_warn("%s: pid=%ld,scause=%#" PRIx64
-				  ",sepc=%#" PRIx64 ",stval=%#" PRIx64 "\n",
-				  cause_to_str(scause), task->pid, scause, sepc,
-				  stval);
+			pr_warn("%s: pid=%ld,scause=%#" PRIx64 ",sepc=%#" PRIx64
+				",stval=%#" PRIx64 "\n",
+				cause_to_str(scause), task->pid, scause, sepc,
+				stval);
 			task_set_killed(task);
 		}
 	} else {
@@ -178,10 +178,10 @@ struct trap_frame *user_trap_handler(void)
 			intr_on();
 			syscall();
 		} else {
-			pr_warn("%s: pid=%ld,scause=%#" PRIx64
-				  ",sepc=%#" PRIx64 ",stval=%#" PRIx64 "\n",
-				  cause_to_str(scause), task->pid, scause, sepc,
-				  stval);
+			pr_warn("%s: pid=%ld,scause=%#" PRIx64 ",sepc=%#" PRIx64
+				",stval=%#" PRIx64 "\n",
+				cause_to_str(scause), task->pid, scause, sepc,
+				stval);
 			task_set_killed(task);
 		}
 	}
@@ -240,24 +240,6 @@ static void print_hex(unsigned long num)
 	}
 }
 
-void early_trap_handler(void)
-{
-	u64 scause = read_scause();
-	u64 sepc = read_sepc();
-	u64 stval = read_stval();
-
-	sbi_console_putstr(cause_to_str(scause));
-	sbi_console_putchar('\n');
-	sbi_console_putstr("sepc :");
-	print_hex(sepc);
-	sbi_console_putchar('\n');
-	sbi_console_putstr("stval:");
-	print_hex(stval);
-	sbi_console_putchar('\n');
-	while (1) {
-	}
-}
-
 static bool early = true;
 
 static void __early_trap_handler(struct riscv_trap_frame *frame)
@@ -285,9 +267,9 @@ static void trap_panic(const char *name, unsigned long code,
 {
 	pr_error("trap: unhandled %s (code %lu)\n", name, code);
 	pr_error("trap: sepc=%#018lx stval=%#018lx\n", frame->sepc,
-		   frame->stval);
+		 frame->stval);
 	pr_error("trap: scause=%#018lx sstatus=%#018lx\n", frame->scause,
-		   frame->sstatus);
+		 frame->sstatus);
 	for (int i = 0; i < 32; ++i) {
 		pr_error("trap: %-4s %#018lx\n", reg_names[i], frame->x[i]);
 	}
@@ -314,9 +296,13 @@ static void trap_panic(const char *name, unsigned long code,
 
 static void handle_interrupt(unsigned long code, struct riscv_trap_frame *frame)
 {
+	struct task *task = current_task();
+
 	switch (code) {
 	case INTERRUPT_SUPERVISOR_TIMER:
 		handle_tick();
+		if (task && --task->time_slice <= 0)
+			task_yield();
 		break;
 	case INTERRUPT_SUPERVISOR_EXTERNAL:
 		irq_handle_external(this_cpuid());

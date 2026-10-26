@@ -52,11 +52,14 @@ struct task {
 		};
 	};
 
+
 	spinlock_t lock;
 	/* protected by @lock */
 	void *chan;
 	/* protected by @lock */
 	struct context ctx;
+	/* protected by @lock */
+	unsigned long kernel_sp;
 	/* protected by @lock */
 	enum task_state state;
 	/* protected by @lock */
@@ -95,6 +98,8 @@ struct task {
 	int time_slice;
 	char name[TASK_NAME_MAX];
 	bool irq_enabled;
+	void (*kthrd_fn)(void *);
+	void *kthrd_data;
 };
 
 /*
