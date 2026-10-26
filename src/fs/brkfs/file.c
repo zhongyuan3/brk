@@ -23,7 +23,7 @@ static int brkfs_file_read_page(struct page_cache *m, struct cached_page *cp)
 	struct block_dev *bd = sbi->s_bdev;
 
 	if (bs > PAGE_SIZE || PAGE_SIZE % bs != 0) {
-		klog_warn("%s(): unsupported blocksize %" PRIu32 "\n", __func__,
+		pr_warn("%s(): unsupported blocksize %" PRIu32 "\n", __func__,
 			  bs);
 		return -EIO;
 	}
@@ -62,7 +62,7 @@ static int brkfs_file_write_page(struct page_cache *m, struct cached_page *cp)
 	struct block_dev *bd = sbi->s_bdev;
 
 	if (bs > PAGE_SIZE || PAGE_SIZE % bs != 0) {
-		klog_warn("%s(): unsupported blocksize %" PRIu32 "\n", __func__,
+		pr_warn("%s(): unsupported blocksize %" PRIu32 "\n", __func__,
 			  bs);
 		return -EIO;
 	}

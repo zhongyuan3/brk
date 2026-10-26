@@ -15,7 +15,7 @@ void timer_init(void)
 {
 	u32 timebase_freq = clocksource_get_timebase_freq();
 	timer_interval = timebase_freq / 1000;
-	klog_debug("timer: timer_interval=%lu\n", timer_interval);
+	pr_debug("timer: timer_interval=%lu\n", timer_interval);
 	timer_init_hart();
 }
 

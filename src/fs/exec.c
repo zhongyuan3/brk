@@ -43,7 +43,7 @@ static int exec_read_exact(struct fs_file *fp, u64 off, void *buf, size_t n)
 	loff_t ret = fs_file_lseek(fp, off, SEEK_SET);
 
 	if (ret < 0) {
-		klog_error("%s(): Failed to lseek file: %s\n", __func__,
+		pr_error("%s(): Failed to lseek file: %s\n", __func__,
 			   strerror(ret));
 		return -EIO;
 	}
@@ -51,12 +51,12 @@ static int exec_read_exact(struct fs_file *fp, u64 off, void *buf, size_t n)
 	ssize_t rcnt = fs_file_read(fp, buf, n);
 
 	if (rcnt < 0) {
-		klog_error("%s(): Failed to read file: %s\n", __func__,
+		pr_error("%s(): Failed to read file: %s\n", __func__,
 			   strerror(rcnt));
 		return -EIO;
 	}
 	if ((size_t)rcnt != n) {
-		klog_error("%s(): Failed to read file (short read)\n",
+		pr_error("%s(): Failed to read file (short read)\n",
 			   __func__);
 		return -EIO;
 	}

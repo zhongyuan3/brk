@@ -47,7 +47,7 @@ void start_kernel(void)
 
 	local_irq_enable();
 
-	klog_debug("smp: boot cpu entering idle\n");
+	pr_debug("smp: boot cpu entering idle\n");
 	while (1) {
 	}
 

@@ -66,7 +66,7 @@ void timekeeper_init(void)
 
 	initialized = true;
 
-	klog_debug("timekeeper: timekeeper initialized\n");
+	pr_debug("timekeeper: timekeeper initialized\n");
 }
 
 void timekeeper_tick(void)

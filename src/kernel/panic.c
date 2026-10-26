@@ -1,5 +1,5 @@
-#include <arch/irqflags.h>
 #include <brk/assert.h>
+#include <brk/cpu.h>
 #include <brk/panic.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
@@ -13,7 +13,7 @@ void panic(char const *fmt, ...)
 	va_list ap;
 	size_t len;
 
-	intr_off();
+	local_irq_disable();
 
 	/*
 	 * Never route panic through printk() itself: a panic may fire while

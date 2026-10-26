@@ -165,7 +165,7 @@ struct trap_frame *user_trap_handler(void)
 		} else if (code == 9) {
 			irq_handle_external(this_cpuid());
 		} else {
-			klog_warn("%s: pid=%ld,scause=%#" PRIx64
+			pr_warn("%s: pid=%ld,scause=%#" PRIx64
 				  ",sepc=%#" PRIx64 ",stval=%#" PRIx64 "\n",
 				  cause_to_str(scause), task->pid, scause, sepc,
 				  stval);
@@ -178,7 +178,7 @@ struct trap_frame *user_trap_handler(void)
 			intr_on();
 			syscall();
 		} else {
-			klog_warn("%s: pid=%ld,scause=%#" PRIx64
+			pr_warn("%s: pid=%ld,scause=%#" PRIx64
 				  ",sepc=%#" PRIx64 ",stval=%#" PRIx64 "\n",
 				  cause_to_str(scause), task->pid, scause, sepc,
 				  stval);
@@ -283,13 +283,13 @@ static const char *reg_names[] = {
 static void trap_panic(const char *name, unsigned long code,
 		       struct riscv_trap_frame *frame)
 {
-	klog_error("trap: unhandled %s (code %lu)\n", name, code);
-	klog_error("trap: sepc=%#018lx stval=%#018lx\n", frame->sepc,
+	pr_error("trap: unhandled %s (code %lu)\n", name, code);
+	pr_error("trap: sepc=%#018lx stval=%#018lx\n", frame->sepc,
 		   frame->stval);
-	klog_error("trap: scause=%#018lx sstatus=%#018lx\n", frame->scause,
+	pr_error("trap: scause=%#018lx sstatus=%#018lx\n", frame->scause,
 		   frame->sstatus);
 	for (int i = 0; i < 32; ++i) {
-		klog_error("trap: %-4s %#018lx\n", reg_names[i], frame->x[i]);
+		pr_error("trap: %-4s %#018lx\n", reg_names[i], frame->x[i]);
 	}
 	panic("trap: unhandled %s (code %lu)\n", name, code);
 }

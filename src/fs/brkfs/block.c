@@ -54,7 +54,7 @@ int brkfs_data_free(struct brkfs_sb_info *sbi, u32 bno)
 	u32 bit = bno - sbi->s_sb.s_first_data_block;
 
 	if (bno < sbi->s_sb.s_first_data_block) {
-		klog_warn("%s(): Invalid bno: %" PRIu32
+		pr_warn("%s(): Invalid bno: %" PRIu32
 			  ", first data block: %" PRIu32 "\n",
 			  __func__, bno, sbi->s_sb.s_first_data_block);
 		return -EINVAL;
@@ -113,7 +113,7 @@ int brkfs_bitmap_free(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
 		      u32 bit)
 {
 	if (bit >= nbits) {
-		klog_warn("%s(): Invalid bit: %" PRIu32 ", nbits: %" PRIu32
+		pr_warn("%s(): Invalid bit: %" PRIu32 ", nbits: %" PRIu32
 			  "\n",
 			  __func__, bit, nbits);
 		return -EINVAL;

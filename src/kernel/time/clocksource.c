@@ -9,7 +9,7 @@ int clocksource_init(void)
 {
 	int ret = dt_setup_timebase_freq();
 	if (ret == 0) {
-		klog_debug("clocksource: initialized: timebase_freq=%u\n",
+		pr_debug("clocksource: initialized: timebase_freq=%u\n",
 			   timebase_freq);
 	}
 	return ret;

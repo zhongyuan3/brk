@@ -355,7 +355,7 @@ int virtio_blk_register(struct virtio_blk_dev *vblk)
 	if (!bdev)
 		return -ENOMEM;
 
-	klog_info("%s: capacity: %" PRIu64 "\n", __func__,
+	pr_info("%s: capacity: %" PRIu64 "\n", __func__,
 		  vblk->config.capacity);
 
 	bdev->ops.read = virtio_blk_bdev_read;
@@ -433,8 +433,8 @@ void virtio_blk_init(void)
 	vblk_registry->major = MAJOR(dev);
 	vblk_registry->minor_start = MINOR(dev);
 
-	klog_info("%s: major: %u\n", __func__, vblk_registry->major);
-	klog_info("%s: minor: %u\n", __func__, vblk_registry->minor_start);
+	pr_info("%s: major: %u\n", __func__, vblk_registry->major);
+	pr_info("%s: minor: %u\n", __func__, vblk_registry->minor_start);
 }
 postcore_initcall(virtio_blk_init);
 
@@ -478,7 +478,7 @@ int virtio_blk_mknod(void)
 					 vblk_registry->minor_start + i));
 			if (err)
 				break;
-			klog_info("/dev/virtio_blk%u created successfully\n",
+			pr_info("/dev/virtio_blk%u created successfully\n",
 				  i);
 		}
 	}

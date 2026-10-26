@@ -338,7 +338,7 @@ int tty_mknod(void)
 					spinlock_release(&tty_driver_lock);
 					return err;
 				}
-				klog_info("/dev/tty%u created successfully\n",
+				pr_info("/dev/tty%u created successfully\n",
 					  i);
 			}
 		}

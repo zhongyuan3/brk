@@ -1,20 +1,12 @@
-obj-y += clocksource.o
+obj-y += main.o
 obj-y += console.o
 obj-y += cpu.o
 obj-y += irq.o
-obj-y += ktime.o
-obj-y += logbuf.o
-obj-y += main.o
 obj-y += panic.o
 obj-y += printk.o
-obj-y += sched.o
 obj-y += signal.o
-obj-y += sleeplock.o
-obj-y += spinlock.o
 obj-y += syscall.o
-obj-y += sysfile.o
-obj-y += sysproc.o
-obj-y += syssignal.o
-obj-y += systime.o
-obj-y += task.o
-obj-y += timekeeper.o
+
+subdir-y += proc
+subdir-y += time
+subdir-y += sync

@@ -46,7 +46,7 @@ void primary_entry(unsigned long hart_id, unsigned long dtb_pa,
 	boot_info.kernel_image_offset = kernel_image_offset;
 
 	// console_register(&debug_console);
-	// klog_debug("debug_console registered\n");
+	// pr_debug("debug_console registered\n");
 
 	start_kernel();
 }
@@ -64,7 +64,7 @@ void secondary_entry(unsigned long hart_id)
 
 	local_irq_enable();
 
-	klog_debug("smp: hart %lu online\n", hart_id);
+	pr_debug("smp: hart %lu online\n", hart_id);
 	while (1) {
 	}
 
