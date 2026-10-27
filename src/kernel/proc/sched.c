@@ -48,15 +48,15 @@ void task_scheduler(void)
 	struct task *next = NULL;
 
 	cpu->handoff = NULL;
-	for (;;) {
+	while (1) {
 		task_sched_resume();
 
-		intr_on();
-		intr_off();
+		local_irq_enable();
+		local_irq_disable();
 
 		next = task_pick_next();
 		if (!next) {
-			intr_on();
+			local_irq_enable();
 			cpu_idle();
 			continue;
 		}
@@ -69,7 +69,6 @@ void task_scheduler(void)
 		next->time_slice = TIME_SLICE_MAX;
 		next->ktime = jiffies_get();
 		__switch_to(&cpu->kernel_sp, &next->kernel_sp);
-		// switch_context(&cpu->ctx, &next->ctx);
 
 		set_current_task(NULL);
 	}
@@ -120,11 +119,9 @@ static void task_sched(void)
 		next->time_slice = TIME_SLICE_MAX;
 		next->ktime = jiffies_get();
 		__switch_to(&curr->kernel_sp, &next->kernel_sp);
-		// switch_context(&curr->ctx, &next->ctx);
 	} else {
 		set_current_task(NULL);
 		__switch_to(&curr->kernel_sp, &cpu->kernel_sp);
-		// switch_context(&curr->ctx, &cpu->ctx);
 	}
 
 	task_sched_resume();
@@ -153,7 +150,7 @@ void task_sleep(void *chan, spinlock_t *lock)
 
 void task_wake_all(void *chan)
 {
-	for (;;) {
+	while (1) {
 		struct task *p, *wakee = NULL;
 
 		spinlock_acquire(&sleep_queue_lock);
@@ -172,7 +169,7 @@ void task_wake_all(void *chan)
 		}
 		spinlock_release(&sleep_queue_lock);
 		if (!wakee)
-			return;
+			break;
 		task_join(wakee);
 	}
 }

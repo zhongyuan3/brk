@@ -40,11 +40,11 @@ bool console_has_active(void)
 	return active;
 }
 
-static u8 console_log_level = LOG_LEVEL_DEBUG;
+static u8 console_log_level = KERN_DEBUG;
 
 int console_set_log_level(u8 level)
 {
-	if (level > LOG_LEVEL_ERROR)
+	if (level > KERN_MAX)
 		return -EINVAL;
 	console_log_level = level;
 	return 0;

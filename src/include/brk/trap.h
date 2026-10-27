@@ -5,9 +5,6 @@
 #include <brk/types.h>
 
 void trap_init(void);
-void trap_enable_timer(void);
-void trap_enable_external(void);
-void trap_enable_software(void);
 
 void kernel_trap_handler(void);
 void kernel_trap_vector(void);

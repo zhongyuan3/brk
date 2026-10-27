@@ -43,21 +43,20 @@ static int exec_read_exact(struct fs_file *fp, u64 off, void *buf, size_t n)
 	loff_t ret = fs_file_lseek(fp, off, SEEK_SET);
 
 	if (ret < 0) {
-		pr_error("%s(): Failed to lseek file: %s\n", __func__,
-			   strerror(ret));
+		pr_err("%s(): Failed to lseek file: %s\n", __func__,
+			 strerror(ret));
 		return -EIO;
 	}
 
 	ssize_t rcnt = fs_file_read(fp, buf, n);
 
 	if (rcnt < 0) {
-		pr_error("%s(): Failed to read file: %s\n", __func__,
-			   strerror(rcnt));
+		pr_err("%s(): Failed to read file: %s\n", __func__,
+			 strerror(rcnt));
 		return -EIO;
 	}
 	if ((size_t)rcnt != n) {
-		pr_error("%s(): Failed to read file (short read)\n",
-			   __func__);
+		pr_err("%s(): Failed to read file (short read)\n", __func__);
 		return -EIO;
 	}
 	return 0;
@@ -166,10 +165,10 @@ static void push_args(struct exec_args *args, uintptr_t *psp,
 	uintptr_t argv_strs_kstart = ksp;
 	uintptr_t argv_strs_ustart = sp;
 
-	arch_tf_set_a2(task->tf, stack_push_ptr_slots(&ksp, &sp, args->envc));
+	task->frame->a2 = stack_push_ptr_slots(&ksp, &sp, args->envc);
 	char **envp_kstart = (char **)ksp;
 
-	arch_tf_set_a1(task->tf, stack_push_ptr_slots(&ksp, &sp, args->argc));
+	task->frame->a1 = stack_push_ptr_slots(&ksp, &sp, args->argc);
 	char **argv_kstart = (char **)ksp;
 
 	copy_exec_strings(args->envp, args->envc, &envp_strs_kstart,
@@ -420,7 +419,8 @@ static int __do_execve(const char *path, struct exec_args *args)
 		task->mm = new_mm;
 		uvm_space_put(old_mm);
 		signal_reset(task);
-		arch_tf_set_user_entry(task->tf, elf_hdr.e_entry, sp);
+		task->frame->sepc = elf_hdr.e_entry;
+		task->frame->sp = sp;
 	}
 
 	return args->argc;

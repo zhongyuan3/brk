@@ -1,4 +1,5 @@
 #include <arch/asm/vmlayout.h>
+#include <arch/trapframe.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -211,14 +212,14 @@ static bool setup_signal_frame_locked(struct task *task, int sig, u64 handler)
 	u64 sp;
 	struct user_sigframe *frame;
 
-	sp = arch_tf_get_sp(task->tf);
+	sp = task->frame->sp;
 	sp -= sizeof(*frame);
 	sp &= ~0xFULL;
 	if (!user_access_ok(sp, sizeof(*frame)))
 		return false;
 
 	frame = (struct user_sigframe *)(uintptr_t)sp;
-	arch_tf_copy(&frame->tf, task->tf);
+	memcpy(&frame->tf, task->frame, TRAP_FRAME_SIZE);
 	frame->blocked = task->blocked;
 	frame->signo = sig;
 
@@ -229,9 +230,9 @@ static bool setup_signal_frame_locked(struct task *task, int sig, u64 handler)
 	clear_pending_locked(task, sig);
 	task->in_handler = true;
 
-	arch_tf_set_sp(task->tf, sp);
-	arch_tf_set_pc(task->tf, handler);
-	arch_tf_set_a0(task->tf, sig);
+	task->frame->sp = sp;
+	task->frame->sepc = handler;
+	task->frame->a0 = sig;
 	return true;
 }
 
@@ -328,11 +329,11 @@ u64 signal_do_sigreturn(struct task *task)
 		goto unlock_and_return;
 	}
 
-	arch_tf_copy(task->tf, &frame->tf);
+	memcpy(task->frame, &frame->tf, TRAP_FRAME_SIZE);
 	task->blocked = frame->blocked;
 	task->in_handler = false;
 	task->sigframe_sp = 0;
-	ret = arch_tf_get_a0(task->tf);
+	ret = task->frame->a0;
 
 unlock_and_return:
 	spinlock_release(&task->sigactions->lock);
