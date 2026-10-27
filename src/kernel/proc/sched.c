@@ -57,43 +57,40 @@ static struct task *task_pick_next(struct cpu *cpu)
 	return task;
 }
 
+/*
+ * Bootstrap the CPU into its idle task. From this point on the scheduler is
+ * entered from task context only; cpu->kernel_sp is just the stack this
+ * startup path is abandoned on.
+ */
 void task_scheduler(void)
 {
 	struct cpu *cpu = this_cpu();
-	struct task *next = NULL;
+	struct task *idle = cpu->idle;
+
+	if (!idle) {
+		idle = task_create_idle(cpu->id);
+		if (!idle)
+			panic("failed to create idle task for cpu %lu\n",
+			      cpu->id);
+		cpu->idle = idle;
+	}
 
 	cpu->handoff = NULL;
-	while (1) {
-		task_sched_resume();
+	local_irq_disable();
 
-		local_irq_enable();
-		local_irq_disable();
+	ASSERT(idle->oncpu == -1);
+	idle->oncpu = cpu->id;
+	idle->frame->kernel_tp = (unsigned long)cpu;
+	set_current_task(idle);
 
-		next = task_pick_next(cpu);
-		if (!next) {
-			local_irq_enable();
-			cpu_idle();
-			continue;
-		}
+	load_final_page_table();
+	user_access_disable();
 
-		raw_spin_lock(&next->lock);
-		ASSERT(next->oncpu == -1);
-		next->oncpu = cpu->id;
-		set_current_task(next);
-		/*
-		 * A task may resume on a different CPU than the one it last
-		 * ran on. Keep the kernel tp used by its next user-mode trap
-		 * in sync with the CPU that is about to run it.
-		 */
-		next->frame->kernel_tp = (unsigned long)cpu;
-		switch_pgtable(next->mm->pgd);
-		user_access_enable();
-		next->time_slice = TIME_SLICE_MAX;
-		next->ktime = jiffies_get();
-		__switch_to(&cpu->kernel_sp, &next->kernel_sp);
+	idle->time_slice = TIME_SLICE_MAX;
+	idle->ktime = jiffies_get();
+	__switch_to(&cpu->kernel_sp, &idle->kernel_sp);
 
-		set_current_task(NULL);
-	}
+	panic("scheduler returned to bootstrap context\n");
 }
 
 static void task_sched(void)
@@ -110,7 +107,8 @@ static void task_sched(void)
 
 	switch (curr->state) {
 	case TASK_STATE_RUNNING:
-		task_join(curr);
+		if (curr != cpu->idle)
+			task_join(curr);
 		break;
 	case TASK_STATE_ZOMBIE:
 		break;
@@ -123,6 +121,12 @@ static void task_sched(void)
 	}
 
 	struct task *next = task_pick_next(cpu);
+	if (!next)
+		next = cpu->idle;
+	if (!next)
+		panic("cpu %lu has no runnable task and no idle task\n",
+		      cpu->id);
+
 	if (next == curr) {
 		curr->time_slice = TIME_SLICE_MAX;
 		set_current_task(curr);
@@ -131,22 +135,23 @@ static void task_sched(void)
 
 	task_add_system_time(curr, jiffies_get() - curr->ktime);
 	cpu->handoff = curr;
-	if (next) {
-		raw_spin_lock(&next->lock);
-		ASSERT(next->oncpu == -1);
-		next->oncpu = cpu->id;
-		set_current_task(next);
-		next->frame->kernel_tp = (unsigned long)cpu;
+
+	raw_spin_lock(&next->lock);
+	ASSERT(next->oncpu == -1);
+	next->oncpu = cpu->id;
+	set_current_task(next);
+	next->frame->kernel_tp = (unsigned long)cpu;
+	if (next->mm) {
 		switch_pgtable(next->mm->pgd);
-		next->time_slice = TIME_SLICE_MAX;
-		next->ktime = jiffies_get();
-		curr->oncpu = -1;
-		__switch_to(&curr->kernel_sp, &next->kernel_sp);
+		user_access_enable();
 	} else {
-		set_current_task(NULL);
-		curr->oncpu = -1;
-		__switch_to(&curr->kernel_sp, &cpu->kernel_sp);
+		load_final_page_table();
+		user_access_disable();
 	}
+	next->time_slice = TIME_SLICE_MAX;
+	next->ktime = jiffies_get();
+	curr->oncpu = -1;
+	__switch_to(&curr->kernel_sp, &next->kernel_sp);
 
 	task_sched_resume();
 }

@@ -215,6 +215,65 @@ pid_alloc_failed:
 	return ERR_PTR(err);
 }
 
+static void idle_entry(void)
+{
+	for (;;) {
+		local_irq_enable();
+		cpu_idle();
+		local_irq_disable();
+		task_yield();
+	}
+}
+
+struct task *task_create_idle(cpuid_t cpuid)
+{
+	struct task *task;
+	unsigned long kernel_sp;
+	struct riscv_context *ctx;
+
+	if (cpuid >= MAX_CPUS)
+		return NULL;
+
+	task = task_alloc();
+	if (!task)
+		return NULL;
+
+	list_init(&task->list);
+	list_init(&task->queue);
+	list_init(&task->children);
+	list_init(&task->child);
+	spinlock_init(&task->lock, "idle");
+	task->state = TASK_STATE_RUNNING;
+	task->oncpu = -1;
+	task->cpu = (int)cpuid;
+	task->pid = 0;
+	task->tgid = 0;
+
+	task->kstack_base = kstack_alloc();
+	if (!task->kstack_base)
+		goto fail;
+
+	task->kstack_top = task->kstack_base + KSTACK_SIZE;
+	kernel_sp = task->kstack_top - TRAP_FRAME_SIZE;
+	ASSERT(is_aligned(kernel_sp, 16));
+	task->frame = (struct riscv_trap_frame *)kernel_sp;
+	memset(task->frame, 0, TRAP_FRAME_SIZE);
+	kernel_sp -= CONTEXT_SIZE;
+	ASSERT(is_aligned(kernel_sp, 16));
+	ctx = (struct riscv_context *)kernel_sp;
+	ctx->ra = (unsigned long)idle_entry;
+	task->kernel_sp = kernel_sp;
+
+	task->frame->kernel_tp = (unsigned long)&cpus[cpuid];
+	strlcpy(task->name, "idle", sizeof(task->name));
+
+	return task;
+
+fail:
+	task_free(task);
+	return NULL;
+}
+
 void task_destroy(struct task *task)
 {
 	spin_lock(&tasks_lock);

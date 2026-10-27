@@ -13,6 +13,7 @@ struct task;
 struct cpu {
 	struct task *handoff;
 	struct task *current;
+	struct task *idle;
 	unsigned long kernel_sp;
 	cpuid_t id;
 	int preempt_count;
