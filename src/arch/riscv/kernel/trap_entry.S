@@ -7,20 +7,28 @@ trap_entry:
 	# zero while in the kernel. Swap to the kernel stack when the trap came
 	# from user mode; the swap with zero restores the kernel sp otherwise.
 	csrrw sp, sscratch, sp
-	bnez sp, .Ltrap_have_stack
-	csrrw sp, sscratch, sp
-.Ltrap_have_stack:
-	addi sp, sp, -RISCV_TRAP_FRAME_SIZE
+	bnez sp, .Ltrap_from_user
 
-	# Save t0 (x5) first, then reuse it to record the trap-time stack pointer:
-	# the user stack is in sscratch, the kernel one is sp + frame_size.
+	# Trap from kernel mode. The swap above put the zero sscratch into sp
+	# and the interrupted kernel sp into sscratch, so swap it back.
+	csrrw sp, sscratch, sp
+	addi sp, sp, -RISCV_TRAP_FRAME_SIZE
+	sd x5, 40(sp)
+	addi x5, sp, RISCV_TRAP_FRAME_SIZE
+	sd x5, 16(sp)
+	j .Ltrap_save_regs
+
+.Ltrap_from_user:
+	# Trap from user mode. sp is the kernel stack top and sscratch holds
+	# the user sp. tp still holds the user's thread pointer, so reload the
+	# kernel per-CPU pointer saved by ret_from_trap.
+	addi sp, sp, -RISCV_TRAP_FRAME_SIZE
 	sd x5, 40(sp)
 	csrr x5, sscratch
-	bnez x5, .Ltrap_save_sp
-	addi x5, sp, RISCV_TRAP_FRAME_SIZE
-.Ltrap_save_sp:
 	sd x5, 16(sp)
+	ld tp, RISCV_TRAP_FRAME_KERNEL_TP(sp)
 
+.Ltrap_save_regs:
 	# From here on the kernel runs with sscratch cleared, so a nested trap
 	# taken in kernel mode is not mistaken for a user trap.
 	csrw sscratch, zero
@@ -82,6 +90,11 @@ ret_from_fork:
 	call task_schedlue_tail
 
 ret_from_trap:
+	# Remember the kernel per-CPU pointer while tp is still valid. It is
+	# needed by trap_entry on the next user -> kernel transition, after the
+	# user's tp has been restored below.
+	sd tp, RISCV_TRAP_FRAME_KERNEL_TP(sp)
+
 	# Restore the CSRs first; `sret` takes the return PC from sepc and the
 	# interrupt enable from sstatus.SPIE.
 	ld x5, 256(sp)

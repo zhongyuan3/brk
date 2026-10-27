@@ -258,11 +258,12 @@ void init_task_do(void)
 	else
 	 	pr_debug("execve /bin/init ok\n");
 
-	// smp_boot_release_secondary_harts();
+	smp_boot_release_secondary_harts();
 
 	unsigned long sstatus = read_sstatus();
 	sstatus &= ~SSTATUS_SPP;
 	sstatus |= SSTATUS_SPIE;
+	sstatus &= ~SSTATUS_SIE;
 	sstatus &= ~SSTATUS_SUM;
 	current_task()->frame->sstatus = sstatus;
 }
