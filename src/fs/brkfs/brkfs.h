@@ -115,6 +115,7 @@ int brkfs_dir_add(struct fs_inode *dir, u32 child_ino, const char *name,
 		  unsigned int name_len, umode_t child_mode);
 int brkfs_dir_remove(struct fs_inode *dir, const char *name,
 		     unsigned int name_len);
+int brkfs_dir_is_empty(struct fs_inode *dir);
 int brkfs_new_dir_body(struct fs_inode *inode, u32 parent_ino);
 
 int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,

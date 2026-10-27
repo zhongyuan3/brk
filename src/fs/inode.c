@@ -105,17 +105,23 @@ retry:
 		if (inode->ino == ino && inode->sb == sb) {
 			irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
-			/* Check if being freed */
-			if (inode->state & (I_FREEING | I_WILL_FREE)) {
+			/*
+			 * Check if being freed, and take the reference while
+			 * holding inode->lock.  fs_inode_put() drops the last
+			 * reference before it sets I_FREEING, so a plain
+			 * refcnt_inc() could resurrect an inode that is about
+			 * to be freed.  inc_unless_zero() closes that window;
+			 * if it fails, wait for the eviction to finish and
+			 * retry the hash lookup.
+			 */
+			if ((inode->state & (I_FREEING | I_WILL_FREE)) ||
+			    !refcnt_inc_unless_zero(&inode->count)) {
 				spin_unlock_irqrestore(&inode->lock, flags);
-				/* Wait for release to complete and retry */
 				task_sleep(&inode->state, &inode_hash_lock);
 				goto retry;
 			}
 
 			spin_unlock_irqrestore(&inode->lock, flags);
-
-			fs_inode_get(inode);
 			return inode; /* Cache hit, return directly */
 		}
 	}
@@ -225,6 +231,14 @@ void fs_inode_put(struct fs_inode *inode)
 	if (inode->state & I_DIRTY)
 		list_del(&inode->list);
 	spin_unlock(&inode->sb->inodes_lock);
+
+	/*
+	 * Wake every lookup that found this inode while it was dying.  The
+	 * inode has already been removed from the hash table, so the waiters
+	 * will retry from scratch and either allocate a fresh inode or find
+	 * one created in the meantime.
+	 */
+	task_wake_all(&inode->state);
 
 	__inode_free(inode);
 }

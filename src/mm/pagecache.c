@@ -76,12 +76,26 @@ struct page_cache *page_cache_create(void *host,
 
 	m->host = host;
 	m->ops = ops;
+	refcnt_init(&m->refcnt, 1);
 	spinlock_init(&m->lock, "page_cache.lock");
 	for (size_t i = 0; i < PAGE_CACHE_HSIZE; ++i)
 		hlist_head_init(&m->pages[i]);
 	list_init(&m->dirty_pages);
 	m->nrpages = 0;
 	return m;
+}
+
+/*
+ * The mapping is normally kept alive by the inode that owns it.  The
+ * reclaimer is the one exception: it obtains a temporary reference while it
+ * inspects a cached page, so page_cache_destroy() may drop the owner
+ * reference concurrently without freeing the mapping under the reclaimer.
+ */
+static void page_cache_put(struct page_cache *m)
+{
+	if (refcnt_dec_fetch(&m->refcnt) > 0)
+		return;
+	kfree(m);
 }
 
 /* Caller must hold @m->lock. */
@@ -123,7 +137,8 @@ void page_cache_destroy(struct page_cache *m)
 	}
 	spin_unlock(&m->lock);
 
-	kfree(m);
+	/* Drop the owner reference.  A concurrent shrinker may still hold one. */
+	page_cache_put(m);
 }
 
 static struct cached_page *cached_page_alloc(struct page_cache *m,
@@ -458,30 +473,62 @@ unsigned long page_cache_shrink(unsigned long nr_to_reclaim)
 		}
 		cp = list_first_entry(&pagecache_lru, struct cached_page,
 				      lru_list);
+
+		/*
+		 * Pin the page before dropping the LRU lock.  Without this,
+		 * truncate/destroy can detach and free @cp between the list
+		 * removal and the refcount check below.
+		 */
+		if (!refcnt_inc_unless_zero(&cp->refcnt)) {
+			/* Already dying; it is not ours to reclaim. */
+			list_del_init(&cp->lru_list);
+			spin_unlock(&pagecache_lru_lock);
+			continue;
+		}
+
+		mapping = cp->mapping;
+		if (!refcnt_inc_unless_zero(&mapping->refcnt)) {
+			list_del_init(&cp->lru_list);
+			spin_unlock(&pagecache_lru_lock);
+			cached_page_put(cp);
+			continue;
+		}
+
 		list_del_init(&cp->lru_list);
 		spin_unlock(&pagecache_lru_lock);
 
 		scanned++;
 
-		if (refcnt_read(&cp->refcnt) != 1) {
-			pagecache_lru_touch(cp);
+		spin_lock(&mapping->lock);
+		flags = cp->flags;
+		/*
+		 * refcount is our pin plus the cache's implicit reference.
+		 * Anything above that means a user still owns the page; dirty
+		 * or in-flight pages are not reclaimable either.
+		 */
+		if (refcnt_read(&cp->refcnt) != 2 ||
+		    (flags & (PCP_DIRTY | PCP_WRITEBACK)) ||
+		    hlist_unhashed(&cp->ht_node)) {
+			/*
+			 * Put a still-cached page back on the LRU.  The
+			 * mapping->lock -> lru_lock order matches
+			 * __detach_locked().
+			 */
+			if (!hlist_unhashed(&cp->ht_node))
+				pagecache_lru_add(cp);
+			spin_unlock(&mapping->lock);
+			cached_page_put(cp);
+			page_cache_put(mapping);
 			continue;
 		}
 
-		mapping = cp->mapping;
-		spin_lock(&mapping->lock);
-		flags = cp->flags;
-		if (refcnt_read(&cp->refcnt) != 1 ||
-		    (flags & (PCP_DIRTY | PCP_WRITEBACK)) ||
-		    hlist_unhashed(&cp->ht_node)) {
-			spin_unlock(&mapping->lock);
-			pagecache_lru_touch(cp);
-			continue;
-		}
 		__detach_locked(mapping, cp);
 		spin_unlock(&mapping->lock);
 
+		/* Drop the cache's implicit reference, then our own pin. */
 		detach_and_put(cp);
+		cached_page_put(cp);
+		page_cache_put(mapping);
 		freed++;
 	}
 

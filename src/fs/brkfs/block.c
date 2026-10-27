@@ -147,7 +147,11 @@ int brkfs_block_read(struct brkfs_sb_info *sb, u32 bno, void *buf)
 	err = brkfs_get_block(sb, bno, &bb);
 	if (err)
 		return err;
+
+	cached_page_lock(bb.cp);
 	memcpy(buf, bb.data, sb->s_sb.s_blocksize);
+	cached_page_unlock(bb.cp);
+
 	brkfs_put_block(&bb);
 	return 0;
 }
@@ -160,8 +164,12 @@ int brkfs_block_write(struct brkfs_sb_info *sb, u32 bno, const void *buf)
 	err = brkfs_get_block(sb, bno, &bb);
 	if (err)
 		return err;
+
+	cached_page_lock(bb.cp);
 	memcpy(bb.data, buf, sb->s_sb.s_blocksize);
 	cached_page_mark_dirty(bb.cp);
+	cached_page_unlock(bb.cp);
+
 	brkfs_put_block(&bb);
 	return 0;
 }

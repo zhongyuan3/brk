@@ -176,6 +176,8 @@ static int brkfs_file_fsync(struct fs_file *file, loff_t start, loff_t end,
 	err = page_cache_flush_range(inode->mapping, start, end);
 	if (!err)
 		err = brkfs_inode_write(sbi, inode);
+	if (!err)
+		err = page_cache_flush(sbi->s_bdev->bd_mapping);
 	sleeplock_release(&inode->rwsem);
 	return err;
 }

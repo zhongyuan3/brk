@@ -123,6 +123,14 @@ struct fs_dentry *fs_dentry_alloc_anon(struct fs_inode *inode,
 
 void fs_dentry_instantiate(struct fs_dentry *dentry, struct fs_inode *inode)
 {
+	/*
+	 * The caller transfers one inode reference to the dentry.  Refuse to
+	 * silently overwrite an existing inode (or add a second alias link):
+	 * either would leak a reference and corrupt inode->dentries.
+	 */
+	ASSERT(dentry->inode == NULL);
+	ASSERT(list_empty(&dentry->alias));
+
 	dentry->inode = inode;
 	spin_lock(&inode->lock);
 	list_add(&dentry->alias, &inode->dentries);
@@ -207,12 +215,36 @@ static struct fs_dentry *__dentry_lookup(struct hlist_head *head,
 		    dentry->name.len == name->len &&
 		    !dentry->ops->compare(dentry, name->len, name->name,
 					  &dentry->name)) {
-			refcnt_inc(&dentry->count);
+			/*
+			 * A dentry drops its last reference before it removes
+			 * itself from this hash table, so a plain refcnt_inc()
+			 * could resurrect a dentry that fs_dentry_put() is
+			 * already tearing down.  Only take a reference while
+			 * the count is still non-zero; a dying entry is simply
+			 * treated as a miss and the caller will either allocate
+			 * a fresh dentry or retry the filesystem lookup.
+			 */
+			if (!refcnt_inc_unless_zero(&dentry->count))
+				continue;
 			return dentry;
 		}
 	}
 
 	return NULL;
+}
+
+static void fs_dentry_hash(struct fs_dentry *dentry, u32 idx)
+{
+	spin_lock(&dentry->lock);
+	if (dentry->parent != dentry && (dentry->flags & DCACHE_UNHASHED)) {
+		dentry->flags &= ~DCACHE_UNHASHED;
+		spin_lock(&dentry_htable_lock);
+		hlist_add_head(&dentry->hash, &dentry_htable[idx]);
+		spin_unlock(&dentry_htable_lock);
+		pr_debug("added dentry to hash table: name=%.*s\n",
+			 (int)dentry->name.len, dentry->name.name);
+	}
+	spin_unlock(&dentry->lock);
 }
 
 struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
@@ -243,33 +275,58 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 
 	inode = parent->inode;
 	sleeplock_acquire(&inode->rwsem);
-	tmp = inode->ops->lookup(inode, dentry, 0);
-	sleeplock_release(&inode->rwsem);
-	if (IS_ERR(tmp)) {
+
+	/*
+	 * Another CPU may have populated the hash while we were allocating
+	 * the new dentry.  Re-check under the directory lock so that two
+	 * concurrent negative lookups converge on the same dentry instead of
+	 * creating two independent negative entries.
+	 */
+	spin_lock(&dentry_htable_lock);
+	tmp = __dentry_lookup(head, parent, name);
+	spin_unlock(&dentry_htable_lock);
+	if (tmp) {
+		/*
+		 * @dentry was never instantiated.  Mark it negative so that
+		 * fs_dentry_put() does not try to iput a NULL inode.
+		 */
+		spin_lock(&dentry->lock);
 		dentry->flags |= DCACHE_NEGATIVE;
+		spin_unlock(&dentry->lock);
+		sleeplock_release(&inode->rwsem);
+		fs_dentry_put(dentry);
+		return tmp;
+	}
+
+	tmp = inode->ops->lookup(inode, dentry, 0);
+	if (IS_ERR(tmp)) {
+		/*
+		 * Do not cache transient lookup errors as a negative dentry.
+		 * Drop the freshly allocated one and report the error.
+		 */
+		spin_lock(&dentry->lock);
+		dentry->flags |= DCACHE_NEGATIVE;
+		spin_unlock(&dentry->lock);
+		sleeplock_release(&inode->rwsem);
 		fs_dentry_put(dentry);
 		return ERR_CAST(tmp);
 	}
 
-	if (!tmp)
+	if (!tmp) {
+		spin_lock(&dentry->lock);
 		dentry->flags |= DCACHE_NEGATIVE;
-	else
-		dentry = tmp;
-
-	spin_lock(&dentry->lock);
-	if (dentry->parent != dentry && dentry->flags & DCACHE_UNHASHED) {
-		dentry->flags &= ~DCACHE_UNHASHED;
-		spin_lock(&dentry_htable_lock);
-		hlist_add_head(&dentry->hash, &dentry_htable[idx]);
-		spin_unlock(&dentry_htable_lock);
 		spin_unlock(&dentry->lock);
-		pr_debug("added dentry to hash table: name=%.*s\n",
-			 (int)dentry->name.len, dentry->name.name);
 	} else {
-		spin_unlock(&dentry->lock);
-		pr_debug("dentry already in hash table: name=%.*s\n",
-			 (int)dentry->name.len, dentry->name.name);
+		dentry = tmp;
 	}
+
+	/*
+	 * Publish the dentry before releasing the directory lock.  In
+	 * particular a negative dentry must be visible to the next creator
+	 * so that both callers operate on the same object.
+	 */
+	fs_dentry_hash(dentry, idx);
+	sleeplock_release(&inode->rwsem);
 
 	return dentry;
 }
@@ -292,8 +349,24 @@ struct fs_dentry *fs_dentry_splice_alias(struct fs_inode *inode,
 		    d->name.len == dentry->name.len &&
 		    !d->ops->compare(d, dentry->name.len, dentry->name.name,
 				     &d->name)) {
+			/*
+			 * @d is on inode->dentries, but its last reference may
+			 * already have been dropped by fs_dentry_put() (the
+			 * alias is unlinked under inode->lock, not before the
+			 * refcount reaches zero).  Do not resurrect it.
+			 */
+			if (!refcnt_inc_unless_zero(&d->count))
+				continue;
+
 			spin_unlock(&inode->lock);
-			fs_dentry_get(d);
+
+			/*
+			 * @d already owns an inode reference.  Drop the
+			 * temporary one obtained by fs_inode_get_locked() so
+			 * that the alias path does not leak it.
+			 */
+			fs_inode_put(inode);
+
 			dentry->flags |= DCACHE_NEGATIVE;
 			fs_dentry_put(dentry);
 			return d;

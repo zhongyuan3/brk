@@ -466,7 +466,13 @@ u64 sys_umount2(void)
 	struct fs_path path;
 	int err;
 
-	err = fs_path_lookup(target, 0, &path);
+	/*
+	 * Resolve the mountpoint as seen from its parent mount.  With plain
+	 * flags the final follow_mount() would enter the filesystem we are
+	 * trying to unmount, and fs_mount_state_lookup() would look for a
+	 * nested mount instead of this one.
+	 */
+	err = fs_path_lookup(target, LOOKUP_MOUNTPOINT, &path);
 	if (err)
 		return err;
 
@@ -491,6 +497,11 @@ u64 sys_umount2(void)
 		return err;
 	}
 
+	/*
+	 * do_umount() dropped the topology reference; the reference obtained
+	 * by fs_mount_state_lookup() above belongs to this syscall.
+	 */
+	fs_mount_state_put(mnt);
 	fs_path_put(&path);
 	return 0;
 }

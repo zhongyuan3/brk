@@ -12,10 +12,12 @@ struct fs_file *do_openat(int dirfd, const char *pathname, int flags,
 	int err;
 	struct fs_file *file;
 	struct fs_path path;
+	bool retried = false;
 
 	if ((flags & O_RDWR) && (flags & O_WRONLY))
 		return ERR_PTR(-EINVAL);
 
+retry:
 	err = fs_path_lookup_at(dirfd, pathname, 0, &path);
 	if (err)
 		return ERR_PTR(err);
@@ -47,12 +49,22 @@ struct fs_file *do_openat(int dirfd, const char *pathname, int flags,
 		sleeplock_acquire(&inode->rwsem);
 		err = inode->ops->create(inode, path.dentry, mode, excl);
 		sleeplock_release(&inode->rwsem);
+		fs_path_put(&parent_path);
+
+		if (err == -EEXIST && !excl && !retried) {
+			/*
+			 * Another CPU created the name after our negative
+			 * check.  Redo the lookup once so that path.dentry is
+			 * the now-positive dentry, then open it below.
+			 */
+			fs_path_put(&path);
+			retried = true;
+			goto retry;
+		}
 		if (err) {
-			fs_path_put(&parent_path);
 			fs_path_put(&path);
 			return ERR_PTR(err);
 		}
-		fs_path_put(&parent_path);
 	}
 
 	fmode_t fmode = 0;
@@ -197,6 +209,19 @@ int do_linkat(int olddirfd, const char *oldpathname, int newdirfd,
 	}
 	struct fs_inode *parent_inode = parent_path.dentry->inode;
 	struct fs_inode *old_inode = oldpath.dentry->inode;
+
+	/*
+	 * Hard-linking a directory is invalid on POSIX systems.  Besides the
+	 * semantic error, @old_inode can equal @parent_inode here (linking a
+	 * directory below itself), which would make the two rwsem acquires
+	 * below self-deadlock before the filesystem has a chance to reject
+	 * it.
+	 */
+	if (S_ISDIR(old_inode->mode) || old_inode == parent_inode) {
+		err = -EPERM;
+		goto out_paths;
+	}
+
 	sleeplock_acquire(&parent_inode->rwsem);
 	sleeplock_acquire(&old_inode->rwsem);
 	err = parent_inode->ops->link(oldpath.dentry, parent_inode,
@@ -204,6 +229,7 @@ int do_linkat(int olddirfd, const char *oldpathname, int newdirfd,
 	sleeplock_release(&old_inode->rwsem);
 	sleeplock_release(&parent_inode->rwsem);
 
+out_paths:
 	fs_path_put(&parent_path);
 	fs_path_put(&oldpath);
 	fs_path_put(&newpath);
@@ -382,6 +408,13 @@ int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 	}
 	struct fs_inode *parent_inode = parent_path.dentry->inode;
 	struct fs_inode *old_inode = oldpath.dentry->inode;
+
+	/* Renaming a directory into itself would self-deadlock on rwsem. */
+	if (old_inode == parent_inode) {
+		err = -EINVAL;
+		goto out_paths;
+	}
+
 	sleeplock_acquire(&parent_inode->rwsem);
 	sleeplock_acquire(&old_inode->rwsem);
 	err = parent_inode->ops->rename(old_inode, oldpath.dentry, parent_inode,
@@ -389,6 +422,7 @@ int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 	sleeplock_release(&old_inode->rwsem);
 	sleeplock_release(&parent_inode->rwsem);
 
+out_paths:
 	fs_path_put(&parent_path);
 	fs_path_put(&oldpath);
 	fs_path_put(&newpath);

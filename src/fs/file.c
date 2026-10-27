@@ -73,9 +73,14 @@ void fs_file_put(struct fs_file *file)
 
 loff_t fs_file_lseek(struct fs_file *file, loff_t len, int whence)
 {
-	loff_t ret = file->ops->llseek(file, len, whence);
+	loff_t ret;
+
+	/* Serialize with fs_file_read()/write() and getdents(). */
+	sleeplock_acquire(&file->pos_lock);
+	ret = file->ops->llseek(file, len, whence);
 	if (ret >= 0)
 		file->pos = ret;
+	sleeplock_release(&file->pos_lock);
 	return ret;
 }
 
