@@ -31,6 +31,7 @@
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
+#include <brk/writeback.h>
 #include <uapi/errno.h>
 #include <uapi/limits.h>
 #include <uapi/signal.h>
@@ -339,6 +340,11 @@ void init_task_do(void)
 	int klog_err = klog_start();
 	if (klog_err)
 		pr_warn("klog: failed to start log thread: %d\n", klog_err);
+
+	int writeback_err = writeback_start();
+	if (writeback_err)
+		pr_warn("writeback: failed to start flush thread: %d\n",
+			writeback_err);
 
 	smp_boot_release_secondary_harts();
 
