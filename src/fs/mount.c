@@ -103,17 +103,23 @@ static int graft_tree(struct fs_mount_state *new_mnt,
 	spin_unlock(&mp_mnt->lock);
 
 	/*
-	 * Publish order for follow_mount():
-	 * set DCACHE_MOUNTED first, then publish into mount hash.
-	 * This avoids false-negative windows (mounted but bit not set).
+	 * Publish the hash entry first and only then set DCACHE_MOUNTED.
+	 * follow_mount() checks the flag and then looks up the hash: if it
+	 * observes the flag, the release/acquire on dentry->lock also makes
+	 * the previously inserted hash entry visible.  A walker that sees the
+	 * flag clear simply linearizes before the mount becomes effective.
+	 *
+	 * The reverse order (flag first) used to expose "flag set, hash not
+	 * yet linked", making follow_mount() silently skip a mounted
+	 * filesystem.
 	 */
-	spin_lock(&mp_dentry->lock);
-	mp_dentry->flags |= DCACHE_MOUNTED;
-	spin_unlock(&mp_dentry->lock);
-
 	spin_lock(&mount_hashtable_lock);
 	hlist_add_head(&new_mnt->hash, &mount_hashtable[h]);
 	spin_unlock(&mount_hashtable_lock);
+
+	spin_lock(&mp_dentry->lock);
+	mp_dentry->flags |= DCACHE_MOUNTED;
+	spin_unlock(&mp_dentry->lock);
 
 	/* Stage 4 (superblock mount list bookkeeping). */
 	spin_lock(&new_mnt->sb->mnt_states_lock);

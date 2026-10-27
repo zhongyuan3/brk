@@ -163,6 +163,14 @@ static void handle_interrupt(unsigned long code, struct riscv_trap_frame *frame,
 	switch (code) {
 	case INTERRUPT_SUPERVISOR_SOFTWARE:
 		clear_ssip_csr();
+		/*
+		 * Another CPU queued a task on our run queue.  Re-evaluate it
+		 * now instead of waiting for the next timer tick.  As with the
+		 * timer path, never switch away while a spinlock or explicit
+		 * preempt_disable() section is active.
+		 */
+		if (preempt_count() == 0)
+			task_yield();
 		break;
 	case INTERRUPT_SUPERVISOR_TIMER:
 		handle_tick();

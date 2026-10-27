@@ -94,3 +94,18 @@ void smp_boot_release_secondary_harts(void)
 	released = true;
 	smp_wake_secondary_harts(boot_info.boot_hart_id);
 }
+
+void arch_send_ipi(cpuid_t cpuid)
+{
+	if (cpuid >= MAX_CPUS)
+		return;
+	if (!__atomic_load_n(&cpus[cpuid].online, __ATOMIC_ACQUIRE))
+		return;
+
+	/*
+	 * SBI IPI sets SSIP on the target hart.  If the extension is not
+	 * implemented the call is simply ignored; the target's timer tick
+	 * will still re-examine its run queue.
+	 */
+	(void)sbi_send_ipi(1UL, cpus[cpuid].id);
+}

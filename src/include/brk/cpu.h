@@ -18,10 +18,13 @@ struct cpu {
 	cpuid_t id;
 	int preempt_count;
 	bool initialized;
+	/* Set once this CPU has entered its idle task and can take IPIs. */
+	bool online;
 
 	/* Per-CPU run queue. */
 	struct list_head run_queue;
 	spinlock_t run_queue_lock;
+	unsigned int nr_running;
 };
 
 int cpu_init(cpuid_t cpuid);
@@ -42,6 +45,7 @@ extern struct cpu cpus[MAX_CPUS];
 
 const char *uname_machine(void);
 void cpu_idle(void);
+void arch_send_ipi(cpuid_t cpuid);
 
 void local_irq_disable(void);
 void local_irq_enable(void);
