@@ -90,9 +90,9 @@ int tty_register_driver(struct tty_driver *driver)
 		driver->minor_start = MINOR(dev);
 	}
 
-	spinlock_acquire(&tty_driver_lock);
+	spin_lock(&tty_driver_lock);
 	hlist_add_head(&driver->driver_list, &tty_driver_list);
-	spinlock_release(&tty_driver_lock);
+	spin_unlock(&tty_driver_lock);
 	return 0;
 }
 
@@ -101,25 +101,25 @@ int tty_unregister_driver(struct tty_driver *driver)
 	if (!driver)
 		return -EINVAL;
 
-	spinlock_acquire(&driver->lock);
+	spin_lock(&driver->lock);
 	for (int i = 0; i < driver->num_ports; i++) {
 		struct tty_port *port = driver->ports[i];
 
 		if (port && port->tty && refcnt_read(&port->tty->refcnt) > 0) {
-			spinlock_release(&driver->lock);
+			spin_unlock(&driver->lock);
 			return -EBUSY;
 		}
 	}
-	spinlock_release(&driver->lock);
+	spin_unlock(&driver->lock);
 
-	spinlock_acquire(&tty_driver_lock);
+	spin_lock(&tty_driver_lock);
 	hlist_del(&driver->driver_list);
-	spinlock_release(&tty_driver_lock);
+	spin_unlock(&tty_driver_lock);
 
-	spinlock_acquire(&driver->lock);
+	spin_lock(&driver->lock);
 	for (int i = 0; i < driver->num_ports; i++)
 		tty_driver_cleanup_port(driver, i);
-	spinlock_release(&driver->lock);
+	spin_unlock(&driver->lock);
 
 	chrdev_free_region(driver->major, driver->minor_start,
 			   driver->num_ports);
@@ -134,7 +134,7 @@ struct tty_port *tty_lookup_port(dev_t dev)
 	unsigned minor = MINOR(dev);
 	struct tty_port *port = NULL;
 
-	spinlock_acquire(&tty_driver_lock);
+	spin_lock(&tty_driver_lock);
 	hlist_for_each_entry(driver, &tty_driver_list, driver_list) {
 		if (driver->major == major && driver->minor_start <= minor &&
 		    driver->minor_start + driver->num_ports > minor) {
@@ -142,7 +142,7 @@ struct tty_port *tty_lookup_port(dev_t dev)
 			break;
 		}
 	}
-	spinlock_release(&tty_driver_lock);
+	spin_unlock(&tty_driver_lock);
 
 	return port;
 }
@@ -158,7 +158,7 @@ int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port)
 	if (!cd)
 		return -ENOMEM;
 
-	spinlock_acquire(&driver->lock);
+	spin_lock(&driver->lock);
 	for (int i = 0; i < driver->num_ports; i++) {
 		if (driver->ports[i] == NULL) {
 			driver->ports[i] = port;
@@ -171,7 +171,7 @@ int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port)
 				chrdev_free(cd);
 				driver->cds[i] = NULL;
 				driver->ports[i] = NULL;
-				spinlock_release(&driver->lock);
+				spin_unlock(&driver->lock);
 				return err;
 			}
 			if (!tty_attach_port(port)) {
@@ -179,14 +179,14 @@ int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port)
 				chrdev_free(cd);
 				driver->cds[i] = NULL;
 				driver->ports[i] = NULL;
-				spinlock_release(&driver->lock);
+				spin_unlock(&driver->lock);
 				return -ENOMEM;
 			}
-			spinlock_release(&driver->lock);
+			spin_unlock(&driver->lock);
 			return 0;
 		}
 	}
-	spinlock_release(&driver->lock);
+	spin_unlock(&driver->lock);
 
 	chrdev_free(cd);
 
@@ -198,20 +198,20 @@ int tty_driver_remove_port(struct tty_driver *driver, struct tty_port *port)
 	if (!driver || !port)
 		return -EINVAL;
 
-	spinlock_acquire(&driver->lock);
+	spin_lock(&driver->lock);
 	if (port->tty && refcnt_read(&port->tty->refcnt) > 0) {
-		spinlock_release(&driver->lock);
+		spin_unlock(&driver->lock);
 		return -EBUSY;
 	}
 
 	for (int i = 0; i < driver->num_ports; i++) {
 		if (driver->ports[i] == port) {
 			tty_driver_cleanup_port(driver, i);
-			spinlock_release(&driver->lock);
+			spin_unlock(&driver->lock);
 			return 0;
 		}
 	}
-	spinlock_release(&driver->lock);
+	spin_unlock(&driver->lock);
 
 	return -ENOENT;
 }
@@ -323,7 +323,7 @@ int tty_mknod(void)
 	struct tty_driver *driver;
 	char name[32];
 
-	spinlock_acquire(&tty_driver_lock);
+	spin_lock(&tty_driver_lock);
 	hlist_for_each_entry(driver, &tty_driver_list, driver_list) {
 		for (int i = 0; i < driver->num_ports; i++) {
 			if (driver->ports[i]) {
@@ -335,7 +335,7 @@ int tty_mknod(void)
 					MKCHRDEV(driver->major,
 						 driver->minor_start + i));
 				if (err) {
-					spinlock_release(&tty_driver_lock);
+					spin_unlock(&tty_driver_lock);
 					return err;
 				}
 				pr_info("/dev/tty%u created successfully\n",
@@ -343,7 +343,7 @@ int tty_mknod(void)
 			}
 		}
 	}
-	spinlock_release(&tty_driver_lock);
+	spin_unlock(&tty_driver_lock);
 	return 0;
 }
 

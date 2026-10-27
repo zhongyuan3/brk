@@ -116,8 +116,7 @@ static void virtio_blk_vq_used(struct virtq *vq, u32 id, void *ctx)
 static void virtio_blk_irq_handler(void *ctx)
 {
 	struct virtio_blk_dev *vblk = ctx;
-
-	spinlock_acquire(&vblk->lock);
+	irqstate_t flags = spin_lock_irqsave(&vblk->lock);
 
 	virtio_mmio_ack_interrupt(vblk->vdev);
 
@@ -125,7 +124,7 @@ static void virtio_blk_irq_handler(void *ctx)
 
 	virtq_process_used(&vblk->vq, virtio_blk_vq_used, vblk);
 
-	spinlock_release(&vblk->lock);
+	spin_unlock_irqrestore(&vblk->lock, flags);
 }
 
 static int virtio_blk_submit(struct virtio_blk_dev *vblk,
@@ -135,8 +134,7 @@ static int virtio_blk_submit(struct virtio_blk_dev *vblk,
 	struct virtio_blk_req *req;
 	char *status;
 	int err;
-
-	spinlock_acquire(&vblk->lock);
+	irqstate_t flags = spin_lock_irqsave(&vblk->lock);
 
 	while (virtq_alloc_desc_chain(&vblk->vq, idx, 3))
 		task_sleep(&vblk->vq.desc, &vblk->lock);
@@ -178,7 +176,7 @@ static int virtio_blk_submit(struct virtio_blk_dev *vblk,
 	virtq_free_desc_chain(&vblk->vq, idx[0]);
 	task_wake_all(&vblk->vq.desc);
 
-	spinlock_release(&vblk->lock);
+	spin_unlock_irqrestore(&vblk->lock, flags);
 	return err;
 }
 
@@ -364,24 +362,24 @@ int virtio_blk_register(struct virtio_blk_dev *vblk)
 	bdev->phy_bsize = VIRTIO_BLK_SECTOR_SIZE;
 	bdev->priv = vblk;
 
-	spinlock_acquire(&vblk_registry->lock);
+	spin_lock(&vblk_registry->lock);
 	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
 		if (vblk_registry->vblks[i] == NULL) {
 			bdev->dev = MKBLKDEV(vblk_registry->major,
 					     vblk_registry->minor_start + i);
 			err = blkdev_register(bdev);
 			if (err) {
-				spinlock_release(&vblk_registry->lock);
+				spin_unlock(&vblk_registry->lock);
 				blkdev_free(bdev);
 				return err;
 			}
 			vblk_registry->vblks[i] = vblk;
 			vblk_registry->bdevs[i] = bdev;
-			spinlock_release(&vblk_registry->lock);
+			spin_unlock(&vblk_registry->lock);
 			return 0;
 		}
 	}
-	spinlock_release(&vblk_registry->lock);
+	spin_unlock(&vblk_registry->lock);
 	return -EBUSY;
 }
 
@@ -392,19 +390,19 @@ void virtio_blk_unregister(struct virtio_blk_dev *vblk)
 	if (!vblk || !vblk->vdev)
 		return;
 
-	spinlock_acquire(&vblk_registry->lock);
+	spin_lock(&vblk_registry->lock);
 	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
 		if (vblk_registry->vblks[i] == vblk) {
 			vblk_registry->vblks[i] = NULL;
 			bdev = vblk_registry->bdevs[i];
 			vblk_registry->bdevs[i] = NULL;
-			spinlock_release(&vblk_registry->lock);
+			spin_unlock(&vblk_registry->lock);
 			blkdev_unregister(bdev);
 			blkdev_free(bdev);
 			return;
 		}
 	}
-	spinlock_release(&vblk_registry->lock);
+	spin_unlock(&vblk_registry->lock);
 }
 
 void virtio_blk_init(void)
@@ -445,7 +443,7 @@ int virtio_blk_enable_irq(u32 hart_id)
 	if (!vblk_registry)
 		return -EINVAL;
 
-	spinlock_acquire(&vblk_registry->lock);
+	spin_lock(&vblk_registry->lock);
 	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
 		if (vblk_registry->vblks[i]) {
 			err = irq_enable_source(
@@ -454,7 +452,7 @@ int virtio_blk_enable_irq(u32 hart_id)
 				break;
 		}
 	}
-	spinlock_release(&vblk_registry->lock);
+	spin_unlock(&vblk_registry->lock);
 	return err;
 }
 
@@ -466,7 +464,7 @@ int virtio_blk_mknod(void)
 	if (!vblk_registry)
 		return -EINVAL;
 
-	spinlock_acquire(&vblk_registry->lock);
+	spin_lock(&vblk_registry->lock);
 	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
 		if (vblk_registry->vblks[i]) {
 			memset(name, 0, sizeof(name));
@@ -482,7 +480,7 @@ int virtio_blk_mknod(void)
 				  i);
 		}
 	}
-	spinlock_release(&vblk_registry->lock);
+	spin_unlock(&vblk_registry->lock);
 
 	return err;
 }

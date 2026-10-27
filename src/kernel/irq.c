@@ -45,7 +45,7 @@ int irq_register_handler(u32 source, irq_handler_t handler, void *ctx,
 	if (source >= irq_handlers_num)
 		return -EINVAL;
 
-	spinlock_acquire(&irq_handlers_lock);
+	irqstate_t flags = spin_lock_irqsave(&irq_handlers_lock);
 	if (old_handler)
 		*old_handler = irq_handlers[source];
 	if (old_ctx)
@@ -53,7 +53,7 @@ int irq_register_handler(u32 source, irq_handler_t handler, void *ctx,
 
 	irq_handlers[source] = handler;
 	irq_handlers_ctx[source] = ctx;
-	spinlock_release(&irq_handlers_lock);
+	spin_unlock_irqrestore(&irq_handlers_lock, flags);
 	return 0;
 }
 
@@ -63,7 +63,7 @@ int irq_unregister_handler(u32 source, irq_handler_t *old_handler,
 	if (source >= irq_handlers_num)
 		return -EINVAL;
 
-	spinlock_acquire(&irq_handlers_lock);
+	irqstate_t flags = spin_lock_irqsave(&irq_handlers_lock);
 	if (old_handler)
 		*old_handler = irq_handlers[source];
 	if (old_ctx)
@@ -71,7 +71,7 @@ int irq_unregister_handler(u32 source, irq_handler_t *old_handler,
 
 	irq_handlers[source] = NULL;
 	irq_handlers_ctx[source] = NULL;
-	spinlock_release(&irq_handlers_lock);
+	spin_unlock_irqrestore(&irq_handlers_lock, flags);
 	return 0;
 }
 
@@ -96,10 +96,10 @@ int irq_handle_external(u32 hart_id)
 		return -EINVAL;
 	}
 
-	spinlock_acquire(&irq_handlers_lock);
+	irqstate_t flags = spin_lock_irqsave(&irq_handlers_lock);
 	handler = irq_handlers[source];
 	ctx = irq_handlers_ctx[source];
-	spinlock_release(&irq_handlers_lock);
+	spin_unlock_irqrestore(&irq_handlers_lock, flags);
 
 	if (handler)
 		handler(ctx);

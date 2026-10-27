@@ -86,9 +86,9 @@ static void brkfs_put_super(struct fs_super_block *sb)
 	struct brkfs_sb_info *sb_info = sb->private_data;
 	struct fs_driver *driver = sb->driver;
 
-	spinlock_acquire(&driver->lock);
+	spin_lock(&driver->lock);
 	list_del(&sb->instance);
-	spinlock_release(&driver->lock);
+	spin_unlock(&driver->lock);
 
 	fs_dentry_put(sb->root);
 	sb->root = NULL;

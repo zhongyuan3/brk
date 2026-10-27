@@ -47,9 +47,10 @@ static void sigaction_table_reset_locked(struct sigaction_table *table)
 
 void sigaction_table_reset(struct sigaction_table *table)
 {
-	spinlock_acquire(&table->lock);
+	irqstate_t flags = spin_lock_irqsave(&table->lock);
+
 	sigaction_table_reset_locked(table);
-	spinlock_release(&table->lock);
+	spin_unlock_irqrestore(&table->lock, flags);
 }
 
 static int get_next_signal_locked(struct task *task)
@@ -97,9 +98,10 @@ static void signal_reset_locked(struct task *task)
 
 void signal_reset(struct task *task)
 {
-	spinlock_acquire(&task->sigactions->lock);
+	irqstate_t flags = spin_lock_irqsave(&task->sigactions->lock);
+
 	signal_reset_locked(task);
-	spinlock_release(&task->sigactions->lock);
+	spin_unlock_irqrestore(&task->sigactions->lock, flags);
 }
 
 static void clear_pending_locked(struct task *task, int sig)
@@ -110,21 +112,22 @@ static void clear_pending_locked(struct task *task, int sig)
 bool signal_pending(struct task *task)
 {
 	bool pending;
+	irqstate_t flags = spin_lock_irqsave(&task->sigactions->lock);
 
-	spinlock_acquire(&task->sigactions->lock);
 	pending = get_next_signal_locked(task) != 0;
-	spinlock_release(&task->sigactions->lock);
+	spin_unlock_irqrestore(&task->sigactions->lock, flags);
 	return pending;
 }
 
 int signal_do_kill(pid_t pid, int sig)
 {
 	struct task *p, *target = NULL;
+	irqstate_t tflags, sflags;
 
 	if (sig != 0 && !sig_valid(sig))
 		return -EINVAL;
 
-	spinlock_acquire(&tasks_lock);
+	spin_lock(&tasks_lock);
 	list_for_each_entry(p, &tasks, list) {
 		if (p->pid == pid) {
 			target = p;
@@ -132,32 +135,32 @@ int signal_do_kill(pid_t pid, int sig)
 		}
 	}
 	if (!target) {
-		spinlock_release(&tasks_lock);
+		spin_unlock(&tasks_lock);
 		return -ESRCH;
 	}
 	if (target == initial_task) {
-		spinlock_release(&tasks_lock);
+		spin_unlock(&tasks_lock);
 		return -EPERM;
 	}
 
-	spinlock_acquire(&target->lock);
-	spinlock_release(&tasks_lock);
+	tflags = spin_lock_irqsave(&target->lock);
+	spin_unlock(&tasks_lock);
 
 	if (target->state == TASK_STATE_ZOMBIE) {
-		spinlock_release(&target->lock);
+		spin_unlock_irqrestore(&target->lock, tflags);
 		return -ESRCH;
 	}
 
-	spinlock_acquire(&target->sigactions->lock);
-	spinlock_release(&target->lock);
+	sflags = spin_lock_irqsave(&target->sigactions->lock);
+	spin_unlock_irqrestore(&target->lock, tflags);
 
 	if (sig == 0) {
-		spinlock_release(&target->sigactions->lock);
+		spin_unlock_irqrestore(&target->sigactions->lock, sflags);
 		return 0;
 	}
 
 	target->pending |= (1ULL << sig);
-	spinlock_release(&target->sigactions->lock);
+	spin_unlock_irqrestore(&target->sigactions->lock, sflags);
 
 	task_wake_spec(target);
 	return 0;
@@ -165,18 +168,20 @@ int signal_do_kill(pid_t pid, int sig)
 
 void signal_send(struct task *task, int sig)
 {
+	irqstate_t tflags, sflags;
+
 	if (!task || !sig_valid(sig))
 		return;
 
-	spinlock_acquire(&task->lock);
+	tflags = spin_lock_irqsave(&task->lock);
 	if (task->state == TASK_STATE_ZOMBIE) {
-		spinlock_release(&task->lock);
+		spin_unlock_irqrestore(&task->lock, tflags);
 		return;
 	}
-	spinlock_acquire(&task->sigactions->lock);
-	spinlock_release(&task->lock);
+	sflags = spin_lock_irqsave(&task->sigactions->lock);
+	spin_unlock_irqrestore(&task->lock, tflags);
 	task->pending |= (1ULL << sig);
-	spinlock_release(&task->sigactions->lock);
+	spin_unlock_irqrestore(&task->sigactions->lock, sflags);
 
 	task_wake_spec(task);
 }
@@ -191,10 +196,11 @@ int signal_init(struct task *task, struct sigaction_table *sigactions,
 		signal_reset(task);
 	} else {
 		task->sigactions = sigaction_table_get(sigactions);
-		spinlock_acquire(&task->sigactions->lock);
+		irqstate_t flags = spin_lock_irqsave(&task->sigactions->lock);
+
 		signal_reset_signal_sets_locked(task);
 		task->blocked = blocked;
-		spinlock_release(&task->sigactions->lock);
+		spin_unlock_irqrestore(&task->sigactions->lock, flags);
 	}
 	return 0;
 }
@@ -240,37 +246,36 @@ static void signal_deliver_one(struct task *task, int sig)
 {
 	unsigned long handler;
 	u64 user_handler;
-
-	spinlock_acquire(&task->sigactions->lock);
+	irqstate_t flags = spin_lock_irqsave(&task->sigactions->lock);
 
 	handler = task->sigactions->actions[sig].sa_handler;
 
 	if (sig == SIGKILL ||
 	    (handler == (unsigned long)SIG_DFL && sig_default_terminate(sig))) {
-		spinlock_release(&task->sigactions->lock);
+		spin_unlock_irqrestore(&task->sigactions->lock, flags);
 		task_exit_signal(sig);
 		return;
 	}
 
 	if (handler == (unsigned long)SIG_IGN) {
 		clear_pending_locked(task, sig);
-		spinlock_release(&task->sigactions->lock);
+		spin_unlock_irqrestore(&task->sigactions->lock, flags);
 		return;
 	}
 
 	if (handler == (unsigned long)SIG_DFL) {
 		clear_pending_locked(task, sig);
-		spinlock_release(&task->sigactions->lock);
+		spin_unlock_irqrestore(&task->sigactions->lock, flags);
 		return;
 	}
 
 	user_handler = handler;
 	if (!setup_signal_frame_locked(task, sig, user_handler)) {
-		spinlock_release(&task->sigactions->lock);
+		spin_unlock_irqrestore(&task->sigactions->lock, flags);
 		task_exit_signal(sig);
 		return;
 	}
-	spinlock_release(&task->sigactions->lock);
+	spin_unlock_irqrestore(&task->sigactions->lock, flags);
 }
 
 void signal_deliver_pending(struct task *task)
@@ -279,15 +284,16 @@ void signal_deliver_pending(struct task *task)
 	bool in_handler;
 
 	for (;;) {
-		spinlock_acquire(&task->sigactions->lock);
+		irqstate_t flags = spin_lock_irqsave(&task->sigactions->lock);
+
 		sig = get_next_signal_locked(task);
-		spinlock_release(&task->sigactions->lock);
+		spin_unlock_irqrestore(&task->sigactions->lock, flags);
 		if (!sig)
 			return;
 		signal_deliver_one(task, sig);
-		spinlock_acquire(&task->sigactions->lock);
+		flags = spin_lock_irqsave(&task->sigactions->lock);
 		in_handler = task->in_handler;
-		spinlock_release(&task->sigactions->lock);
+		spin_unlock_irqrestore(&task->sigactions->lock, flags);
 		if (in_handler)
 			return;
 	}
@@ -301,23 +307,24 @@ static void sigaction_table_copy_locked(struct sigaction_table *dst,
 
 void signal_copy(struct task *dst, struct task *src)
 {
-	spinlock_acquire(&src->sigactions->lock);
-	spinlock_acquire(&dst->sigactions->lock);
+	irqstate_t sflags = spin_lock_irqsave(&src->sigactions->lock);
+	irqstate_t dflags = spin_lock_irqsave(&dst->sigactions->lock);
+
 	dst->pending = 0;
 	dst->blocked = src->blocked;
 	dst->in_handler = false;
 	dst->sigframe_sp = 0;
 	sigaction_table_copy_locked(dst->sigactions, src->sigactions);
-	spinlock_release(&dst->sigactions->lock);
-	spinlock_release(&src->sigactions->lock);
+	spin_unlock_irqrestore(&dst->sigactions->lock, dflags);
+	spin_unlock_irqrestore(&src->sigactions->lock, sflags);
 }
 
 u64 signal_do_sigreturn(struct task *task)
 {
 	struct user_sigframe *frame;
 	u64 ret = 0;
+	irqstate_t flags = spin_lock_irqsave(&task->sigactions->lock);
 
-	spinlock_acquire(&task->sigactions->lock);
 	if (!task->sigframe_sp) {
 		ret = -EINVAL;
 		goto unlock_and_return;
@@ -336,7 +343,7 @@ u64 signal_do_sigreturn(struct task *task)
 	ret = task->frame->a0;
 
 unlock_and_return:
-	spinlock_release(&task->sigactions->lock);
+	spin_unlock_irqrestore(&task->sigactions->lock, flags);
 	return ret;
 }
 
@@ -350,12 +357,13 @@ int signal_do_sigaction(struct task *task, int sig, const struct sigaction *act,
 	if (sig == SIGKILL || sig == SIGSTOP)
 		return -EINVAL;
 
-	spinlock_acquire(&table->lock);
+	irqstate_t flags = spin_lock_irqsave(&table->lock);
+
 	if (oact)
 		*oact = table->actions[sig];
 	if (act)
 		table->actions[sig] = *act;
-	spinlock_release(&table->lock);
+	spin_unlock_irqrestore(&table->lock, flags);
 	return 0;
 }
 
@@ -363,8 +371,8 @@ int signal_do_sigprocmask(struct task *task, int how, const sigset_t *set,
 			  sigset_t *oldset)
 {
 	sigset_t newblocked;
+	irqstate_t flags = spin_lock_irqsave(&task->sigactions->lock);
 
-	spinlock_acquire(&task->sigactions->lock);
 	if (oldset)
 		*oldset = task->blocked;
 
@@ -381,14 +389,14 @@ int signal_do_sigprocmask(struct task *task, int how, const sigset_t *set,
 			newblocked = *set;
 			break;
 		default:
-			spinlock_release(&task->lock);
+			spin_unlock_irqrestore(&task->sigactions->lock, flags);
 			return -EINVAL;
 		}
 		newblocked &= ~(1ULL << SIGKILL);
 		newblocked &= ~(1ULL << SIGSTOP);
 		task->blocked = newblocked;
 	}
-	spinlock_release(&task->sigactions->lock);
+	spin_unlock_irqrestore(&task->sigactions->lock, flags);
 	return 0;
 }
 
@@ -423,11 +431,12 @@ struct sigaction_table *sigaction_table_get(struct sigaction_table *table)
 void sigaction_table_copy(struct sigaction_table *dst,
 			  struct sigaction_table *src)
 {
-	spinlock_acquire(&src->lock);
-	spinlock_acquire(&dst->lock);
+	irqstate_t sflags = spin_lock_irqsave(&src->lock);
+	irqstate_t dflags = spin_lock_irqsave(&dst->lock);
+
 	sigaction_table_copy_locked(dst, src);
-	spinlock_release(&dst->lock);
-	spinlock_release(&src->lock);
+	spin_unlock_irqrestore(&dst->lock, dflags);
+	spin_unlock_irqrestore(&src->lock, sflags);
 }
 
 u64 sys_rt_sigaction(void)

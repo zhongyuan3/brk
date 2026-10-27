@@ -470,13 +470,13 @@ u64 sys_umount2(void)
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->lock);
+	spin_lock(&path.dentry->lock);
 	if (path.dentry->flags & DCACHE_NEGATIVE) {
-		spinlock_release(&path.dentry->lock);
+		spin_unlock(&path.dentry->lock);
 		fs_path_put(&path);
 		return -ENOENT;
 	}
-	spinlock_release(&path.dentry->lock);
+	spin_unlock(&path.dentry->lock);
 
 	struct fs_mount_state *mnt = fs_mount_state_lookup(&path);
 	if (!mnt) {

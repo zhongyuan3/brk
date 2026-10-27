@@ -85,9 +85,9 @@ static struct fs_dentry *fs_dentry_alloc(struct fs_dentry *parent,
 		return NULL;
 
 	d->parent = fs_dentry_get(parent);
-	spinlock_acquire(&parent->lock);
+	spin_lock(&parent->lock);
 	list_add(&d->child, &parent->children);
-	spinlock_release(&parent->lock);
+	spin_unlock(&parent->lock);
 
 	return d;
 }
@@ -124,13 +124,13 @@ struct fs_dentry *fs_dentry_alloc_anon(struct fs_inode *inode,
 void fs_dentry_instantiate(struct fs_dentry *dentry, struct fs_inode *inode)
 {
 	dentry->inode = inode;
-	spinlock_acquire(&inode->lock);
+	spin_lock(&inode->lock);
 	list_add(&dentry->alias, &inode->dentries);
-	spinlock_release(&inode->lock);
+	spin_unlock(&inode->lock);
 
-	spinlock_acquire(&dentry->lock);
+	spin_lock(&dentry->lock);
 	dentry->flags &= ~DCACHE_NEGATIVE;
-	spinlock_release(&dentry->lock);
+	spin_unlock(&dentry->lock);
 }
 
 struct fs_dentry *fs_dentry_get(struct fs_dentry *dentry)
@@ -158,27 +158,27 @@ void fs_dentry_put(struct fs_dentry *dentry)
 		 dentry->name.name);
 
 	if (dentry->parent != dentry) {
-		spinlock_acquire(&dentry->parent->lock);
+		spin_lock(&dentry->parent->lock);
 		list_del(&dentry->child);
-		spinlock_release(&dentry->parent->lock);
+		spin_unlock(&dentry->parent->lock);
 		fs_dentry_put(dentry->parent);
 	}
 
 	if (!(dentry->flags & DCACHE_UNHASHED)) {
 		pr_debug("removing dentry from hash table: name=%.*s\n",
 			 (int)dentry->name.len, dentry->name.name);
-		spinlock_acquire(&dentry_htable_lock);
+		spin_lock(&dentry_htable_lock);
 		ASSERT(!hlist_unhashed(&dentry->hash));
 		hlist_del_init(&dentry->hash);
-		spinlock_release(&dentry_htable_lock);
+		spin_unlock(&dentry_htable_lock);
 	}
 
 	if (!(dentry->flags & DCACHE_NEGATIVE)) {
 		inode = dentry->inode;
 
-		spinlock_acquire(&inode->lock);
+		spin_lock(&inode->lock);
 		list_del(&dentry->alias);
-		spinlock_release(&inode->lock);
+		spin_unlock(&inode->lock);
 
 		op = dentry->ops;
 		if (op->release)
@@ -199,7 +199,7 @@ static struct fs_dentry *__dentry_lookup(struct hlist_head *head,
 {
 	struct fs_dentry *dentry;
 
-	ASSERT(spinlock_holding(&dentry_htable_lock));
+	ASSERT(spin_is_locked_by_me(&dentry_htable_lock));
 
 	hlist_for_each_entry(dentry, head, hash) {
 		if (dentry->parent == parent &&
@@ -228,9 +228,9 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 	pr_debug("looking up %.*s in %.*s\n", (int)name->len, name->name,
 		 (int)parent->name.len, parent->name.name);
 
-	spinlock_acquire(&dentry_htable_lock);
+	spin_lock(&dentry_htable_lock);
 	dentry = __dentry_lookup(head, parent, name);
-	spinlock_release(&dentry_htable_lock);
+	spin_unlock(&dentry_htable_lock);
 	if (dentry) {
 		pr_debug("cache hit for %.*s\n", (int)name->len, name->name);
 		return dentry;
@@ -256,17 +256,17 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 	else
 		dentry = tmp;
 
-	spinlock_acquire(&dentry->lock);
+	spin_lock(&dentry->lock);
 	if (dentry->parent != dentry && dentry->flags & DCACHE_UNHASHED) {
 		dentry->flags &= ~DCACHE_UNHASHED;
-		spinlock_acquire(&dentry_htable_lock);
+		spin_lock(&dentry_htable_lock);
 		hlist_add_head(&dentry->hash, &dentry_htable[idx]);
-		spinlock_release(&dentry_htable_lock);
-		spinlock_release(&dentry->lock);
+		spin_unlock(&dentry_htable_lock);
+		spin_unlock(&dentry->lock);
 		pr_debug("added dentry to hash table: name=%.*s\n",
 			 (int)dentry->name.len, dentry->name.name);
 	} else {
-		spinlock_release(&dentry->lock);
+		spin_unlock(&dentry->lock);
 		pr_debug("dentry already in hash table: name=%.*s\n",
 			 (int)dentry->name.len, dentry->name.name);
 	}
@@ -285,14 +285,14 @@ struct fs_dentry *fs_dentry_splice_alias(struct fs_inode *inode,
 
 	dentries = &inode->dentries;
 
-	spinlock_acquire(&inode->lock);
+	spin_lock(&inode->lock);
 	list_for_each_entry(d, dentries, alias) {
 		if (d->parent == dentry->parent &&
 		    d->name.hash == dentry->name.hash &&
 		    d->name.len == dentry->name.len &&
 		    !d->ops->compare(d, dentry->name.len, dentry->name.name,
 				     &d->name)) {
-			spinlock_release(&inode->lock);
+			spin_unlock(&inode->lock);
 			fs_dentry_get(d);
 			dentry->flags |= DCACHE_NEGATIVE;
 			fs_dentry_put(dentry);
@@ -301,7 +301,7 @@ struct fs_dentry *fs_dentry_splice_alias(struct fs_inode *inode,
 	}
 	list_add(&dentry->alias, dentries);
 	dentry->inode = inode;
-	spinlock_release(&inode->lock);
+	spin_unlock(&inode->lock);
 
 	return dentry;
 }
@@ -342,7 +342,7 @@ void fs_dcache_dump(void)
 	struct fs_dentry *d;
 	struct hlist_head *head;
 
-	spinlock_acquire(&dentry_htable_lock);
+	spin_lock(&dentry_htable_lock);
 	printk("Dcache dump:\n");
 	for (size_t i = 0; i < DENTRY_HTABLE_SIZE; i++) {
 		head = &dentry_htable[i];
@@ -357,5 +357,5 @@ void fs_dcache_dump(void)
 			       d->flags & DCACHE_MOUNTED ? "true" : "false");
 		}
 	}
-	spinlock_release(&dentry_htable_lock);
+	spin_unlock(&dentry_htable_lock);
 }

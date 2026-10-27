@@ -28,18 +28,18 @@ struct fs_super_block *fs_super_block_alloc(struct fs_driver *driver)
 	spinlock_init(&sb->mnt_states_lock, "super_block.mnt_states_lock");
 	list_init(&sb->mnt_states);
 
-	spinlock_acquire(&sb_lock);
+	spin_lock(&sb_lock);
 	list_add_tail(&sb->list, &super_blocks);
-	spinlock_release(&sb_lock);
+	spin_unlock(&sb_lock);
 
 	return sb;
 }
 
 void fs_super_block_free(struct fs_super_block *sb)
 {
-	spinlock_acquire(&sb_lock);
+	spin_lock(&sb_lock);
 	list_del_init(&sb->list);
-	spinlock_release(&sb_lock);
+	spin_unlock(&sb_lock);
 
 	kfree(sb);
 }
@@ -104,9 +104,9 @@ int sync_filesystem(struct fs_super_block *sb)
 	 * fs_inode_mark_dirty() only links when I_DIRTY is clear) will not try
 	 * to re-link an inode that is already on the work list.
 	 */
-	spinlock_acquire(&sb->inodes_lock);
+	spin_lock(&sb->inodes_lock);
 	list_for_each_entry_safe(inode, n, &sb->dirty_inodes, list) {
-		spinlock_acquire(&inode->lock);
+		spin_lock(&inode->lock);
 		/*
 		 * Skip inodes that are on their way out, and pin the rest with
 		 * refcnt_inc_unless_zero() rather than fs_inode_get(): if
@@ -117,13 +117,13 @@ int sync_filesystem(struct fs_super_block *sb)
 		 */
 		if ((inode->state & (I_FREEING | I_WILL_FREE)) ||
 		    !refcnt_inc_unless_zero(&inode->count)) {
-			spinlock_release(&inode->lock);
+			spin_unlock(&inode->lock);
 			continue;
 		}
-		spinlock_release(&inode->lock);
+		spin_unlock(&inode->lock);
 		list_move_tail(&inode->list, &work);
 	}
-	spinlock_release(&sb->inodes_lock);
+	spin_unlock(&sb->inodes_lock);
 
 	while (!list_empty(&work)) {
 		int err;
@@ -134,13 +134,13 @@ int sync_filesystem(struct fs_super_block *sb)
 		 * inode during writeback re-links it on sb->dirty_inodes and it
 		 * is caught by a later sync.
 		 */
-		spinlock_acquire(&sb->inodes_lock);
+		spin_lock(&sb->inodes_lock);
 		inode = list_first_entry(&work, struct fs_inode, list);
 		list_del_init(&inode->list);
-		spinlock_acquire(&inode->lock);
+		spin_lock(&inode->lock);
 		inode->state &= ~I_DIRTY;
-		spinlock_release(&inode->lock);
-		spinlock_release(&sb->inodes_lock);
+		spin_unlock(&inode->lock);
+		spin_unlock(&sb->inodes_lock);
 
 		err = writeback_single_inode(inode);
 		if (err && !ret)
@@ -162,27 +162,27 @@ int sync_all_filesystems(void)
 	 * pinned sb stays linked, so we can safely read its successor after
 	 * re-taking the lock.
 	 */
-	spinlock_acquire(&sb_lock);
+	spin_lock(&sb_lock);
 	sb = list_empty(&super_blocks) ?
 		     NULL :
 		     list_first_entry(&super_blocks, struct fs_super_block,
 				      list);
 	if (sb)
 		fs_super_block_get(sb);
-	spinlock_release(&sb_lock);
+	spin_unlock(&sb_lock);
 
 	while (sb) {
 		int err = sync_filesystem(sb);
 		if (err && !ret)
 			ret = err;
 
-		spinlock_acquire(&sb_lock);
+		spin_lock(&sb_lock);
 		next = list_is_last(&sb->list, &super_blocks) ?
 			       NULL :
 			       list_next_entry(sb, list);
 		if (next)
 			fs_super_block_get(next);
-		spinlock_release(&sb_lock);
+		spin_unlock(&sb_lock);
 
 		fs_super_block_put(sb);
 		sb = next;

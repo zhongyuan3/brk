@@ -591,9 +591,9 @@ static void procfs_evict_inode(struct fs_inode *inode)
 static void procfs_put_super(struct fs_super_block *sb)
 {
 	struct fs_driver *driver = sb->driver;
-	spinlock_acquire(&driver->lock);
+	spin_lock(&driver->lock);
 	list_del(&sb->instance);
-	spinlock_release(&driver->lock);
+	spin_unlock(&driver->lock);
 	if (sb->root)
 		fs_dentry_put(sb->root);
 }
@@ -1113,9 +1113,9 @@ int procfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 
 	sb->root = fs_dentry_get(root_dentry);
 
-	spinlock_acquire(&args->driver->lock);
+	spin_lock(&args->driver->lock);
 	list_add_tail(&sb->instance, &args->driver->super_blocks);
-	spinlock_release(&args->driver->lock);
+	spin_unlock(&args->driver->lock);
 
 	result->root = root_dentry;
 	result->sb = sb;

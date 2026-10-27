@@ -75,12 +75,13 @@ static u8 ns16550a_device_read_reg(struct ns16550a_device *dev,
 static int ns16550a_device_getc(struct ns16550a_device *dev)
 {
 	int ret = 0;
-	spinlock_acquire(&dev->lock);
+	irqstate_t flags = spin_lock_irqsave(&dev->lock);
+
 	if (ns16550a_device_read_reg(dev, LSR) & LSR_RX_READY)
 		ret = ns16550a_device_read_reg(dev, RHR);
 	else
 		ret = -ENODATA;
-	spinlock_release(&dev->lock);
+	spin_unlock_irqrestore(&dev->lock, flags);
 	return ret;
 }
 
@@ -165,12 +166,13 @@ static int ns16550a_device_enable_irq(struct ns16550a_device *dev, u32 hart_id)
 static int ns16550a_device_putc(struct ns16550a_device *dev, int c)
 {
 	int ret = 0;
-	spinlock_acquire(&dev->lock);
+	irqstate_t flags = spin_lock_irqsave(&dev->lock);
+
 	if (ns16550a_device_read_reg(dev, LSR) & LSR_TX_IDLE)
 		ns16550a_device_write_reg(dev, THR, c);
 	else
 		ret = -EBUSY;
-	spinlock_release(&dev->lock);
+	spin_unlock_irqrestore(&dev->lock, flags);
 	return ret;
 }
 
@@ -267,10 +269,10 @@ int ns16550a_add_device(struct ns16550a_device *dev)
 
 	data = ns16550a_driver->driver_data;
 
-	spinlock_acquire(&ns16550a_driver->lock);
+	spin_lock(&ns16550a_driver->lock);
 	bool first = hlist_empty(&data->devices);
 	hlist_add_head(&dev->node, &data->devices);
-	spinlock_release(&ns16550a_driver->lock);
+	spin_unlock(&ns16550a_driver->lock);
 
 	if (first) {
 		ns16550a_console.client_data = dev;
@@ -290,12 +292,12 @@ int ns16550a_enable_irq(u32 hart_id)
 	struct ns16550a_driver_data *data = ns16550a_driver->driver_data;
 	int err = 0;
 
-	spinlock_acquire(&ns16550a_driver->lock);
+	spin_lock(&ns16550a_driver->lock);
 	hlist_for_each_entry(dev, &data->devices, node) {
 		err = ns16550a_device_enable_irq(dev, hart_id);
 		if (err)
 			break;
 	}
-	spinlock_release(&ns16550a_driver->lock);
+	spin_unlock(&ns16550a_driver->lock);
 	return err;
 }

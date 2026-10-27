@@ -82,13 +82,13 @@ static int graft_tree(struct fs_mount_state *new_mnt,
 	 * Stage 1 (validation):
 	 * Check mountpoint occupancy while serializing mount topology updates.
 	 */
-	spinlock_acquire(&mount_hashtable_lock);
+	spin_lock(&mount_hashtable_lock);
 	if (mount_point_busy(mp_mnt, mp_dentry)) {
-		spinlock_release(&mount_hashtable_lock);
+		spin_unlock(&mount_hashtable_lock);
 		sleeplock_release(&mount_lock);
 		return -EBUSY;
 	}
-	spinlock_release(&mount_hashtable_lock);
+	spin_unlock(&mount_hashtable_lock);
 
 	/*
 	 * Stage 2 (ownership transfer):
@@ -98,27 +98,27 @@ static int graft_tree(struct fs_mount_state *new_mnt,
 	new_mnt->mount_point = fs_dentry_get(mp_dentry);
 
 	/* Stage 3 (topology linkage): parent child list + global mount hash. */
-	spinlock_acquire(&mp_mnt->lock);
+	spin_lock(&mp_mnt->lock);
 	list_add_tail(&new_mnt->child, &mp_mnt->children);
-	spinlock_release(&mp_mnt->lock);
+	spin_unlock(&mp_mnt->lock);
 
 	/*
 	 * Publish order for follow_mount():
 	 * set DCACHE_MOUNTED first, then publish into mount hash.
 	 * This avoids false-negative windows (mounted but bit not set).
 	 */
-	spinlock_acquire(&mp_dentry->lock);
+	spin_lock(&mp_dentry->lock);
 	mp_dentry->flags |= DCACHE_MOUNTED;
-	spinlock_release(&mp_dentry->lock);
+	spin_unlock(&mp_dentry->lock);
 
-	spinlock_acquire(&mount_hashtable_lock);
+	spin_lock(&mount_hashtable_lock);
 	hlist_add_head(&new_mnt->hash, &mount_hashtable[h]);
-	spinlock_release(&mount_hashtable_lock);
+	spin_unlock(&mount_hashtable_lock);
 
 	/* Stage 4 (superblock mount list bookkeeping). */
-	spinlock_acquire(&new_mnt->sb->mnt_states_lock);
+	spin_lock(&new_mnt->sb->mnt_states_lock);
 	list_add(&new_mnt->instance, &new_mnt->sb->mnt_states);
-	spinlock_release(&new_mnt->sb->mnt_states_lock);
+	spin_unlock(&new_mnt->sb->mnt_states_lock);
 
 	sleeplock_release(&mount_lock);
 
@@ -132,14 +132,14 @@ struct fs_mount_state *fs_mount_state_lookup(const struct fs_path *path)
 	struct fs_dentry *mp_dentry = path->dentry;
 	u32 h = __mount_state_hash(mp_mnt, mp_dentry);
 	struct hlist_head *head = &mount_hashtable[h];
-	spinlock_acquire(&mount_hashtable_lock);
+	spin_lock(&mount_hashtable_lock);
 	hlist_for_each_entry(mnt, head, hash) {
 		if (mnt->parent == mp_mnt && mnt->mount_point == mp_dentry) {
-			spinlock_release(&mount_hashtable_lock);
+			spin_unlock(&mount_hashtable_lock);
 			return fs_mount_state_get(mnt);
 		}
 	}
-	spinlock_release(&mount_hashtable_lock);
+	spin_unlock(&mount_hashtable_lock);
 	return NULL;
 }
 
@@ -236,21 +236,21 @@ int do_umount(struct fs_mount_state *mnt, int flags)
 	 * remove from mount hash first, then clear DCACHE_MOUNTED.
 	 * This avoids false-negative windows during teardown.
 	 */
-	spinlock_acquire(&mount_hashtable_lock);
+	spin_lock(&mount_hashtable_lock);
 	hlist_del_init(&mnt->hash);
-	spinlock_release(&mount_hashtable_lock);
+	spin_unlock(&mount_hashtable_lock);
 
-	spinlock_acquire(&mountpoint->lock);
+	spin_lock(&mountpoint->lock);
 	mountpoint->flags &= ~DCACHE_MOUNTED;
-	spinlock_release(&mountpoint->lock);
+	spin_unlock(&mountpoint->lock);
 
-	spinlock_acquire(&parent->lock);
+	spin_lock(&parent->lock);
 	list_del(&mnt->child);
-	spinlock_release(&parent->lock);
+	spin_unlock(&parent->lock);
 
-	spinlock_acquire(&sb->mnt_states_lock);
+	spin_lock(&sb->mnt_states_lock);
 	list_del(&mnt->instance);
-	spinlock_release(&sb->mnt_states_lock);
+	spin_unlock(&sb->mnt_states_lock);
 
 	sleeplock_release(&mount_lock);
 
@@ -318,17 +318,17 @@ struct fs_mount_state *kernel_mount(struct fs_driver *driver,
 	new_mnt->mount_point = result.root;
 	new_mnt->parent = new_mnt;
 
-	spinlock_acquire(&new_mnt->lock);
+	spin_lock(&new_mnt->lock);
 	list_add_tail(&new_mnt->child, &new_mnt->children);
-	spinlock_release(&new_mnt->lock);
+	spin_unlock(&new_mnt->lock);
 
-	spinlock_acquire(&kernel_mounts_lock);
+	spin_lock(&kernel_mounts_lock);
 	hlist_add_head(&new_mnt->hash, &kernel_mounts);
-	spinlock_release(&kernel_mounts_lock);
+	spin_unlock(&kernel_mounts_lock);
 
-	spinlock_acquire(&new_mnt->sb->mnt_states_lock);
+	spin_lock(&new_mnt->sb->mnt_states_lock);
 	list_add(&new_mnt->instance, &new_mnt->sb->mnt_states);
-	spinlock_release(&new_mnt->sb->mnt_states_lock);
+	spin_unlock(&new_mnt->sb->mnt_states_lock);
 
 	return fs_mount_state_get(new_mnt);
 }
@@ -348,17 +348,17 @@ int kernel_umount(struct fs_mount_state *mnt)
 	if (refcnt < 2)
 		return -EINVAL;
 
-	spinlock_acquire(&kernel_mounts_lock);
+	spin_lock(&kernel_mounts_lock);
 	hlist_del_init(&mnt->hash);
-	spinlock_release(&kernel_mounts_lock);
+	spin_unlock(&kernel_mounts_lock);
 
-	spinlock_acquire(&mnt->parent->lock);
+	spin_lock(&mnt->parent->lock);
 	list_del(&mnt->child);
-	spinlock_release(&mnt->parent->lock);
+	spin_unlock(&mnt->parent->lock);
 
-	spinlock_acquire(&mnt->sb->mnt_states_lock);
+	spin_lock(&mnt->sb->mnt_states_lock);
 	list_del(&mnt->instance);
-	spinlock_release(&mnt->sb->mnt_states_lock);
+	spin_unlock(&mnt->sb->mnt_states_lock);
 
 	fs_mount_state_put(mnt);
 

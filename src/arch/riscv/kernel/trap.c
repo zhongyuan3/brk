@@ -168,8 +168,17 @@ static void handle_interrupt(unsigned long code, struct riscv_trap_frame *frame,
 		handle_tick();
 		if (from_user)
 			signal_deliver_pending(task);
-		if (task && --task->time_slice <= 0)
-			task_yield();
+		if (task && --task->time_slice <= 0) {
+			/*
+			 * Plain spinlocks and explicit preempt_disable()
+			 * sections bump preempt_count. Do not switch away
+			 * while such a section is active, or another task
+			 * could spin forever on a lock held by the preempted
+			 * context.
+			 */
+			if (preempt_count() == 0)
+				task_yield();
+		}
 		break;
 	case INTERRUPT_SUPERVISOR_EXTERNAL:
 		irq_handle_external(this_cpuid());

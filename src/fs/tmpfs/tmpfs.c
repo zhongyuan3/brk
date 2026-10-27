@@ -628,9 +628,9 @@ int tmpfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 
 	sb->root = fs_dentry_get(root_dentry);
 
-	spinlock_acquire(&args->driver->lock);
+	spin_lock(&args->driver->lock);
 	list_add_tail(&sb->instance, &args->driver->super_blocks);
-	spinlock_release(&args->driver->lock);
+	spin_unlock(&args->driver->lock);
 
 	result->root = root_dentry;
 	result->sb = sb;
@@ -677,9 +677,9 @@ static void tmpfs_put_super(struct fs_super_block *sb)
 	struct tmpfs_super_block *t_sb = sb->private_data;
 	struct fs_driver *driver = sb->driver;
 
-	spinlock_acquire(&driver->lock);
+	spin_lock(&driver->lock);
 	list_del(&sb->instance);
-	spinlock_release(&driver->lock);
+	spin_unlock(&driver->lock);
 
 	fs_dentry_put(sb->root);
 	sb->root = NULL;
@@ -717,9 +717,9 @@ tmpfs_lookup(struct fs_inode *dir, struct fs_dentry *dentry, unsigned int flags)
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 
-	spinlock_acquire(&inode->lock);
+	spin_lock(&inode->lock);
 	bool is_new = (inode->state & I_NEW) != 0;
-	spinlock_release(&inode->lock);
+	spin_unlock(&inode->lock);
 	if (is_new && tmpfs_init_new_inode(t_sb, inode)) {
 		fs_inode_put(inode);
 		return ERR_PTR(-EIO);

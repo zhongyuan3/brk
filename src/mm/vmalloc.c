@@ -237,17 +237,17 @@ int kvmap_with_mode(u64 addr, size_t size, u64 paddr, unsigned int flags,
 {
 	int ret;
 	size = round_up(size, PAGE_SIZE);
-	spinlock_acquire(&kernel_pgdir_lock);
+	spin_lock(&kernel_pgdir_lock);
 	ret = vmap(kernel_pgdir, addr, size, paddr, flags, mode);
-	spinlock_release(&kernel_pgdir_lock);
+	spin_unlock(&kernel_pgdir_lock);
 	return ret;
 }
 
 void kvunmap(u64 addr, size_t size)
 {
-	spinlock_acquire(&kernel_pgdir_lock);
+	spin_lock(&kernel_pgdir_lock);
 	vunmap(kernel_pgdir, addr, size, VMAP_MODE_FINAL);
-	spinlock_release(&kernel_pgdir_lock);
+	spin_unlock(&kernel_pgdir_lock);
 }
 
 int uvmap(pgd_t *pgd, u64 addr, size_t size, u64 paddr, unsigned int flags)
@@ -354,13 +354,13 @@ void vmalloc_init(void)
 
 void *vmalloc(size_t size)
 {
-	spinlock_acquire(&vma_lock);
+	spin_lock(&vma_lock);
 
 	size = round_up(size, PAGE_SIZE);
 
 	struct vmalloc_region *area = find_free_vm_area(size);
 	if (!area) {
-		spinlock_release(&vma_lock);
+		spin_unlock(&vma_lock);
 		return NULL;
 	}
 
@@ -369,7 +369,7 @@ void *vmalloc(size_t size)
 	area->pages = kcalloc(npgs, sizeof(struct page *));
 	if (!area->pages) {
 		free_vm_area(area);
-		spinlock_release(&vma_lock);
+		spin_unlock(&vma_lock);
 		return NULL;
 	}
 	area->nr_pages = npgs;
@@ -389,7 +389,7 @@ void *vmalloc(size_t size)
 		vaddr += PAGE_SIZE;
 	}
 
-	spinlock_release(&vma_lock);
+	spin_unlock(&vma_lock);
 	return (void *)(uintptr_t)area->addr;
 
 out_cleanup:
@@ -399,7 +399,7 @@ out_cleanup:
 	}
 	kfree(area->pages);
 	free_vm_area(area);
-	spinlock_release(&vma_lock);
+	spin_unlock(&vma_lock);
 	return NULL;
 }
 
@@ -407,10 +407,10 @@ void vfree(void *ptr)
 {
 	struct vmalloc_region *area;
 
-	spinlock_acquire(&vma_lock);
+	spin_lock(&vma_lock);
 	area = find_vm_area((uintptr_t)ptr);
 	if (!area || area->is_free) {
-		spinlock_release(&vma_lock);
+		spin_unlock(&vma_lock);
 		return;
 	}
 
@@ -421,16 +421,16 @@ void vfree(void *ptr)
 	}
 	kfree(area->pages);
 	free_vm_area(area);
-	spinlock_release(&vma_lock);
+	spin_unlock(&vma_lock);
 }
 
 void *vmalloc_nomap(size_t size)
 {
 	struct vmalloc_region *area;
 
-	spinlock_acquire(&vma_lock);
+	spin_lock(&vma_lock);
 	area = find_free_vm_area(round_up(size, PAGE_SIZE));
-	spinlock_release(&vma_lock);
+	spin_unlock(&vma_lock);
 	if (!area)
 		return NULL;
 
@@ -441,12 +441,12 @@ void vfree_nomap(void *ptr)
 {
 	struct vmalloc_region *area;
 
-	spinlock_acquire(&vma_lock);
+	spin_lock(&vma_lock);
 	area = find_vm_area((uintptr_t)ptr);
 	if (!area || area->is_free) {
-		spinlock_release(&vma_lock);
+		spin_unlock(&vma_lock);
 		return;
 	}
 	free_vm_area(area);
-	spinlock_release(&vma_lock);
+	spin_unlock(&vma_lock);
 }

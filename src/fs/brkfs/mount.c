@@ -143,9 +143,9 @@ int brkfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 
 	sb->root = fs_dentry_get(root_dentry);
 
-	spinlock_acquire(&args->driver->lock);
+	spin_lock(&args->driver->lock);
 	list_add_tail(&sb->instance, &args->driver->super_blocks);
-	spinlock_release(&args->driver->lock);
+	spin_unlock(&args->driver->lock);
 
 	result->root = root_dentry;
 	result->sb = sb;

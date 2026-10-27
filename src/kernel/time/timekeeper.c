@@ -59,10 +59,11 @@ void timekeeper_init(void)
 		wall_ns = 0;
 	}
 
-	spinlock_acquire(&tk_lock);
+	irqstate_t flags = spin_lock_irqsave(&tk_lock);
+
 	wall_to_mono_ns = (i64)wall_ns;
 	jiffies = 0;
-	spinlock_release(&tk_lock);
+	spin_unlock_irqrestore(&tk_lock, flags);
 
 	initialized = true;
 
@@ -71,18 +72,19 @@ void timekeeper_init(void)
 
 void timekeeper_tick(void)
 {
-	spinlock_acquire(&tk_lock);
+	irqstate_t flags = spin_lock_irqsave(&tk_lock);
+
 	++jiffies;
-	spinlock_release(&tk_lock);
+	spin_unlock_irqrestore(&tk_lock, flags);
 }
 
 u64 jiffies_get(void)
 {
 	u64 j;
+	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 
-	spinlock_acquire(&tk_lock);
 	j = jiffies;
-	spinlock_release(&tk_lock);
+	spin_unlock_irqrestore(&tk_lock, flags);
 	return j;
 }
 
@@ -100,10 +102,10 @@ void timekeeper_get_real_ts(struct timespec *ts)
 {
 	i64 wtm;
 	i64 real_ns;
+	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 
-	spinlock_acquire(&tk_lock);
 	wtm = wall_to_mono_ns;
-	spinlock_release(&tk_lock);
+	spin_unlock_irqrestore(&tk_lock, flags);
 
 	real_ns = (i64)timekeeper_mono_ns() + wtm;
 	ns_to_ts(real_ns, ts);
@@ -113,10 +115,10 @@ void timekeeper_set_real_ts(const struct timespec *ts)
 {
 	u64 new_wall_ns = (u64)ts->tv_sec * NS_PER_SEC + (u64)ts->tv_nsec;
 	u64 mono_ns = timekeeper_mono_ns();
+	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 
-	spinlock_acquire(&tk_lock);
 	wall_to_mono_ns = (i64)new_wall_ns - (i64)mono_ns;
-	spinlock_release(&tk_lock);
+	spin_unlock_irqrestore(&tk_lock, flags);
 
 	if (rtc_is_available())
 		rtc_set_timespec(ts);
@@ -127,13 +129,13 @@ u64 timekeeper_nanosleep(const struct timespec *dur, struct timespec *rem)
 	i64 start_ns = (i64)timekeeper_mono_ns();
 	i64 deadline_ns = start_ns + timespec_to_ns(dur);
 	i64 now_ns;
+	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 
-	spinlock_acquire(&tk_lock);
 	for (;;) {
 		if (task_is_killed(current_task())) {
 			i64 left_ns;
 
-			spinlock_release(&tk_lock);
+			spin_unlock_irqrestore(&tk_lock, flags);
 			now_ns = (i64)timekeeper_mono_ns();
 			left_ns = deadline_ns - now_ns;
 			if (left_ns < 0)
@@ -146,7 +148,7 @@ u64 timekeeper_nanosleep(const struct timespec *dur, struct timespec *rem)
 			break;
 		task_sleep(&jiffies, &tk_lock);
 	}
-	spinlock_release(&tk_lock);
+	spin_unlock_irqrestore(&tk_lock, flags);
 
 	rem->tv_sec = 0;
 	rem->tv_nsec = 0;

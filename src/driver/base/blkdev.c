@@ -128,19 +128,19 @@ int blkdev_register(struct block_dev *bd)
 
 	if (!bd || !IS_BLKDEV(dev))
 		return -EINVAL;
-	spinlock_acquire(&bd_lock);
+	spin_lock(&bd_lock);
 	if (!blkdev_minor_is_allocated(MAJOR(dev), MINOR(dev))) {
-		spinlock_release(&bd_lock);
+		spin_unlock(&bd_lock);
 		return -EINVAL;
 	}
-	spinlock_release(&bd_lock);
+	spin_unlock(&bd_lock);
 
 	pr_debug("%s: devtype=%" PRIu32 ", major=%u, minor=%u\n", __func__,
 		   DEVTYPE(dev), MAJOR(dev), MINOR(dev));
 
-	spinlock_acquire(&bd_htable_lock);
+	spin_lock(&bd_htable_lock);
 	hlist_add_head(&bd->hlist, &bd_htable[MAJOR(dev)]);
-	spinlock_release(&bd_htable_lock);
+	spin_unlock(&bd_htable_lock);
 
 	return 0;
 }
@@ -159,9 +159,9 @@ static struct block_dev *blkdev_get_no_lock(dev_t dev)
 
 void blkdev_unregister(struct block_dev *bd)
 {
-	spinlock_acquire(&bd_htable_lock);
+	spin_lock(&bd_htable_lock);
 	hlist_del_init(&bd->hlist);
-	spinlock_release(&bd_htable_lock);
+	spin_unlock(&bd_htable_lock);
 }
 
 struct block_dev *blkdev_get(dev_t dev)
@@ -171,9 +171,9 @@ struct block_dev *blkdev_get(dev_t dev)
 	pr_debug("%s: devtype=%" PRIu32 ", major=%u, minor=%u\n", __func__,
 		   DEVTYPE(dev), MAJOR(dev), MINOR(dev));
 
-	spinlock_acquire(&bd_htable_lock);
+	spin_lock(&bd_htable_lock);
 	bd = blkdev_get_no_lock(dev);
-	spinlock_release(&bd_htable_lock);
+	spin_unlock(&bd_htable_lock);
 	return bd;
 }
 
@@ -184,9 +184,9 @@ int blkdev_alloc_major(unsigned *major_out)
 	if (!major_out)
 		return -EINVAL;
 
-	spinlock_acquire(&bd_lock);
+	spin_lock(&bd_lock);
 	err = blkdev_alloc_major_no_lock(0, major_out);
-	spinlock_release(&bd_lock);
+	spin_unlock(&bd_lock);
 	return err;
 }
 
@@ -195,9 +195,9 @@ void blkdev_free_major(unsigned major)
 	if (major >= MAJOR_MAX)
 		return;
 
-	spinlock_acquire(&bd_lock);
+	spin_lock(&bd_lock);
 	blkdev_free_major_no_lock(major);
-	spinlock_release(&bd_lock);
+	spin_unlock(&bd_lock);
 }
 
 int blkdev_alloc_minor(unsigned major, unsigned *minor_out)
@@ -208,13 +208,13 @@ int blkdev_alloc_minor(unsigned major, unsigned *minor_out)
 	if (major >= MAJOR_MAX || !minor_out)
 		return -EINVAL;
 
-	spinlock_acquire(&bd_lock);
+	spin_lock(&bd_lock);
 	if (!bitmap_test_bit(bd_major_pooled, major)) {
-		spinlock_release(&bd_lock);
+		spin_unlock(&bd_lock);
 		return -EINVAL;
 	}
 	err = blkdev_alloc_region_no_lock(major, 0, 1, &dev);
-	spinlock_release(&bd_lock);
+	spin_unlock(&bd_lock);
 
 	if (err)
 		return err;
@@ -235,9 +235,9 @@ int blkdev_alloc_region(unsigned major, unsigned base_minor, unsigned count,
 	if (major >= MAJOR_MAX || count == 0 || !dev_out)
 		return -EINVAL;
 
-	spinlock_acquire(&bd_lock);
+	spin_lock(&bd_lock);
 	ret = blkdev_alloc_region_no_lock(major, base_minor, count, dev_out);
-	spinlock_release(&bd_lock);
+	spin_unlock(&bd_lock);
 
 	return ret;
 }
@@ -249,24 +249,24 @@ void blkdev_free_region(unsigned major, unsigned minor, unsigned count)
 	if (major >= MAJOR_MAX || minor + count > MINOR_MAX)
 		return;
 
-	spinlock_acquire(&bd_lock);
+	spin_lock(&bd_lock);
 	hlist_for_each_entry(curr, &bd_regs[major], entry) {
 		if (curr->minor_start + curr->minor_count <= minor)
 			continue;
 
 		if (curr->minor_start == minor && curr->minor_count == count) {
 			hlist_del_init(&curr->entry);
-			spinlock_release(&bd_lock);
+			spin_unlock(&bd_lock);
 			kfree(curr);
 			return;
 		}
 
 		pr_err("%s: region %u+%u does not match %u+%u", __func__,
 			   curr->minor_start, curr->minor_count, minor, count);
-		spinlock_release(&bd_lock);
+		spin_unlock(&bd_lock);
 		return;
 	}
-	spinlock_release(&bd_lock);
+	spin_unlock(&bd_lock);
 	pr_err("%s: no region at minor %u count %u", __func__, minor,
 		   count);
 }

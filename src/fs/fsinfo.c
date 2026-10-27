@@ -23,10 +23,10 @@ void fsinfo_put(struct file_system_info *info)
 	if (refcnt_dec_fetch(&info->refcnt) > 0)
 		return;
 
-	spinlock_acquire(&info->lock);
+	spin_lock(&info->lock);
 	fs_path_put(&info->cwd);
 	fs_path_put(&info->root);
-	spinlock_release(&info->lock);
+	spin_unlock(&info->lock);
 
 	kfree(info);
 }
@@ -39,68 +39,68 @@ struct file_system_info *fsinfo_get(struct file_system_info *info)
 
 void fsinfo_copy(struct file_system_info *dst, struct file_system_info *src)
 {
-	spinlock_acquire(&src->lock);
-	spinlock_acquire(&dst->lock);
+	spin_lock(&src->lock);
+	spin_lock(&dst->lock);
 	fs_path_get(&src->cwd);
 	dst->cwd = src->cwd;
 	fs_path_get(&src->root);
 	dst->root = src->root;
-	spinlock_release(&dst->lock);
-	spinlock_release(&src->lock);
+	spin_unlock(&dst->lock);
+	spin_unlock(&src->lock);
 }
 
 void fsinfo_set_cwd(struct file_system_info *info, struct fs_path *path)
 {
-	spinlock_acquire(&info->lock);
+	spin_lock(&info->lock);
 	info->cwd = *path;
-	spinlock_release(&info->lock);
+	spin_unlock(&info->lock);
 }
 
 void fsinfo_set_root(struct file_system_info *info, struct fs_path *path)
 {
-	spinlock_acquire(&info->lock);
+	spin_lock(&info->lock);
 	info->root = *path;
-	spinlock_release(&info->lock);
+	spin_unlock(&info->lock);
 }
 
 void fsinfo_update_cwd(struct file_system_info *info, struct fs_path *path)
 {
-	spinlock_acquire(&info->lock);
+	spin_lock(&info->lock);
 	fs_path_put(&info->cwd);
 	info->cwd = *path;
-	spinlock_release(&info->lock);
+	spin_unlock(&info->lock);
 }
 
 void fsinfo_update_root(struct file_system_info *info, struct fs_path *path)
 {
-	spinlock_acquire(&info->lock);
+	spin_lock(&info->lock);
 	fs_path_put(&info->root);
 	info->root = *path;
-	spinlock_release(&info->lock);
+	spin_unlock(&info->lock);
 }
 
 void fsinfo_get_cwd(struct file_system_info *info, struct fs_path *path)
 {
-	spinlock_acquire(&info->lock);
+	spin_lock(&info->lock);
 	fs_path_get(&info->cwd);
 	*path = info->cwd;
-	spinlock_release(&info->lock);
+	spin_unlock(&info->lock);
 }
 
 void fsinfo_get_root(struct file_system_info *info, struct fs_path *path)
 {
-	spinlock_acquire(&info->lock);
+	spin_lock(&info->lock);
 	fs_path_get(&info->root);
 	*path = info->root;
-	spinlock_release(&info->lock);
+	spin_unlock(&info->lock);
 }
 
 void fsinfo_free_resources(struct file_system_info *info)
 {
-	spinlock_acquire(&info->lock);
+	spin_lock(&info->lock);
 	fs_path_put(&info->cwd);
 	fs_path_put(&info->root);
 	info->cwd = (struct fs_path){ 0 };
 	info->root = (struct fs_path){ 0 };
-	spinlock_release(&info->lock);
+	spin_unlock(&info->lock);
 }

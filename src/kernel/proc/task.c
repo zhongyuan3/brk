@@ -47,9 +47,9 @@ pid_t pid_alloc(void)
 {
 	pid_t pid;
 
-	spinlock_acquire(&pid_lock);
+	spin_lock(&pid_lock);
 	pid = curr_pid++;
-	spinlock_release(&pid_lock);
+	spin_unlock(&pid_lock);
 	return pid;
 }
 
@@ -188,9 +188,9 @@ struct task *task_create(struct task_create_args *args)
 	if (err)
 		goto signal_init_failed;
 
-	spinlock_acquire(&tasks_lock);
+	spin_lock(&tasks_lock);
 	list_add_tail(&task->list, &tasks);
-	spinlock_release(&tasks_lock);
+	spin_unlock(&tasks_lock);
 
 	return task;
 
@@ -215,9 +215,9 @@ pid_alloc_failed:
 
 void task_destroy(struct task *task)
 {
-	spinlock_acquire(&tasks_lock);
+	spin_lock(&tasks_lock);
 	list_del_init(&task->list);
-	spinlock_release(&tasks_lock);
+	spin_unlock(&tasks_lock);
 
 	signal_deinit(task);
 	if (task_is_leader(task))
@@ -233,8 +233,16 @@ void task_destroy(struct task *task)
 static void complete_task_switch(void)
 {
 	task_sched_resume();
+
 	struct task *task = current_task();
-	spinlock_release(&task->lock);
+	raw_spin_unlock(&task->lock);
+
+	/*
+	 * The switch path always runs with interrupts disabled. A task enters
+	 * its kernel entry trampoline for the first time here, so this is the
+	 * point where normal interrupt handling resumes.
+	 */
+	local_irq_enable();
 }
 
 void init_task_do(void)
@@ -276,11 +284,11 @@ void task_init_user(void)
 	if (IS_ERR(initial_task))
 		panic("failed to create initial user task: %s\n",
 		      strerror(PTR_ERR(initial_task)));
-	spinlock_acquire(&initial_task->lock);
+	irqstate_t flags = spin_lock_irqsave(&initial_task->lock);
+
 	strlcpy(initial_task->name, "init", sizeof(initial_task->name));
 	initial_task->state = TASK_STATE_RUNNING;
-	initial_task->irq_enabled = true;
-	spinlock_release(&initial_task->lock);
+	spin_unlock_irqrestore(&initial_task->lock, flags);
 	task_join(initial_task);
 }
 device_initcall(task_init_user);
@@ -391,7 +399,7 @@ int task_snapshot_pids(pid_t *out, int max)
 	if (!out || max <= 0)
 		return 0;
 
-	spinlock_acquire(&tasks_lock);
+	spin_lock(&tasks_lock);
 	list_for_each_entry(p, &tasks, list) {
 		bool dup;
 		int i;
@@ -408,7 +416,7 @@ int task_snapshot_pids(pid_t *out, int max)
 		if (!dup)
 			out[n++] = p->tgid;
 	}
-	spinlock_release(&tasks_lock);
+	spin_unlock(&tasks_lock);
 	return n;
 }
 
@@ -416,9 +424,9 @@ bool task_pid_exists(pid_t tgid)
 {
 	bool found;
 
-	spinlock_acquire(&tasks_lock);
+	spin_lock(&tasks_lock);
 	found = task_find_by_tgid_locked(tgid) != NULL;
-	spinlock_release(&tasks_lock);
+	spin_unlock(&tasks_lock);
 	return found;
 }
 
@@ -430,10 +438,10 @@ bool task_get_info(pid_t tgid, struct task_info *info)
 	if (!info)
 		return false;
 
-	spinlock_acquire(&tasks_lock);
+	spin_lock(&tasks_lock);
 	target = task_find_by_tgid_locked(tgid);
 	if (!target) {
-		spinlock_release(&tasks_lock);
+		spin_unlock(&tasks_lock);
 		return false;
 	}
 
@@ -447,7 +455,8 @@ bool task_get_info(pid_t tgid, struct task_info *info)
 	par = target->parent;
 	info->ppid = par ? par->tgid : 0;
 
-	spinlock_acquire(&target->lock);
+	irqstate_t flags = spin_lock_irqsave(&target->lock);
+
 	info->pid = target->tgid;
 	info->state = target->state;
 	info->exit_status = target->exit_status;
@@ -460,10 +469,10 @@ bool task_get_info(pid_t tgid, struct task_info *info)
 			break;
 	}
 	info->name[TASK_NAME_MAX - 1] = '\0';
-	spinlock_release(&target->lock);
+	spin_unlock_irqrestore(&target->lock, flags);
 	info->killed = signal_pending(target);
 
-	spinlock_release(&tasks_lock);
+	spin_unlock(&tasks_lock);
 	return true;
 }
 
@@ -478,7 +487,7 @@ void task_dump(void)
 	struct task *task;
 	char *state;
 
-	spinlock_acquire(&tasks_lock);
+	spin_lock(&tasks_lock);
 	printk("\n");
 	list_for_each_entry(task, &tasks, list) {
 		if (task->state >= 0 && task->state < countof(state_strs) &&
@@ -488,7 +497,7 @@ void task_dump(void)
 			state = "???    ";
 		printk("%ld %s %s\n", task->pid, state, task->name);
 	}
-	spinlock_release(&tasks_lock);
+	spin_unlock(&tasks_lock);
 }
 
 int task_fork(void)
@@ -518,15 +527,16 @@ int task_fork(void)
 
 	child->frame->a0 = 0;
 
-	spinlock_acquire(&wait_lock);
+	irqstate_t flags = spin_lock_irqsave(&wait_lock);
+
 	child->parent = parent;
 	list_add(&child->child, &parent->children);
-	spinlock_release(&wait_lock);
+	spin_unlock_irqrestore(&wait_lock, flags);
 
-	spinlock_acquire(&child->lock);
+	flags = spin_lock_irqsave(&child->lock);
 	cpid = child->tgid;
 	child->state = TASK_STATE_RUNNING;
-	spinlock_release(&child->lock);
+	spin_unlock_irqrestore(&child->lock, flags);
 
 	child->newly_forked = true;
 
@@ -540,10 +550,10 @@ int task_get_times(struct task *task, struct tms *times)
 	if (!task || !task->rsrc_usage)
 		return -EINVAL;
 
-	spinlock_acquire(&task->rsrc_usage->lock);
+	spin_lock(&task->rsrc_usage->lock);
 	if (times)
 		*times = task->rsrc_usage->task_times;
-	spinlock_release(&task->rsrc_usage->lock);
+	spin_unlock(&task->rsrc_usage->lock);
 
 	return 0;
 }
@@ -553,9 +563,9 @@ void task_add_system_time(struct task *task, u64 time)
 	if (!task || !task->rsrc_usage)
 		return;
 
-	spinlock_acquire(&task->rsrc_usage->lock);
+	spin_lock(&task->rsrc_usage->lock);
 	task->rsrc_usage->task_times.tms_stime += time;
-	spinlock_release(&task->rsrc_usage->lock);
+	spin_unlock(&task->rsrc_usage->lock);
 }
 
 void task_add_user_time(struct task *task, u64 time)
@@ -563,9 +573,9 @@ void task_add_user_time(struct task *task, u64 time)
 	if (!task || !task->rsrc_usage)
 		return;
 
-	spinlock_acquire(&task->rsrc_usage->lock);
+	spin_lock(&task->rsrc_usage->lock);
 	task->rsrc_usage->task_times.tms_utime += time;
-	spinlock_release(&task->rsrc_usage->lock);
+	spin_unlock(&task->rsrc_usage->lock);
 }
 
 void task_add_child_system_time(struct task *task, u64 time)
@@ -573,9 +583,9 @@ void task_add_child_system_time(struct task *task, u64 time)
 	if (!task || !task->rsrc_usage)
 		return;
 
-	spinlock_acquire(&task->rsrc_usage->lock);
+	spin_lock(&task->rsrc_usage->lock);
 	task->rsrc_usage->task_times.tms_cstime += time;
-	spinlock_release(&task->rsrc_usage->lock);
+	spin_unlock(&task->rsrc_usage->lock);
 }
 
 void task_add_child_user_time(struct task *task, u64 time)
@@ -583,9 +593,9 @@ void task_add_child_user_time(struct task *task, u64 time)
 	if (!task || !task->rsrc_usage)
 		return;
 
-	spinlock_acquire(&task->rsrc_usage->lock);
+	spin_lock(&task->rsrc_usage->lock);
 	task->rsrc_usage->task_times.tms_cutime += time;
-	spinlock_release(&task->rsrc_usage->lock);
+	spin_unlock(&task->rsrc_usage->lock);
 }
 
 u64 task_get_system_time(struct task *task)
@@ -595,9 +605,9 @@ u64 task_get_system_time(struct task *task)
 	if (!task || !task->rsrc_usage)
 		return 0;
 
-	spinlock_acquire(&task->rsrc_usage->lock);
+	spin_lock(&task->rsrc_usage->lock);
 	time = task->rsrc_usage->task_times.tms_stime;
-	spinlock_release(&task->rsrc_usage->lock);
+	spin_unlock(&task->rsrc_usage->lock);
 
 	return time;
 }
@@ -609,9 +619,9 @@ u64 task_get_user_time(struct task *task)
 	if (!task || !task->rsrc_usage)
 		return 0;
 
-	spinlock_acquire(&task->rsrc_usage->lock);
+	spin_lock(&task->rsrc_usage->lock);
 	time = task->rsrc_usage->task_times.tms_utime;
-	spinlock_release(&task->rsrc_usage->lock);
+	spin_unlock(&task->rsrc_usage->lock);
 
 	return time;
 }
@@ -623,9 +633,9 @@ u64 task_get_child_system_time(struct task *task)
 	if (!task || !task->rsrc_usage)
 		return 0;
 
-	spinlock_acquire(&task->rsrc_usage->lock);
+	spin_lock(&task->rsrc_usage->lock);
 	time = task->rsrc_usage->task_times.tms_cstime;
-	spinlock_release(&task->rsrc_usage->lock);
+	spin_unlock(&task->rsrc_usage->lock);
 
 	return time;
 }
@@ -637,9 +647,9 @@ u64 task_get_child_user_time(struct task *task)
 	if (!task || !task->rsrc_usage)
 		return 0;
 
-	spinlock_acquire(&task->rsrc_usage->lock);
+	spin_lock(&task->rsrc_usage->lock);
 	time = task->rsrc_usage->task_times.tms_cutime;
-	spinlock_release(&task->rsrc_usage->lock);
+	spin_unlock(&task->rsrc_usage->lock);
 
 	return time;
 }
@@ -689,9 +699,10 @@ struct task *kthread_create(void (*fn)(void *), void *data)
 
 void kthread_join(struct task *kthread)
 {
-	spinlock_acquire(&kthread->lock);
+	irqstate_t flags = spin_lock_irqsave(&kthread->lock);
+
 	kthread->state = TASK_STATE_RUNNING;
-	spinlock_release(&kthread->lock);
+	spin_unlock_irqrestore(&kthread->lock, flags);
 	task_join(kthread);
 }
 

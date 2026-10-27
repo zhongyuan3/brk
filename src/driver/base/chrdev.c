@@ -134,16 +134,16 @@ int chrdev_register(struct char_dev *cd)
 		return -EINVAL;
 	if (!cd->fops || !cd->fops->open)
 		return -EINVAL;
-	spinlock_acquire(&cd_lock);
+	spin_lock(&cd_lock);
 	if (!chrdev_minor_is_allocated(MAJOR(cd->dev), MINOR(cd->dev))) {
-		spinlock_release(&cd_lock);
+		spin_unlock(&cd_lock);
 		return -EINVAL;
 	}
-	spinlock_release(&cd_lock);
+	spin_unlock(&cd_lock);
 
-	spinlock_acquire(&cd_htable_lock);
+	spin_lock(&cd_htable_lock);
 	hlist_add_head(&cd->hlist, &cd_htable[MAJOR(cd->dev)]);
-	spinlock_release(&cd_htable_lock);
+	spin_unlock(&cd_htable_lock);
 
 	return 0;
 }
@@ -162,16 +162,16 @@ static struct char_dev *chrdev_get_no_lock(dev_t dev)
 
 void chrdev_unregister(struct char_dev *cd)
 {
-	spinlock_acquire(&cd_htable_lock);
+	spin_lock(&cd_htable_lock);
 	hlist_del_init(&cd->hlist);
-	spinlock_release(&cd_htable_lock);
+	spin_unlock(&cd_htable_lock);
 }
 
 struct char_dev *chrdev_get(dev_t dev)
 {
-	spinlock_acquire(&cd_htable_lock);
+	spin_lock(&cd_htable_lock);
 	struct char_dev *cd = chrdev_get_no_lock(dev);
-	spinlock_release(&cd_htable_lock);
+	spin_unlock(&cd_htable_lock);
 	return cd;
 }
 
@@ -182,9 +182,9 @@ int chrdev_alloc_major(unsigned *major_out)
 	if (!major_out)
 		return -EINVAL;
 
-	spinlock_acquire(&cd_lock);
+	spin_lock(&cd_lock);
 	err = chrdev_alloc_major_no_lock(0, major_out);
-	spinlock_release(&cd_lock);
+	spin_unlock(&cd_lock);
 	return err;
 }
 
@@ -193,9 +193,9 @@ void chrdev_free_major(unsigned major)
 	if (major >= MAJOR_MAX)
 		return;
 
-	spinlock_acquire(&cd_lock);
+	spin_lock(&cd_lock);
 	chrdev_free_major_no_lock(major);
-	spinlock_release(&cd_lock);
+	spin_unlock(&cd_lock);
 }
 
 int chrdev_alloc_minor(unsigned major, unsigned *minor_out)
@@ -206,13 +206,13 @@ int chrdev_alloc_minor(unsigned major, unsigned *minor_out)
 	if (major >= MAJOR_MAX || !minor_out)
 		return -EINVAL;
 
-	spinlock_acquire(&cd_lock);
+	spin_lock(&cd_lock);
 	if (!bitmap_test_bit(cd_major_pooled, major)) {
-		spinlock_release(&cd_lock);
+		spin_unlock(&cd_lock);
 		return -EINVAL;
 	}
 	err = chrdev_alloc_region_no_lock(major, 0, 1, &dev);
-	spinlock_release(&cd_lock);
+	spin_unlock(&cd_lock);
 
 	if (err)
 		return err;
@@ -233,9 +233,9 @@ int chrdev_alloc_region(unsigned major, unsigned base_minor, unsigned count,
 	if (major >= MAJOR_MAX || count == 0 || !dev_out)
 		return -EINVAL;
 
-	spinlock_acquire(&cd_lock);
+	spin_lock(&cd_lock);
 	ret = chrdev_alloc_region_no_lock(major, base_minor, count, dev_out);
-	spinlock_release(&cd_lock);
+	spin_unlock(&cd_lock);
 
 	return ret;
 }
@@ -247,24 +247,24 @@ void chrdev_free_region(unsigned major, unsigned minor, unsigned count)
 	if (major >= MAJOR_MAX || minor + count > MINOR_MAX)
 		return;
 
-	spinlock_acquire(&cd_lock);
+	spin_lock(&cd_lock);
 	hlist_for_each_entry(curr, &cd_regs[major], entry) {
 		if (curr->minor_start + curr->minor_count <= minor)
 			continue;
 
 		if (curr->minor_start == minor && curr->minor_count == count) {
 			hlist_del_init(&curr->entry);
-			spinlock_release(&cd_lock);
+			spin_unlock(&cd_lock);
 			kfree(curr);
 			return;
 		}
 
 		pr_err("%s: region %u+%u does not match %u+%u", __func__,
 			   curr->minor_start, curr->minor_count, minor, count);
-		spinlock_release(&cd_lock);
+		spin_unlock(&cd_lock);
 		return;
 	}
-	spinlock_release(&cd_lock);
+	spin_unlock(&cd_lock);
 	pr_err("%s: no region at minor %u count %u", __func__, minor,
 		   count);
 }

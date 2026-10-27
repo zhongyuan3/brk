@@ -102,7 +102,6 @@ struct task {
 	u64 utime; /* no lock protection */
 	int time_slice; /* no lock protection */
 	char name[TASK_NAME_MAX]; /* no lock protection */
-	bool irq_enabled; /* no lock protection */
 	bool newly_forked; /* no lock protection */
 	void (*kthrd_fn)(void *); /* no lock protection */
 	void *kthrd_data; /* no lock protection */
