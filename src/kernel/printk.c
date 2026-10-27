@@ -114,7 +114,7 @@ static void vprintk_locked(int level, const char *fmt, va_list ap)
 void vprintk(char const *fmt, va_list ap)
 {
 	spinlock_acquire(&printk_lock);
-	vprintk_locked(LOG_LEVEL_DEFAULT, fmt, ap);
+	vprintk_locked(KERN_DEFAULT, fmt, ap);
 	spinlock_release(&printk_lock);
 }
 
@@ -140,15 +140,15 @@ void printk_panic_text(const char *text, size_t len)
 {
 	if (spinlock_holding(&printk_lock)) {
 		/* Panic fired inside printk(): we already own the lock. */
-		log_store(LOG_LEVEL_ERROR, text, len);
+		log_store(KERN_EMERG, text, len);
 		log_flush();
 	} else if (spinlock_tryacquire(&printk_lock)) {
-		log_store(LOG_LEVEL_ERROR, text, len);
+		log_store(KERN_EMERG, text, len);
 		log_flush();
 		spinlock_release(&printk_lock);
 	} else {
 		/* Another CPU holds the lock; best-effort raw output. */
-		console_write_record_direct(LOG_LEVEL_ERROR,
+		console_write_record_direct(KERN_EMERG,
 					    ktime_get_boot_ns(), text, len);
 	}
 }

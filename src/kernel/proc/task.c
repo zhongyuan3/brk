@@ -1,4 +1,5 @@
 #include <arch/context.h>
+#include <arch/csr.h>
 #include <arch/pgtable.h>
 #include <arch/trapframe.h>
 #include <brk/asm/cpu.h>
@@ -96,8 +97,6 @@ static void default_new_task_entry(void)
 
 struct task *task_create(struct task_create_args *args)
 {
-	// u64 kstack_top;
-	// struct extended_trap_frame *ext_tf;
 	struct task *task;
 	int err = 0;
 
@@ -131,7 +130,8 @@ struct task *task_create(struct task_create_args *args)
 	unsigned long kernel_sp = task->kstack_top;
 	kernel_sp -= TRAP_FRAME_SIZE;
 	ASSERT(is_aligned(kernel_sp, 16));
-	memset((void *)kernel_sp, 0, TRAP_FRAME_SIZE);
+	task->frame = (struct riscv_trap_frame *)kernel_sp;
+	memset(task->frame, 0, TRAP_FRAME_SIZE);
 	kernel_sp -= CONTEXT_SIZE;
 	ASSERT(is_aligned(kernel_sp, 16));
 	struct riscv_context *ctx = (struct riscv_context *)kernel_sp;
@@ -140,14 +140,6 @@ struct task *task_create(struct task_create_args *args)
 	else
 		ctx->ra = (unsigned long)default_new_task_entry;
 	task->kernel_sp = kernel_sp;
-
-	// kstack_top = task->kstack_base + KSTACK_SIZE;
-	// kstack_top -= TRAP_FRAME_ON_STACK_SIZE;
-	// ext_tf = (struct extended_trap_frame *)(uintptr_t)kstack_top;
-	// ext_tf->task = task;
-	// task->tf = &ext_tf->tf;
-	// arch_tf_init(task->tf);
-	// task->kstack_top = kstack_top;
 
 	if (args && args->mm) {
 		task->mm = uvm_space_get(args->mm);
@@ -195,12 +187,6 @@ struct task *task_create(struct task_create_args *args)
 		err = signal_init(task, NULL, 0);
 	if (err)
 		goto signal_init_failed;
-
-	if (args && args->fn)
-		task->ctx.ra = (uintptr_t)args->fn;
-	else
-		task->ctx.ra = (uintptr_t)default_new_task_entry;
-	task->ctx.sp = task->kstack_top;
 
 	spinlock_acquire(&tasks_lock);
 	list_add_tail(&task->list, &tasks);
@@ -255,37 +241,42 @@ void init_task_do(void)
 {
 	complete_task_switch();
 
-	while (1) {
-	}
+	// while (1) {
+	// }
 
-	// int err = fs_init();
-	// if (err)
-	// 	panic("failed to initialize filesystem: %s\n", strerror(err));
+	int err = fs_init();
+	if (err)
+		panic("failed to initialize filesystem: %s\n", strerror(err));
+	else
+		pr_info("file system initialized\n");
 
-	// char *argv[] = { "/bin/init", 0 };
-	// char *envp[] = { 0 };
-	// err = do_execve(argv[0], argv, envp);
-	// if (err < 0)
-	// 	panic("execve %s failed: %s\n", argv[0], strerror(err));
+	char *argv[] = { "/bin/init", 0 };
+	char *envp[] = { 0 };
+	err = do_execve(argv[0], argv, envp);
+	if (err < 0)
+		panic("execve %s failed: %s\n", argv[0], strerror(err));
+	else
+	 	pr_debug("execve /bin/init ok\n");
 
 	// smp_boot_release_secondary_harts();
 
-	// prepare_to_return();
-	// user_trap_return(task->tf);
+	unsigned long sstatus = read_sstatus();
+	sstatus &= ~SSTATUS_SPP;
+	sstatus |= SSTATUS_SPIE;
+	sstatus &= ~SSTATUS_SUM;
+	current_task()->frame->sstatus = sstatus;
 }
 
 void task_init_user(void)
 {
-	struct task_create_args args = {
+	initial_task = task_create(&(struct task_create_args){
 		.fn = ret_from_init,
-	};
-	initial_task = task_create(&args);
+	});
 	if (IS_ERR(initial_task))
 		panic("failed to create initial user task: %s\n",
 		      strerror(PTR_ERR(initial_task)));
 	spinlock_acquire(&initial_task->lock);
 	strlcpy(initial_task->name, "init", sizeof(initial_task->name));
-	initial_task->ctx.sp = initial_task->kstack_top;
 	initial_task->state = TASK_STATE_RUNNING;
 	initial_task->irq_enabled = true;
 	spinlock_release(&initial_task->lock);
@@ -499,15 +490,6 @@ void task_dump(void)
 	spinlock_release(&tasks_lock);
 }
 
-// static void task_fork_return(void)
-// {
-// 	complete_task_switch();
-// 	struct task *task = current_task();
-
-// 	prepare_to_return();
-// 	user_trap_return(task->tf);
-// }
-
 int task_fork(void)
 {
 	int err;
@@ -515,7 +497,9 @@ int task_fork(void)
 	struct task *child;
 	struct task *parent = current_task();
 
-	child = task_create(NULL);
+	child = task_create(&(struct task_create_args){
+		.fn = ret_from_fork,
+	});
 	if (IS_ERR(child))
 		return PTR_ERR(child);
 
@@ -525,13 +509,13 @@ int task_fork(void)
 		return err;
 	}
 
-	arch_tf_copy(child->tf, parent->tf);
+	memcpy(child->frame, parent->frame, TRAP_FRAME_SIZE);
 	signal_copy(child, parent);
 
 	fdtable_copy(child->fdtable, parent->fdtable);
 	fsinfo_copy(child->fsinfo, parent->fsinfo);
 
-	arch_tf_set_a0(child->tf, 0);
+	child->frame->a0 = 0;
 
 	spinlock_acquire(&wait_lock);
 	child->parent = parent;
@@ -541,8 +525,6 @@ int task_fork(void)
 	spinlock_acquire(&child->lock);
 	cpid = child->tgid;
 	child->state = TASK_STATE_RUNNING;
-	child->ctx.ra = (uintptr_t)ret_from_fork;
-	child->ctx.sp = child->kstack_top;
 	spinlock_release(&child->lock);
 
 	child->newly_forked = true;

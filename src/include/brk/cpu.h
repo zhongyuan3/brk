@@ -11,7 +11,6 @@ struct task;
 struct cpu {
 	struct task *handoff;
 	struct task *current;
-	struct context ctx;
 	unsigned long kernel_sp;
 	cpuid_t id;
 	int irq_nest;
@@ -42,7 +41,6 @@ void local_irq_enable(void);
 irqstate_t local_irq_save(void);
 void local_irq_restore(irqstate_t state);
 
-void switch_context(struct context *prev, struct context *next);
 void __switch_to(unsigned long *old_sp, unsigned long *new_sp);
 void set_thread_pointer(unsigned long value);
 unsigned long get_thread_pointer(void);

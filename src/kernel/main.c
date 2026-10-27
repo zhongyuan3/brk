@@ -1,5 +1,6 @@
 #include <arch/irqflags.h>
 #include <brk/clocksource.h>
+#include <brk/console.h>
 #include <brk/cpu.h>
 #include <brk/dt.h>
 #include <brk/init.h>
@@ -26,12 +27,14 @@
 extern initcall_t __initcall_start[];
 extern initcall_t __initcall_end[];
 
-static void test_schedule(void);
+// static void test_schedule(void);
 
 void start_kernel(void)
 {
 	arch_init();
 	mm_core_init();
+
+	// console_set_log_level(KERN_INFO);
 
 	clocksource_init();
 	rtc_init();
@@ -51,9 +54,9 @@ void start_kernel(void)
 
 	local_irq_enable();
 
-	pr_debug("smp: boot cpu entering idle\n");
-	pr_debug("test schedule\n");
-	test_schedule();
+	// pr_debug("smp: boot cpu entering idle\n");
+	// pr_debug("test schedule\n");
+	// test_schedule();
 
 	task_scheduler();
 }
@@ -78,16 +81,16 @@ void do_initcalls(void)
 		}                                                   \
 	}
 
-def_kthread_entry(kthrd0);
-def_kthread_entry(kthrd1);
-def_kthread_entry(kthrd2);
+// def_kthread_entry(kthrd0);
+// def_kthread_entry(kthrd1);
+// def_kthread_entry(kthrd2);
 
-static void test_schedule(void)
-{
-	struct task *t0 = kthread_create(kthrd0, (void *)500000);
-	struct task *t1 = kthread_create(kthrd1, (void *)100000);
-	struct task *t2 = kthread_create(kthrd2, (void *)200000000);
-	kthread_join(t0);
-	kthread_join(t1);
-	kthread_join(t2);
-}
+// static void test_schedule(void)
+// {
+// 	struct task *t0 = kthread_create(kthrd0, (void *)500000);
+// 	struct task *t1 = kthread_create(kthrd1, (void *)100000);
+// 	struct task *t2 = kthread_create(kthrd2, (void *)200000000);
+// 	kthread_join(t0);
+// 	kthread_join(t1);
+// 	kthread_join(t2);
+// }

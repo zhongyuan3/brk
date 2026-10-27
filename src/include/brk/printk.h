@@ -5,12 +5,18 @@
 #include <brk/stdargs.h>
 #include <brk/types.h>
 
-#define LOG_LEVEL_ERROR 0
-#define LOG_LEVEL_WARN 1
-#define LOG_LEVEL_INFO 2
-#define LOG_LEVEL_DEBUG 3
+#define KERN_EMERG 0
+#define KERN_ALERT 1
+#define KERN_CRIT 2
+#define KERN_ERR 3
+#define KERN_WARN 4
+#define KERN_NOTICE 5
+#define KERN_INFO 6
+#define KERN_DEBUG 7
 
-#define LOG_LEVEL_DEFAULT LOG_LEVEL_WARN
+#define KERN_MAX KERN_DEBUG
+
+#define KERN_DEFAULT KERN_WARN
 
 void printk(char const *fmt, ...) __printf_format(1, 2);
 void vprintk(char const *fmt, va_list ap);
@@ -26,9 +32,17 @@ void printk_flush_pending(void);
  */
 void printk_panic_text(const char *text, size_t len);
 
-#define pr_debug(fmt, ...) _printk(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
-#define pr_info(fmt, ...) _printk(LOG_LEVEL_INFO, fmt, ##__VA_ARGS__)
-#define pr_warn(fmt, ...) _printk(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
-#define pr_error(fmt, ...) _printk(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
+#ifndef pr_fmt
+#define pr_fmt(fmt) fmt
+#endif
+
+#define pr_emerg(fmt, ...) _printk(KERN_EMERG, pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_alert(fmt, ...) _printk(KERN_ALERT, pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_crit(fmt, ...) _printk(KERN_CRIT, pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_err(fmt, ...) _printk(KERN_ERR, pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_warn(fmt, ...) _printk(KERN_WARN, pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_notice(fmt, ...) _printk(KERN_NOTICE, pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_info(fmt, ...) _printk(KERN_INFO, pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_debug(fmt, ...) _printk(KERN_DEBUG, pr_fmt(fmt), ##__VA_ARGS__)
 
 #endif

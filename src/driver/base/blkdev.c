@@ -261,13 +261,13 @@ void blkdev_free_region(unsigned major, unsigned minor, unsigned count)
 			return;
 		}
 
-		pr_error("%s: region %u+%u does not match %u+%u", __func__,
+		pr_err("%s: region %u+%u does not match %u+%u", __func__,
 			   curr->minor_start, curr->minor_count, minor, count);
 		spinlock_release(&bd_lock);
 		return;
 	}
 	spinlock_release(&bd_lock);
-	pr_error("%s: no region at minor %u count %u", __func__, minor,
+	pr_err("%s: no region at minor %u count %u", __func__, minor,
 		   count);
 }
 

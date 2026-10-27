@@ -1,4 +1,5 @@
-#include <arch/syscall.h>
+#include <arch/trapframe.h>
+#include <brk/cpu.h>
 #include <brk/kernel.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
@@ -78,19 +79,35 @@ static u64 (*systable[])(void) = {
 void syscall(void)
 {
 	struct task *task = current_task();
-	u64 num = arch_syscall_get_nr(task->tf);
+	u64 num = task->frame->a7;
 	u64 ret;
 
 	if (num < countof(systable) && systable[num])
 		ret = systable[num]();
 	else
 		ret = -ENOSYS;
-	arch_syscall_set_ret(task->tf, ret);
+	task->frame->a0 = ret;
 }
 
 u64 syscall_arg_raw(int argno)
 {
-	return arch_syscall_get_arg(current_task()->tf, argno);
+	struct riscv_trap_frame *tf = current_task()->frame;
+	switch (argno) {
+	case 0:
+		return tf->a0;
+	case 1:
+		return tf->a1;
+	case 2:
+		return tf->a2;
+	case 3:
+		return tf->a3;
+	case 4:
+		return tf->a4;
+	case 5:
+		return tf->a5;
+	default:
+		panic("%s(): illegal argument number\n", __func__);
+	}
 }
 
 void *syscall_arg_ptr(int argno)

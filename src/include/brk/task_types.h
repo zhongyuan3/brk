@@ -52,12 +52,9 @@ struct task {
 		};
 	};
 
-
 	spinlock_t lock;
 	/* protected by @lock */
 	void *chan;
-	/* protected by @lock */
-	struct context ctx;
 	/* protected by @lock */
 	unsigned long kernel_sp;
 	/* protected by @lock */
@@ -65,9 +62,17 @@ struct task {
 	/* protected by @lock */
 	int exit_status;
 
-	/* never modified after creation, not protected by any locks */
+	/*
+	 * no lock protection
+	 *
+	 * read-only after initialization
+	 */
 	pid_t tgid;
-	/* never modified after creation, not protected by any locks */
+	/*
+	 * no lock protection
+	 *
+	 * read-only after initialization
+	 */
 	pid_t pid;
 
 	struct sigaction_table *sigactions;
@@ -90,17 +95,17 @@ struct task {
 	struct task_resource_usage *rsrc_usage;
 
 	/* the following fields are private, not protected by any locks */
-	struct trap_frame *tf; /* points to the trap frame on kernel stack */
-	u64 kstack_base;
-	u64 kstack_top;
-	u64 ktime; /* last time the task was scheduled or entered kernel mode */
-	u64 utime; /* last time the task entered user mode */
-	int time_slice;
-	char name[TASK_NAME_MAX];
-	bool irq_enabled;
-	bool newly_forked;
-	void (*kthrd_fn)(void *);
-	void *kthrd_data;
+	struct riscv_trap_frame *frame; /* no lock protection */
+	u64 kstack_base; /* no lock protection */
+	u64 kstack_top; /* no lock protection */
+	u64 ktime; /* no lock protection */
+	u64 utime; /* no lock protection */
+	int time_slice; /* no lock protection */
+	char name[TASK_NAME_MAX]; /* no lock protection */
+	bool irq_enabled; /* no lock protection */
+	bool newly_forked; /* no lock protection */
+	void (*kthrd_fn)(void *); /* no lock protection */
+	void *kthrd_data; /* no lock protection */
 };
 
 /*
