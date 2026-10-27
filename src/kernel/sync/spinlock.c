@@ -17,26 +17,8 @@ bool spin_is_locked_by_me(spinlock_t *lock)
 	return lock->locked && lock->cpuid == this_cpuid();
 }
 
-static void spin_lock_check(spinlock_t *lock)
-{
-	if (spin_is_locked_by_me(lock)) {
-		if (!strcmp(lock->name, "task")) {
-			struct task *t = current_task();
-			pid_t pid = t ? t->pid : -1;
-
-			panic("%s: name=%s@%ld,cpu=%lu\n", __func__, lock->name,
-			      pid, lock->cpuid);
-		} else {
-			panic("%s: name=%s,cpu=%lu\n", __func__, lock->name,
-			      lock->cpuid);
-		}
-	}
-}
-
 static void __spin_lock(spinlock_t *lock)
 {
-	spin_lock_check(lock);
-
 	while (__sync_lock_test_and_set(&lock->locked, 1) != 0)
 		;
 	__sync_synchronize();
@@ -45,8 +27,6 @@ static void __spin_lock(spinlock_t *lock)
 
 static bool __spin_trylock(spinlock_t *lock)
 {
-	spin_lock_check(lock);
-
 	if (__sync_lock_test_and_set(&lock->locked, 1) != 0)
 		return false;
 	__sync_synchronize();
@@ -54,9 +34,9 @@ static bool __spin_trylock(spinlock_t *lock)
 	return true;
 }
 
-static void __spin_unlock(spinlock_t *lock)
+static void __spin_unlock(spinlock_t *lock, bool check_owner)
 {
-	if (!spin_is_locked_by_me(lock))
+	if (check_owner && !spin_is_locked_by_me(lock))
 		panic("spin_unlock: name=%s,cpu=%lu\n", lock->name,
 		      lock->cpuid);
 	lock->cpuid = -1;
@@ -71,7 +51,7 @@ void raw_spin_lock(spinlock_t *lock)
 
 void raw_spin_unlock(spinlock_t *lock)
 {
-	__spin_unlock(lock);
+	__spin_unlock(lock, false);
 }
 
 void spin_lock(spinlock_t *lock)
@@ -92,7 +72,7 @@ bool spin_trylock(spinlock_t *lock)
 
 void spin_unlock(spinlock_t *lock)
 {
-	__spin_unlock(lock);
+	__spin_unlock(lock, true);
 	preempt_enable();
 }
 
@@ -106,7 +86,7 @@ irqstate_t spin_lock_irqsave(spinlock_t *lock)
 
 void spin_unlock_irqrestore(spinlock_t *lock, irqstate_t flags)
 {
-	__spin_unlock(lock);
+	__spin_unlock(lock, true);
 	local_irq_restore(flags);
 }
 

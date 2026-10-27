@@ -113,6 +113,8 @@ struct task *task_create(struct task_create_args *args)
 	list_init(&task->child);
 	spinlock_init(&task->lock, "task");
 	task->state = TASK_STATE_NEW;
+	task->oncpu = -1;
+	task->cpu = (int)this_cpuid();
 
 	task->pid = pid_alloc();
 	if (task->pid < 0) {
