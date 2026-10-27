@@ -13,6 +13,7 @@
 #include <brk/init.h>
 #include <brk/initcall.h>
 #include <brk/kernel.h>
+#include <brk/klog.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/mm.h>
@@ -329,6 +330,15 @@ void init_task_do(void)
 		panic("execve %s failed: %s\n", argv[0], strerror(err));
 	else
 	 	pr_debug("execve /bin/init ok\n");
+
+	/*
+	 * Start persistent kernel logging only after the initial exec
+	 * succeeded.  Until klogd has opened /kernel.log the UART console
+	 * stays active, so an exec failure is still visible.
+	 */
+	int klog_err = klog_start();
+	if (klog_err)
+		pr_warn("klog: failed to start log thread: %d\n", klog_err);
 
 	smp_boot_release_secondary_harts();
 
@@ -754,7 +764,7 @@ struct task *kthread_create(void (*fn)(void *), void *data)
 	struct task *t = task_create(&(struct task_create_args){
 		.fn = kthread_return,
 	});
-	if (!t)
+	if (IS_ERR(t))
 		return NULL;
 	t->kthrd_fn = fn;
 	t->kthrd_data = data;

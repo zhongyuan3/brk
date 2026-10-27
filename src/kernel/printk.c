@@ -9,7 +9,7 @@
 #include <brk/timekeeper.h>
 #include <uapi/errno.h>
 
-#define LOG_BUF_LEN (32 * 1024)
+#define LOG_BUF_LEN (64 * 1024)
 
 #define LOG_RECORD_MARK 0xffffffffu
 
@@ -24,7 +24,10 @@ struct log_record {
 
 static char log_buf[LOG_BUF_LEN] __attribute__((aligned(8)));
 static u32 log_next_off;
+/* Next record for the console flush. */
 static u32 log_first_off;
+/* Next record for the persistent disk log (klogd). */
+static u32 log_disk_off;
 
 static SPINLOCK_DEFINE(printk_lock);
 static char printk_buf[1024];
@@ -50,6 +53,8 @@ static void log_store(u8 level, const char *text, u32 len)
 		 */
 		log_next_off = 0;
 		log_first_off = 0;
+		/* The disk reader also loses unread records on overflow. */
+		log_disk_off = 0;
 	}
 
 	rec = (struct log_record *)&log_buf[log_next_off];
@@ -137,6 +142,57 @@ void printk_flush_pending(void)
 
 	log_flush();
 	spin_unlock_irqrestore(&printk_lock, flags);
+}
+
+int printk_read_record(char *buf, size_t size, u8 *level, u64 *ts_nsec)
+{
+	irqstate_t flags = spin_lock_irqsave(&printk_lock);
+	int ret = 0;
+
+	while (log_disk_off != log_next_off) {
+		u32 off = log_disk_off;
+		struct log_record *rec;
+		u32 used;
+
+		if (off + sizeof(*rec) > LOG_BUF_LEN) {
+			/* Corrupt/partial tail: restart from the beginning. */
+			log_disk_off = 0;
+			continue;
+		}
+
+		rec = (struct log_record *)&log_buf[off];
+		if (rec->len == LOG_RECORD_MARK) {
+			log_disk_off = 0;
+			continue;
+		}
+
+		used = log_record_used(rec->len);
+		if (off + used > LOG_BUF_LEN) {
+			log_disk_off = 0;
+			continue;
+		}
+
+		if (rec->len + 1 > size) {
+			/* Consume it anyway; the caller cannot use this record. */
+			ret = -ENOSPC;
+		} else {
+			memcpy(buf, &log_buf[off + sizeof(*rec)],
+			       rec->len);
+			buf[rec->len] = '\0';
+			ret = (int)rec->len;
+		}
+
+		if (level)
+			*level = rec->level;
+		if (ts_nsec)
+			*ts_nsec = rec->ts_nsec;
+
+		log_disk_off = off + used;
+		break;
+	}
+
+	spin_unlock_irqrestore(&printk_lock, flags);
+	return ret;
 }
 
 void printk_panic_text(const char *text, size_t len)

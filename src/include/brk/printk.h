@@ -26,6 +26,15 @@ void _printk(int level, const char *fmt, ...) __printf_format(2, 3);
 void printk_flush_pending(void);
 
 /*
+ * Consume the oldest record from the printk ring buffer into @buf.
+ * @buf is NUL-terminated when a record is returned.
+ *
+ * Return the text length, 0 if the buffer is empty, or -ENOSPC if the
+ * record did not fit in @size (the record is consumed either way).
+ */
+int printk_read_record(char *buf, size_t size, u8 *level, u64 *ts_nsec);
+
+/*
  * Panic helper: append a pre-formatted message to the log ring buffer and
  * flush it, tolerating the lock states found on the panic path. Falls back
  * to a raw console write if printk_lock cannot be taken.
