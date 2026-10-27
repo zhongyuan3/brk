@@ -468,6 +468,67 @@ out:
 	return err;
 }
 
+/*
+ * Return 1 if @dir contains no entries other than "." and "..", 0 if it is
+ * non-empty, or a negative errno on I/O/format errors.  The caller must hold
+ * @dir->rwsem.
+ */
+int brkfs_dir_is_empty(struct fs_inode *dir)
+{
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+	struct brkfs_inode_info *di = dir->private_data;
+	size_t bs = sbi->s_sb.s_blocksize;
+	u8 *blk;
+	int ret = 1;
+
+	if (!di || !S_ISDIR(dir->mode))
+		return -ENOTDIR;
+
+	blk = kmalloc(bs);
+	if (!blk)
+		return -ENOMEM;
+
+	for (unsigned int bi = 0; bi < BRKFS_DIRECT_BLOCKS; bi++) {
+		u32 bno = di->i_block[bi];
+		loff_t blk_base = (loff_t)bi * bs;
+		struct brkfs_dir_entry *ent;
+		size_t left;
+
+		if (blk_base >= dir->size)
+			break;
+		if (bno == 0)
+			continue;
+
+		ret = brkfs_block_read(sbi, bno, blk);
+		if (ret)
+			goto out;
+
+		ent = (struct brkfs_dir_entry *)blk;
+		left = bs;
+		while (left >= BRKFS_DIR_ENTRY_MIN_LEN) {
+			u16 el = ent->entry_len;
+
+			if (el < BRKFS_DIR_ENTRY_MIN_LEN || el > left) {
+				ret = -EIO;
+				goto out;
+			}
+			if (ent->inode != 0 &&
+			    !(ent->name_len == 1 && ent->name[0] == '.') &&
+			    !(ent->name_len == 2 && ent->name[0] == '.' &&
+			      ent->name[1] == '.')) {
+				ret = 0;
+				goto out;
+			}
+			ent = (struct brkfs_dir_entry *)((u8 *)ent + el);
+			left -= el;
+		}
+	}
+
+out:
+	kfree(blk);
+	return ret;
+}
+
 int brkfs_dir_lookup(struct fs_inode *dir, const char *name,
 		     unsigned int name_len, u32 *ino_out, u8 *type_out)
 {

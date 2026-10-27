@@ -190,7 +190,14 @@ static int __path_lookup(int dirfd, const char *name, unsigned int flags,
 		fs_path_put(path);
 		*path = component_path;
 
-		follow_mount(path);
+		/*
+		 * LOOKUP_MOUNTPOINT asks for the mountpoint dentry as seen
+		 * from its parent mount, not the root of a filesystem mounted
+		 * on it.  This is what mount/umount need to identify the
+		 * fs_mount_state that lives at the last component.
+		 */
+		if (!(flags & LOOKUP_MOUNTPOINT) || *p != '\0')
+			follow_mount(path);
 	}
 
 	if (flags & LOOKUP_PARENT) {

@@ -105,9 +105,20 @@ static int brkfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	u32 ino = 0;
 	int err;
 
+	(void)excl;
+
+	if (dentry->inode)
+		return -EEXIST;
+
 	err = brkfs_dir_lookup(dir, dentry->name.name, dentry->name.len, &ino,
 			       NULL);
-	if (!err && excl) {
+	/*
+	 * The entry already exists (it may have been created after
+	 * do_openat() sampled the negative dentry).  Report -EEXIST so the
+	 * caller can retry the lookup and open the existing file; returning
+	 * success here would hand back a still-negative dentry.
+	 */
+	if (err == 0) {
 		err = -EEXIST;
 		goto out;
 	}
@@ -159,7 +170,20 @@ static int brkfs_link(struct fs_dentry *old_dentry, struct fs_inode *dir,
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct fs_inode *old_inode = old_dentry->inode;
+	u32 ino;
 	int err;
+
+	if (S_ISDIR(old_inode->mode))
+		return -EPERM;
+	if (new_dentry->inode)
+		return -EEXIST;
+
+	err = brkfs_dir_lookup(dir, new_dentry->name.name,
+			       new_dentry->name.len, &ino, NULL);
+	if (err == 0)
+		return -EEXIST;
+	if (err != -ENOENT)
+		return err;
 
 	err = brkfs_dir_add(dir, (u32)old_inode->ino, new_dentry->name.name,
 			    new_dentry->name.len, old_inode->mode);
@@ -170,6 +194,8 @@ static int brkfs_link(struct fs_dentry *old_dentry, struct fs_inode *dir,
 	inode_touch_ctime(old_inode);
 	err = brkfs_inode_write(sbi, old_inode);
 	if (err) {
+		(void)brkfs_dir_remove(dir, new_dentry->name.name,
+				       new_dentry->name.len);
 		old_inode->nlink--;
 		fs_inode_put(old_inode);
 		goto out;
@@ -187,16 +213,32 @@ static int brkfs_unlink(struct fs_inode *dir, struct fs_dentry *dentry)
 	struct fs_inode *inode = dentry->inode;
 	int err;
 
+	if (S_ISDIR(inode->mode))
+		return -EISDIR;
+
+	/*
+	 * nlink is shared by every hard link, so it must be modified and
+	 * written back under the target inode's rwsem.  The VFS only holds
+	 * the parent directory's rwsem here.
+	 */
+	sleeplock_acquire(&inode->rwsem);
+
 	err = brkfs_dir_remove(dir, dentry->name.name, dentry->name.len);
 	if (err)
-		return err;
+		goto out;
+
 	inode->nlink--;
 	inode_touch_ctime(inode);
 	inode_touch_mtime_ctime(dir);
+
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
-		return err;
-	return brkfs_inode_write(sbi, inode);
+		goto out;
+
+	err = brkfs_inode_write(sbi, inode);
+out:
+	sleeplock_release(&inode->rwsem);
+	return err;
 	/*
 	 * Do NOT fs_inode_put(inode) here: the inode reference belongs to the
 	 * dentry. The eventual fs_dentry_put() will drop it and trigger
@@ -215,6 +257,15 @@ static int brkfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	loff_t pos = 0;
 	size_t w = 0;
 	int err;
+
+	if (dentry->inode)
+		return -EEXIST;
+	err = brkfs_dir_lookup(dir, dentry->name.name, dentry->name.len, &ino,
+			       NULL);
+	if (err == 0)
+		return -EEXIST;
+	if (err != -ENOENT)
+		return err;
 
 	err = brkfs_inode_alloc(sbi, &ino);
 	if (err)
@@ -289,6 +340,15 @@ static int brkfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 	u32 ino = 0;
 	int err;
 
+	if (dentry->inode)
+		return -EEXIST;
+	err = brkfs_dir_lookup(dir, dentry->name.name, dentry->name.len, &ino,
+			       NULL);
+	if (err == 0)
+		return -EEXIST;
+	if (err != -ENOENT)
+		return err;
+
 	err = brkfs_inode_alloc(sbi, &ino);
 	if (err)
 		goto out;
@@ -352,20 +412,38 @@ static int brkfs_rmdir(struct fs_inode *dir, struct fs_dentry *dentry)
 
 	if (!S_ISDIR(inode->mode))
 		return -ENOTDIR;
-	if (inode->nlink > 2)
-		return -ENOTEMPTY;
+
+	sleeplock_acquire(&inode->rwsem);
+
+	/*
+	 * nlink only counts subdirectories, not ordinary files.  Scan the
+	 * actual directory contents instead of using nlink as an emptiness
+	 * heuristic.
+	 */
+	err = brkfs_dir_is_empty(inode);
+	if (err < 0)
+		goto out;
+	if (err == 0) {
+		err = -ENOTEMPTY;
+		goto out;
+	}
 
 	err = brkfs_dir_remove(dir, dentry->name.name, dentry->name.len);
 	if (err)
-		return err;
+		goto out;
+
 	dir->nlink--;
 	inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
-		return err;
+		goto out;
+
 	inode->nlink = 0;
 	inode_touch_ctime(inode);
-	return brkfs_inode_write(sbi, inode);
+	err = brkfs_inode_write(sbi, inode);
+out:
+	sleeplock_release(&inode->rwsem);
+	return err;
 	/*
 	 * Do NOT fs_inode_put(inode) here. The inode reference belongs to the
 	 * dentry; fs_dentry_put() will trigger the final eviction.
@@ -392,6 +470,15 @@ static int brkfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct fs_inode *inode;
 	u32 ino;
 	int err;
+
+	if (dentry->inode)
+		return -EEXIST;
+	err = brkfs_dir_lookup(dir, dentry->name.name, dentry->name.len, &ino,
+			       NULL);
+	if (err == 0)
+		return -EEXIST;
+	if (err != -ENOENT)
+		return err;
 
 	err = brkfs_inode_alloc(sbi, &ino);
 	if (err)
@@ -458,6 +545,13 @@ static int brkfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	int err = 0;
 
+	/*
+	 * Serialize all metadata updates with generic_file I/O and
+	 * writeback.  Besides truncation, the mode/timestamp changes below
+	 * are copied into the on-disk inode by brkfs_inode_write().
+	 */
+	sleeplock_acquire(&inode->rwsem);
+
 	if (attr->valid & ATTR_MODE) {
 		inode->mode = attr->mode;
 		inode_touch_ctime(inode);
@@ -465,10 +559,8 @@ static int brkfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 	if (attr->valid & ATTR_SIZE) {
 		/*
 		 * Shrink: drop cache pages past the new EOF, zero the partial
-		 * tail page, flush dirty data, then free on-disk blocks. The
-		 * inode rwsem excludes concurrent generic_file I/O.
+		 * tail page, flush dirty data, then free on-disk blocks.
 		 */
-		sleeplock_acquire(&inode->rwsem);
 		if (inode->mapping) {
 			err = truncate_inode_pages(inode->mapping, attr->size);
 			if (!err)
@@ -476,13 +568,13 @@ static int brkfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 		}
 		if (!err)
 			err = brkfs_truncate_inode_blocks(inode, attr->size);
-		sleeplock_release(&inode->rwsem);
 		if (err)
 			goto out;
 		inode_touch_mtime_ctime(inode);
 	}
 	err = brkfs_inode_write(sbi, inode);
 out:
+	sleeplock_release(&inode->rwsem);
 	return err;
 }
 

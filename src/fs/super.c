@@ -148,6 +148,17 @@ int sync_filesystem(struct fs_super_block *sb)
 		fs_inode_put(inode);
 	}
 
+	/*
+	 * Inode writeback usually dirties filesystem-level metadata pages
+	 * (inode table, bitmaps, directory blocks).  Flush those after all
+	 * inodes have been written.
+	 */
+	if (sb->ops->sync_fs) {
+		int err = sb->ops->sync_fs(sb);
+		if (err && !ret)
+			ret = err;
+	}
+
 	return ret;
 }
 

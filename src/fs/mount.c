@@ -157,10 +157,14 @@ int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
 	if (!driver)
 		return -ENODEV;
 
-	err = fs_path_lookup(dir_name, 0, &mp_path);
+	err = fs_path_lookup(dir_name, LOOKUP_MOUNTPOINT, &mp_path);
 	if (err)
 		return err;
 
+	if (!mp_path.dentry->inode) {
+		fs_path_put(&mp_path);
+		return -ENOENT;
+	}
 	if (!S_ISDIR(mp_path.dentry->inode->mode)) {
 		fs_path_put(&mp_path);
 		return -ENOTDIR;
@@ -211,34 +215,32 @@ int do_umount(struct fs_mount_state *mnt, int flags)
 	(void)flags;
 
 	/*
-	 * The VFS held one reference to the mount state, @mnt itself holds one
-	 * reference, so if the reference count is greater than 2, the mount
-	 * state is still in use.
-	 */
-	refcnt = fs_mount_state_get_refcnt(mnt);
-	if (refcnt > 2)
-		return -EBUSY;
-	if (refcnt < 2)
-		return -EINVAL;
-
-	/*
 	 * Unmount stage 1: detach from global topology while serialized by
 	 * mount_lock; keep heavy put/kill callbacks out of the lock.
 	 */
 	sleeplock_acquire(&mount_lock);
 
+	/*
+	 * Revalidate and unpublish atomically.  fs_mount_state_lookup()
+	 * takes mount_hashtable_lock before taking a reference, so if the
+	 * count is still 2 here (topology + caller) and the mount is still
+	 * hashed, no new path can start using it after this point.  Checking
+	 * the count outside the lock would allow a new lookup reference to
+	 * slip in between the check and hlist_del_init().
+	 */
+	spin_lock(&mount_hashtable_lock);
+	refcnt = fs_mount_state_get_refcnt(mnt);
+	if (hlist_unhashed(&mnt->hash) || refcnt != 2) {
+		spin_unlock(&mount_hashtable_lock);
+		sleeplock_release(&mount_lock);
+		return refcnt > 2 ? -EBUSY : -EINVAL;
+	}
+	hlist_del_init(&mnt->hash);
+	spin_unlock(&mount_hashtable_lock);
+
 	parent = mnt->parent;
 	mountpoint = mnt->mount_point;
 	sb = mnt->sb;
-
-	/*
-	 * Unpublish order for follow_mount():
-	 * remove from mount hash first, then clear DCACHE_MOUNTED.
-	 * This avoids false-negative windows during teardown.
-	 */
-	spin_lock(&mount_hashtable_lock);
-	hlist_del_init(&mnt->hash);
-	spin_unlock(&mount_hashtable_lock);
 
 	spin_lock(&mountpoint->lock);
 	mountpoint->flags &= ~DCACHE_MOUNTED;

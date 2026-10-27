@@ -82,6 +82,12 @@ struct fs_super_block_ops {
 	int (*write_inode)(struct fs_inode *, int);
 	void (*evict_inode)(struct fs_inode *);
 	void (*put_super)(struct fs_super_block *);
+	/*
+	 * Optional: flush filesystem-level metadata that is not attached to
+	 * an inode (block/inode bitmaps, directory blocks, ...).  Called by
+	 * sync_filesystem() after all dirty inode writebacks have completed.
+	 */
+	int (*sync_fs)(struct fs_super_block *);
 };
 
 struct fs_inode {

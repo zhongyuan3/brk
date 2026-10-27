@@ -20,13 +20,26 @@ struct file_system_info *fsinfo_alloc(void)
 
 void fsinfo_put(struct file_system_info *info)
 {
+	struct fs_path cwd, root;
+
 	if (refcnt_dec_fetch(&info->refcnt) > 0)
 		return;
 
+	/*
+	 * fs_path_put() can evict the last dentry/inode and therefore sleep
+	 * (page-cache / block I/O, or a filesystem sleep lock).  Take the
+	 * paths out of the object under the spinlock, then drop the
+	 * references with interrupts and preemption enabled.
+	 */
 	spin_lock(&info->lock);
-	fs_path_put(&info->cwd);
-	fs_path_put(&info->root);
+	cwd = info->cwd;
+	root = info->root;
+	info->cwd = (struct fs_path){ 0 };
+	info->root = (struct fs_path){ 0 };
 	spin_unlock(&info->lock);
+
+	fs_path_put(&cwd);
+	fs_path_put(&root);
 
 	kfree(info);
 }
@@ -65,18 +78,26 @@ void fsinfo_set_root(struct file_system_info *info, struct fs_path *path)
 
 void fsinfo_update_cwd(struct file_system_info *info, struct fs_path *path)
 {
+	struct fs_path old;
+
 	spin_lock(&info->lock);
-	fs_path_put(&info->cwd);
+	old = info->cwd;
 	info->cwd = *path;
 	spin_unlock(&info->lock);
+
+	fs_path_put(&old);
 }
 
 void fsinfo_update_root(struct file_system_info *info, struct fs_path *path)
 {
+	struct fs_path old;
+
 	spin_lock(&info->lock);
-	fs_path_put(&info->root);
+	old = info->root;
 	info->root = *path;
 	spin_unlock(&info->lock);
+
+	fs_path_put(&old);
 }
 
 void fsinfo_get_cwd(struct file_system_info *info, struct fs_path *path)
@@ -97,10 +118,19 @@ void fsinfo_get_root(struct file_system_info *info, struct fs_path *path)
 
 void fsinfo_free_resources(struct file_system_info *info)
 {
+	struct fs_path cwd, root;
+
 	spin_lock(&info->lock);
-	fs_path_put(&info->cwd);
-	fs_path_put(&info->root);
+	cwd = info->cwd;
+	root = info->root;
 	info->cwd = (struct fs_path){ 0 };
 	info->root = (struct fs_path){ 0 };
 	spin_unlock(&info->lock);
+
+	/*
+	 * The final cwd/root dentry may be the last reference and its
+	 * eviction may sleep.  Never do that under info->lock.
+	 */
+	fs_path_put(&cwd);
+	fs_path_put(&root);
 }

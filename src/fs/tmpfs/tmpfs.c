@@ -743,7 +743,21 @@ static int tmpfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	sb = dir->sb;
 	t_sb = sb->private_data;
 
+	/*
+	 * The negative check in do_openat() happens before the parent
+	 * directory rwsem is taken, so another CPU may have created (or
+	 * linked) the name in the meantime.  Revalidate under the directory
+	 * lock and never add a second entry with the same name.
+	 */
+	if (dentry->inode)
+		return -EEXIST;
+
 	sleeplock_acquire(&t_sb->s_lock);
+	if (tmpfs_dir_lookup(t_sb, t_dir, dentry->name.name,
+			     dentry->name.len)) {
+		sleeplock_release(&t_sb->s_lock);
+		return -EEXIST;
+	}
 	mode |= S_IFREG;
 	t_new_inode = tmpfs_inode_alloc(t_sb, mode, 0);
 	if (!t_new_inode) {
@@ -798,8 +812,15 @@ static int tmpfs_link(struct fs_dentry *old_dentry, struct fs_inode *dir,
 	t_old_inode = old_inode->private_data;
 	if (S_ISDIR(old_inode->mode))
 		return -EPERM;
+	if (new_dentry->inode)
+		return -EEXIST;
 
 	sleeplock_acquire(&t_sb->s_lock);
+	if (tmpfs_dir_lookup(t_sb, t_dir, new_dentry->name.name,
+			     new_dentry->name.len)) {
+		sleeplock_release(&t_sb->s_lock);
+		return -EEXIST;
+	}
 	err = tmpfs_dir_add_entry(t_dir, t_old_inode, new_dentry->name.len,
 				  new_dentry->name.name);
 	if (err) {
@@ -810,6 +831,13 @@ static int tmpfs_link(struct fs_dentry *old_dentry, struct fs_inode *dir,
 	++old_inode->nlink;
 	sleeplock_release(&t_sb->s_lock);
 
+	/*
+	 * fs_dentry_instantiate() takes ownership of one inode reference.
+	 * The new dentry needs its own reference: the old dentry keeps the
+	 * one it already owns, otherwise both dentries would eventually put
+	 * the same reference.
+	 */
+	fs_inode_get(old_inode);
 	fs_dentry_instantiate(new_dentry, old_inode);
 	inode_touch_ctime(old_inode);
 	inode_touch_mtime_ctime(dir);
@@ -866,7 +894,15 @@ static int tmpfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	t_sb = dir->sb->private_data;
 	len = strlen(symname);
 
+	if (dentry->inode)
+		return -EEXIST;
+
 	sleeplock_acquire(&t_sb->s_lock);
+	if (tmpfs_dir_lookup(t_sb, t_dir, dentry->name.name,
+			     dentry->name.len)) {
+		sleeplock_release(&t_sb->s_lock);
+		return -EEXIST;
+	}
 
 	t_inode = tmpfs_inode_alloc(t_sb, S_IFLNK | 0777, 0);
 	if (!t_inode) {
@@ -950,7 +986,15 @@ static int tmpfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 	sb = dir->sb;
 	t_sb = sb->private_data;
 
+	if (dentry->inode)
+		return -EEXIST;
+
 	sleeplock_acquire(&t_sb->s_lock);
+	if (tmpfs_dir_lookup(t_sb, t_dir, dentry->name.name,
+			     dentry->name.len)) {
+		sleeplock_release(&t_sb->s_lock);
+		return -EEXIST;
+	}
 	t_inode = tmpfs_inode_alloc_dir(t_sb, mode);
 	if (!t_inode) {
 		sleeplock_release(&t_sb->s_lock);
@@ -1089,7 +1133,15 @@ static int tmpfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 	t_dir = dir->private_data;
 	t_sb = dir->sb->private_data;
 
+	if (dentry->inode)
+		return -EEXIST;
+
 	sleeplock_acquire(&t_sb->s_lock);
+	if (tmpfs_dir_lookup(t_sb, t_dir, dentry->name.name,
+			     dentry->name.len)) {
+		sleeplock_release(&t_sb->s_lock);
+		return -EEXIST;
+	}
 
 	t_inode = tmpfs_inode_alloc(t_sb, mode, dev);
 	if (!t_inode) {

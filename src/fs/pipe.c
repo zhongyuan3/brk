@@ -459,6 +459,12 @@ int anon_pipe_create(struct fs_file **read_file, struct fs_file **write_file,
 		return -ENOMEM;
 	}
 
+	/*
+	 * @path owns the dentry/mount references created above.
+	 * fs_file_alloc() takes an additional reference for each file, so do
+	 * not get them again for the second end: that would leak one dentry
+	 * and one mount reference per pipe.
+	 */
 	path.mnt = fs_mount_state_get(pipe_mnt);
 	path.dentry = d;
 
@@ -469,9 +475,6 @@ int anon_pipe_create(struct fs_file **read_file, struct fs_file **write_file,
 		fs_path_put(&path);
 		return err;
 	}
-
-	path.mnt = fs_mount_state_get(pipe_mnt);
-	path.dentry = fs_dentry_get(d);
 
 	wf = fs_file_alloc(&path, FMODE_WRITE);
 	if (IS_ERR(wf)) {

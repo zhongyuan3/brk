@@ -97,10 +97,26 @@ static void brkfs_put_super(struct fs_super_block *sb)
 	sb->private_data = NULL;
 }
 
+static int brkfs_sync_fs(struct fs_super_block *sb)
+{
+	struct brkfs_sb_info *sbi = sb->private_data;
+
+	if (!sbi || !sbi->s_bdev || !sbi->s_bdev->bd_mapping)
+		return 0;
+
+	/*
+	 * Inode tables, bitmaps and directory blocks live in the block
+	 * device's page cache, not in any inode's mapping.  Without this
+	 * flush they would stay dirty in memory forever.
+	 */
+	return page_cache_flush(sbi->s_bdev->bd_mapping);
+}
+
 const struct fs_super_block_ops brkfs_sops = {
 	.alloc_inode = brkfs_alloc_inode,
 	.free_inode = brkfs_free_inode,
 	.write_inode = brkfs_write_inode,
 	.evict_inode = brkfs_evict_inode,
 	.put_super = brkfs_put_super,
+	.sync_fs = brkfs_sync_fs,
 };

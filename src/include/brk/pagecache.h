@@ -64,6 +64,14 @@ struct page_cache {
 	void *host;
 	const struct page_cache_ops *ops;
 
+	/*
+	 * Lifetime reference.  The filesystem/inode owns the initial
+	 * reference; page_cache_shrink() temporarily pins a mapping while it
+	 * examines a page so that page_cache_destroy() cannot free the
+	 * mapping underneath it.
+	 */
+	refcnt_t refcnt;
+
 	spinlock_t lock;
 	struct hlist_head pages[PAGE_CACHE_HSIZE];
 	struct list_head dirty_pages;
