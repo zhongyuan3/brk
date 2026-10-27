@@ -16,6 +16,5 @@
     "[makefile]": {
         "editor.tabSize": 8,
         "editor.insertSpaces": false
-    },
-    "C_Cpp.intelliSenseEngine": "disabled"
+    }
 }

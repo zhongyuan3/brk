@@ -3,27 +3,6 @@
 
 #include <brk/types.h>
 
-#define MAX_MMIO_RANGES 4
-
-#define MAX_DEVICES 64
-
-struct mmio_range {
-	unsigned long base;
-	unsigned long size;
-};
-
-struct platform_device {
-	const char *name;
-	const char *compatible;
-	struct mmio_range mmio[MAX_MMIO_RANGES];
-	int nr_mmio;
-	struct list_head list;
-	unsigned long irq;
-	int fdt_node;
-};
-
-void platform_device_add(struct platform_device *dev);
-
 /*
  * Device number encoding (dev_t):
  *   bits 28..31 : device type (CHRDEV / BLKDEV)
