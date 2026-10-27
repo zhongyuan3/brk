@@ -240,6 +240,7 @@ void trap_handler(struct riscv_trap_frame *frame)
 		unsigned long sstatus = read_sstatus();
 		sstatus &= ~SSTATUS_SPP;
 		sstatus |= SSTATUS_SPIE;
+		sstatus &= ~SSTATUS_SIE;
 		sstatus &= ~SSTATUS_SUM;
 		frame->sstatus = sstatus;
 		signal_deliver_pending(task);

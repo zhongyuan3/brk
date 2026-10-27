@@ -63,8 +63,8 @@ void secondary_entry(unsigned long hart_id)
 	local_irq_enable();
 
 	pr_debug("smp: hart %lu online\n", hart_id);
-	while (1) {
-	}
+	// while (1) {
+	// }
 
 	task_scheduler();
 }
