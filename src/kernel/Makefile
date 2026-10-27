@@ -2,6 +2,7 @@ obj-y += main.o
 obj-y += console.o
 obj-y += cpu.o
 obj-y += irq.o
+obj-y += klog.o
 obj-y += panic.o
 obj-y += printk.o
 obj-y += signal.o

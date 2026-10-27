@@ -190,6 +190,11 @@ static struct console ns16550a_console = {
 	.active = true,
 };
 
+void ns16550a_console_disable(void)
+{
+	console_deactivate(&ns16550a_console);
+}
+
 static int ns16550a_tty_put_char(struct tty *tty, int c)
 {
 	struct ns16550a_device *dev = tty->port->client_data;

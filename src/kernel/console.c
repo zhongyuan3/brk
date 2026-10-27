@@ -29,6 +29,14 @@ void console_unregister(struct console *console)
 	spin_unlock_irqrestore(&console_lock, flags);
 }
 
+void console_deactivate(struct console *console)
+{
+	irqstate_t flags = spin_lock_irqsave(&console_lock);
+
+	console->active = false;
+	spin_unlock_irqrestore(&console_lock, flags);
+}
+
 bool console_has_active(void)
 {
 	struct console *con;

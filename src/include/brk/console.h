@@ -15,6 +15,7 @@ int console_set_log_level(u8 level);
 
 void console_register(struct console *console);
 void console_unregister(struct console *console);
+void console_deactivate(struct console *console);
 
 bool console_has_active(void);
 
