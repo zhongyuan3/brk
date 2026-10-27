@@ -26,6 +26,6 @@ void inode_touch_mtime(struct fs_inode *inode);
 void inode_touch_ctime(struct fs_inode *inode);
 void inode_touch_mtime_ctime(struct fs_inode *inode);
 
-void inode_times_to_stat(const struct fs_inode *inode, struct stat *st);
+void inode_times_to_stat(struct fs_inode *inode, struct stat *st);
 
 #endif

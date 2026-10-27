@@ -61,6 +61,14 @@ struct fs_dentry *fs_dentry_alloc_anon(struct fs_inode *inode,
 void fs_dentry_instantiate(struct fs_dentry *dentry, struct fs_inode *inode);
 struct fs_dentry *fs_dentry_get(struct fs_dentry *dentry);
 void fs_dentry_put(struct fs_dentry *dentry);
+/*
+ * Locked accessors for the dentry state that path walking reads without
+ * holding any other lock.  Use these instead of reading ->flags / ->inode
+ * directly.
+ */
+bool fs_dentry_is_negative(struct fs_dentry *dentry);
+bool fs_dentry_is_mounted(struct fs_dentry *dentry);
+struct fs_inode *fs_dentry_inode(struct fs_dentry *dentry);
 struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 				   const struct qstr *name);
 struct fs_dentry *fs_dentry_splice_alias(struct fs_inode *inode,

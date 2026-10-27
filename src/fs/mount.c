@@ -161,11 +161,13 @@ int do_mount(const char *dev_name, const char *dir_name, const char *type_name,
 	if (err)
 		return err;
 
-	if (!mp_path.dentry->inode) {
+	struct fs_inode *mp_inode = fs_dentry_inode(mp_path.dentry);
+
+	if (!mp_inode) {
 		fs_path_put(&mp_path);
 		return -ENOENT;
 	}
-	if (!S_ISDIR(mp_path.dentry->inode->mode)) {
+	if (!S_ISDIR(mp_inode->mode)) {
 		fs_path_put(&mp_path);
 		return -ENOTDIR;
 	}

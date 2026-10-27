@@ -1,5 +1,6 @@
 #include <brk/fs.h>
 #include <brk/ktime.h>
+#include <brk/spinlock.h>
 #include <brk/timekeeper.h>
 #include <brk/types.h>
 #include <uapi/stat.h>
@@ -62,33 +63,65 @@ u64 ktime_nanosleep(const struct timespec *dur, struct timespec *rem)
 
 void inode_times_set_all_now(struct fs_inode *inode)
 {
-	ktime_get_real_ts(&inode->atime);
-	inode->mtime = inode->atime;
-	inode->ctime = inode->atime;
+	struct timespec ts;
+	irqstate_t flags;
+
+	ktime_get_real_ts(&ts);
+
+	flags = spin_lock_irqsave(&inode->lock);
+	inode->atime = ts;
+	inode->mtime = ts;
+	inode->ctime = ts;
+	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
 void inode_touch_mtime(struct fs_inode *inode)
 {
-	ktime_get_real_ts(&inode->mtime);
+	struct timespec ts;
+	irqstate_t flags;
+
+	ktime_get_real_ts(&ts);
+
+	flags = spin_lock_irqsave(&inode->lock);
+	inode->mtime = ts;
+	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
 void inode_touch_ctime(struct fs_inode *inode)
 {
-	ktime_get_real_ts(&inode->ctime);
+	struct timespec ts;
+	irqstate_t flags;
+
+	ktime_get_real_ts(&ts);
+
+	flags = spin_lock_irqsave(&inode->lock);
+	inode->ctime = ts;
+	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
 void inode_touch_mtime_ctime(struct fs_inode *inode)
 {
-	inode_touch_mtime(inode);
-	inode_touch_ctime(inode);
+	struct timespec ts;
+	irqstate_t flags;
+
+	ktime_get_real_ts(&ts);
+
+	flags = spin_lock_irqsave(&inode->lock);
+	inode->mtime = ts;
+	inode->ctime = ts;
+	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
-void inode_times_to_stat(const struct fs_inode *inode, struct stat *st)
+void inode_times_to_stat(struct fs_inode *inode, struct stat *st)
 {
+	irqstate_t flags = spin_lock_irqsave(&inode->lock);
+
 	st->st_atime = inode->atime.tv_sec;
 	st->st_atime_nsec = (unsigned long)inode->atime.tv_nsec;
 	st->st_mtime = inode->mtime.tv_sec;
 	st->st_mtime_nsec = (unsigned long)inode->mtime.tv_nsec;
 	st->st_ctime = inode->ctime.tv_sec;
 	st->st_ctime_nsec = (unsigned long)inode->ctime.tv_nsec;
+
+	spin_unlock_irqrestore(&inode->lock, flags);
 }

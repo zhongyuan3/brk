@@ -115,7 +115,7 @@ int sync_filesystem(struct fs_super_block *sb)
 		 * resurrect the inode. Doing both under inode->lock makes the
 		 * I_FREEING check and the pin atomic against that teardown.
 		 */
-		if ((inode->state & (I_FREEING | I_WILL_FREE)) ||
+		if ((inode->state & (I_FREEING | I_WILL_FREE | I_BAD)) ||
 		    !refcnt_inc_unless_zero(&inode->count)) {
 			spin_unlock(&inode->lock);
 			continue;

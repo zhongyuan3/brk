@@ -297,12 +297,14 @@ u64 sys_chdir(void)
 	if (err)
 		return err;
 
-	if (!new_path.dentry->inode) {
+	struct fs_inode *inode = fs_dentry_inode(new_path.dentry);
+
+	if (!inode) {
 		fs_path_put(&new_path);
 		return -ENOENT;
 	}
 
-	if (!S_ISDIR(new_path.dentry->inode->mode)) {
+	if (!S_ISDIR(inode->mode)) {
 		fs_path_put(&new_path);
 		return -ENOTDIR;
 	}
@@ -584,9 +586,13 @@ u64 sys_getdents(void)
 	buf = syscall_arg_ptr(1);
 	size = syscall_arg_raw(2);
 
-	struct fs_inode *inode = fp->path.dentry->inode;
+	struct fs_inode *inode = fs_dentry_inode(fp->path.dentry);
 	const struct fs_file_ops *fop = fp->ops;
 
+	if (!inode) {
+		fs_file_put(fp);
+		return -ENOENT;
+	}
 	if (!fop->iterate_shared) {
 		fs_file_put(fp);
 		return -EOPNOTSUPP;
@@ -676,9 +682,13 @@ u64 sys_getdents64(void)
 	buf = syscall_arg_ptr(1);
 	size = syscall_arg_raw(2);
 
-	struct fs_inode *inode = fp->path.dentry->inode;
+	struct fs_inode *inode = fs_dentry_inode(fp->path.dentry);
 	const struct fs_file_ops *fop = fp->ops;
 
+	if (!inode) {
+		fs_file_put(fp);
+		return -ENOENT;
+	}
 	if (!fop->iterate_shared) {
 		fs_file_put(fp);
 		return -EOPNOTSUPP;

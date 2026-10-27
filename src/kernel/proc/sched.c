@@ -8,6 +8,7 @@
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
+#include <brk/refcnt.h>
 #include <brk/spinlock.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
@@ -301,8 +302,17 @@ void task_exit(int status)
 	if (task == initial_task)
 		panic("%s(): init exit\n", __func__);
 
-	fdtable_close_all(task->fdtable);
-	fsinfo_free_resources(task->fsinfo);
+	/*
+	 * A task normally owns its fdtable/fsinfo.  If a future clone flag
+	 * shares them, only the last user may close the descriptors and clear
+	 * cwd/root; other tasks would otherwise lose live state.  The
+	 * reference counted put in task_destroy() still drains the table when
+	 * the last reference disappears.
+	 */
+	if (refcnt_read(&task->fdtable->refcnt) == 1)
+		fdtable_close_all(task->fdtable);
+	if (refcnt_read(&task->fsinfo->refcnt) == 1)
+		fsinfo_free_resources(task->fsinfo);
 
 	flags = spin_lock_irqsave(&wait_lock);
 	list_for_each_entry(child, &task->children, child) {

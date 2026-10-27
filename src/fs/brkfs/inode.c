@@ -39,8 +39,10 @@ static int brkfs_init_loaded_inode(struct brkfs_sb_info *sbi,
 {
 	int err = brkfs_inode_read(sbi, inode);
 
-	if (err)
+	if (err) {
+		fs_inode_fail_new(inode);
 		return err;
+	}
 	brkfs_inode_attach_ops(inode);
 	/*
 	 * Regular files and symlinks store their data through the same block
@@ -49,8 +51,10 @@ static int brkfs_init_loaded_inode(struct brkfs_sb_info *sbi,
 	 */
 	if (S_ISREG(inode->mode) || S_ISLNK(inode->mode)) {
 		err = fs_inode_attach_page_cache(inode, &brkfs_file_pc_ops);
-		if (err)
+		if (err) {
+			fs_inode_fail_new(inode);
 			return err;
+		}
 	}
 	fs_inode_unlock_new(inode);
 	return 0;

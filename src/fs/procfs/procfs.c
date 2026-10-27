@@ -525,9 +525,17 @@ static struct fs_inode *procfs_iget(struct fs_super_block *sb,
 				    const struct fs_file_ops *fop)
 {
 	struct fs_inode *inode = fs_inode_get_locked(sb, ino);
+	bool is_new;
+	irqstate_t flags;
+
 	if (!inode)
 		return NULL;
-	if (inode->state & I_NEW) {
+
+	flags = spin_lock_irqsave(&inode->lock);
+	is_new = (inode->state & I_NEW) != 0;
+	spin_unlock_irqrestore(&inode->lock, flags);
+
+	if (is_new) {
 		procfs_init_inode(inode, mode, nlink);
 		inode->ops = iop;
 		inode->fops = fop;
