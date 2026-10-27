@@ -20,9 +20,9 @@ struct fs_file *do_openat(int dirfd, const char *pathname, int flags,
 	if (err)
 		return ERR_PTR(err);
 
-	spinlock_acquire(&path.dentry->lock);
+	spin_lock(&path.dentry->lock);
 	bool exists = !(path.dentry->flags & DCACHE_NEGATIVE);
-	spinlock_release(&path.dentry->lock);
+	spin_unlock(&path.dentry->lock);
 
 	bool create = (flags & O_CREAT) != 0;
 	if (!exists && !create) {
@@ -104,13 +104,13 @@ int do_mkdirat(int dirfd, const char *pathname, umode_t mode)
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->lock);
+	spin_lock(&path.dentry->lock);
 	if (!(path.dentry->flags & DCACHE_NEGATIVE)) {
-		spinlock_release(&path.dentry->lock);
+		spin_unlock(&path.dentry->lock);
 		fs_path_put(&path);
 		return -EEXIST;
 	}
-	spinlock_release(&path.dentry->lock);
+	spin_unlock(&path.dentry->lock);
 
 	struct fs_path parent_path;
 	err = fs_path_dot_dot(&path, &parent_path);
@@ -137,13 +137,13 @@ int do_mknodat(int dirfd, const char *pathname, umode_t mode, dev_t dev)
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->lock);
+	spin_lock(&path.dentry->lock);
 	if (!(path.dentry->flags & DCACHE_NEGATIVE)) {
-		spinlock_release(&path.dentry->lock);
+		spin_unlock(&path.dentry->lock);
 		fs_path_put(&path);
 		return -EEXIST;
 	}
-	spinlock_release(&path.dentry->lock);
+	spin_unlock(&path.dentry->lock);
 
 	struct fs_path parent_path;
 	err = fs_path_dot_dot(&path, &parent_path);
@@ -179,14 +179,14 @@ int do_linkat(int olddirfd, const char *oldpathname, int newdirfd,
 		return err;
 	}
 
-	spinlock_acquire(&newpath.dentry->lock);
+	spin_lock(&newpath.dentry->lock);
 	if (!(newpath.dentry->flags & DCACHE_NEGATIVE)) {
-		spinlock_release(&newpath.dentry->lock);
+		spin_unlock(&newpath.dentry->lock);
 		fs_path_put(&oldpath);
 		fs_path_put(&newpath);
 		return -EEXIST;
 	}
-	spinlock_release(&newpath.dentry->lock);
+	spin_unlock(&newpath.dentry->lock);
 
 	struct fs_path parent_path;
 	err = fs_path_dot_dot(&newpath, &parent_path);
@@ -221,13 +221,13 @@ int do_unlinkat(int dirfd, const char *pathname, int flags)
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->lock);
+	spin_lock(&path.dentry->lock);
 	if (path.dentry->flags & DCACHE_NEGATIVE) {
-		spinlock_release(&path.dentry->lock);
+		spin_unlock(&path.dentry->lock);
 		fs_path_put(&path);
 		return -ENOENT;
 	}
-	spinlock_release(&path.dentry->lock);
+	spin_unlock(&path.dentry->lock);
 
 	struct fs_path parent_path;
 	err = fs_path_dot_dot(&path, &parent_path);
@@ -254,13 +254,13 @@ int do_symlinkat(int dirfd, const char *pathname, const char *target)
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->lock);
+	spin_lock(&path.dentry->lock);
 	if (!(path.dentry->flags & DCACHE_NEGATIVE)) {
-		spinlock_release(&path.dentry->lock);
+		spin_unlock(&path.dentry->lock);
 		fs_path_put(&path);
 		return -EEXIST;
 	}
-	spinlock_release(&path.dentry->lock);
+	spin_unlock(&path.dentry->lock);
 
 	struct fs_path parent_path;
 	err = fs_path_dot_dot(&path, &parent_path);
@@ -287,13 +287,13 @@ int do_readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz)
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->lock);
+	spin_lock(&path.dentry->lock);
 	if (path.dentry->flags & DCACHE_NEGATIVE) {
-		spinlock_release(&path.dentry->lock);
+		spin_unlock(&path.dentry->lock);
 		fs_path_put(&path);
 		return -ENOENT;
 	}
-	spinlock_release(&path.dentry->lock);
+	spin_unlock(&path.dentry->lock);
 
 	struct fs_inode *inode = path.dentry->inode;
 	if (!S_ISLNK(inode->mode)) {
@@ -324,13 +324,13 @@ int do_creat(const char *pathname, umode_t mode)
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->lock);
+	spin_lock(&path.dentry->lock);
 	if (!(path.dentry->flags & DCACHE_NEGATIVE)) {
-		spinlock_release(&path.dentry->lock);
+		spin_unlock(&path.dentry->lock);
 		fs_path_put(&path);
 		return -EEXIST;
 	}
-	spinlock_release(&path.dentry->lock);
+	spin_unlock(&path.dentry->lock);
 
 	struct fs_path parent_path;
 	err = fs_path_dot_dot(&path, &parent_path);
@@ -364,14 +364,14 @@ int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 		return err;
 	}
 
-	spinlock_acquire(&newpath.dentry->lock);
+	spin_lock(&newpath.dentry->lock);
 	if (!(newpath.dentry->flags & DCACHE_NEGATIVE)) {
-		spinlock_release(&newpath.dentry->lock);
+		spin_unlock(&newpath.dentry->lock);
 		fs_path_put(&oldpath);
 		fs_path_put(&newpath);
 		return -EEXIST;
 	}
-	spinlock_release(&newpath.dentry->lock);
+	spin_unlock(&newpath.dentry->lock);
 
 	struct fs_path parent_path;
 	err = fs_path_dot_dot(&newpath, &parent_path);
@@ -404,13 +404,13 @@ int do_rmdir(const char *pathname)
 	if (err)
 		return err;
 
-	spinlock_acquire(&path.dentry->lock);
+	spin_lock(&path.dentry->lock);
 	if (path.dentry->flags & DCACHE_NEGATIVE) {
-		spinlock_release(&path.dentry->lock);
+		spin_unlock(&path.dentry->lock);
 		fs_path_put(&path);
 		return -ENOENT;
 	}
-	spinlock_release(&path.dentry->lock);
+	spin_unlock(&path.dentry->lock);
 
 	struct fs_path parent_path;
 	err = fs_path_dot_dot(&path, &parent_path);

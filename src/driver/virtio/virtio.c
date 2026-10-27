@@ -54,30 +54,30 @@ void virtio_dev_destroy(struct virtio_device *dev)
 
 void virtio_dev_add(struct virtio_device *dev)
 {
-	spinlock_acquire(&vdevs_lock);
+	spin_lock(&vdevs_lock);
 	list_add(&dev->list, &vdevs);
-	spinlock_release(&vdevs_lock);
+	spin_unlock(&vdevs_lock);
 }
 
 void virtio_dev_remove(struct virtio_device *dev)
 {
-	spinlock_acquire(&vdevs_lock);
+	spin_lock(&vdevs_lock);
 	list_del(&dev->list);
-	spinlock_release(&vdevs_lock);
+	spin_unlock(&vdevs_lock);
 }
 
 struct virtio_device *virtio_dev_get(u32 id)
 {
 	struct virtio_device *dev;
 
-	spinlock_acquire(&vdevs_lock);
+	spin_lock(&vdevs_lock);
 	list_for_each_entry(dev, &vdevs, list) {
 		if (dev->id == id) {
-			spinlock_release(&vdevs_lock);
+			spin_unlock(&vdevs_lock);
 			return dev;
 		}
 	}
-	spinlock_release(&vdevs_lock);
+	spin_unlock(&vdevs_lock);
 
 	return NULL;
 }
@@ -88,7 +88,7 @@ void virtio_init_scan(void)
 	struct virtio_blk_dev *vblk;
 	int err = 0;
 
-	spinlock_acquire(&vdevs_lock);
+	spin_lock(&vdevs_lock);
 	list_for_each_entry(dev, &vdevs, list) {
 		if (dev->id == VIRTIO_DEVICE_ID_BLK) {
 			vblk = virtio_blk_create(dev,
@@ -102,6 +102,6 @@ void virtio_init_scan(void)
 			}
 		}
 	}
-	spinlock_release(&vdevs_lock);
+	spin_unlock(&vdevs_lock);
 }
 subsys_initcall(virtio_init_scan);

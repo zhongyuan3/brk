@@ -25,20 +25,21 @@ static SPINLOCK_DEFINE(sleep_queue_lock);
 
 void task_join(struct task *task)
 {
-	spinlock_acquire(&run_queue_lock);
+	irqstate_t flags = spin_lock_irqsave(&run_queue_lock);
+
 	list_add_tail(&task->queue, &run_queue);
-	spinlock_release(&run_queue_lock);
+	spin_unlock_irqrestore(&run_queue_lock, flags);
 }
 
 static struct task *task_pick_next(void)
 {
 	struct task *task = NULL;
-	spinlock_acquire(&run_queue_lock);
+	spin_lock(&run_queue_lock);
 	if (!list_empty(&run_queue)) {
 		task = list_first_entry(&run_queue, struct task, queue);
 		list_del_init(&task->queue);
 	}
-	spinlock_release(&run_queue_lock);
+	spin_unlock(&run_queue_lock);
 	return task;
 }
 
@@ -61,9 +62,8 @@ void task_scheduler(void)
 			continue;
 		}
 
-		spinlock_acquire(&next->lock);
+		raw_spin_lock(&next->lock);
 		set_current_task(next);
-		cpu->irq_enabled = next->irq_enabled;
 		switch_pgtable(next->mm->pgd);
 		user_access_enable();
 		next->time_slice = TIME_SLICE_MAX;
@@ -80,11 +80,10 @@ static void task_sched(void)
 	struct cpu *cpu = this_cpu();
 
 	ASSERT(!intr_enabled());
-	ASSERT(spinlock_holding(&curr->lock));
-	ASSERT(this_cpu()->irq_nest == 1);
+	ASSERT(spin_is_locked_by_me(&curr->lock));
+	ASSERT(cpu->preempt_count == 0);
 
 	set_current_task(NULL);
-	curr->irq_enabled = cpu->irq_enabled;
 
 	switch (curr->state) {
 	case TASK_STATE_RUNNING:
@@ -93,9 +92,9 @@ static void task_sched(void)
 	case TASK_STATE_ZOMBIE:
 		break;
 	case TASK_STATE_SLEEPING:
-		spinlock_acquire(&sleep_queue_lock);
+		spin_lock(&sleep_queue_lock);
 		list_add_tail(&curr->queue, &sleep_queue);
-		spinlock_release(&sleep_queue_lock);
+		spin_unlock(&sleep_queue_lock);
 		break;
 	default:
 		panic("unexpected state: pid=%ld, state=%d\n", curr->pid,
@@ -112,9 +111,8 @@ static void task_sched(void)
 	task_add_system_time(curr, jiffies_get() - curr->ktime);
 	cpu->handoff = curr;
 	if (next) {
-		spinlock_acquire(&next->lock);
+		raw_spin_lock(&next->lock);
 		set_current_task(next);
-		cpu->irq_enabled = next->irq_enabled;
 		switch_pgtable(next->mm->pgd);
 		next->time_slice = TIME_SLICE_MAX;
 		next->ktime = jiffies_get();
@@ -129,45 +127,63 @@ static void task_sched(void)
 
 void task_yield(void)
 {
+	irqstate_t flags = local_irq_save();
 	struct task *task = current_task();
-	spinlock_acquire(&task->lock);
+
+	ASSERT(preempt_count() == 0);
+
+	raw_spin_lock(&task->lock);
 	task_sched();
-	spinlock_release(&task->lock);
+	raw_spin_unlock(&task->lock);
+
+	local_irq_restore(flags);
 }
 
+/*
+ * Callers must hold @lock and run with interrupts disabled. The interrupt
+ * state stays disabled across the switch and is restored by the caller's
+ * irqrestore once it drops @lock.
+ */
 void task_sleep(void *chan, spinlock_t *lock)
 {
 	struct task *task = current_task();
-	spinlock_acquire(&task->lock);
-	spinlock_release(lock);
+
+	ASSERT(!intr_enabled());
+	ASSERT(spin_is_locked_by_me(lock));
+	ASSERT(preempt_count() == 0);
+
+	raw_spin_lock(&task->lock);
+	raw_spin_unlock(lock);
 	task->state = TASK_STATE_SLEEPING;
 	task->chan = chan;
 	task_sched();
 	task->chan = NULL;
-	spinlock_release(&task->lock);
-	spinlock_acquire(lock);
+	raw_spin_unlock(&task->lock);
+	raw_spin_lock(lock);
 }
 
 void task_wake_all(void *chan)
 {
 	while (1) {
 		struct task *p, *wakee = NULL;
+		irqstate_t flags;
 
-		spinlock_acquire(&sleep_queue_lock);
+		flags = spin_lock_irqsave(&sleep_queue_lock);
 		list_for_each_entry(p, &sleep_queue, queue) {
-			spinlock_acquire(&p->lock);
+			irqstate_t pflags = spin_lock_irqsave(&p->lock);
+
 			if (p->state == TASK_STATE_SLEEPING &&
 			    p->chan == chan) {
 				p->state = TASK_STATE_RUNNING;
 				p->chan = NULL;
 				list_del_init(&p->queue);
-				spinlock_release(&p->lock);
+				spin_unlock_irqrestore(&p->lock, pflags);
 				wakee = p;
 				break;
 			}
-			spinlock_release(&p->lock);
+			spin_unlock_irqrestore(&p->lock, pflags);
 		}
-		spinlock_release(&sleep_queue_lock);
+		spin_unlock_irqrestore(&sleep_queue_lock, flags);
 		if (!wakee)
 			break;
 		task_join(wakee);
@@ -176,19 +192,20 @@ void task_wake_all(void *chan)
 
 void task_wake_spec(struct task *task)
 {
-	spinlock_acquire(&sleep_queue_lock);
-	spinlock_acquire(&task->lock);
+	irqstate_t flags = spin_lock_irqsave(&sleep_queue_lock);
+	irqstate_t tflags = spin_lock_irqsave(&task->lock);
+
 	if (task->state == TASK_STATE_SLEEPING) {
 		task->state = TASK_STATE_RUNNING;
 		task->chan = NULL;
 		list_del_init(&task->queue);
-		spinlock_release(&task->lock);
-		spinlock_release(&sleep_queue_lock);
+		spin_unlock_irqrestore(&task->lock, tflags);
+		spin_unlock_irqrestore(&sleep_queue_lock, flags);
 		task_join(task);
 		return;
 	}
-	spinlock_release(&task->lock);
-	spinlock_release(&sleep_queue_lock);
+	spin_unlock_irqrestore(&task->lock, tflags);
+	spin_unlock_irqrestore(&sleep_queue_lock, flags);
 }
 
 void task_exit_normal(int code)
@@ -205,6 +222,7 @@ void task_exit(int status)
 {
 	struct task *child;
 	struct task *task = current_task();
+	irqstate_t flags;
 
 	if (task == initial_task)
 		panic("%s(): init exit\n", __func__);
@@ -212,15 +230,19 @@ void task_exit(int status)
 	fdtable_close_all(task->fdtable);
 	fsinfo_free_resources(task->fsinfo);
 
-	spinlock_acquire(&wait_lock);
+	flags = spin_lock_irqsave(&wait_lock);
 	list_for_each_entry(child, &task->children, child) {
 		child->parent = initial_task;
 	}
 	list_splice(&task->children, &initial_task->children);
 	task_wake_spec(task->parent);
-	spinlock_release(&wait_lock);
+	spin_unlock_irqrestore(&wait_lock, flags);
 
-	spinlock_acquire(&task->lock);
+	ASSERT(preempt_count() == 0);
+
+	/* task_sched() never returns for a zombie, so no irqrestore here. */
+	local_irq_disable();
+	raw_spin_lock(&task->lock);
 
 	task->state = TASK_STATE_ZOMBIE;
 	task->exit_status = status;
@@ -234,15 +256,16 @@ pid_t task_wait(pid_t pid, int *status, int options, struct rusage *rus)
 {
 	struct task *child;
 	struct task *parent = current_task();
+	irqstate_t flags;
 	bool found;
 
 	(void)options;
 	(void)rus;
 
-	spinlock_acquire(&wait_lock);
+	flags = spin_lock_irqsave(&wait_lock);
 
 	if (list_empty(&parent->children)) {
-		spinlock_release(&wait_lock);
+		spin_unlock_irqrestore(&wait_lock, flags);
 		return -ECHILD;
 	}
 
@@ -250,14 +273,15 @@ again:
 	found = false;
 
 	list_for_each_entry(child, &parent->children, child) {
-		spinlock_acquire(&child->lock);
+		irqstate_t cflags = spin_lock_irqsave(&child->lock);
+
 		if (pid > 0 && child->tgid == pid) {
 			found = true;
 		}
 
 		if (child->state != TASK_STATE_ZOMBIE ||
 		    (pid > 0 && child->tgid != pid)) {
-			spinlock_release(&child->lock);
+			spin_unlock_irqrestore(&child->lock, cflags);
 			continue;
 		}
 
@@ -270,15 +294,15 @@ again:
 		task_add_child_user_time(
 			parent, task_get_user_time(child) +
 					task_get_child_user_time(child));
-		spinlock_release(&child->lock);
+		spin_unlock_irqrestore(&child->lock, cflags);
 		list_del_init(&child->child);
-		spinlock_release(&wait_lock);
+		spin_unlock_irqrestore(&wait_lock, flags);
 		task_destroy(child);
 		return pid;
 	}
 
 	if (pid > 0 && !found) {
-		spinlock_release(&wait_lock);
+		spin_unlock_irqrestore(&wait_lock, flags);
 		return -ECHILD;
 	}
 
@@ -291,7 +315,7 @@ void task_sched_resume(void)
 {
 	struct cpu *cpu = this_cpu();
 	if (cpu->handoff) {
-		spinlock_release(&cpu->handoff->lock);
+		raw_spin_unlock(&cpu->handoff->lock);
 		cpu->handoff = NULL;
 	}
 }

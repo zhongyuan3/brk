@@ -18,7 +18,7 @@ void panic(char const *fmt, ...)
 	/*
 	 * Never route panic through printk() itself: a panic may fire while
 	 * the current CPU already holds printk_lock, in which case re-entering
-	 * spinlock_acquire() would recurse forever. Render the message into a
+	 * spin_lock() would recurse forever. Render the message into a
 	 * local buffer and hand it to printk_panic_text(), which tolerates the
 	 * lock states found on the panic path.
 	 */

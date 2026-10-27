@@ -143,9 +143,9 @@ static void pipefs_evict_inode(struct fs_inode *inode)
 static void pipefs_put_super(struct fs_super_block *sb)
 {
 	struct fs_driver *driver = sb->driver;
-	spinlock_acquire(&driver->lock);
+	spin_lock(&driver->lock);
 	list_del(&sb->instance);
-	spinlock_release(&driver->lock);
+	spin_unlock(&driver->lock);
 	fs_dentry_put(sb->root);
 }
 
@@ -202,9 +202,9 @@ int pipefs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 
 	sb->root = fs_dentry_get(root_dentry);
 
-	spinlock_acquire(&args->driver->lock);
+	spin_lock(&args->driver->lock);
 	list_add_tail(&sb->instance, &args->driver->super_blocks);
-	spinlock_release(&args->driver->lock);
+	spin_unlock(&args->driver->lock);
 
 	result->root = root_dentry;
 	result->sb = sb;
@@ -243,11 +243,12 @@ static int pipe_open(struct fs_inode *inode, struct fs_file *file)
 static int pipe_release(struct fs_inode *inode, struct fs_file *file)
 {
 	struct anon_pipe *pipe = inode->private_data;
+	irqstate_t flags;
 
 	if (!pipe)
 		return 0;
 
-	spinlock_acquire(&pipe->lock);
+	flags = spin_lock_irqsave(&pipe->lock);
 	if (file->mode & FMODE_READ) {
 		if (pipe->readers)
 			pipe->readers--;
@@ -258,7 +259,7 @@ static int pipe_release(struct fs_inode *inode, struct fs_file *file)
 			pipe->writers--;
 		task_wake_all(&pipe->rwait);
 	}
-	spinlock_release(&pipe->lock);
+	spin_unlock_irqrestore(&pipe->lock, flags);
 	return 0;
 }
 
@@ -268,24 +269,25 @@ static ssize_t pipe_read(struct fs_file *file, char *buf, size_t size,
 	struct anon_pipe *pipe = file->inode->private_data;
 	size_t n, first;
 	ssize_t total = 0;
+	irqstate_t flags;
 
 	(void)pos;
 	if (!pipe)
 		return -EINVAL;
 
 	while (size > 0) {
-		spinlock_acquire(&pipe->lock);
+		flags = spin_lock_irqsave(&pipe->lock);
 		while (pipe->count == 0) {
 			if (pipe->writers == 0) {
-				spinlock_release(&pipe->lock);
+				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total;
 			}
 			if (pipe->nonblock) {
-				spinlock_release(&pipe->lock);
+				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EAGAIN;
 			}
 			if (task_is_killed(current_task())) {
-				spinlock_release(&pipe->lock);
+				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EINTR;
 			}
 			task_sleep(&pipe->rwait, &pipe->lock);
@@ -303,7 +305,7 @@ static ssize_t pipe_read(struct fs_file *file, char *buf, size_t size,
 		}
 		pipe->head = (pipe->head + n) % PIPE_RING_CAP;
 		pipe->count -= n;
-		spinlock_release(&pipe->lock);
+		spin_unlock_irqrestore(&pipe->lock, flags);
 
 		buf += n;
 		size -= n;
@@ -320,29 +322,30 @@ static ssize_t pipe_write(struct fs_file *file, const char *buf, size_t size,
 	struct anon_pipe *pipe = file->inode->private_data;
 	size_t n, first;
 	ssize_t total = 0;
+	irqstate_t flags;
 
 	(void)pos;
 	if (!pipe)
 		return -EINVAL;
 
 	while (size > 0) {
-		spinlock_acquire(&pipe->lock);
+		flags = spin_lock_irqsave(&pipe->lock);
 		if (pipe->readers == 0) {
-			spinlock_release(&pipe->lock);
+			spin_unlock_irqrestore(&pipe->lock, flags);
 			return total ? total : -EPIPE;
 		}
 		while (pipe->count == PIPE_RING_CAP) {
 			if (pipe->nonblock) {
-				spinlock_release(&pipe->lock);
+				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EAGAIN;
 			}
 			if (task_is_killed(current_task())) {
-				spinlock_release(&pipe->lock);
+				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EINTR;
 			}
 			task_sleep(&pipe->wwait, &pipe->lock);
 			if (pipe->readers == 0) {
-				spinlock_release(&pipe->lock);
+				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EPIPE;
 			}
 		}
@@ -363,7 +366,7 @@ static ssize_t pipe_write(struct fs_file *file, const char *buf, size_t size,
 			       buf, n);
 		}
 		pipe->count += n;
-		spinlock_release(&pipe->lock);
+		spin_unlock_irqrestore(&pipe->lock, flags);
 
 		buf += n;
 		size -= n;

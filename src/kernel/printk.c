@@ -113,39 +113,42 @@ static void vprintk_locked(int level, const char *fmt, va_list ap)
 
 void vprintk(char const *fmt, va_list ap)
 {
-	spinlock_acquire(&printk_lock);
+	irqstate_t flags = spin_lock_irqsave(&printk_lock);
+
 	vprintk_locked(KERN_DEFAULT, fmt, ap);
-	spinlock_release(&printk_lock);
+	spin_unlock_irqrestore(&printk_lock, flags);
 }
 
 void _printk(int level, const char *fmt, ...)
 {
 	va_list ap;
+	irqstate_t flags;
 
 	va_start(ap, fmt);
-	spinlock_acquire(&printk_lock);
+	flags = spin_lock_irqsave(&printk_lock);
 	vprintk_locked(level, fmt, ap);
-	spinlock_release(&printk_lock);
+	spin_unlock_irqrestore(&printk_lock, flags);
 	va_end(ap);
 }
 
 void printk_flush_pending(void)
 {
-	spinlock_acquire(&printk_lock);
+	irqstate_t flags = spin_lock_irqsave(&printk_lock);
+
 	log_flush();
-	spinlock_release(&printk_lock);
+	spin_unlock_irqrestore(&printk_lock, flags);
 }
 
 void printk_panic_text(const char *text, size_t len)
 {
-	if (spinlock_holding(&printk_lock)) {
+	if (spin_is_locked_by_me(&printk_lock)) {
 		/* Panic fired inside printk(): we already own the lock. */
 		log_store(KERN_EMERG, text, len);
 		log_flush();
-	} else if (spinlock_tryacquire(&printk_lock)) {
+	} else if (spin_trylock(&printk_lock)) {
 		log_store(KERN_EMERG, text, len);
 		log_flush();
-		spinlock_release(&printk_lock);
+		spin_unlock(&printk_lock);
 	} else {
 		/* Another CPU holds the lock; best-effort raw output. */
 		console_write_record_direct(KERN_EMERG,

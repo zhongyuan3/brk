@@ -12,9 +12,10 @@ static SPINLOCK_DEFINE(console_lock);
 
 void console_register(struct console *console)
 {
-	spinlock_acquire(&console_lock);
+	irqstate_t flags = spin_lock_irqsave(&console_lock);
+
 	list_add_tail(&console->list, &console_list);
-	spinlock_release(&console_lock);
+	spin_unlock_irqrestore(&console_lock, flags);
 
 	/* Print any messages logged before a console was available. */
 	printk_flush_pending();
@@ -22,21 +23,22 @@ void console_register(struct console *console)
 
 void console_unregister(struct console *console)
 {
-	spinlock_acquire(&console_lock);
+	irqstate_t flags = spin_lock_irqsave(&console_lock);
+
 	list_del(&console->list);
-	spinlock_release(&console_lock);
+	spin_unlock_irqrestore(&console_lock, flags);
 }
 
 bool console_has_active(void)
 {
 	struct console *con;
 	bool active = false;
+	irqstate_t flags = spin_lock_irqsave(&console_lock);
 
-	spinlock_acquire(&console_lock);
 	list_for_each_entry(con, &console_list, list)
 		if (con->active)
 			active = true;
-	spinlock_release(&console_lock);
+	spin_unlock_irqrestore(&console_lock, flags);
 	return active;
 }
 
@@ -86,9 +88,10 @@ static void console_write_record_locked(u8 level, u64 ts_nsec, const char *text,
 
 void console_write_record(u8 level, u64 ts_nsec, const char *text, size_t len)
 {
-	spinlock_acquire(&console_lock);
+	irqstate_t flags = spin_lock_irqsave(&console_lock);
+
 	console_write_record_locked(level, ts_nsec, text, len);
-	spinlock_release(&console_lock);
+	spin_unlock_irqrestore(&console_lock, flags);
 }
 
 void console_write_record_direct(u8 level, u64 ts_nsec, const char *text,

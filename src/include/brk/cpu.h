@@ -13,8 +13,7 @@ struct cpu {
 	struct task *current;
 	unsigned long kernel_sp;
 	cpuid_t id;
-	int irq_nest;
-	bool irq_enabled;
+	int preempt_count;
 	bool initialized;
 };
 
@@ -23,8 +22,9 @@ struct cpu *this_cpu(void);
 cpuid_t this_cpuid(void);
 void set_this_cpuid(cpuid_t cpuid);
 
-void push_off(void);
-void pop_off(void);
+void preempt_disable(void);
+void preempt_enable(void);
+int preempt_count(void);
 
 struct task *current_task(void);
 void set_current_task(struct task *task);

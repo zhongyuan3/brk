@@ -100,9 +100,9 @@ int slab_init(struct slab_allocator *allocator, size_t size, size_t align,
 
 	list_init(&allocator->slab_list);
 
-	spinlock_acquire(&allocator->lock);
+	spin_lock(&allocator->lock);
 	ret = slab_add_page(allocator);
-	spinlock_release(&allocator->lock);
+	spin_unlock(&allocator->lock);
 	return ret;
 }
 
@@ -112,7 +112,7 @@ void slab_deinit(struct slab_allocator *allocator)
 	struct page *pg;
 	struct list_head *list;
 
-	spinlock_acquire(&allocator->lock);
+	spin_lock(&allocator->lock);
 	list = &allocator->slab_list;
 	while (!list_empty(list)) {
 		first = list->next;
@@ -123,7 +123,7 @@ void slab_deinit(struct slab_allocator *allocator)
 		ASSERT(pg);
 		page_free(pg, allocator->page_order);
 	}
-	spinlock_release(&allocator->lock);
+	spin_unlock(&allocator->lock);
 }
 
 void *slab_alloc(struct slab_allocator *allocator)
@@ -133,12 +133,12 @@ void *slab_alloc(struct slab_allocator *allocator)
 	int attempt = 0;
 	struct list_head *list;
 
-	spinlock_acquire(&allocator->lock);
+	spin_lock(&allocator->lock);
 	list = &allocator->slab_list;
 
 retry:
 	if (attempt > 1) {
-		spinlock_release(&allocator->lock);
+		spin_unlock(&allocator->lock);
 		return NULL;
 	}
 
@@ -147,13 +147,13 @@ retry:
 			obj = curr->slab_free_objs;
 			curr->slab_free_objs = *(void **)obj;
 			curr->slab_free_count--;
-			spinlock_release(&allocator->lock);
+			spin_unlock(&allocator->lock);
 			return obj;
 		}
 	}
 
 	if (attempt == 0 && slab_add_page(allocator) < 0) {
-		spinlock_release(&allocator->lock);
+		spin_unlock(&allocator->lock);
 		return NULL;
 	}
 
@@ -179,7 +179,7 @@ void slab_free(struct slab_allocator *allocator, void *obj)
 	if (!obj)
 		return;
 
-	spinlock_acquire(&allocator->lock);
+	spin_lock(&allocator->lock);
 
 	ASSERT(is_aligned((uintptr_t)obj, allocator->align));
 
@@ -191,12 +191,12 @@ void slab_free(struct slab_allocator *allocator, void *obj)
 			*(void **)obj = curr->slab_free_objs;
 			curr->slab_free_objs = obj;
 			curr->slab_free_count++;
-			spinlock_release(&allocator->lock);
+			spin_unlock(&allocator->lock);
 			return;
 		}
 	}
 
-	spinlock_release(&allocator->lock);
+	spin_unlock(&allocator->lock);
 
 	panic("%s(): invalid obj %p in cache %s\n", __func__, obj,
 	      allocator->name ? allocator->name : "(null)");

@@ -82,9 +82,9 @@ brkfs_lookup(struct fs_inode *dir, struct fs_dentry *dentry, unsigned int flags)
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 
-	spinlock_acquire(&inode->lock);
+	spin_lock(&inode->lock);
 	bool is_new = (inode->state & I_NEW) != 0;
-	spinlock_release(&inode->lock);
+	spin_unlock(&inode->lock);
 	if (is_new) {
 		err = brkfs_init_loaded_inode(sbi, inode);
 		if (err) {

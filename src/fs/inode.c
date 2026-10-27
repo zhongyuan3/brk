@@ -97,23 +97,23 @@ static struct fs_inode *__inode_lookup(struct hlist_head *bucket,
 {
 	struct fs_inode *inode;
 
-	ASSERT(spinlock_holding(&inode_hash_lock));
+	ASSERT(spin_is_locked_by_me(&inode_hash_lock));
 
 retry:
 	/* Look up in hash table */
 	hlist_for_each_entry(inode, bucket, hash) {
 		if (inode->ino == ino && inode->sb == sb) {
-			spinlock_acquire(&inode->lock);
+			irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
 			/* Check if being freed */
 			if (inode->state & (I_FREEING | I_WILL_FREE)) {
-				spinlock_release(&inode->lock);
+				spin_unlock_irqrestore(&inode->lock, flags);
 				/* Wait for release to complete and retry */
 				task_sleep(&inode->state, &inode_hash_lock);
 				goto retry;
 			}
 
-			spinlock_release(&inode->lock);
+			spin_unlock_irqrestore(&inode->lock, flags);
 
 			fs_inode_get(inode);
 			return inode; /* Cache hit, return directly */
@@ -128,10 +128,12 @@ struct fs_inode *fs_inode_get_locked(struct fs_super_block *sb,
 {
 	struct fs_inode *inode, *old;
 	struct hlist_head *head = inode_hash_table + __inode_hash(sb, ino);
+	irqstate_t flags;
+	irqstate_t iflags;
 
-	spinlock_acquire(&inode_hash_lock);
+	flags = spin_lock_irqsave(&inode_hash_lock);
 	inode = __inode_lookup(head, sb, ino);
-	spinlock_release(&inode_hash_lock);
+	spin_unlock_irqrestore(&inode_hash_lock, flags);
 	if (inode)
 		return inode;
 
@@ -139,7 +141,7 @@ struct fs_inode *fs_inode_get_locked(struct fs_super_block *sb,
 	if (!inode)
 		return NULL;
 
-	spinlock_acquire(&inode_hash_lock);
+	flags = spin_lock_irqsave(&inode_hash_lock);
 	old = __inode_lookup(head, sb, ino);
 	if (!old) {
 		/*
@@ -150,37 +152,34 @@ struct fs_inode *fs_inode_get_locked(struct fs_super_block *sb,
 		inode->state |= I_NEW;
 
 		hlist_add_head(&inode->hash, head);
-		spinlock_release(&inode_hash_lock);
+		spin_unlock_irqrestore(&inode_hash_lock, flags);
 
-		spinlock_acquire(&sb->inodes_lock);
+		spin_lock(&sb->inodes_lock);
 		list_add(&inode->sb_list, &sb->inodes);
-		spinlock_release(&sb->inodes_lock);
+		spin_unlock(&sb->inodes_lock);
 
 		return inode;
 	}
-	spinlock_release(&inode_hash_lock);
+	spin_unlock_irqrestore(&inode_hash_lock, flags);
 
 	__inode_free(inode);
 
 	inode = old;
 
-	while (1) {
-		spinlock_acquire(&inode->lock);
-		if (!(inode->state & I_NEW)) {
-			spinlock_release(&inode->lock);
-			break;
-		}
+	iflags = spin_lock_irqsave(&inode->lock);
+	while (inode->state & I_NEW)
 		task_sleep(&inode->state, &inode->lock);
-	}
+	spin_unlock_irqrestore(&inode->lock, iflags);
 
 	return inode;
 }
 
 void fs_inode_unlock_new(struct fs_inode *inode)
 {
-	spinlock_acquire(&inode->lock);
+	irqstate_t flags = spin_lock_irqsave(&inode->lock);
+
 	inode->state &= ~I_NEW;
-	spinlock_release(&inode->lock);
+	spin_unlock_irqrestore(&inode->lock, flags);
 	task_wake_all(&inode->state);
 }
 
@@ -197,9 +196,10 @@ void fs_inode_put(struct fs_inode *inode)
 	if (refcnt_dec_fetch(&inode->count) > 0)
 		return;
 
-	spinlock_acquire(&inode->lock);
+	irqstate_t flags = spin_lock_irqsave(&inode->lock);
+
 	inode->state |= I_FREEING;
-	spinlock_release(&inode->lock);
+	spin_unlock_irqrestore(&inode->lock, flags);
 
 	s_op = inode->sb->ops;
 	if (s_op->evict_inode)
@@ -215,15 +215,16 @@ void fs_inode_put(struct fs_inode *inode)
 		inode->mapping = NULL;
 	}
 
-	spinlock_acquire(&inode_hash_lock);
-	hlist_del_init(&inode->hash);
-	spinlock_release(&inode_hash_lock);
+	irqstate_t hflags = spin_lock_irqsave(&inode_hash_lock);
 
-	spinlock_acquire(&inode->sb->inodes_lock);
+	hlist_del_init(&inode->hash);
+	spin_unlock_irqrestore(&inode_hash_lock, hflags);
+
+	spin_lock(&inode->sb->inodes_lock);
 	list_del(&inode->sb_list);
 	if (inode->state & I_DIRTY)
 		list_del(&inode->list);
-	spinlock_release(&inode->sb->inodes_lock);
+	spin_unlock(&inode->sb->inodes_lock);
 
 	__inode_free(inode);
 }
@@ -247,22 +248,24 @@ void fs_inode_mark_dirty(struct fs_inode *inode)
 	struct fs_super_block *sb = inode->sb;
 	bool need_link;
 
-	spinlock_acquire(&inode->lock);
+	irqstate_t flags = spin_lock_irqsave(&inode->lock);
+
 	need_link = (inode->state & I_DIRTY) == 0;
 	inode->state |= I_DIRTY;
-	spinlock_release(&inode->lock);
+	spin_unlock_irqrestore(&inode->lock, flags);
 
 	if (!need_link)
 		return;
 
-	spinlock_acquire(&sb->inodes_lock);
+	spin_lock(&sb->inodes_lock);
 	list_add(&inode->list, &sb->dirty_inodes);
-	spinlock_release(&sb->inodes_lock);
+	spin_unlock(&sb->inodes_lock);
 }
 
 void fs_inode_clear(struct fs_inode *inode)
 {
-	spinlock_acquire(&inode->lock);
+	irqstate_t flags = spin_lock_irqsave(&inode->lock);
+
 	inode->state |= I_CLEAR;
-	spinlock_release(&inode->lock);
+	spin_unlock_irqrestore(&inode->lock, flags);
 }

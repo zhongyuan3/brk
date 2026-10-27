@@ -45,9 +45,9 @@ pgd_t *create_user_pgtable(void)
 {
 	u64 pa = alloc_pgtable();
 	void *pgtable = (void *)phys_to_virt(pa);
-	spinlock_acquire(&kernel_pgdir_lock);
+	spin_lock(&kernel_pgdir_lock);
 	memcpy(pgtable, kernel_pgdir, PAGE_SIZE);
-	spinlock_release(&kernel_pgdir_lock);
+	spin_unlock(&kernel_pgdir_lock);
 	return pgtable;
 }
 
@@ -138,9 +138,9 @@ static int copy_user_pgd(pgd_t *dst, pgd_t *src)
 	int err = 0;
 
 	for (size_t i = 0; i < PTRS_PER_PGD; ++i) {
-		spinlock_acquire(&kernel_pgdir_lock);
+		spin_lock(&kernel_pgdir_lock);
 		bool is_kspace = pgd_is_valid(kernel_pgdir[i]);
-		spinlock_release(&kernel_pgdir_lock);
+		spin_unlock(&kernel_pgdir_lock);
 		if (is_kspace || !pgd_is_valid(src[i]))
 			continue;
 
@@ -225,9 +225,9 @@ static void destroy_user_pgd(pgd_t *pgd)
 	pmd_t *pmd;
 
 	for (size_t i = 0; i < PTRS_PER_PGD; ++i) {
-		spinlock_acquire(&kernel_pgdir_lock);
+		spin_lock(&kernel_pgdir_lock);
 		bool is_kspace = pgd_is_valid(kernel_pgdir[i]);
-		spinlock_release(&kernel_pgdir_lock);
+		spin_unlock(&kernel_pgdir_lock);
 		if (is_kspace || !pgd_is_valid(pgd[i]))
 			continue;
 

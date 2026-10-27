@@ -53,11 +53,13 @@ void tty_init(struct tty *tty, struct tty_port *port)
 
 void tty_set_foreground(struct tty *tty, struct task *task)
 {
+	irqstate_t flags;
+
 	if (!tty || !tty->port)
 		return;
-	spinlock_acquire(&tty->port->lock);
+	flags = spin_lock_irqsave(&tty->port->lock);
 	tty->port->foreground = task;
-	spinlock_release(&tty->port->lock);
+	spin_unlock_irqrestore(&tty->port->lock, flags);
 }
 
 long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
@@ -76,14 +78,17 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 	case TIOCGWINSZ:
 		*ws = tty->winsize;
 		return 0;
-	case TIOCSWINSZ:
+	case TIOCSWINSZ: {
+		irqstate_t flags;
+
 		tty->winsize = *ws;
-		spinlock_acquire(&tty->port->lock);
+		flags = spin_lock_irqsave(&tty->port->lock);
 		fg = tty->port->foreground;
-		spinlock_release(&tty->port->lock);
+		spin_unlock_irqrestore(&tty->port->lock, flags);
 		if (fg)
 			signal_send(fg, SIGWINCH);
 		return 0;
+	}
 	default:
 		return -ENOTTY;
 	}
@@ -94,17 +99,19 @@ ssize_t tty_read(struct tty *tty, void *buf, size_t n)
 	size_t target;
 	int c;
 	char *dst = buf;
+	irqstate_t flags;
 
 	tty_set_foreground(tty, current_task());
 
 	target = n;
-	spinlock_acquire(&tty->port->lock);
+	flags = spin_lock_irqsave(&tty->port->lock);
 	while (n > 0) {
 		/* wait until interrupt handler has put some
 		 * input into cons.buffer. */
 		while (tty->rx_r == tty->rx_w) {
 			if (signal_pending(current_task())) {
-				spinlock_release(&tty->port->lock);
+				spin_unlock_irqrestore(&tty->port->lock,
+						       flags);
 				return -EINTR;
 			}
 			task_sleep(&tty->rx_r, &tty->port->lock);
@@ -130,7 +137,7 @@ ssize_t tty_read(struct tty *tty, void *buf, size_t n)
 			break;
 		}
 	}
-	spinlock_release(&tty->port->lock);
+	spin_unlock_irqrestore(&tty->port->lock, flags);
 
 	return target - n;
 }
@@ -141,21 +148,21 @@ ssize_t tty_write(struct tty *tty, const void *buf, size_t n)
 	const u8 *p = buf;
 	const u8 *end = p + n;
 	int err = 0;
+	irqstate_t flags = spin_lock_irqsave(&tty->port->lock);
 
-	spinlock_acquire(&tty->port->lock);
 	while (p < end) {
 		err = ops->put_char(tty, *p);
 		if (err)
 			break;
 		p++;
 	}
-	spinlock_release(&tty->port->lock);
+	spin_unlock_irqrestore(&tty->port->lock, flags);
 	return err ? err : p - (const u8 *)buf;
 }
 
 void tty_receive(struct tty *tty, int c)
 {
-	spinlock_acquire(&tty->port->lock);
+	irqstate_t flags = spin_lock_irqsave(&tty->port->lock);
 	const struct tty_ops *ops = tty->port->driver->ops;
 
 	switch (c) {
@@ -194,7 +201,7 @@ void tty_receive(struct tty *tty, int c)
 		break;
 	}
 
-	spinlock_release(&tty->port->lock);
+	spin_unlock_irqrestore(&tty->port->lock, flags);
 }
 
 struct tty *tty_attach_port(struct tty_port *port)
@@ -204,21 +211,22 @@ struct tty *tty_attach_port(struct tty_port *port)
 	if (!port)
 		return NULL;
 
-	spinlock_acquire(&port->lock);
+	irqstate_t flags = spin_lock_irqsave(&port->lock);
+
 	if (port->tty) {
-		spinlock_release(&port->lock);
+		spin_unlock_irqrestore(&port->lock, flags);
 		return port->tty;
 	}
 
 	tty = tty_alloc();
 	if (!tty) {
-		spinlock_release(&port->lock);
+		spin_unlock_irqrestore(&port->lock, flags);
 		return NULL;
 	}
 
 	tty_init(tty, port);
 	port->tty = tty;
-	spinlock_release(&port->lock);
+	spin_unlock_irqrestore(&port->lock, flags);
 	return tty;
 }
 
@@ -229,10 +237,11 @@ void tty_detach_port(struct tty_port *port)
 	if (!port)
 		return;
 
-	spinlock_acquire(&port->lock);
+	irqstate_t flags = spin_lock_irqsave(&port->lock);
+
 	tty = port->tty;
 	port->tty = NULL;
-	spinlock_release(&port->lock);
+	spin_unlock_irqrestore(&port->lock, flags);
 
 	if (tty)
 		tty_free(tty);
@@ -245,14 +254,15 @@ struct tty *tty_open(struct tty_port *port)
 	if (!port)
 		return NULL;
 
-	spinlock_acquire(&port->lock);
+	irqstate_t flags = spin_lock_irqsave(&port->lock);
+
 	tty = port->tty;
 	if (!tty) {
-		spinlock_release(&port->lock);
+		spin_unlock_irqrestore(&port->lock, flags);
 		return NULL;
 	}
 	refcnt_inc(&tty->refcnt);
-	spinlock_release(&port->lock);
+	spin_unlock_irqrestore(&port->lock, flags);
 	return tty;
 }
 

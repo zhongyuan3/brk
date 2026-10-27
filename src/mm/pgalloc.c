@@ -23,7 +23,7 @@ struct page *page_alloc(unsigned int order)
 	bool retried = false;
 
 again:
-	spinlock_acquire(&areas_lock);
+	spin_lock(&areas_lock);
 
 	for (; curr_order <= PAGE_ORDER_MAX; ++curr_order) {
 		if (!list_empty(&areas[curr_order].free_list)) {
@@ -34,7 +34,7 @@ again:
 		}
 	}
 
-	spinlock_release(&areas_lock);
+	spin_unlock(&areas_lock);
 
 	if (!retried) {
 		retried = true;
@@ -57,7 +57,7 @@ found:
 	}
 
 	curr->flags &= ~PAGE_FLAGS_FREE;
-	spinlock_release(&areas_lock);
+	spin_unlock(&areas_lock);
 	return curr;
 }
 
@@ -98,7 +98,7 @@ void page_free(struct page *pg, unsigned int order)
 {
 	struct page *buddy;
 
-	spinlock_acquire(&areas_lock);
+	spin_lock(&areas_lock);
 
 	ASSERT((pg->flags & PAGE_FLAGS_BUDDY));
 	ASSERT(!(pg->flags & PAGE_FLAGS_FREE));
@@ -121,7 +121,7 @@ void page_free(struct page *pg, unsigned int order)
 	pg->buddy_page_order = order;
 	list_add(&pg->buddy_lru, &areas[order].free_list);
 
-	spinlock_release(&areas_lock);
+	spin_unlock(&areas_lock);
 }
 
 void page_alloc_init(void)

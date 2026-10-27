@@ -25,28 +25,28 @@ static unsigned long pagecache_nrpages;
 
 static void pagecache_lru_add(struct cached_page *cp)
 {
-	spinlock_acquire(&pagecache_lru_lock);
+	spin_lock(&pagecache_lru_lock);
 	if (list_empty(&cp->lru_list))
 		list_add_tail(&cp->lru_list, &pagecache_lru);
-	spinlock_release(&pagecache_lru_lock);
+	spin_unlock(&pagecache_lru_lock);
 }
 
 static void pagecache_lru_del(struct cached_page *cp)
 {
-	spinlock_acquire(&pagecache_lru_lock);
+	spin_lock(&pagecache_lru_lock);
 	if (!list_empty(&cp->lru_list))
 		list_del_init(&cp->lru_list);
-	spinlock_release(&pagecache_lru_lock);
+	spin_unlock(&pagecache_lru_lock);
 }
 
 static void pagecache_lru_touch(struct cached_page *cp)
 {
-	spinlock_acquire(&pagecache_lru_lock);
+	spin_lock(&pagecache_lru_lock);
 	if (!list_empty(&cp->lru_list)) {
 		list_del(&cp->lru_list);
 		list_add_tail(&cp->lru_list, &pagecache_lru);
 	}
-	spinlock_release(&pagecache_lru_lock);
+	spin_unlock(&pagecache_lru_lock);
 }
 
 void page_cache_init(void)
@@ -112,16 +112,16 @@ void page_cache_destroy(struct page_cache *m)
 	if (!m)
 		return;
 
-	spinlock_acquire(&m->lock);
+	spin_lock(&m->lock);
 	for (size_t i = 0; i < PAGE_CACHE_HSIZE; ++i) {
 		hlist_for_each_entry_safe(cp, next, &m->pages[i], ht_node) {
 			__detach_locked(m, cp);
-			spinlock_release(&m->lock);
+			spin_unlock(&m->lock);
 			detach_and_put(cp);
-			spinlock_acquire(&m->lock);
+			spin_lock(&m->lock);
 		}
 	}
-	spinlock_release(&m->lock);
+	spin_unlock(&m->lock);
 
 	kfree(m);
 }
@@ -178,11 +178,11 @@ static struct cached_page *find_page(struct page_cache *m, pgoff_t index)
 {
 	struct cached_page *cp;
 
-	spinlock_acquire(&m->lock);
+	spin_lock(&m->lock);
 	cp = __lookup_locked(m, index);
 	if (cp)
 		refcnt_inc(&cp->refcnt);
-	spinlock_release(&m->lock);
+	spin_unlock(&m->lock);
 	if (cp)
 		pagecache_lru_touch(cp);
 	return cp;
@@ -201,11 +201,11 @@ static struct cached_page *find_or_create_page(struct page_cache *m,
 	if (!cp)
 		return NULL;
 
-	spinlock_acquire(&m->lock);
+	spin_lock(&m->lock);
 	existing = __lookup_locked(m, index);
 	if (existing) {
 		refcnt_inc(&existing->refcnt);
-		spinlock_release(&m->lock);
+		spin_unlock(&m->lock);
 		cached_page_destroy(cp);
 		return existing;
 	}
@@ -213,7 +213,7 @@ static struct cached_page *find_or_create_page(struct page_cache *m,
 	m->nrpages++;
 	pagecache_nrpages++;
 	refcnt_inc(&cp->refcnt); /* user reference returned to caller */
-	spinlock_release(&m->lock);
+	spin_unlock(&m->lock);
 
 	pagecache_lru_add(cp);
 	return cp;
@@ -253,36 +253,36 @@ void cached_page_unlock(struct cached_page *cp)
 bool cached_page_uptodate(struct cached_page *cp)
 {
 	bool ret;
-	spinlock_acquire(&cp->lock);
+	spin_lock(&cp->lock);
 	ret = (cp->flags & PCP_UPTODATE) != 0;
-	spinlock_release(&cp->lock);
+	spin_unlock(&cp->lock);
 	return ret;
 }
 
 bool cached_page_dirty(struct cached_page *cp)
 {
 	bool ret;
-	spinlock_acquire(&cp->lock);
+	spin_lock(&cp->lock);
 	ret = (cp->flags & PCP_DIRTY) != 0;
-	spinlock_release(&cp->lock);
+	spin_unlock(&cp->lock);
 	return ret;
 }
 
 bool cached_page_writeback(struct cached_page *cp)
 {
 	bool ret;
-	spinlock_acquire(&cp->lock);
+	spin_lock(&cp->lock);
 	ret = (cp->flags & PCP_WRITEBACK) != 0;
-	spinlock_release(&cp->lock);
+	spin_unlock(&cp->lock);
 	return ret;
 }
 
 void cached_page_mark_uptodate(struct cached_page *cp)
 {
-	spinlock_acquire(&cp->lock);
+	spin_lock(&cp->lock);
 	cp->flags |= PCP_UPTODATE;
 	cp->flags &= ~PCP_ERROR;
-	spinlock_release(&cp->lock);
+	spin_unlock(&cp->lock);
 }
 
 void cached_page_mark_dirty(struct cached_page *cp)
@@ -290,14 +290,14 @@ void cached_page_mark_dirty(struct cached_page *cp)
 	struct page_cache *m = cp->mapping;
 	bool need_link;
 
-	spinlock_acquire(&m->lock);
-	spinlock_acquire(&cp->lock);
+	spin_lock(&m->lock);
+	spin_lock(&cp->lock);
 	need_link = !(cp->flags & PCP_DIRTY);
 	cp->flags |= PCP_DIRTY;
-	spinlock_release(&cp->lock);
+	spin_unlock(&cp->lock);
 	if (need_link)
 		list_add_tail(&cp->dirty_list, &m->dirty_pages);
-	spinlock_release(&m->lock);
+	spin_unlock(&m->lock);
 }
 
 struct cached_page *read_mapping_page(struct page_cache *m, pgoff_t index)
@@ -320,9 +320,9 @@ struct cached_page *read_mapping_page(struct page_cache *m, pgoff_t index)
 
 	err = m->ops->read_page(m, cp);
 	if (err) {
-		spinlock_acquire(&cp->lock);
+		spin_lock(&cp->lock);
 		cp->flags |= PCP_ERROR;
-		spinlock_release(&cp->lock);
+		spin_unlock(&cp->lock);
 		cached_page_unlock(cp);
 		cached_page_put(cp);
 		return ERR_PTR(err);
@@ -370,15 +370,15 @@ static int writeback_one(struct page_cache *m, struct cached_page *cp)
 	bool do_write;
 	int err = 0;
 
-	spinlock_acquire(&m->lock);
+	spin_lock(&m->lock);
 	list_del_init(&cp->dirty_list);
-	spinlock_acquire(&cp->lock);
+	spin_lock(&cp->lock);
 	do_write = (cp->flags & PCP_UPTODATE) != 0;
 	cp->flags &= ~PCP_DIRTY;
 	if (do_write)
 		cp->flags |= PCP_WRITEBACK;
-	spinlock_release(&cp->lock);
-	spinlock_release(&m->lock);
+	spin_unlock(&cp->lock);
+	spin_unlock(&m->lock);
 
 	if (!do_write)
 		return 0;
@@ -387,11 +387,11 @@ static int writeback_one(struct page_cache *m, struct cached_page *cp)
 	err = m->ops->write_page(m, cp);
 	cached_page_unlock(cp);
 
-	spinlock_acquire(&cp->lock);
+	spin_lock(&cp->lock);
 	cp->flags &= ~PCP_WRITEBACK;
 	if (err)
 		cp->flags |= PCP_ERROR;
-	spinlock_release(&cp->lock);
+	spin_unlock(&cp->lock);
 
 	/* Re-dirty so a later flush retries the page that failed to write. */
 	if (err)
@@ -414,9 +414,9 @@ int page_cache_flush_range(struct page_cache *m, loff_t start, loff_t end)
 	first = (pgoff_t)(start >> PAGE_SHIFT);
 	last = (end < 0) ? ~(pgoff_t)0 : (pgoff_t)(end >> PAGE_SHIFT);
 
-	spinlock_acquire(&m->lock);
+	spin_lock(&m->lock);
 	collect_dirty_batch(m, first, last, &batch);
-	spinlock_release(&m->lock);
+	spin_unlock(&m->lock);
 
 	while (!list_empty(&batch)) {
 		struct cached_page *cp = list_first_entry(
@@ -451,15 +451,15 @@ unsigned long page_cache_shrink(unsigned long nr_to_reclaim)
 		struct cached_page *cp;
 		unsigned int flags;
 
-		spinlock_acquire(&pagecache_lru_lock);
+		spin_lock(&pagecache_lru_lock);
 		if (list_empty(&pagecache_lru)) {
-			spinlock_release(&pagecache_lru_lock);
+			spin_unlock(&pagecache_lru_lock);
 			break;
 		}
 		cp = list_first_entry(&pagecache_lru, struct cached_page,
 				      lru_list);
 		list_del_init(&cp->lru_list);
-		spinlock_release(&pagecache_lru_lock);
+		spin_unlock(&pagecache_lru_lock);
 
 		scanned++;
 
@@ -469,17 +469,17 @@ unsigned long page_cache_shrink(unsigned long nr_to_reclaim)
 		}
 
 		mapping = cp->mapping;
-		spinlock_acquire(&mapping->lock);
+		spin_lock(&mapping->lock);
 		flags = cp->flags;
 		if (refcnt_read(&cp->refcnt) != 1 ||
 		    (flags & (PCP_DIRTY | PCP_WRITEBACK)) ||
 		    hlist_unhashed(&cp->ht_node)) {
-			spinlock_release(&mapping->lock);
+			spin_unlock(&mapping->lock);
 			pagecache_lru_touch(cp);
 			continue;
 		}
 		__detach_locked(mapping, cp);
-		spinlock_release(&mapping->lock);
+		spin_unlock(&mapping->lock);
 
 		detach_and_put(cp);
 		freed++;
@@ -514,18 +514,18 @@ int truncate_inode_pages(struct page_cache *m, loff_t new_size)
 	/* Phase 1: detach every page strictly past new_size from the cache.
 	 * Detaching drops the cache's implicit reference; any user references
 	 * still outstanding will keep the page alive until their put. */
-	spinlock_acquire(&m->lock);
+	spin_lock(&m->lock);
 	for (size_t i = 0; i < PAGE_CACHE_HSIZE; ++i) {
 		hlist_for_each_entry_safe(cp, n, &m->pages[i], ht_node) {
 			if (cp->index < first_full)
 				continue;
 			__detach_locked(m, cp);
-			spinlock_release(&m->lock);
+			spin_unlock(&m->lock);
 			detach_and_put(cp);
-			spinlock_acquire(&m->lock);
+			spin_lock(&m->lock);
 		}
 	}
-	spinlock_release(&m->lock);
+	spin_unlock(&m->lock);
 
 	/* Phase 2: zero the tail of the page that straddles new_size. */
 	if (partial_off) {

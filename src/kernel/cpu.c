@@ -18,9 +18,30 @@ int cpu_init(cpuid_t cpuid)
 	}
 
 	cpus[cpuid].id = cpuid;
+	cpus[cpuid].preempt_count = 0;
 	cpus[cpuid].initialized = true;
 	set_thread_pointer((unsigned long)&cpus[cpuid]);
 	return 0;
+}
+
+void preempt_disable(void)
+{
+	this_cpu()->preempt_count++;
+	__asm__ volatile("" ::: "memory");
+}
+
+void preempt_enable(void)
+{
+	struct cpu *cpu = this_cpu();
+
+	ASSERT(cpu->preempt_count > 0);
+	cpu->preempt_count--;
+	__asm__ volatile("" ::: "memory");
+}
+
+int preempt_count(void)
+{
+	return this_cpu()->preempt_count;
 }
 
 static bool cpu_is_valid(unsigned long cpu_ptr)
@@ -49,29 +70,6 @@ cpuid_t this_cpuid(void)
 void set_this_cpuid(cpuid_t cpuid)
 {
 	(void)cpuid;
-}
-
-void push_off(void)
-{
-	int enabled = intr_off_get();
-	struct cpu *cpu = this_cpu();
-
-	if (cpu->irq_nest == 0)
-		cpu->irq_enabled = enabled;
-	cpu->irq_nest += 1;
-}
-
-void pop_off(void)
-{
-	struct cpu *cpu = this_cpu();
-
-	if (intr_enabled())
-		panic("%s(): interruptible\n", __func__);
-	if (cpu->irq_nest < 1)
-		panic("%s(): nesting level < 1\n", __func__);
-	cpu->irq_nest -= 1;
-	if (cpu->irq_nest == 0 && cpu->irq_enabled)
-		intr_on();
 }
 
 struct task *current_task(void)

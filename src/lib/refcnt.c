@@ -9,41 +9,41 @@ void refcnt_init(refcnt_t *rc, refcnt_value_t val)
 
 refcnt_value_t refcnt_read(refcnt_t *rc)
 {
-	spinlock_acquire(&rc->lock);
+	irqstate_t flags = spin_lock_irqsave(&rc->lock);
 	refcnt_value_t val = rc->counter;
-	spinlock_release(&rc->lock);
+	spin_unlock_irqrestore(&rc->lock, flags);
 	return val;
 }
 
 refcnt_value_t refcnt_fetch_inc(refcnt_t *rc)
 {
-	spinlock_acquire(&rc->lock);
+	irqstate_t flags = spin_lock_irqsave(&rc->lock);
 	refcnt_value_t old_val = rc->counter++;
-	spinlock_release(&rc->lock);
+	spin_unlock_irqrestore(&rc->lock, flags);
 	return old_val;
 }
 
 refcnt_value_t refcnt_fetch_dec(refcnt_t *rc)
 {
-	spinlock_acquire(&rc->lock);
+	irqstate_t flags = spin_lock_irqsave(&rc->lock);
 	refcnt_value_t old_val = rc->counter > 0 ? rc->counter-- : 0;
-	spinlock_release(&rc->lock);
+	spin_unlock_irqrestore(&rc->lock, flags);
 	return old_val;
 }
 
 refcnt_value_t refcnt_inc_fetch(refcnt_t *rc)
 {
-	spinlock_acquire(&rc->lock);
+	irqstate_t flags = spin_lock_irqsave(&rc->lock);
 	refcnt_value_t new_val = ++rc->counter;
-	spinlock_release(&rc->lock);
+	spin_unlock_irqrestore(&rc->lock, flags);
 	return new_val;
 }
 
 refcnt_value_t refcnt_dec_fetch(refcnt_t *rc)
 {
-	spinlock_acquire(&rc->lock);
+	irqstate_t flags = spin_lock_irqsave(&rc->lock);
 	refcnt_value_t new_val = rc->counter > 0 ? --rc->counter : 0;
-	spinlock_release(&rc->lock);
+	spin_unlock_irqrestore(&rc->lock, flags);
 	return new_val;
 }
 
@@ -61,10 +61,10 @@ bool refcnt_inc_unless_zero(refcnt_t *rc)
 {
 	bool taken;
 
-	spinlock_acquire(&rc->lock);
+	irqstate_t flags = spin_lock_irqsave(&rc->lock);
 	taken = rc->counter > 0;
 	if (taken)
 		rc->counter++;
-	spinlock_release(&rc->lock);
+	spin_unlock_irqrestore(&rc->lock, flags);
 	return taken;
 }
