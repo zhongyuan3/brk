@@ -12,6 +12,7 @@ obj-y += namei.o
 obj-y += fdtable.o
 obj-y += fsinfo.o
 obj-y += sysfile.o
+obj-y += writeback.o
 
 subdir-y += tmpfs
 subdir-y += procfs
