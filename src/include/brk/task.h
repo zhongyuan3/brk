@@ -46,6 +46,7 @@ void task_init_user(void);
 
 void task_cache_init(void);
 struct task *task_create(struct task_create_args *args);
+struct task *task_create_idle(cpuid_t cpuid);
 void task_destroy(struct task *task);
 void task_set_killed(struct task *task);
 bool task_is_killed(struct task *task);
