@@ -15,6 +15,7 @@
 #include <brk/memblock.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
+#include <brk/panic.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/stddef.h>
@@ -41,26 +42,34 @@ static unsigned long alloc_early_pgdir_rsvd_page(void)
 	}
 }
 
+static unsigned long alloc_early_pgtable(void)
+{
+	return alloc_early_pgdir_rsvd_page();
+}
+
+static void *early_phys_to_virt(unsigned long paddr)
+{
+	return (void *)paddr;
+}
+
 static void map_early(unsigned long addr, unsigned long paddr,
 		      unsigned long size, unsigned int flags)
 {
-	pgd_t *pgdep;
-	pmd_t *pmdep;
-	unsigned long pmd_phys;
-	unsigned long end_addr = addr + size;
+	struct map_pages_context ctx = {
+		.root = (pgd_t *)early_pgdir_rsvd_pages,
+		.addr = (void *)addr,
+		.paddr = paddr,
+		.size = size,
+		.flags = flags,
+		.alloc_frame = alloc_early_pgtable,
+		.phys_to_virt = early_phys_to_virt,
+	};
+	int err = map_pages(&ctx);
 
-	while (addr < end_addr) {
-		pgdep = (pgd_t *)early_pgdir_rsvd_pages + pgd_index(addr);
-		if (pgd_is_valid(*pgdep)) {
-			pmd_phys = pgd_next(*pgdep);
-		} else {
-			pmd_phys = alloc_early_pgdir_rsvd_page();
-			pgd_set_next(pgdep, pmd_phys);
+	if (err) {
+		sbi_console_putstr("boot: map_early failed\n");
+		while (1) {
 		}
-		pmdep = (pmd_t *)pmd_phys + pmd_index(addr);
-		pmd_set_leaf(pmdep, paddr, flags);
-		addr += PAGE_SIZE_2M;
-		paddr += PAGE_SIZE_2M;
 	}
 }
 
@@ -280,8 +289,8 @@ static void vmemmap_init(void)
 			.alloc_frame = alloc_frame_after_final,
 			.phys_to_virt = phys_to_virt_after_final,
 		};
-		int err = map_pages(&ctx);
-		ASSERT(err == 0);
+		if (map_pages(&ctx))
+			panic("mm: vmemmap: map_pages() failed\n");
 	}
 }
 

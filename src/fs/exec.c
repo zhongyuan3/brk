@@ -244,7 +244,7 @@ static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 				goto failed;
 			}
 		}
-		err = uvmap(mm->pgd, addr, PAGE_SIZE, pa, flags);
+		err = map_user_pages(mm->pgd, addr, PAGE_SIZE, pa, flags);
 		if (err) {
 			ASSERT(pg);
 			page_free(pg, 0);
@@ -261,7 +261,7 @@ static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 
 failed:
 	for (u64 a = vma->addr; a < addr; a += PAGE_SIZE)
-		uvunmap(mm->pgd, a, PAGE_SIZE);
+		unmap_user_pages(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = 0; j < i; ++j) {
 		ASSERT(pgs[j]);
 		page_free(pgs[j], 0);
@@ -333,7 +333,7 @@ static int map_stack(struct uvm_space *mm)
 
 	pa = page_to_phys(pg);
 	base = random_ustack();
-	err = uvmap(mm->pgd, base, USTACK_SIZE, pa, PTE_R | PTE_W);
+	err = map_user_pages(mm->pgd, base, USTACK_SIZE, pa, PTE_R | PTE_W);
 	if (err) {
 		kfree(pgs);
 		ASSERT(pg);

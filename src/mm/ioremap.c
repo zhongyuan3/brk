@@ -11,7 +11,7 @@ void *ioremap(u64 paddr, size_t size, unsigned int flags)
 	if (!virt)
 		return NULL;
 
-	if (kvmap((uintptr_t)virt, size, paddr, flags)) {
+	if (map_kernel_pages((uintptr_t)virt, size, paddr, flags)) {
 		vfree_nomap(virt);
 		return NULL;
 	}
@@ -22,6 +22,6 @@ void *ioremap(u64 paddr, size_t size, unsigned int flags)
 void iounmap(void *addr, size_t size)
 {
 	size = round_up(size, PAGE_SIZE);
-	kvunmap((uintptr_t)addr, size);
+	unmap_kernel_pages((uintptr_t)addr, size);
 	vfree_nomap(addr);
 }

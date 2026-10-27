@@ -5,6 +5,7 @@ MAKEFLAGS += --no-print-directory --silent
 ARCH ?= riscv
 
 CFLAGS :=
+LDFLAGS_FINAL :=
 
 ifeq ($(ARCH),riscv)
 include src/arch/$(ARCH)/config.mk
@@ -53,7 +54,7 @@ CFLAGS += -fno-unwind-tables
 CFLAGS += -fno-asynchronous-unwind-tables
 CFLAGS += -ffunction-sections
 CFLAGS += -fdata-sections
-LDFLAGS += --gc-sections
+LDFLAGS_FINAL += --gc-sections
 else
 $(error Unknown build type '$(BUILD)')
 endif
@@ -121,7 +122,7 @@ $(LINKER_SCRIPT): $(LINKER_SCRIPT_SRC)
 
 $(KERNEL_ELF): $(BUILT_IN_OBJS) $(LINKER_SCRIPT)
 	@echo "  LD      $@"
-	@$(LD) $(LDFLAGS) -T $(LINKER_SCRIPT) -static -o $@ $(BUILT_IN_OBJS) $(LIBGCC)
+	@$(LD) $(LDFLAGS) $(LDFLAGS_FINAL) -T $(LINKER_SCRIPT) -static -o $@ $(BUILT_IN_OBJS) $(LIBGCC)
 
 $(KERNEL_BUILD_ROOT)/%/built-in.o: FORCE
 	@$(MAKE) -f scripts/Makefile.build build=$*

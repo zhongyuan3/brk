@@ -414,7 +414,8 @@ int task_set_brk(u64 addr)
 			goto failed;
 		}
 		u64 pa = page_to_phys(pg);
-		err = uvmap(mm->pgd, addr, PAGE_SIZE, pa, PTE_R | PTE_W);
+		err = map_user_pages(mm->pgd, addr, PAGE_SIZE, pa,
+				     PTE_R | PTE_W);
 		if (err) {
 			ASSERT(pg);
 			page_free(pg, 0);
@@ -437,7 +438,7 @@ int task_set_brk(u64 addr)
 
 failed:
 	for (u64 a = curr_heap_end; a < addr; a += PAGE_SIZE)
-		uvunmap(mm->pgd, a, PAGE_SIZE);
+		unmap_user_pages(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = old_npgs; j < i; ++j) {
 		ASSERT(new_pgs[j]);
 		page_free(new_pgs[j], 0);

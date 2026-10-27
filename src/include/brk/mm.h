@@ -29,23 +29,16 @@ struct map_pages_context {
 };
 
 int map_pages(const struct map_pages_context *ctx);
+void unmap_pages(pgd_t *root, void *addr, unsigned long size);
+
+/* Convenience wrappers for final mappings, where page_alloc() is usable. */
+int map_kernel_pages(unsigned long addr, size_t size, unsigned long paddr,
+		     unsigned int flags);
+void unmap_kernel_pages(unsigned long addr, size_t size);
+int map_user_pages(pgd_t *root, unsigned long addr, size_t size,
+		   unsigned long paddr, unsigned int flags);
+void unmap_user_pages(pgd_t *root, unsigned long addr, size_t size);
 
 int mm_core_init(void);
-
-enum vmap_mode {
-	VMAP_MODE_EARLY,
-	VMAP_MODE_INTERIM,
-	VMAP_MODE_FINAL,
-};
-
-int vmap(pgd_t *pgd, u64 addr, size_t size, u64 paddr, unsigned int flags,
-	 enum vmap_mode mode);
-void vunmap(pgd_t *pgd, u64 addr, size_t size, enum vmap_mode mode);
-int kvmap(u64 addr, size_t size, u64 paddr, unsigned int flags);
-int kvmap_with_mode(u64 addr, size_t size, u64 paddr, unsigned int flags,
-		    enum vmap_mode mode);
-void kvunmap(u64 addr, size_t size);
-int uvmap(pgd_t *pgd, u64 addr, size_t size, u64 paddr, unsigned int flags);
-void uvunmap(pgd_t *pgd, u64 addr, size_t size);
 
 #endif

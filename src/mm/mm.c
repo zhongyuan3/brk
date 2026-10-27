@@ -74,7 +74,7 @@ static void uvm_space_free_segments(struct uvm_space *mm)
 
 	list_for_each_entry_safe(curr, next, &mm->seg, list) {
 		list_del(&curr->list);
-		uvunmap(mm->pgd, curr->addr, curr->size);
+		unmap_user_pages(mm->pgd, curr->addr, curr->size);
 		for (size_t i = 0; i < curr->nr_pages; ++i) {
 			ASSERT(curr->pages[i]);
 			page_free(curr->pages[i], 0);
@@ -87,7 +87,7 @@ static void uvm_space_free_segments(struct uvm_space *mm)
 static void uvm_space_free_stack(struct uvm_space *mm)
 {
 	if (mm->stack->size > 0) {
-		uvunmap(mm->pgd, mm->stack->addr, mm->stack->size);
+		unmap_user_pages(mm->pgd, mm->stack->addr, mm->stack->size);
 		ASSERT(mm->stack->pages[0]);
 		page_free(mm->stack->pages[0], USTACK_PAGE_ORDER);
 	}
@@ -97,7 +97,7 @@ static void uvm_space_free_stack(struct uvm_space *mm)
 static void uvm_space_free_heap(struct uvm_space *mm)
 {
 	if (mm->heap->size > 0) {
-		uvunmap(mm->pgd, mm->heap->addr, mm->heap->size);
+		unmap_user_pages(mm->pgd, mm->heap->addr, mm->heap->size);
 		for (size_t i = 0; i < mm->heap->nr_pages; ++i) {
 			ASSERT(mm->heap->pages[i]);
 			page_free(mm->heap->pages[i], 0);
@@ -152,7 +152,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 			goto failed;
 		}
 		u64 dst_pa = page_to_phys(pg);
-		err = uvmap(mm->pgd, addr, PAGE_SIZE, dst_pa, flags);
+		err = map_user_pages(mm->pgd, addr, PAGE_SIZE, dst_pa, flags);
 		if (err) {
 			ASSERT(pg);
 			page_free(pg, 0);
@@ -177,7 +177,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 
 failed:
 	for (u64 a = src->addr; a < addr; a += PAGE_SIZE)
-		uvunmap(mm->pgd, a, PAGE_SIZE);
+		unmap_user_pages(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = 0; j < i; ++j) {
 		ASSERT(pgs[j]);
 		page_free(pgs[j], 0);
@@ -219,7 +219,7 @@ failed:
 	if (!list_empty(&seg)) {
 		list_for_each_entry_safe(curr, next, &seg, list) {
 			list_del(&curr->list);
-			uvunmap(dst->pgd, curr->addr, curr->size);
+			unmap_user_pages(dst->pgd, curr->addr, curr->size);
 			npgs = curr->nr_pages;
 			pgs = curr->pages;
 			for (size_t i = 0; i < npgs; ++i) {
@@ -250,8 +250,8 @@ static int uvm_space_copy_stack(struct uvm_space *dst, struct uvm_space *src)
 	}
 
 	u64 pa = page_to_phys(pg);
-	int err = uvmap(dst->pgd, src->stack->addr, src->stack->size, pa,
-			src->stack->flags);
+	int err = map_user_pages(dst->pgd, src->stack->addr, src->stack->size,
+				 pa, src->stack->flags);
 	if (err) {
 		ASSERT(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
@@ -384,6 +384,7 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 				return -ENOMEM;
 			}
 			pmd = phys_to_virt(pmd_pa);
+			memset(pmd, 0, PAGE_SIZE);
 			pgd_set_next(pgde, pmd_pa);
 		} else {
 			pmd = phys_to_virt(pgd_next(*pgde));
@@ -401,6 +402,7 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 				return -ENOMEM;
 			}
 			pt = phys_to_virt(pt_pa);
+			memset(pt, 0, PAGE_SIZE);
 			pmd_set_next(pmde, pt_pa);
 		} else {
 			pt = phys_to_virt(pmd_next(*pmde));
@@ -423,6 +425,9 @@ int map_pages(const struct map_pages_context *ctx)
 	unsigned long size = ctx->size;
 	unsigned long paddr = ctx->paddr;
 
+	ASSERT(ctx->root);
+	ASSERT(ctx->alloc_frame);
+	ASSERT(ctx->phys_to_virt);
 	ASSERT(is_aligned(addr, PAGE_SIZE));
 	ASSERT(is_aligned(size, PAGE_SIZE));
 	ASSERT(is_aligned(paddr, PAGE_SIZE));
@@ -458,6 +463,82 @@ int map_pages(const struct map_pages_context *ctx)
 	return 0;
 }
 
+static unsigned long alloc_pgtable_frame(void)
+{
+	struct page *pg = page_alloc(0);
+
+	if (!pg)
+		return 0;
+
+	return page_to_phys(pg);
+}
+
+static void *pgtable_phys_to_virt(unsigned long paddr)
+{
+	return (void *)phys_to_virt(paddr);
+}
+
+static int map_pages_final(pgd_t *root, unsigned long addr,
+			   unsigned long size, unsigned long paddr,
+			   unsigned int flags)
+{
+	struct map_pages_context ctx = {
+		.root = root,
+		.addr = (void *)addr,
+		.paddr = paddr,
+		.size = size,
+		.flags = flags,
+		.alloc_frame = alloc_pgtable_frame,
+		.phys_to_virt = pgtable_phys_to_virt,
+	};
+
+	return map_pages(&ctx);
+}
+
+void unmap_pages(pgd_t *root, void *addr, unsigned long size)
+{
+	struct map_pages_context ctx = {
+		.root = root,
+		.phys_to_virt = pgtable_phys_to_virt,
+	};
+	unsigned long start = (unsigned long)addr;
+
+	ASSERT(is_aligned(start, PAGE_SIZE));
+	ASSERT(is_aligned(size, PAGE_SIZE));
+	__unmap_range(start, start + size, &ctx);
+}
+
+int map_kernel_pages(unsigned long addr, size_t size, unsigned long paddr,
+		     unsigned int flags)
+{
+	int err;
+
+	size = round_up(size, PAGE_SIZE);
+	spin_lock(&kernel_pgdir_lock);
+	err = map_pages_final(kernel_pgdir, addr, size, paddr, flags);
+	spin_unlock(&kernel_pgdir_lock);
+	return err;
+}
+
+void unmap_kernel_pages(unsigned long addr, size_t size)
+{
+	spin_lock(&kernel_pgdir_lock);
+	unmap_pages(kernel_pgdir, (void *)addr, size);
+	spin_unlock(&kernel_pgdir_lock);
+}
+
+int map_user_pages(pgd_t *root, unsigned long addr, size_t size,
+		   unsigned long paddr, unsigned int flags)
+{
+	size = round_up(size, PAGE_SIZE);
+	return map_pages_final(root, addr, size, paddr, flags | PTE_U);
+}
+
+void unmap_user_pages(pgd_t *root, unsigned long addr, size_t size)
+{
+	unmap_pages(root, (void *)addr, size);
+}
+
 int mm_core_init(void)
 {
 	page_alloc_init();
@@ -468,237 +549,4 @@ int mm_core_init(void)
 	memblock_dump_all();
 
 	return 0;
-}
-
-static u64 alloc_pgtable(enum vmap_mode mode)
-{
-	struct page *pg;
-	u64 paddr;
-
-	switch (mode) {
-	case VMAP_MODE_EARLY:
-		paddr = memblock_alloc(PAGE_SIZE, _EKERNEL_PHYS, PAGE_SIZE);
-		if (!paddr)
-			panic("%s(): memblock_alloc() failed\n", __func__);
-		memset((void *)(uintptr_t)paddr, 0, PAGE_SIZE);
-		return paddr;
-	case VMAP_MODE_INTERIM:
-		paddr = memblock_alloc(PAGE_SIZE, _EKERNEL_PHYS, PAGE_SIZE);
-		if (!paddr)
-			panic("%s(): memblock_alloc() failed\n", __func__);
-		memset((void *)phys_to_virt(paddr), 0, PAGE_SIZE);
-		return paddr;
-	case VMAP_MODE_FINAL:
-		pg = page_alloc(0);
-		if (!pg)
-			return 0;
-		paddr = page_to_phys(pg);
-		memset((void *)phys_to_virt(paddr), 0, PAGE_SIZE);
-		return paddr;
-	}
-	panic("%s(): unexpected mode: %d\n", __func__, mode);
-}
-
-static u64 alloc_pmd(enum vmap_mode mode)
-{
-	return alloc_pgtable(mode);
-}
-
-static u64 alloc_pt(enum vmap_mode mode)
-{
-	return alloc_pgtable(mode);
-}
-
-static pmd_t *get_pmd_virt(u64 pmd_phys, enum vmap_mode mode)
-{
-	switch (mode) {
-	case VMAP_MODE_EARLY:
-		return (pmd_t *)pmd_phys;
-	case VMAP_MODE_INTERIM:
-		return (pmd_t *)phys_to_virt(pmd_phys);
-	case VMAP_MODE_FINAL:
-		return (pmd_t *)phys_to_virt(pmd_phys);
-	}
-	panic("%s(): unexpected mode: %d\n", __func__, mode);
-}
-
-static pte_t *get_pt_virt(u64 pt_phys, enum vmap_mode mode)
-{
-	switch (mode) {
-	case VMAP_MODE_EARLY:
-		return (pte_t *)(uintptr_t)pt_phys;
-	case VMAP_MODE_INTERIM:
-		return (pte_t *)phys_to_virt(pt_phys);
-	case VMAP_MODE_FINAL:
-		return (pte_t *)phys_to_virt(pt_phys);
-	}
-	panic("%s(): unexpected mode: %d\n", __func__, mode);
-}
-
-static void vunmap_range(pgd_t *pgd, u64 addr, u64 end_addr,
-			 enum vmap_mode mode)
-{
-	pgd_t *pgdep;
-	pmd_t *pmd, *pmdep;
-	pte_t *pt, *ptep;
-
-	while (addr < end_addr) {
-		pgdep = pgd + pgd_index(addr);
-		if (pgd_is_leaf(*pgdep)) {
-			ASSERT(end_addr - addr >= PAGE_SIZE_1G);
-			pgd_clear(pgdep);
-			addr += PAGE_SIZE_1G;
-			continue;
-		}
-		ASSERT(pgd_is_valid(*pgdep));
-		pmd = get_pmd_virt(pgd_next(*pgdep), mode);
-		pmdep = pmd + pmd_index(addr);
-		if (pmd_is_leaf(*pmdep)) {
-			ASSERT(end_addr - addr >= PAGE_SIZE_2M);
-			pmd_clear(pmdep);
-			addr += PAGE_SIZE_2M;
-			continue;
-		}
-		ASSERT(pmd_is_valid(*pmdep));
-		pt = get_pt_virt(pmd_next(*pmdep), mode);
-		ptep = pt + pte_index(addr);
-		ASSERT(pte_is_valid(*ptep));
-		pte_clear(ptep);
-		addr += PAGE_SIZE;
-	}
-}
-
-static int vmap_range(pgd_t *pgd, u64 addr, u64 end_addr, u64 paddr,
-		      size_t page_size, unsigned int flags, enum vmap_mode mode)
-{
-	pgd_t *pgdep;
-	pmd_t *pmd, *pmdep;
-	pte_t *pt, *ptep;
-	u64 pmd_phys, pt_phys;
-	u64 start_addr = addr;
-
-	for (; addr < end_addr; addr += page_size, paddr += page_size) {
-		pgdep = pgd + pgd_index(addr);
-		if (page_size == PAGE_SIZE_1G) {
-			ASSERT(!pgd_is_valid(*pgdep));
-			pgd_set_leaf(pgdep, paddr, flags);
-			continue;
-		}
-		if (!pgd_is_valid(*pgdep)) {
-			pmd_phys = alloc_pmd(mode);
-			if (!pmd_phys) {
-				vunmap_range(pgd, start_addr, addr, mode);
-				return -ENOMEM;
-			}
-			pmd = get_pmd_virt(pmd_phys, mode);
-			pgd_set_next(pgdep, pmd_phys);
-		} else {
-			pmd = get_pmd_virt(pgd_next(*pgdep), mode);
-		}
-		pmdep = pmd + pmd_index(addr);
-		if (page_size == PAGE_SIZE_2M) {
-			ASSERT(!pmd_is_valid(*pmdep));
-			pmd_set_leaf(pmdep, paddr, flags);
-			continue;
-		}
-		if (!pmd_is_valid(*pmdep)) {
-			pt_phys = alloc_pt(mode);
-			if (!pt_phys) {
-				vunmap_range(pgd, start_addr, addr, mode);
-				return -ENOMEM;
-			}
-			pt = get_pt_virt(pt_phys, mode);
-			pmd_set_next(pmdep, pt_phys);
-		} else {
-			pt = get_pt_virt(pmd_next(*pmdep), mode);
-		}
-		ptep = pt + pte_index(addr);
-		ASSERT(!pte_is_valid(*ptep));
-		pte_set_leaf(ptep, paddr, flags);
-	}
-
-	return 0;
-}
-
-int vmap(pgd_t *pgd, u64 addr, size_t size, u64 paddr, unsigned int flags,
-	 enum vmap_mode mode)
-{
-	u64 end_addr;
-	size_t rem_size;
-	size_t page_size;
-	int err;
-
-	ASSERT(is_aligned(addr, PAGE_SIZE));
-	ASSERT(is_aligned(size, PAGE_SIZE));
-	ASSERT(is_aligned(paddr, PAGE_SIZE));
-
-	end_addr = addr + size;
-	while (addr < end_addr) {
-		rem_size = end_addr - addr;
-
-		if (is_aligned(addr, PAGE_SIZE_1G) &&
-		    is_aligned(paddr, PAGE_SIZE_1G) &&
-		    rem_size >= PAGE_SIZE_1G) {
-			page_size = PAGE_SIZE_1G;
-			rem_size = round_down(rem_size, PAGE_SIZE_1G);
-		} else if (is_aligned(addr, PAGE_SIZE_2M) &&
-			   is_aligned(paddr, PAGE_SIZE_2M) &&
-			   rem_size >= PAGE_SIZE_2M) {
-			page_size = PAGE_SIZE_2M;
-			rem_size = round_down(rem_size, PAGE_SIZE_2M);
-		} else {
-			page_size = PAGE_SIZE;
-			rem_size = round_down(rem_size, PAGE_SIZE);
-		}
-
-		err = vmap_range(pgd, addr, addr + rem_size, paddr, page_size,
-				 flags, mode);
-		if (err)
-			return err;
-
-		addr += rem_size;
-		paddr += rem_size;
-	}
-
-	return 0;
-}
-
-void vunmap(pgd_t *pgd, u64 addr, size_t size, enum vmap_mode mode)
-{
-	ASSERT(is_aligned(addr, PAGE_SIZE));
-	ASSERT(is_aligned(size, PAGE_SIZE));
-	vunmap_range(pgd, addr, addr + size, mode);
-}
-
-int kvmap(u64 addr, size_t size, u64 paddr, unsigned int flags)
-{
-	return kvmap_with_mode(addr, size, paddr, flags, VMAP_MODE_FINAL);
-}
-
-int kvmap_with_mode(u64 addr, size_t size, u64 paddr, unsigned int flags,
-		    enum vmap_mode mode)
-{
-	int ret;
-	size = round_up(size, PAGE_SIZE);
-	spin_lock(&kernel_pgdir_lock);
-	ret = vmap(kernel_pgdir, addr, size, paddr, flags, mode);
-	spin_unlock(&kernel_pgdir_lock);
-	return ret;
-}
-
-void kvunmap(u64 addr, size_t size)
-{
-	spin_lock(&kernel_pgdir_lock);
-	vunmap(kernel_pgdir, addr, size, VMAP_MODE_FINAL);
-	spin_unlock(&kernel_pgdir_lock);
-}
-
-int uvmap(pgd_t *pgd, u64 addr, size_t size, u64 paddr, unsigned int flags)
-{
-	return vmap(pgd, addr, size, paddr, flags | PTE_U, VMAP_MODE_FINAL);
-}
-
-void uvunmap(pgd_t *pgd, u64 addr, size_t size)
-{
-	vunmap(pgd, addr, size, VMAP_MODE_FINAL);
 }
