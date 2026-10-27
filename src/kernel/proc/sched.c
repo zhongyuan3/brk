@@ -22,22 +22,97 @@ SPINLOCK_DEFINE(wait_lock);
 static LIST_DEFINE(sleep_queue);
 static SPINLOCK_DEFINE(sleep_queue_lock);
 
+static unsigned int next_cpu_hint;
+
+static unsigned int cpu_load(struct cpu *cpu)
+{
+	irqstate_t flags = spin_lock_irqsave(&cpu->run_queue_lock);
+	unsigned int load = cpu->nr_running;
+	struct task *cur = cpu->current;
+	spin_unlock_irqrestore(&cpu->run_queue_lock, flags);
+
+	/* nr_running counts queued tasks; also account for the running one. */
+	if (cur && cur != cpu->idle)
+		load++;
+	return load;
+}
+
+/*
+ * Pick a CPU for a task that is not currently running.  Only CPUs that have
+ * entered their idle task (online) are eligible, so a newly started CPU
+ * cannot receive an IPI before its scheduler context exists.
+ *
+ * The rotating hint makes equal-load choices round-robin instead of always
+ * favouring CPU 0.
+ */
+static int task_select_cpu(void)
+{
+	int best = -1;
+	unsigned int best_load = ~0U;
+	unsigned int start =
+		__atomic_fetch_add(&next_cpu_hint, 1, __ATOMIC_RELAXED);
+
+	for (int off = 0; off < MAX_CPUS; ++off) {
+		int i = (int)((start + (unsigned int)off) % MAX_CPUS);
+		unsigned int load;
+
+		if (!__atomic_load_n(&cpus[i].online, __ATOMIC_ACQUIRE))
+			continue;
+
+		load = cpu_load(&cpus[i]);
+		if (load < best_load) {
+			best = i;
+			best_load = load;
+			if (load == 0)
+				break;
+		}
+	}
+
+	return best;
+}
+
 void task_join(struct task *task)
 {
 	struct cpu *cpu;
 	irqstate_t flags;
+	int target;
 
-	if (task->cpu < 0 || task->cpu >= MAX_CPUS)
+	/*
+	 * The currently running task must stay on this CPU until __switch_to()
+	 * has saved its context.  Everything else (new tasks and tasks woken
+	 * from sleep) has a complete saved context and may be placed on any
+	 * online CPU.
+	 */
+	if (task->oncpu < 0) {
+		target = task_select_cpu();
+		if (target < 0)
+			target = task->cpu;
+	} else {
+		ASSERT(task->cpu == (int)this_cpuid());
+		target = task->cpu;
+	}
+
+	if (target < 0 || target >= MAX_CPUS)
 		panic("task_join: pid=%ld invalid cpu %d\n", task->pid,
-		      task->cpu);
+		      target);
 
-	cpu = &cpus[task->cpu];
+	cpu = &cpus[target];
 	flags = spin_lock_irqsave(&cpu->run_queue_lock);
 
 	ASSERT(list_empty(&task->queue));
 	ASSERT(task->state == TASK_STATE_RUNNING);
+	task->cpu = target;
 	list_add_tail(&task->queue, &cpu->run_queue);
+	cpu->nr_running++;
 	spin_unlock_irqrestore(&cpu->run_queue_lock, flags);
+
+	/*
+	 * A remote CPU may be in WFI with interrupts enabled.  The timer tick
+	 * would eventually notice the new queue entry, but an IPI keeps
+	 * wakeup latency bounded and is required for prompt migration.
+	 */
+	if (target != (int)this_cpuid())
+		arch_send_ipi((cpuid_t)target);
 }
 
 /*
@@ -53,6 +128,8 @@ static struct task *task_pick_next(struct cpu *cpu)
 		task = list_first_entry(&cpu->run_queue, struct task, queue);
 		ASSERT(task->cpu == (int)cpu->id);
 		list_del_init(&task->queue);
+		ASSERT(cpu->nr_running > 0);
+		cpu->nr_running--;
 	}
 	spin_unlock(&cpu->run_queue_lock);
 	return task;
@@ -89,6 +166,14 @@ void task_scheduler(void)
 
 	idle->time_slice = TIME_SLICE_MAX;
 	idle->ktime = jiffies_get();
+
+	/*
+	 * Publish this CPU as online only after current is the idle task.  An
+	 * IPI may then queue work immediately, but it stays pending until the
+	 * idle task enables interrupts after __switch_to().
+	 */
+	__atomic_store_n(&cpu->online, true, __ATOMIC_RELEASE);
+
 	__switch_to(&cpu->kernel_sp, &idle->kernel_sp);
 
 	panic("scheduler returned to bootstrap context\n");
@@ -151,7 +236,11 @@ static void task_sched(void)
 	}
 	next->time_slice = TIME_SLICE_MAX;
 	next->ktime = jiffies_get();
-	curr->oncpu = -1;
+	/*
+	 * curr->oncpu is cleared by task_sched_resume() in the next task's
+	 * context, i.e. only after this CPU has completely left curr.  This
+	 * lets a parent on another CPU wait until a zombie is safe to reap.
+	 */
 	__switch_to(&curr->kernel_sp, &next->kernel_sp);
 
 	task_sched_resume();
@@ -298,29 +387,43 @@ void task_exit(int status)
 	struct task *child;
 	struct task *task = current_task();
 	irqstate_t flags;
+	bool reparented;
 
 	if (task == initial_task)
 		panic("%s(): init exit\n", __func__);
 
 	/*
-	 * A task normally owns its fdtable/fsinfo.  If a future clone flag
-	 * shares them, only the last user may close the descriptors and clear
-	 * cwd/root; other tasks would otherwise lose live state.  The
-	 * reference counted put in task_destroy() still drains the table when
-	 * the last reference disappears.
+	 * Drop this task's references now.  For a private table this closes
+	 * the descriptors / releases cwd and root immediately; for a shared
+	 * table the last exiting task does the final close.  The reference
+	 * count makes the "am I the last user?" decision atomic, unlike the
+	 * old read-then-close check which could race with a concurrent
+	 * fdtable_get()/fsinfo_get().
 	 */
-	if (refcnt_read(&task->fdtable->refcnt) == 1)
-		fdtable_close_all(task->fdtable);
-	if (refcnt_read(&task->fsinfo->refcnt) == 1)
-		fsinfo_free_resources(task->fsinfo);
+	if (task->fdtable) {
+		fdtable_put(task->fdtable);
+		task->fdtable = NULL;
+	}
+	if (task->fsinfo) {
+		fsinfo_put(task->fsinfo);
+		task->fsinfo = NULL;
+	}
 
 	flags = spin_lock_irqsave(&wait_lock);
+	reparented = !list_empty(&task->children);
 	list_for_each_entry(child, &task->children, child) {
 		child->parent = initial_task;
 	}
 	list_splice(&task->children, &initial_task->children);
-	task_wake_spec(task->parent);
 	spin_unlock_irqrestore(&wait_lock, flags);
+
+	/*
+	 * The parent is woken by task_sched_resume() after this task has
+	 * actually left the CPU.  Waking it here would let another CPU run it
+	 * while this task is still on-CPU and its state is not yet ZOMBIE.
+	 */
+	if (reparented)
+		task_wake_spec(initial_task);
 
 	ASSERT(preempt_count() == 0);
 
@@ -363,7 +466,12 @@ again:
 			found = true;
 		}
 
-		if (child->state != TASK_STATE_ZOMBIE ||
+		/*
+		 * A zombie is only safe to reap after its exiting CPU has
+		 * cleared oncpu in task_sched_resume(); before that the task
+		 * still owns a kernel stack/context that the CPU may touch.
+		 */
+		if (child->state != TASK_STATE_ZOMBIE || child->oncpu != -1 ||
 		    (pid > 0 && child->tgid != pid)) {
 			spin_unlock_irqrestore(&child->lock, cflags);
 			continue;
@@ -398,8 +506,30 @@ again:
 void task_sched_resume(void)
 {
 	struct cpu *cpu = this_cpu();
-	if (cpu->handoff) {
-		raw_spin_unlock(&cpu->handoff->lock);
-		cpu->handoff = NULL;
-	}
+	struct task *prev = cpu->handoff;
+
+	if (!prev)
+		return;
+
+	/*
+	 * The previous task's context is now fully saved; this CPU no longer
+	 * touches its kernel stack.  Publish oncpu == -1 before releasing its
+	 * lock so a parent on another CPU can safely reap a zombie.
+	 */
+	bool zombie = prev->state == TASK_STATE_ZOMBIE;
+	struct task *parent = zombie ? prev->parent : NULL;
+
+	prev->oncpu = -1;
+	raw_spin_unlock(&prev->lock);
+	cpu->handoff = NULL;
+
+	/*
+	 * The parent was not woken before the switch because it could have
+	 * run on another CPU while @prev was still on-CPU.  Now that the
+	 * zombie is really off-CPU and safe to reap, wake it.  @prev may be
+	 * reaped as soon as we dropped its lock, so only use the parent
+	 * pointer captured while it was still pinned by the lock.
+	 */
+	if (parent)
+		task_wake_spec(parent);
 }

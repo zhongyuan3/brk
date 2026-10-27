@@ -283,8 +283,11 @@ void task_destroy(struct task *task)
 	signal_deinit(task);
 	if (task_is_leader(task))
 		task_rusage_free(task->rsrc_usage);
-	fsinfo_put(task->fsinfo);
-	fdtable_put(task->fdtable);
+	/* task_exit() may already have dropped these references. */
+	if (task->fsinfo)
+		fsinfo_put(task->fsinfo);
+	if (task->fdtable)
+		fdtable_put(task->fdtable);
 	uvm_space_put(task->mm);
 	kstack_free(task->kstack_base);
 	pid_free(task->pid);

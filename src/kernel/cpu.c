@@ -36,6 +36,8 @@ static void cpu_sched_init(void)
 	for (int i = 0; i < MAX_CPUS; ++i) {
 		list_init(&cpus[i].run_queue);
 		spinlock_init(&cpus[i].run_queue_lock, "rq");
+		cpus[i].nr_running = 0;
+		cpus[i].online = false;
 	}
 }
 core_initcall(cpu_sched_init);

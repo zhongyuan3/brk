@@ -13,6 +13,9 @@
 #define SBI_EXT_HSM_HART_STOP 0x01
 #define SBI_EXT_HSM_HART_GET_STATUS 0x02
 
+#define SBI_EXT_IPI 0x735049
+#define SBI_EXT_IPI_SEND_IPI 0x00
+
 #define SBI_SUCCESS 0
 #define SBI_ERR_FAILURE -1
 #define SBI_ERR_NOT_SUPPORTED -2
@@ -95,6 +98,13 @@ static inline struct sbiret sbi_hart_start(unsigned long hartid,
 {
 	return sbi_ecall(SBI_EXT_HSM, SBI_EXT_HSM_HART_START, hartid,
 			 start_addr, opaque, 0, 0, 0);
+}
+
+static inline struct sbiret sbi_send_ipi(unsigned long hart_mask,
+					 unsigned long hart_mask_base)
+{
+	return sbi_ecall(SBI_EXT_IPI, SBI_EXT_IPI_SEND_IPI, hart_mask,
+			 hart_mask_base, 0, 0, 0, 0);
 }
 
 #endif
