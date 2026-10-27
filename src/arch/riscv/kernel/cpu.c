@@ -6,7 +6,7 @@
 #include <brk/task.h>
 #include <brk/task_types.h>
 
-unsigned long nr_harts = 1;
+unsigned long nr_harts = 0;
 
 const char *uname_machine(void)
 {

@@ -4,6 +4,8 @@
 #include <arch/context.h>
 #include <arch/irqstate.h>
 #include <brk/asm/cpu.h>
+#include <brk/list.h>
+#include <brk/spinlock_types.h>
 #include <brk/types.h>
 
 struct task;
@@ -15,6 +17,10 @@ struct cpu {
 	cpuid_t id;
 	int preempt_count;
 	bool initialized;
+
+	/* Per-CPU run queue. */
+	struct list_head run_queue;
+	spinlock_t run_queue_lock;
 };
 
 int cpu_init(cpuid_t cpuid);

@@ -18,28 +18,42 @@
 
 SPINLOCK_DEFINE(wait_lock);
 
-static LIST_DEFINE(run_queue);
-static SPINLOCK_DEFINE(run_queue_lock);
 static LIST_DEFINE(sleep_queue);
 static SPINLOCK_DEFINE(sleep_queue_lock);
 
 void task_join(struct task *task)
 {
-	irqstate_t flags = spin_lock_irqsave(&run_queue_lock);
+	struct cpu *cpu;
+	irqstate_t flags;
 
-	list_add_tail(&task->queue, &run_queue);
-	spin_unlock_irqrestore(&run_queue_lock, flags);
+	if (task->cpu < 0 || task->cpu >= MAX_CPUS)
+		panic("task_join: pid=%ld invalid cpu %d\n", task->pid,
+		      task->cpu);
+
+	cpu = &cpus[task->cpu];
+	flags = spin_lock_irqsave(&cpu->run_queue_lock);
+
+	ASSERT(list_empty(&task->queue));
+	ASSERT(task->state == TASK_STATE_RUNNING);
+	list_add_tail(&task->queue, &cpu->run_queue);
+	spin_unlock_irqrestore(&cpu->run_queue_lock, flags);
 }
 
-static struct task *task_pick_next(void)
+/*
+ * The caller runs with interrupts disabled and can therefore use the
+ * non-irqsave form of the rq lock.
+ */
+static struct task *task_pick_next(struct cpu *cpu)
 {
 	struct task *task = NULL;
-	spin_lock(&run_queue_lock);
-	if (!list_empty(&run_queue)) {
-		task = list_first_entry(&run_queue, struct task, queue);
+
+	spin_lock(&cpu->run_queue_lock);
+	if (!list_empty(&cpu->run_queue)) {
+		task = list_first_entry(&cpu->run_queue, struct task, queue);
+		ASSERT(task->cpu == (int)cpu->id);
 		list_del_init(&task->queue);
 	}
-	spin_unlock(&run_queue_lock);
+	spin_unlock(&cpu->run_queue_lock);
 	return task;
 }
 
@@ -55,7 +69,7 @@ void task_scheduler(void)
 		local_irq_enable();
 		local_irq_disable();
 
-		next = task_pick_next();
+		next = task_pick_next(cpu);
 		if (!next) {
 			local_irq_enable();
 			cpu_idle();
@@ -63,7 +77,15 @@ void task_scheduler(void)
 		}
 
 		raw_spin_lock(&next->lock);
+		ASSERT(next->oncpu == -1);
+		next->oncpu = cpu->id;
 		set_current_task(next);
+		/*
+		 * A task may resume on a different CPU than the one it last
+		 * ran on. Keep the kernel tp used by its next user-mode trap
+		 * in sync with the CPU that is about to run it.
+		 */
+		next->frame->kernel_tp = (unsigned long)cpu;
 		switch_pgtable(next->mm->pgd);
 		user_access_enable();
 		next->time_slice = TIME_SLICE_MAX;
@@ -80,8 +102,9 @@ static void task_sched(void)
 	struct cpu *cpu = this_cpu();
 
 	ASSERT(!intr_enabled());
-	ASSERT(spin_is_locked_by_me(&curr->lock));
+	ASSERT(curr->lock.locked);
 	ASSERT(cpu->preempt_count == 0);
+	ASSERT(curr->oncpu == (int)cpu->id);
 
 	set_current_task(NULL);
 
@@ -92,16 +115,14 @@ static void task_sched(void)
 	case TASK_STATE_ZOMBIE:
 		break;
 	case TASK_STATE_SLEEPING:
-		spin_lock(&sleep_queue_lock);
-		list_add_tail(&curr->queue, &sleep_queue);
-		spin_unlock(&sleep_queue_lock);
+		/* task_sleep() already linked us into the sleep queue. */
 		break;
 	default:
 		panic("unexpected state: pid=%ld, state=%d\n", curr->pid,
 		      curr->state);
 	}
 
-	struct task *next = task_pick_next();
+	struct task *next = task_pick_next(cpu);
 	if (next == curr) {
 		curr->time_slice = TIME_SLICE_MAX;
 		set_current_task(curr);
@@ -112,13 +133,18 @@ static void task_sched(void)
 	cpu->handoff = curr;
 	if (next) {
 		raw_spin_lock(&next->lock);
+		ASSERT(next->oncpu == -1);
+		next->oncpu = cpu->id;
 		set_current_task(next);
+		next->frame->kernel_tp = (unsigned long)cpu;
 		switch_pgtable(next->mm->pgd);
 		next->time_slice = TIME_SLICE_MAX;
 		next->ktime = jiffies_get();
+		curr->oncpu = -1;
 		__switch_to(&curr->kernel_sp, &next->kernel_sp);
 	} else {
 		set_current_task(NULL);
+		curr->oncpu = -1;
 		__switch_to(&curr->kernel_sp, &cpu->kernel_sp);
 	}
 
@@ -149,13 +175,24 @@ void task_sleep(void *chan, spinlock_t *lock)
 	struct task *task = current_task();
 
 	ASSERT(!intr_enabled());
-	ASSERT(spin_is_locked_by_me(lock));
+	ASSERT(lock->locked);
 	ASSERT(preempt_count() == 0);
 
 	raw_spin_lock(&task->lock);
-	raw_spin_unlock(lock);
 	task->state = TASK_STATE_SLEEPING;
 	task->chan = chan;
+
+	/*
+	 * Publish the task on the sleep queue while the caller's condition
+	 * lock is still held. A wakeup that races with us must take that
+	 * condition lock, so it is guaranteed to observe the queue entry.
+	 */
+	irqstate_t sflags = spin_lock_irqsave(&sleep_queue_lock);
+
+	list_add_tail(&task->queue, &sleep_queue);
+	spin_unlock_irqrestore(&sleep_queue_lock, sflags);
+
+	raw_spin_unlock(lock);
 	task_sched();
 	task->chan = NULL;
 	raw_spin_unlock(&task->lock);
@@ -166,46 +203,78 @@ void task_wake_all(void *chan)
 {
 	while (1) {
 		struct task *p, *wakee = NULL;
+		bool retry = false;
 		irqstate_t flags;
 
+		/*
+		 * task_sched() takes task->lock before sleep_queue_lock when
+		 * a task goes to sleep, so never block on task->lock while
+		 * holding sleep_queue_lock. Try-lock instead; if the sleeper
+		 * still owns it, drop sleep_queue_lock and retry.
+		 */
 		flags = spin_lock_irqsave(&sleep_queue_lock);
 		list_for_each_entry(p, &sleep_queue, queue) {
-			irqstate_t pflags = spin_lock_irqsave(&p->lock);
+			irqstate_t pflags;
 
-			if (p->state == TASK_STATE_SLEEPING &&
-			    p->chan == chan) {
-				p->state = TASK_STATE_RUNNING;
-				p->chan = NULL;
-				list_del_init(&p->queue);
-				spin_unlock_irqrestore(&p->lock, pflags);
-				wakee = p;
-				break;
+			if (p->state != TASK_STATE_SLEEPING ||
+			    p->chan != chan)
+				continue;
+
+			if (!spin_trylock_irqsave(&p->lock, &pflags)) {
+				retry = true;
+				continue;
 			}
+
+			p->state = TASK_STATE_RUNNING;
+			p->chan = NULL;
+			list_del_init(&p->queue);
 			spin_unlock_irqrestore(&p->lock, pflags);
+			wakee = p;
+			break;
 		}
 		spin_unlock_irqrestore(&sleep_queue_lock, flags);
-		if (!wakee)
+
+		if (wakee)
+			task_join(wakee);
+		else if (!retry)
 			break;
-		task_join(wakee);
 	}
 }
 
 void task_wake_spec(struct task *task)
 {
-	irqstate_t flags = spin_lock_irqsave(&sleep_queue_lock);
-	irqstate_t tflags = spin_lock_irqsave(&task->lock);
+	while (1) {
+		struct task *p = NULL;
+		bool found = false;
+		irqstate_t flags;
+		irqstate_t tflags;
 
-	if (task->state == TASK_STATE_SLEEPING) {
-		task->state = TASK_STATE_RUNNING;
-		task->chan = NULL;
-		list_del_init(&task->queue);
-		spin_unlock_irqrestore(&task->lock, tflags);
+		flags = spin_lock_irqsave(&sleep_queue_lock);
+		list_for_each_entry(p, &sleep_queue, queue) {
+			if (p == task) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found || p->state != TASK_STATE_SLEEPING) {
+			spin_unlock_irqrestore(&sleep_queue_lock, flags);
+			return;
+		}
+
+		if (!spin_trylock_irqsave(&p->lock, &tflags)) {
+			spin_unlock_irqrestore(&sleep_queue_lock, flags);
+			continue;
+		}
+
+		p->state = TASK_STATE_RUNNING;
+		p->chan = NULL;
+		list_del_init(&p->queue);
+		spin_unlock_irqrestore(&p->lock, tflags);
 		spin_unlock_irqrestore(&sleep_queue_lock, flags);
-		task_join(task);
+		task_join(p);
 		return;
 	}
-	spin_unlock_irqrestore(&task->lock, tflags);
-	spin_unlock_irqrestore(&sleep_queue_lock, flags);
 }
 
 void task_exit_normal(int code)

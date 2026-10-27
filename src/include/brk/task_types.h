@@ -98,6 +98,8 @@ struct task {
 	struct riscv_trap_frame *frame; /* no lock protection */
 	u64 kstack_base; /* no lock protection */
 	u64 kstack_top; /* no lock protection */
+	int oncpu; /* CPU currently running this task, -1 if not running */
+	int cpu; /* CPU affinity; the task is only dispatched on this CPU */
 	u64 ktime; /* no lock protection */
 	u64 utime; /* no lock protection */
 	int time_slice; /* no lock protection */
