@@ -574,8 +574,10 @@ static int tmpfs_init_new_inode(struct tmpfs_super_block *sb,
 
 	inode->ops = &tmpfs_iops;
 	err = tmpfs_inode_read(sb, inode);
-	if (err)
+	if (err) {
+		fs_inode_fail_new(inode);
 		return err;
+	}
 	tmpfs_inode_attach_fops(inode);
 	fs_inode_unlock_new(inode);
 	return 0;

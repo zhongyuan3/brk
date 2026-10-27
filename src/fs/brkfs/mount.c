@@ -125,6 +125,7 @@ int brkfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 	err = brkfs_inode_read(sb_info, root_inode);
 	sleeplock_release(&root_inode->rwsem);
 	if (err) {
+		fs_inode_fail_new(root_inode);
 		fs_inode_put(root_inode);
 		fs_super_block_free(sb);
 		brkfs_sb_info_free(sb_info);

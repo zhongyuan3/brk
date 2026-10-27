@@ -27,6 +27,7 @@
 #define I_WILL_FREE (1 << 4)
 #define I_FREEING (1 << 5)
 #define I_CLEAR (1 << 6)
+#define I_BAD (1 << 7) /* I_NEW initialization failed; do not evict */
 #define I_DIRTY (I_DIRTY_SYNC | I_DIRTY_DATASYNC | I_DIRTY_PAGES)
 
 #define FMODE_READ (1 << 0)
@@ -181,6 +182,7 @@ int sync_all_filesystems(void);
 struct fs_inode *fs_inode_get_locked(struct fs_super_block *sb,
 				     unsigned long ino);
 void fs_inode_unlock_new(struct fs_inode *inode);
+void fs_inode_fail_new(struct fs_inode *inode);
 struct fs_inode *fs_inode_get(struct fs_inode *inode);
 void fs_inode_put(struct fs_inode *inode);
 void fs_inode_mark_dirty(struct fs_inode *inode);

@@ -114,7 +114,7 @@ retry:
 			 * if it fails, wait for the eviction to finish and
 			 * retry the hash lookup.
 			 */
-			if ((inode->state & (I_FREEING | I_WILL_FREE)) ||
+			if ((inode->state & (I_FREEING | I_WILL_FREE | I_BAD)) ||
 			    !refcnt_inc_unless_zero(&inode->count)) {
 				spin_unlock_irqrestore(&inode->lock, flags);
 				task_sleep(&inode->state, &inode_hash_lock);
@@ -129,19 +129,44 @@ retry:
 	return NULL;
 }
 
+/*
+ * Wait for an inode that another CPU is initializing (I_NEW).  The caller
+ * already owns a reference, so the inode cannot disappear while we sleep.
+ *
+ * Return true when the inode is ready to use, false if initialization
+ * failed (I_BAD) or the inode started dying.  In the false case the caller
+ * must drop its reference and retry the hash lookup.
+ */
+static bool inode_wait_new(struct fs_inode *inode)
+{
+	irqstate_t flags = spin_lock_irqsave(&inode->lock);
+
+	while (inode->state & I_NEW)
+		task_sleep(&inode->state, &inode->lock);
+
+	bool ready = !(inode->state & (I_BAD | I_FREEING | I_WILL_FREE));
+	spin_unlock_irqrestore(&inode->lock, flags);
+	return ready;
+}
+
 struct fs_inode *fs_inode_get_locked(struct fs_super_block *sb,
 				     unsigned long ino)
 {
 	struct fs_inode *inode, *old;
 	struct hlist_head *head = inode_hash_table + __inode_hash(sb, ino);
 	irqstate_t flags;
-	irqstate_t iflags;
 
+retry:
 	flags = spin_lock_irqsave(&inode_hash_lock);
 	inode = __inode_lookup(head, sb, ino);
 	spin_unlock_irqrestore(&inode_hash_lock, flags);
-	if (inode)
+	if (inode) {
+		if (!inode_wait_new(inode)) {
+			fs_inode_put(inode);
+			goto retry;
+		}
 		return inode;
+	}
 
 	inode = __inode_alloc(sb, ino);
 	if (!inode)
@@ -171,11 +196,10 @@ struct fs_inode *fs_inode_get_locked(struct fs_super_block *sb,
 	__inode_free(inode);
 
 	inode = old;
-
-	iflags = spin_lock_irqsave(&inode->lock);
-	while (inode->state & I_NEW)
-		task_sleep(&inode->state, &inode->lock);
-	spin_unlock_irqrestore(&inode->lock, iflags);
+	if (!inode_wait_new(inode)) {
+		fs_inode_put(inode);
+		goto retry;
+	}
 
 	return inode;
 }
@@ -184,6 +208,22 @@ void fs_inode_unlock_new(struct fs_inode *inode)
 {
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
+	inode->state &= ~I_NEW;
+	spin_unlock_irqrestore(&inode->lock, flags);
+	task_wake_all(&inode->state);
+}
+
+/*
+ * Mark a never-published I_NEW inode as unusable.  Waiters are woken and
+ * will drop their temporary references; the inode is then freed by the
+ * normal fs_inode_put() path without running ->evict_inode() on partially
+ * initialized state.
+ */
+void fs_inode_fail_new(struct fs_inode *inode)
+{
+	irqstate_t flags = spin_lock_irqsave(&inode->lock);
+
+	inode->state |= I_BAD;
 	inode->state &= ~I_NEW;
 	spin_unlock_irqrestore(&inode->lock, flags);
 	task_wake_all(&inode->state);
@@ -198,17 +238,24 @@ struct fs_inode *fs_inode_get(struct fs_inode *inode)
 void fs_inode_put(struct fs_inode *inode)
 {
 	const struct fs_super_block_ops *s_op;
+	bool bad;
 
 	if (refcnt_dec_fetch(&inode->count) > 0)
 		return;
 
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
+	bad = (inode->state & I_BAD) != 0;
 	inode->state |= I_FREEING;
 	spin_unlock_irqrestore(&inode->lock, flags);
 
 	s_op = inode->sb->ops;
-	if (s_op->evict_inode)
+	/*
+	 * An I_BAD inode failed during I_NEW initialization.  Its filesystem
+	 * private data may be incomplete, so do not call ->evict_inode();
+	 * ->free_inode() still releases the allocation itself.
+	 */
+	if (!bad && s_op->evict_inode)
 		s_op->evict_inode(inode);
 
 	/*

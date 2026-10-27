@@ -78,7 +78,13 @@ retry:
 	if (flags & O_RDWR)
 		fmode = FMODE_READ | FMODE_WRITE;
 
-	if (S_ISDIR(path.dentry->inode->mode))
+	struct fs_inode *file_inode = fs_dentry_inode(path.dentry);
+
+	if (!file_inode) {
+		fs_path_put(&path);
+		return ERR_PTR(-ENOENT);
+	}
+	if (S_ISDIR(file_inode->mode))
 		fmode |= FMODE_DIR;
 
 	file = fs_file_alloc(&path, fmode);
@@ -184,6 +190,11 @@ int do_linkat(int olddirfd, const char *oldpathname, int newdirfd,
 	err = fs_path_lookup_at(olddirfd, oldpathname, 0, &oldpath);
 	if (err)
 		return err;
+
+	if (fs_dentry_is_negative(oldpath.dentry)) {
+		fs_path_put(&oldpath);
+		return -ENOENT;
+	}
 
 	err = fs_path_lookup_at(newdirfd, newpathname, 0, &newpath);
 	if (err) {
@@ -321,7 +332,11 @@ int do_readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz)
 	}
 	spin_unlock(&path.dentry->lock);
 
-	struct fs_inode *inode = path.dentry->inode;
+	struct fs_inode *inode = fs_dentry_inode(path.dentry);
+	if (!inode) {
+		fs_path_put(&path);
+		return -ENOENT;
+	}
 	if (!S_ISLNK(inode->mode)) {
 		fs_path_put(&path);
 		return -EINVAL;
@@ -383,6 +398,11 @@ int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 	err = fs_path_lookup_at(olddirfd, oldpathname, 0, &oldpath);
 	if (err)
 		return err;
+
+	if (fs_dentry_is_negative(oldpath.dentry)) {
+		fs_path_put(&oldpath);
+		return -ENOENT;
+	}
 
 	err = fs_path_lookup_at(newdirfd, newpathname, 0, &newpath);
 	if (err) {

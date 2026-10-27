@@ -131,12 +131,12 @@ void fs_dentry_instantiate(struct fs_dentry *dentry, struct fs_inode *inode)
 	ASSERT(dentry->inode == NULL);
 	ASSERT(list_empty(&dentry->alias));
 
-	dentry->inode = inode;
 	spin_lock(&inode->lock);
 	list_add(&dentry->alias, &inode->dentries);
 	spin_unlock(&inode->lock);
 
 	spin_lock(&dentry->lock);
+	dentry->inode = inode;
 	dentry->flags &= ~DCACHE_NEGATIVE;
 	spin_unlock(&dentry->lock);
 }
@@ -148,6 +148,36 @@ struct fs_dentry *fs_dentry_get(struct fs_dentry *dentry)
 		 refcnt_read(&dentry->count));
 	refcnt_inc(&dentry->count);
 	return dentry;
+}
+
+bool fs_dentry_is_negative(struct fs_dentry *dentry)
+{
+	bool neg;
+
+	spin_lock(&dentry->lock);
+	neg = (dentry->flags & DCACHE_NEGATIVE) != 0;
+	spin_unlock(&dentry->lock);
+	return neg;
+}
+
+bool fs_dentry_is_mounted(struct fs_dentry *dentry)
+{
+	bool mounted;
+
+	spin_lock(&dentry->lock);
+	mounted = (dentry->flags & DCACHE_MOUNTED) != 0;
+	spin_unlock(&dentry->lock);
+	return mounted;
+}
+
+struct fs_inode *fs_dentry_inode(struct fs_dentry *dentry)
+{
+	struct fs_inode *inode;
+
+	spin_lock(&dentry->lock);
+	inode = dentry->inode;
+	spin_unlock(&dentry->lock);
+	return inode;
 }
 
 void fs_dentry_put(struct fs_dentry *dentry)
@@ -373,7 +403,9 @@ struct fs_dentry *fs_dentry_splice_alias(struct fs_inode *inode,
 		}
 	}
 	list_add(&dentry->alias, dentries);
+	spin_lock(&dentry->lock);
 	dentry->inode = inode;
+	spin_unlock(&dentry->lock);
 	spin_unlock(&inode->lock);
 
 	return dentry;
@@ -424,7 +456,7 @@ void fs_dcache_dump(void)
 		printk("Bucket %zu:\n", i);
 		hlist_for_each_entry(d, head, hash) {
 			printk("  Name: %s, Inode: %ld, Refcnt: %d, Negative: %s, Mounted: %s\n",
-			       d->name.name, d->inode->ino,
+			       d->name.name, d->inode ? d->inode->ino : 0,
 			       refcnt_read(&d->count),
 			       d->flags & DCACHE_NEGATIVE ? "true" : "false",
 			       d->flags & DCACHE_MOUNTED ? "true" : "false");

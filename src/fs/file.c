@@ -23,6 +23,11 @@ core_initcall(fs_file_cache_init);
 struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode)
 {
 	struct fs_file *file;
+	struct fs_inode *inode;
+
+	inode = fs_dentry_inode(path->dentry);
+	if (!inode)
+		return ERR_PTR(-ENOENT);
 
 	file = slab_alloc(&file_cache);
 	if (!file)
@@ -31,8 +36,8 @@ struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode)
 	refcnt_init(&file->count, 1);
 	fs_path_get(path);
 	file->path = *path;
-	file->inode = path->dentry->inode;
-	file->ops = file->inode->fops;
+	file->inode = inode;
+	file->ops = inode->fops;
 
 	spinlock_init(&file->lock, "file.f_lock");
 	file->mode = mode;

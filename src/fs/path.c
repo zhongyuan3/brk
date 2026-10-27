@@ -16,7 +16,7 @@
 
 static void follow_mount(struct fs_path *path)
 {
-	if (!(path->dentry->flags & DCACHE_MOUNTED))
+	if (!fs_dentry_is_mounted(path->dentry))
 		return;
 
 	struct fs_mount_state *child_mnt;
@@ -26,7 +26,7 @@ static void follow_mount(struct fs_path *path)
 		path->mnt = child_mnt;
 		path->dentry = fs_dentry_get(child_mnt->root);
 
-		if (!(path->dentry->flags & DCACHE_MOUNTED))
+		if (!fs_dentry_is_mounted(path->dentry))
 			break;
 	}
 }
@@ -149,12 +149,14 @@ static int __path_lookup(int dirfd, const char *name, unsigned int flags,
 	const char *p = name;
 
 	while ((p = skip_component(p, component_name))) {
-		if (path->dentry->flags & DCACHE_NEGATIVE) {
+		struct fs_inode *dir_inode = fs_dentry_inode(path->dentry);
+
+		if (fs_dentry_is_negative(path->dentry) || !dir_inode) {
 			err = -ENOENT;
 			goto lookup_error;
 		}
 
-		if (!S_ISDIR(path->dentry->inode->mode)) {
+		if (!S_ISDIR(dir_inode->mode)) {
 			err = -ENOTDIR;
 			goto lookup_error;
 		}

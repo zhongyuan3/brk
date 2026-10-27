@@ -184,7 +184,11 @@ int pipefs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 		return -ENOMEM;
 	}
 
-	if (root_inode->state & I_NEW) {
+	irqstate_t root_flags = spin_lock_irqsave(&root_inode->lock);
+	bool root_is_new = (root_inode->state & I_NEW) != 0;
+	spin_unlock_irqrestore(&root_inode->lock, root_flags);
+
+	if (root_is_new) {
 		root_inode->mode = S_IFDIR | 0555;
 		root_inode->ops = &pipefs_dir_iops;
 		root_inode->fops = &pipefs_dir_fops;
@@ -439,7 +443,11 @@ int anon_pipe_create(struct fs_file **read_file, struct fs_file **write_file,
 		return -ENOMEM;
 	}
 
-	if (!(inode->state & I_NEW)) {
+	irqstate_t inode_flags = spin_lock_irqsave(&inode->lock);
+	bool inode_is_new = (inode->state & I_NEW) != 0;
+	spin_unlock_irqrestore(&inode->lock, inode_flags);
+
+	if (!inode_is_new) {
 		fs_inode_put(inode);
 		kfree(pipe);
 		return -EBUSY;
