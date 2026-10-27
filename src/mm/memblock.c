@@ -331,11 +331,24 @@ static void memblock_free_range(u64 start, u64 end)
 	memblock_reserve(start, end - start);
 
 	while (start < end) {
+		size_t chunk_size;
+
 		order = page_order(end - start);
 		if (order > PAGE_ORDER_MAX)
 			order = PAGE_ORDER_MAX;
-		while (!is_aligned(start, (size_t)1 << (PAGE_SHIFT + order)))
+
+		/*
+		 * Pick the largest aligned chunk that still fits inside
+		 * [start, end). page_order() may round up and would
+		 * otherwise free past the end of this range.
+		 */
+		for (;;) {
+			chunk_size = (size_t)1 << (PAGE_SHIFT + order);
+			if (is_aligned(start, chunk_size) &&
+			    chunk_size <= end - start)
+				break;
 			--order;
+		}
 
 		npgs = (1 << order);
 
@@ -348,14 +361,32 @@ static void memblock_free_range(u64 start, u64 end)
 	}
 }
 
+#define MAX_FREE_RANGES 128
+
 void memblock_free_all(void)
 {
+	struct free_range {
+		u64 start;
+		u64 end;
+	} ranges[MAX_FREE_RANGES];
+	size_t nr_ranges = 0;
 	u64 idx;
 	u64 start, end;
 
+	/*
+	 * memblock_free_range() inserts each freed range into the reserved
+	 * set. Snapshot the free ranges first; mutating the reserved set
+	 * while iterating over it would make the iterator skip ranges.
+	 */
 	for_each_mem_range(idx, start, end) {
-		memblock_free_range(start, end);
+		ASSERT(nr_ranges < MAX_FREE_RANGES);
+		ranges[nr_ranges].start = start;
+		ranges[nr_ranges].end = end;
+		nr_ranges += 1;
 	}
+
+	for (size_t i = 0; i < nr_ranges; ++i)
+		memblock_free_range(ranges[i].start, ranges[i].end);
 
 	pr_debug("memblock: %s() done\n", __func__);
 }

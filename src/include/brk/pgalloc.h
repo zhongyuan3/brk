@@ -13,6 +13,7 @@
 #define PAGE_FLAGS_SLAB (1 << 2) /* Is this page in the SLAB system? */
 #define PAGE_FLAGS_FREE (1 << 3) /* Is this page free? */
 #define PAGE_FLAGS_KMALLOC (1 << 4) /* Buddy block from kmalloc() > max slab */
+#define PAGE_FLAGS_PCP (1 << 5) /* Cached in a per-CPU page list */
 
 #define PAGE_FLAGS_NEW_PAGE (PAGE_FLAGS_BUDDY | PAGE_FLAGS_HEAD)
 
