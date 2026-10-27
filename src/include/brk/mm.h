@@ -32,4 +32,20 @@ int map_pages(const struct map_pages_context *ctx);
 
 int mm_core_init(void);
 
+enum vmap_mode {
+	VMAP_MODE_EARLY,
+	VMAP_MODE_INTERIM,
+	VMAP_MODE_FINAL,
+};
+
+int vmap(pgd_t *pgd, u64 addr, size_t size, u64 paddr, unsigned int flags,
+	 enum vmap_mode mode);
+void vunmap(pgd_t *pgd, u64 addr, size_t size, enum vmap_mode mode);
+int kvmap(u64 addr, size_t size, u64 paddr, unsigned int flags);
+int kvmap_with_mode(u64 addr, size_t size, u64 paddr, unsigned int flags,
+		    enum vmap_mode mode);
+void kvunmap(u64 addr, size_t size);
+int uvmap(pgd_t *pgd, u64 addr, size_t size, u64 paddr, unsigned int flags);
+void uvunmap(pgd_t *pgd, u64 addr, size_t size);
+
 #endif

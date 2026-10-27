@@ -12,6 +12,7 @@
 #include <brk/pgalloc.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
@@ -467,4 +468,237 @@ int mm_core_init(void)
 	memblock_dump_all();
 
 	return 0;
+}
+
+static u64 alloc_pgtable(enum vmap_mode mode)
+{
+	struct page *pg;
+	u64 paddr;
+
+	switch (mode) {
+	case VMAP_MODE_EARLY:
+		paddr = memblock_alloc(PAGE_SIZE, _EKERNEL_PHYS, PAGE_SIZE);
+		if (!paddr)
+			panic("%s(): memblock_alloc() failed\n", __func__);
+		memset((void *)(uintptr_t)paddr, 0, PAGE_SIZE);
+		return paddr;
+	case VMAP_MODE_INTERIM:
+		paddr = memblock_alloc(PAGE_SIZE, _EKERNEL_PHYS, PAGE_SIZE);
+		if (!paddr)
+			panic("%s(): memblock_alloc() failed\n", __func__);
+		memset((void *)phys_to_virt(paddr), 0, PAGE_SIZE);
+		return paddr;
+	case VMAP_MODE_FINAL:
+		pg = page_alloc(0);
+		if (!pg)
+			return 0;
+		paddr = page_to_phys(pg);
+		memset((void *)phys_to_virt(paddr), 0, PAGE_SIZE);
+		return paddr;
+	}
+	panic("%s(): unexpected mode: %d\n", __func__, mode);
+}
+
+static u64 alloc_pmd(enum vmap_mode mode)
+{
+	return alloc_pgtable(mode);
+}
+
+static u64 alloc_pt(enum vmap_mode mode)
+{
+	return alloc_pgtable(mode);
+}
+
+static pmd_t *get_pmd_virt(u64 pmd_phys, enum vmap_mode mode)
+{
+	switch (mode) {
+	case VMAP_MODE_EARLY:
+		return (pmd_t *)pmd_phys;
+	case VMAP_MODE_INTERIM:
+		return (pmd_t *)phys_to_virt(pmd_phys);
+	case VMAP_MODE_FINAL:
+		return (pmd_t *)phys_to_virt(pmd_phys);
+	}
+	panic("%s(): unexpected mode: %d\n", __func__, mode);
+}
+
+static pte_t *get_pt_virt(u64 pt_phys, enum vmap_mode mode)
+{
+	switch (mode) {
+	case VMAP_MODE_EARLY:
+		return (pte_t *)(uintptr_t)pt_phys;
+	case VMAP_MODE_INTERIM:
+		return (pte_t *)phys_to_virt(pt_phys);
+	case VMAP_MODE_FINAL:
+		return (pte_t *)phys_to_virt(pt_phys);
+	}
+	panic("%s(): unexpected mode: %d\n", __func__, mode);
+}
+
+static void vunmap_range(pgd_t *pgd, u64 addr, u64 end_addr,
+			 enum vmap_mode mode)
+{
+	pgd_t *pgdep;
+	pmd_t *pmd, *pmdep;
+	pte_t *pt, *ptep;
+
+	while (addr < end_addr) {
+		pgdep = pgd + pgd_index(addr);
+		if (pgd_is_leaf(*pgdep)) {
+			ASSERT(end_addr - addr >= PAGE_SIZE_1G);
+			pgd_clear(pgdep);
+			addr += PAGE_SIZE_1G;
+			continue;
+		}
+		ASSERT(pgd_is_valid(*pgdep));
+		pmd = get_pmd_virt(pgd_next(*pgdep), mode);
+		pmdep = pmd + pmd_index(addr);
+		if (pmd_is_leaf(*pmdep)) {
+			ASSERT(end_addr - addr >= PAGE_SIZE_2M);
+			pmd_clear(pmdep);
+			addr += PAGE_SIZE_2M;
+			continue;
+		}
+		ASSERT(pmd_is_valid(*pmdep));
+		pt = get_pt_virt(pmd_next(*pmdep), mode);
+		ptep = pt + pte_index(addr);
+		ASSERT(pte_is_valid(*ptep));
+		pte_clear(ptep);
+		addr += PAGE_SIZE;
+	}
+}
+
+static int vmap_range(pgd_t *pgd, u64 addr, u64 end_addr, u64 paddr,
+		      size_t page_size, unsigned int flags, enum vmap_mode mode)
+{
+	pgd_t *pgdep;
+	pmd_t *pmd, *pmdep;
+	pte_t *pt, *ptep;
+	u64 pmd_phys, pt_phys;
+	u64 start_addr = addr;
+
+	for (; addr < end_addr; addr += page_size, paddr += page_size) {
+		pgdep = pgd + pgd_index(addr);
+		if (page_size == PAGE_SIZE_1G) {
+			ASSERT(!pgd_is_valid(*pgdep));
+			pgd_set_leaf(pgdep, paddr, flags);
+			continue;
+		}
+		if (!pgd_is_valid(*pgdep)) {
+			pmd_phys = alloc_pmd(mode);
+			if (!pmd_phys) {
+				vunmap_range(pgd, start_addr, addr, mode);
+				return -ENOMEM;
+			}
+			pmd = get_pmd_virt(pmd_phys, mode);
+			pgd_set_next(pgdep, pmd_phys);
+		} else {
+			pmd = get_pmd_virt(pgd_next(*pgdep), mode);
+		}
+		pmdep = pmd + pmd_index(addr);
+		if (page_size == PAGE_SIZE_2M) {
+			ASSERT(!pmd_is_valid(*pmdep));
+			pmd_set_leaf(pmdep, paddr, flags);
+			continue;
+		}
+		if (!pmd_is_valid(*pmdep)) {
+			pt_phys = alloc_pt(mode);
+			if (!pt_phys) {
+				vunmap_range(pgd, start_addr, addr, mode);
+				return -ENOMEM;
+			}
+			pt = get_pt_virt(pt_phys, mode);
+			pmd_set_next(pmdep, pt_phys);
+		} else {
+			pt = get_pt_virt(pmd_next(*pmdep), mode);
+		}
+		ptep = pt + pte_index(addr);
+		ASSERT(!pte_is_valid(*ptep));
+		pte_set_leaf(ptep, paddr, flags);
+	}
+
+	return 0;
+}
+
+int vmap(pgd_t *pgd, u64 addr, size_t size, u64 paddr, unsigned int flags,
+	 enum vmap_mode mode)
+{
+	u64 end_addr;
+	size_t rem_size;
+	size_t page_size;
+	int err;
+
+	ASSERT(is_aligned(addr, PAGE_SIZE));
+	ASSERT(is_aligned(size, PAGE_SIZE));
+	ASSERT(is_aligned(paddr, PAGE_SIZE));
+
+	end_addr = addr + size;
+	while (addr < end_addr) {
+		rem_size = end_addr - addr;
+
+		if (is_aligned(addr, PAGE_SIZE_1G) &&
+		    is_aligned(paddr, PAGE_SIZE_1G) &&
+		    rem_size >= PAGE_SIZE_1G) {
+			page_size = PAGE_SIZE_1G;
+			rem_size = round_down(rem_size, PAGE_SIZE_1G);
+		} else if (is_aligned(addr, PAGE_SIZE_2M) &&
+			   is_aligned(paddr, PAGE_SIZE_2M) &&
+			   rem_size >= PAGE_SIZE_2M) {
+			page_size = PAGE_SIZE_2M;
+			rem_size = round_down(rem_size, PAGE_SIZE_2M);
+		} else {
+			page_size = PAGE_SIZE;
+			rem_size = round_down(rem_size, PAGE_SIZE);
+		}
+
+		err = vmap_range(pgd, addr, addr + rem_size, paddr, page_size,
+				 flags, mode);
+		if (err)
+			return err;
+
+		addr += rem_size;
+		paddr += rem_size;
+	}
+
+	return 0;
+}
+
+void vunmap(pgd_t *pgd, u64 addr, size_t size, enum vmap_mode mode)
+{
+	ASSERT(is_aligned(addr, PAGE_SIZE));
+	ASSERT(is_aligned(size, PAGE_SIZE));
+	vunmap_range(pgd, addr, addr + size, mode);
+}
+
+int kvmap(u64 addr, size_t size, u64 paddr, unsigned int flags)
+{
+	return kvmap_with_mode(addr, size, paddr, flags, VMAP_MODE_FINAL);
+}
+
+int kvmap_with_mode(u64 addr, size_t size, u64 paddr, unsigned int flags,
+		    enum vmap_mode mode)
+{
+	int ret;
+	size = round_up(size, PAGE_SIZE);
+	spin_lock(&kernel_pgdir_lock);
+	ret = vmap(kernel_pgdir, addr, size, paddr, flags, mode);
+	spin_unlock(&kernel_pgdir_lock);
+	return ret;
+}
+
+void kvunmap(u64 addr, size_t size)
+{
+	spin_lock(&kernel_pgdir_lock);
+	vunmap(kernel_pgdir, addr, size, VMAP_MODE_FINAL);
+	spin_unlock(&kernel_pgdir_lock);
+}
+
+int uvmap(pgd_t *pgd, u64 addr, size_t size, u64 paddr, unsigned int flags)
+{
+	return vmap(pgd, addr, size, paddr, flags | PTE_U, VMAP_MODE_FINAL);
+}
+
+void uvunmap(pgd_t *pgd, u64 addr, size_t size)
+{
+	vunmap(pgd, addr, size, VMAP_MODE_FINAL);
 }

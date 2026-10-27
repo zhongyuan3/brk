@@ -176,7 +176,7 @@ int dt_init_scan_cpu(void)
 		const char *type = fdt_getprop(fdt, subnode, "device_type", 0);
 		if (type && !strcmp(type, "cpu")) {
 			pr_debug("dtb: found cpu: %s\n",
-				   fdt_get_name(fdt, subnode, 0));
+				 fdt_get_name(fdt, subnode, 0));
 			nr_harts += 1;
 		}
 	}
@@ -244,38 +244,6 @@ static int dtb_get_irq(int node, u32 *irq)
 		return -EINVAL;
 
 	*irq = fdt32_to_cpu(*prop);
-	return 0;
-}
-
-int dt_parse_uart(struct ns16550a_device *uart)
-{
-	int node;
-	const u32 *clock_freq;
-	int len;
-	u64 addr = 0;
-	u64 size = 0;
-	u32 irq = 0;
-
-	node = fdt_path_offset(fdt, "/soc/serial");
-	if (node < 0)
-		return -EINVAL;
-
-	if (dtb_get_one_reg(node, &addr, &size))
-		return -EINVAL;
-
-	if (dtb_get_irq(node, &irq))
-		return -EINVAL;
-
-	uart->phys_base = addr;
-	uart->size = size;
-	uart->irq = irq;
-
-	clock_freq = fdt_getprop(fdt, node, "clock-frequency", &len);
-	if (!clock_freq || len != sizeof(u32))
-		return -EINVAL;
-
-	uart->clock_freq = fdt32_to_cpu(*clock_freq);
-
 	return 0;
 }
 
@@ -352,10 +320,10 @@ void dt_init_scan_serial(void)
 
 	fdt_for_each_subnode(subnode, fdt, parent) {
 		pr_debug("subnode: %d, name: %s\n", subnode,
-			   fdt_get_name(fdt, subnode, NULL));
+			 fdt_get_name(fdt, subnode, NULL));
 		if (fdt_node_check_compatible(fdt, subnode, "ns16550a") == 0) {
-			pr_debug("found ns16550a node: %d, name: %s\n",
-				   subnode, fdt_get_name(fdt, subnode, NULL));
+			pr_debug("found ns16550a node: %d, name: %s\n", subnode,
+				 fdt_get_name(fdt, subnode, NULL));
 
 			err = dtb_get_one_reg(subnode, &addr, &size);
 			if (err) {
@@ -369,9 +337,8 @@ void dt_init_scan_serial(void)
 			clock_freq = fdt_getprop(fdt, subnode,
 						 "clock-frequency", &len);
 			if (!clock_freq || len != sizeof(u32)) {
-				pr_debug(
-					"failed to get clock frequency: %d\n",
-					(int)(unsigned long)clock_freq);
+				pr_debug("failed to get clock frequency: %d\n",
+					 (int)(unsigned long)clock_freq);
 				continue;
 			}
 
@@ -396,9 +363,8 @@ void dt_init_scan_serial(void)
 			}
 			err = ns16550a_add_device(dev);
 			if (err) {
-				pr_debug(
-					"failed to add ns16550a device: %d\n",
-					err);
+				pr_debug("failed to add ns16550a device: %d\n",
+					 err);
 				ns16550a_device_finalize(dev);
 				ns16550a_device_free(dev);
 				continue;
@@ -408,69 +374,3 @@ void dt_init_scan_serial(void)
 	}
 }
 subsys_initcall(dt_init_scan_serial);
-
-static int __add_mmio(u64 addr, size_t size, void *arg)
-{
-	struct platform_device *dev = arg;
-
-	if (dev->nr_mmio >= MAX_MMIO_RANGES)
-		return -ENOMEM;
-
-	int i = dev->nr_mmio++;
-	dev->mmio[i].base = addr;
-	dev->mmio[i].size = size;
-	return 0;
-}
-
-int dt_scan_platform_devices(void)
-{
-	int soc = fdt_path_offset(fdt, "/soc");
-	int sub_node;
-	int len;
-	const char *name;
-	struct platform_device *dev;
-	int addr_cells = 0, size_cells = 0;
-	u32 irq = 0;
-
-	get_addr_cells(soc, &addr_cells, &size_cells);
-
-	fdt_for_each_subnode(sub_node, fdt, soc) {
-		dev = (void *)phys_to_virt(
-			memblock_alloc(sizeof(struct platform_device), 0,
-				       alignof(struct platform_device)));
-		ASSERT(dev != NULL);
-		memset(dev, 0, sizeof(*dev));
-
-		len = 0;
-		name = NULL;
-		name = fdt_get_name(fdt, sub_node, &len);
-		ASSERT(name != NULL);
-		pr_debug("dtb: found /soc/%.*s\n", len, name);
-		dev->name = name;
-
-		name = NULL;
-		len = 0;
-		name = fdt_getprop(fdt, sub_node, "compatible", &len);
-		ASSERT(name != NULL);
-		pr_debug("dtb: /soc/%s.compatible: %.*s\n", dev->name, len,
-			   name);
-		dev->compatible = name;
-
-		for_each_node_reg(sub_node, addr_cells, size_cells, __add_mmio,
-				  dev);
-
-		for (int i = 0; i < dev->nr_mmio; ++i) {
-			pr_debug("dtb: /soc/%s.mmio[%d]: %#lx+%lu\n",
-				   dev->name, i, dev->mmio[i].base,
-				   dev->mmio[i].size);
-		}
-
-		dtb_get_irq(sub_node, &irq);
-		dev->irq = irq;
-
-		dev->fdt_node = sub_node;
-		platform_device_add(dev);
-	}
-
-	return 0;
-}
