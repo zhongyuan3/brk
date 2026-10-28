@@ -182,6 +182,51 @@ static int virtio_blk_submit(struct virtio_blk_dev *vblk,
 	return err;
 }
 
+static int virtio_blk_flush(struct virtio_blk_dev *vblk)
+{
+	unsigned int idx[2];
+	struct virtio_blk_req *req;
+	struct virtio_blk_io_desc trans = { .completed = false };
+	char *status;
+	int err;
+	irqstate_t flags = spin_lock_irqsave(&vblk->lock);
+
+	while (virtq_alloc_desc_chain(&vblk->vq, idx, 2))
+		task_sleep(&vblk->vq.desc, &vblk->lock);
+
+	req = &vblk->reqs[idx[0]];
+	req->type = VIRTIO_BLK_T_FLUSH;
+	req->reserved = 0;
+	req->sector = 0;
+
+	vblk->vq.desc[idx[0]].addr = virt_to_phys((uintptr_t)req);
+	vblk->vq.desc[idx[0]].len = sizeof(*req);
+	vblk->vq.desc[idx[0]].flags = VIRTQ_DESC_F_NEXT;
+	vblk->vq.desc[idx[0]].next = idx[1];
+
+	status = &vblk->slots[idx[0]].status;
+	*status = 0xff;
+	vblk->vq.desc[idx[1]].addr = virt_to_phys((uintptr_t)status);
+	vblk->vq.desc[idx[1]].len = sizeof(*status);
+	vblk->vq.desc[idx[1]].flags = VIRTQ_DESC_F_WRITE;
+	vblk->vq.desc[idx[1]].next = 0;
+
+	vblk->slots[idx[0]].trans = &trans;
+	virtq_submit(&vblk->vq, idx[0]);
+	virtio_mmio_queue_notify(vblk->vdev, 0);
+
+	while (!trans.completed)
+		task_sleep(&trans.completed, &vblk->lock);
+
+	err = virtio_blk_status_to_errno(vblk->slots[idx[0]].status);
+	vblk->slots[idx[0]].trans = NULL;
+	virtq_free_desc_chain(&vblk->vq, idx[0]);
+	task_wake_all(&vblk->vq.desc);
+
+	spin_unlock_irqrestore(&vblk->lock, flags);
+	return err;
+}
+
 static int virtio_blk_io(struct virtio_blk_dev *vblk, u64 sector, u64 buf_phys,
 			 size_t sec_count, bool write)
 {
@@ -224,6 +269,15 @@ static int virtio_blk_bdev_write(struct block_dev *bdev, u64 blk_id,
 				 const void *buf, u32 blk_cnt)
 {
 	return virtio_blk_bdev_rw(bdev, blk_id, (void *)buf, blk_cnt, true);
+}
+
+static int virtio_blk_bdev_flush(struct block_dev *bdev)
+{
+	struct virtio_blk_dev *vbd = bdev->priv;
+
+	if (!vbd || !vbd->flush_supported)
+		return 0;
+	return virtio_blk_flush(vbd);
 }
 
 static struct virtio_blk_dev *virtio_blk_alloc(unsigned queue_size)
@@ -275,6 +329,7 @@ static int virtio_blk_setup(struct virtio_blk_dev *vblk,
 		return err;
 
 	features = virtio_blk_select_features(vdev);
+	vblk->flush_supported = (features & (1u << VIRTIO_BLK_F_FLUSH)) != 0;
 	virtio_mmio_write_features(vdev, features);
 
 	err = virtio_mmio_features_ok(vdev);
@@ -360,6 +415,7 @@ int virtio_blk_register(struct virtio_blk_dev *vblk)
 
 	bdev->ops.read = virtio_blk_bdev_read;
 	bdev->ops.write = virtio_blk_bdev_write;
+	bdev->ops.flush = virtio_blk_bdev_flush;
 	bdev->phy_bcnt = vblk->config.capacity;
 	bdev->phy_bsize = VIRTIO_BLK_SECTOR_SIZE;
 	bdev->priv = vblk;

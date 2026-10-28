@@ -111,9 +111,14 @@ static int brkfs_sync_fs(struct fs_super_block *sb)
 	/*
 	 * Inode tables, bitmaps and directory blocks live in the block
 	 * device's page cache, not in any inode's mapping.  Without this
-	 * flush they would stay dirty in memory forever.
+	 * flush they would stay dirty in memory forever.  Then ask the device
+	 * to drain its volatile write cache.
 	 */
-	return page_cache_flush(sbi->s_bdev->bd_mapping);
+	int err = page_cache_flush(sbi->s_bdev->bd_mapping);
+
+	if (!err)
+		err = blkdev_flush(sbi->s_bdev);
+	return err;
 }
 
 const struct fs_super_block_ops brkfs_sops = {

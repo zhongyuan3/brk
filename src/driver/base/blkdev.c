@@ -15,7 +15,9 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <brk/uaccess.h>
 #include <uapi/errno.h>
+#include <uapi/ioctl.h>
 #include <uapi/types.h>
 
 static struct devno_allocator bd_devno;
@@ -186,11 +188,21 @@ int blkdev_write(struct block_dev *bd, u64 blk_id, const void *buf, u32 blk_cnt)
 	return bd->ops.write(bd, blk_id, buf, blk_cnt);
 }
 
+int blkdev_flush(struct block_dev *bd)
+{
+	if (!bd)
+		return -EINVAL;
+	if (!bd->ops.flush)
+		return 0;
+	return bd->ops.flush(bd);
+}
+
 static int blkdev_read_page(struct page_cache *m, struct cached_page *cp)
 {
 	struct block_dev *bd;
 	u32 bs;
 	u32 nsec;
+	u32 valid;
 	u64 sector;
 	int err;
 	void *buf;
@@ -206,13 +218,29 @@ static int blkdev_read_page(struct page_cache *m, struct cached_page *cp)
 
 	nsec = PAGE_SIZE / bs;
 	sector = cp->index * nsec;
+	buf = (void *)page_to_virt(cp->page);
 
-	err = blkdev_check_bounds(bd, sector, nsec);
+	if (sector >= bd->phy_bcnt) {
+		memset(buf, 0, PAGE_SIZE);
+		return 0;
+	}
+
+	valid = nsec;
+	if (bd->phy_bcnt - sector < valid)
+		valid = (u32)(bd->phy_bcnt - sector);
+
+	err = blkdev_check_bounds(bd, sector, valid);
 	if (err)
 		return err;
 
-	buf = (void *)page_to_virt(cp->page);
-	return bd->ops.read(bd, sector, buf, nsec);
+	err = bd->ops.read(bd, sector, buf, valid);
+	if (err)
+		return err;
+
+	if (valid < nsec)
+		memset((u8 *)buf + valid * bs, 0, PAGE_SIZE - valid * bs);
+
+	return 0;
 }
 
 static int blkdev_write_page(struct page_cache *m, struct cached_page *cp)
@@ -220,6 +248,7 @@ static int blkdev_write_page(struct page_cache *m, struct cached_page *cp)
 	struct block_dev *bd;
 	u32 bs;
 	u32 nsec;
+	u32 valid;
 	u64 sector;
 	int err;
 	void *buf;
@@ -234,12 +263,19 @@ static int blkdev_write_page(struct page_cache *m, struct cached_page *cp)
 	nsec = PAGE_SIZE / bs;
 	sector = cp->index * nsec;
 
-	err = blkdev_check_bounds(bd, sector, nsec);
+	if (sector >= bd->phy_bcnt)
+		return 0;
+
+	valid = nsec;
+	if (bd->phy_bcnt - sector < valid)
+		valid = (u32)(bd->phy_bcnt - sector);
+
+	err = blkdev_check_bounds(bd, sector, valid);
 	if (err)
 		return err;
 
 	buf = (void *)page_to_virt(cp->page);
-	return bd->ops.write(bd, sector, buf, nsec);
+	return bd->ops.write(bd, sector, buf, valid);
 }
 
 static const struct page_cache_ops bdev_pc_ops = {
@@ -285,40 +321,156 @@ static int blkdev_file_open(struct fs_inode *inode, struct fs_file *file)
 static int blkdev_file_release(struct fs_inode *inode, struct fs_file *file)
 {
 	struct block_dev *bd = file->private_data;
+	int err = 0;
 
 	(void)inode;
 	file->private_data = NULL;
+	if (bd && !bd->dead) {
+		err = page_cache_flush(bd->bd_mapping);
+		if (!err)
+			err = blkdev_flush(bd);
+	}
 	blkdev_put(bd);
-	return 0;
+	return err;
 }
 
 static ssize_t blkdev_file_read(struct fs_file *file, char *buf, size_t size,
 				loff_t *pos)
 {
-	(void)file;
-	(void)buf;
-	(void)size;
-	(void)pos;
-	return -EOPNOTSUPP;
+	struct block_dev *bd = file->private_data;
+	u64 capacity;
+	size_t total = 0;
+
+	if (!bd || bd->dead)
+		return -ENODEV;
+	if (!(file->mode & FMODE_READ))
+		return -EBADF;
+	if (*pos < 0)
+		return -EINVAL;
+
+	capacity = blkdev_capacity_bytes(bd);
+	if ((u64)*pos >= capacity)
+		return 0;
+	if (size > capacity - (u64)*pos)
+		size = (size_t)(capacity - (u64)*pos);
+
+	while (size > 0) {
+		pgoff_t index = (pgoff_t)(*pos >> PAGE_SHIFT);
+		size_t off = (size_t)(*pos & (PAGE_SIZE - 1));
+		size_t n = PAGE_SIZE - off;
+		struct cached_page *cp;
+		int err;
+
+		if (n > size)
+			n = size;
+
+		cp = read_mapping_page(bd->bd_mapping, index);
+		if (IS_ERR(cp)) {
+			if (total > 0)
+				break;
+			return PTR_ERR(cp);
+		}
+
+		cached_page_lock(cp);
+		err = copy_to_user(buf + total,
+				   (u8 *)cached_page_addr(cp) + off, n);
+		cached_page_unlock(cp);
+		cached_page_put(cp);
+
+		if (err)
+			return total > 0 ? (ssize_t)total : -EFAULT;
+
+		*pos += (loff_t)n;
+		total += n;
+		size -= n;
+	}
+
+	return (ssize_t)total;
 }
 
 static ssize_t blkdev_file_write(struct fs_file *file, const char *buf,
 				 size_t size, loff_t *pos)
 {
-	(void)file;
-	(void)buf;
-	(void)size;
-	(void)pos;
-	return -EOPNOTSUPP;
+	struct block_dev *bd = file->private_data;
+	u64 capacity;
+	size_t total = 0;
+
+	if (!bd || bd->dead)
+		return -ENODEV;
+	if (!(file->mode & FMODE_WRITE))
+		return -EBADF;
+	if (*pos < 0)
+		return -EINVAL;
+
+	capacity = blkdev_capacity_bytes(bd);
+	if ((u64)*pos >= capacity)
+		return -ENOSPC;
+	if (size > capacity - (u64)*pos)
+		size = (size_t)(capacity - (u64)*pos);
+
+	while (size > 0) {
+		pgoff_t index = (pgoff_t)(*pos >> PAGE_SHIFT);
+		size_t off = (size_t)(*pos & (PAGE_SIZE - 1));
+		size_t n = PAGE_SIZE - off;
+		struct cached_page *cp;
+		int err;
+
+		if (n > size)
+			n = size;
+
+		/* Partial page writes need the existing surrounding data. */
+		cp = read_mapping_page(bd->bd_mapping, index);
+		if (IS_ERR(cp)) {
+			if (total > 0)
+				break;
+			return PTR_ERR(cp);
+		}
+
+		cached_page_lock(cp);
+		err = copy_from_user((u8 *)cached_page_addr(cp) + off,
+				     buf + total, n);
+		cached_page_unlock(cp);
+		if (!err)
+			cached_page_mark_dirty(cp);
+		cached_page_put(cp);
+
+		if (err)
+			return total > 0 ? (ssize_t)total : -EFAULT;
+
+		*pos += (loff_t)n;
+		total += n;
+		size -= n;
+	}
+
+	return (ssize_t)total;
 }
 
 static loff_t blkdev_file_llseek(struct fs_file *file, loff_t offset,
 				 int whence)
 {
-	(void)file;
-	(void)offset;
-	(void)whence;
-	return -EOPNOTSUPP;
+	struct block_dev *bd = file->private_data;
+	loff_t new_pos;
+
+	if (!bd || bd->dead)
+		return -ENODEV;
+
+	switch (whence) {
+	case SEEK_SET:
+		new_pos = offset;
+		break;
+	case SEEK_CUR:
+		new_pos = file->pos + offset;
+		break;
+	case SEEK_END:
+		new_pos = (loff_t)blkdev_capacity_bytes(bd) + offset;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	if (new_pos < 0)
+		return -EINVAL;
+	return new_pos;
 }
 
 static int blkdev_file_iterate_shared(struct fs_file *file,
@@ -326,32 +478,58 @@ static int blkdev_file_iterate_shared(struct fs_file *file,
 {
 	(void)file;
 	(void)ctx;
-	return -EOPNOTSUPP;
+	return -ENOTDIR;
 }
 
 static int blkdev_file_fsync(struct fs_file *file, loff_t start, loff_t end,
 			     int datasync)
 {
-	(void)file;
-	(void)start;
-	(void)end;
+	struct block_dev *bd = file->private_data;
+	int err;
+
 	(void)datasync;
-	return -EOPNOTSUPP;
+	if (!bd || bd->dead)
+		return -ENODEV;
+
+	err = page_cache_flush_range(bd->bd_mapping, start, end);
+	if (!err)
+		err = blkdev_flush(bd);
+	return err;
 }
 
 static int blkdev_file_flush(struct fs_file *file)
 {
 	(void)file;
-	return -EOPNOTSUPP;
+	return 0;
 }
 
 static long blkdev_file_ioctl(struct fs_file *file, unsigned int cmd,
 			      unsigned long arg)
 {
-	(void)file;
-	(void)cmd;
-	(void)arg;
-	return -ENOTTY;
+	struct block_dev *bd = file->private_data;
+	u64 bytes;
+
+	if (!bd || bd->dead)
+		return -ENODEV;
+
+	switch (cmd) {
+	case BLKGETSIZE64:
+		if (!arg)
+			return -EFAULT;
+		bytes = blkdev_capacity_bytes(bd);
+		return copy_to_user((void *)arg, &bytes, sizeof(bytes)) ?
+			       -EFAULT :
+			       0;
+	case BLKFLSBUF: {
+		int err = page_cache_flush(bd->bd_mapping);
+
+		if (!err)
+			err = blkdev_flush(bd);
+		return err;
+	}
+	default:
+		return -ENOTTY;
+	}
 }
 
 const struct fs_file_ops blkdev_fops = {

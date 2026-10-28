@@ -12,6 +12,8 @@ struct cached_page;
 struct block_dev_ops {
 	int (*read)(struct block_dev *, u64, void *, u32);
 	int (*write)(struct block_dev *, u64, const void *, u32);
+	/* Drain the device's volatile write cache, if it has one. */
+	int (*flush)(struct block_dev *);
 };
 
 struct block_dev {
@@ -32,6 +34,11 @@ int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt);
 int blkdev_read(struct block_dev *bd, u64 blk_id, void *buf, u32 blk_cnt);
 int blkdev_write(struct block_dev *bd, u64 blk_id, const void *buf,
 		 u32 blk_cnt);
+int blkdev_flush(struct block_dev *bd);
+static inline u64 blkdev_capacity_bytes(const struct block_dev *bd)
+{
+	return bd->phy_bcnt * bd->phy_bsize;
+}
 
 struct block_dev *blkdev_alloc(void);
 void blkdev_free(struct block_dev *bd);
