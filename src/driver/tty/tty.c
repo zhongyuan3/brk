@@ -1,17 +1,17 @@
 #include <brk/kmalloc.h>
 #include <brk/refcnt.h>
 #include <brk/signal.h>
+#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/tty.h>
 #include <brk/types.h>
+#include <brk/uaccess.h>
 #include <uapi/errno.h>
 #include <uapi/ioctl.h>
 #include <uapi/signal.h>
 #include <uapi/types.h>
-
-#define CTRL(x) ((x) - '@')
 
 #define TTY_DEFAULT_ROWS 24
 #define TTY_DEFAULT_COLS 80
@@ -27,6 +27,7 @@ static void tty_init_winsize(struct tty *tty)
 struct tty *tty_alloc(void)
 {
 	struct tty *tty = kzalloc(sizeof(*tty));
+
 	if (!tty)
 		return NULL;
 	tty->rx_buf = kzalloc(TTY_RX_BUF_SIZE);
@@ -35,8 +36,12 @@ struct tty *tty_alloc(void)
 		return NULL;
 	}
 	tty->rx_size = TTY_RX_BUF_SIZE;
+	tty->ldisc = &n_tty_ldisc_ops;
+	tty->eof_pending = false;
 	/* The port owns the initial reference. */
 	refcnt_init(&tty->refcnt, 1);
+	sleeplock_init(&tty->read_lock, "tty.read_lock");
+	sleeplock_init(&tty->write_lock, "tty.write_lock");
 	return tty;
 }
 
@@ -72,146 +77,77 @@ void tty_set_foreground(struct tty *tty, struct task *task)
 	spin_unlock_irqrestore(&tty->port->lock, flags);
 }
 
-long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
+ssize_t tty_read(struct tty *tty, char *buf, size_t n)
 {
-	struct winsize *ws = (struct winsize *)arg;
-	struct task *fg;
-
-	if (!tty)
-		return -EBADF;
-	if (!ws)
-		return -EFAULT;
+	if (!tty || !tty->ldisc || !tty->ldisc->read)
+		return -EIO;
 
 	tty_set_foreground(tty, current_task());
-
-	switch (cmd) {
-	case TIOCGWINSZ:
-		*ws = tty->winsize;
-		return 0;
-	case TIOCSWINSZ: {
-		irqstate_t flags;
-
-		tty->winsize = *ws;
-		flags = spin_lock_irqsave(&tty->port->lock);
-		fg = tty->port->foreground;
-		spin_unlock_irqrestore(&tty->port->lock, flags);
-		if (fg)
-			signal_send(fg, SIGWINCH);
-		return 0;
-	}
-	default:
-		return -ENOTTY;
-	}
-}
-
-ssize_t tty_read(struct tty *tty, void *buf, size_t n)
-{
-	size_t target;
-	int c;
-	char *dst = buf;
-	irqstate_t flags;
-
-	tty_set_foreground(tty, current_task());
-
-	target = n;
-	flags = spin_lock_irqsave(&tty->port->lock);
-	while (n > 0) {
-		/* wait until interrupt handler has put some
-		 * input into cons.buffer. */
-		while (tty->rx_r == tty->rx_w) {
-			if (signal_pending(current_task())) {
-				spin_unlock_irqrestore(&tty->port->lock,
-						       flags);
-				return -EINTR;
-			}
-			task_sleep(&tty->rx_r, &tty->port->lock);
-		}
-
-		c = tty->rx_buf[tty->rx_r++ % tty->rx_size];
-
-		if (c == CTRL('D')) { /* end-of-file */
-			if (n < target) {
-				/* Save ^D for next time, to make sure
-				 * caller gets a 0-byte result. */
-				tty->rx_r--;
-			}
-			break;
-		}
-
-		*dst++ = c;
-		--n;
-
-		if (c == '\n') {
-			/* a whole line has arrived, return to
-			 * the user-level read(). */
-			break;
-		}
-	}
-	spin_unlock_irqrestore(&tty->port->lock, flags);
-
-	return target - n;
+	return tty->ldisc->read(tty, buf, n);
 }
 
 ssize_t tty_write(struct tty *tty, const void *buf, size_t n)
 {
-	const struct tty_ops *ops = tty->port->driver->ops;
-	const u8 *p = buf;
-	const u8 *end = p + n;
-	int err = 0;
-	irqstate_t flags = spin_lock_irqsave(&tty->port->lock);
-
-	while (p < end) {
-		err = ops->put_char(tty, *p);
-		if (err)
-			break;
-		p++;
-	}
-	spin_unlock_irqrestore(&tty->port->lock, flags);
-	return err ? err : p - (const u8 *)buf;
+	if (!tty || !tty->ldisc || !tty->ldisc->write)
+		return -EIO;
+	return tty->ldisc->write(tty, buf, n);
 }
 
 void tty_receive(struct tty *tty, int c)
 {
-	irqstate_t flags = spin_lock_irqsave(&tty->port->lock);
-	const struct tty_ops *ops = tty->port->driver->ops;
+	u8 ch = (u8)c;
 
-	switch (c) {
-	case CTRL('C'):
-		if (tty->port->foreground)
-			signal_send(tty->port->foreground, SIGINT);
-		break;
-	case CTRL('U'): /* Kill line. */
-		while (tty->rx_e != tty->rx_w &&
-		       tty->rx_buf[(tty->rx_e - 1) % tty->rx_size] != '\n') {
-			tty->rx_e--;
-			ops->put_char(tty, TTY_VIS_BACKSPACE);
-		}
-		break;
-	case CTRL('H'): /* Backspace */
-	case '\x7f': /* Delete key */
-		if (tty->rx_e != tty->rx_w) {
-			tty->rx_e--;
-			ops->put_char(tty, TTY_VIS_BACKSPACE);
-		}
-		break;
-	default:
-		if (c != 0 && tty->rx_e - tty->rx_r < tty->rx_size) {
-			c = (c == '\r') ? '\n' : c;
+	if (!tty || !tty->ldisc || !tty->ldisc->receive_buf)
+		return;
+	tty->ldisc->receive_buf(tty, &ch, 1);
+}
 
-			ops->put_char(tty, c);
+long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
+{
+	struct tty_port *port;
+	struct winsize ws;
+	struct task *fg;
+	irqstate_t flags;
+	long ret;
 
-			tty->rx_buf[tty->rx_e++ % tty->rx_size] = c;
+	if (!tty || !tty->port)
+		return -EBADF;
 
-			if (c == '\n' || c == CTRL('D') ||
-			    tty->rx_e - tty->rx_r == tty->rx_size) {
-				tty->rx_w = tty->rx_e;
-				task_wake_all(&tty->rx_r);
-			}
-		}
-		break;
+	port = tty->port;
+	tty_set_foreground(tty, current_task());
+
+	if (cmd == TIOCGWINSZ) {
+		if (!arg)
+			return -EFAULT;
+
+		flags = spin_lock_irqsave(&port->lock);
+		ws = tty->winsize;
+		spin_unlock_irqrestore(&port->lock, flags);
+
+		return copy_to_user((void *)arg, &ws, sizeof(ws)) ? -EFAULT : 0;
 	}
 
-	spin_unlock_irqrestore(&tty->port->lock, flags);
+	if (cmd == TIOCSWINSZ) {
+		if (!arg || copy_from_user(&ws, (const void *)arg, sizeof(ws)))
+			return -EFAULT;
+
+		flags = spin_lock_irqsave(&port->lock);
+		tty->winsize = ws;
+		fg = port->foreground;
+		spin_unlock_irqrestore(&port->lock, flags);
+
+		if (fg)
+			signal_send(fg, SIGWINCH);
+		return 0;
+	}
+
+	if (tty->ldisc && tty->ldisc->ioctl) {
+		ret = tty->ldisc->ioctl(tty, cmd, arg);
+		if (ret != -ENOTTY)
+			return ret;
+	}
+
+	return -ENOTTY;
 }
 
 struct tty *tty_attach_port(struct tty_port *port)

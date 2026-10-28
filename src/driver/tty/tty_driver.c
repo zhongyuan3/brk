@@ -361,9 +361,11 @@ static const struct fs_file_ops tty_fops = {
 struct tty_port *tty_port_alloc(void)
 {
 	struct tty_port *port = kzalloc(sizeof(struct tty_port));
+
 	if (!port)
 		return NULL;
 	spinlock_init(&port->lock, "tty_port");
+	tty_termios_defaults(&port->termios);
 	return port;
 }
 
