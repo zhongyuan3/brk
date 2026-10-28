@@ -1,6 +1,7 @@
 obj-y += init.o
 obj-y += pipe.o
 obj-y += dcache.o
+obj-y += devtmpfs.o
 obj-y += file.o
 obj-y += inode.o
 obj-y += mount.o

@@ -3,6 +3,7 @@
 
 #include <brk/bio.h>
 #include <brk/blkdev.h>
+#include <brk/device_model.h>
 #include <brk/types.h>
 
 /*
@@ -24,6 +25,7 @@ struct hd_struct {
 	u64 nr_sects;
 	unsigned int partno;
 	struct block_dev *bdev;
+	struct device dev;
 };
 
 struct gendisk {
@@ -35,6 +37,7 @@ struct gendisk {
 	void *priv;
 	struct block_dev *bdev;
 	struct request_queue *queue;
+	struct device dev;
 	struct hd_struct parts[GENHD_MAX_PARTITIONS];
 	struct list_head list;
 	bool scanned;
@@ -42,7 +45,7 @@ struct gendisk {
 
 struct gendisk *gendisk_alloc(unsigned int major, unsigned int first_minor,
 			      unsigned int minors, const char *name,
-			      u64 nr_sects, void *priv);
+			      u64 nr_sects, struct device *parent, void *priv);
 void gendisk_free(struct gendisk *disk);
 
 int add_disk(struct gendisk *disk);
@@ -50,7 +53,7 @@ void del_gendisk(struct gendisk *disk);
 
 /*
  * Scan every registered disk for an MBR partition table and create the
- * partition block devices/devnodes.  Must run in sleepable task context with
+ * partition block devices and devtmpfs nodes.  Must run in sleepable task context with
  * interrupts enabled, since probing issues real I/O.
  */
 void gendisk_scan_partitions(void);

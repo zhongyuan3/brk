@@ -1,5 +1,8 @@
 #include <arch/pgtable.h>
+#include <brk/device_model.h>
 #include <brk/initcall.h>
+#include <brk/kernel.h>
+#include <brk/printf.h>
 #include <brk/ioremap.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -12,6 +15,34 @@
 
 static LIST_DEFINE(vdevs);
 static SPINLOCK_DEFINE(vdevs_lock);
+static unsigned int virtio_dev_index;
+
+struct bus_type virtio_bus = {
+	.name = "virtio",
+};
+
+static int virtio_match(struct device *dev, struct device_driver *drv)
+{
+	struct virtio_device *vdev = container_of(dev, struct virtio_device,
+						  dev);
+	const struct device_id *id;
+
+	if (!drv->id_table)
+		return 0;
+
+	for (id = drv->id_table; id->device_id; ++id) {
+		if (id->device_id == vdev->id)
+			return 1;
+	}
+	return 0;
+}
+
+static void virtio_bus_init(void)
+{
+	virtio_bus.match = virtio_match;
+	bus_register(&virtio_bus);
+}
+core_initcall(virtio_bus_init);
 
 struct virtio_device *virtio_dev_create(u64 phys_base, size_t size, u32 irq)
 {
@@ -42,6 +73,12 @@ struct virtio_device *virtio_dev_create(u64 phys_base, size_t size, u32 irq)
 	}
 
 	dev->id = readl(dev->mem_base + VIRTIO_DEVICE_ID_OFFSET);
+
+	char name[DEVICE_NAME_LEN];
+
+	snprintf(name, sizeof(name), "virtio%u", virtio_dev_index++);
+	device_init(&dev->dev, name);
+	dev->dev.bus = &virtio_bus;
 	return dev;
 }
 
@@ -52,15 +89,20 @@ void virtio_dev_destroy(struct virtio_device *dev)
 	kfree(dev);
 }
 
-void virtio_dev_add(struct virtio_device *dev)
+int virtio_dev_add(struct virtio_device *dev)
 {
 	spin_lock(&vdevs_lock);
 	list_add(&dev->list, &vdevs);
 	spin_unlock(&vdevs_lock);
+
+	/* On failure the caller owns cleanup via virtio_dev_destroy(). */
+	return device_register(&dev->dev);
 }
 
 void virtio_dev_remove(struct virtio_device *dev)
 {
+	device_unregister(&dev->dev);
+
 	spin_lock(&vdevs_lock);
 	list_del(&dev->list);
 	spin_unlock(&vdevs_lock);
@@ -81,51 +123,3 @@ struct virtio_device *virtio_dev_get(u32 id)
 
 	return NULL;
 }
-
-void virtio_init_scan(void)
-{
-	struct virtio_device **devs;
-	struct virtio_device *dev;
-	struct virtio_blk_dev *vblk;
-	size_t count = 0;
-	size_t i = 0;
-
-	spin_lock(&vdevs_lock);
-	list_for_each_entry(dev, &vdevs, list)
-		count++;
-	spin_unlock(&vdevs_lock);
-
-	if (count == 0)
-		return;
-
-	devs = kcalloc(count, sizeof(*devs));
-	if (!devs)
-		return;
-
-	spin_lock(&vdevs_lock);
-	list_for_each_entry(dev, &vdevs, list) {
-		if (i < count)
-			devs[i++] = dev;
-	}
-	spin_unlock(&vdevs_lock);
-
-	/*
-	 * Driver creation/registration may allocate memory, ioremap and
-	 * register IRQs; do it without vdevs_lock held.
-	 */
-	for (size_t j = 0; j < i; ++j) {
-		dev = devs[j];
-		if (dev->id != VIRTIO_DEVICE_ID_BLK)
-			continue;
-
-		vblk = virtio_blk_create(dev,
-					 VIRTIO_BLK_DEFAULT_QUEUE_SIZE);
-		if (!vblk)
-			continue;
-		if (virtio_blk_register(vblk))
-			virtio_blk_destroy(vblk);
-	}
-
-	kfree(devs);
-}
-subsys_initcall(virtio_init_scan);

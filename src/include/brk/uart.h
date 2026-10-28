@@ -29,6 +29,10 @@ struct ns16550a_driver_data {
 	struct hlist_head devices;
 };
 
+struct ns16550a_platform_data {
+	u32 clock_freq;
+};
+
 void ns16550a_driver_init(void);
 int ns16550a_add_device(struct ns16550a_device *dev);
 

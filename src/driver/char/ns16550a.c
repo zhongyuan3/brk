@@ -10,6 +10,7 @@
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mmio.h>
+#include <brk/platform.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
@@ -149,6 +150,79 @@ void ns16550a_device_finalize(struct ns16550a_device *dev)
 	iounmap((void *)dev->mem_base, dev->size);
 }
 
+static struct tty_driver *ns16550a_driver;
+
+static int ns16550a_probe(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct ns16550a_platform_data *pdata = pdev->pdata;
+	struct ns16550a_device *uart;
+	int err;
+
+	uart = ns16550a_device_alloc();
+	if (!uart)
+		return -ENOMEM;
+
+	uart->phys_base = pdev->phys_base;
+	uart->size = pdev->size;
+	uart->irq = pdev->irq;
+	uart->clock_freq = pdata ? pdata->clock_freq : 0;
+
+	err = ns16550a_device_init(uart);
+	if (err) {
+		ns16550a_device_free(uart);
+		return err;
+	}
+
+	err = ns16550a_add_device(uart);
+	if (err) {
+		ns16550a_device_finalize(uart);
+		ns16550a_device_free(uart);
+		return err;
+	}
+
+	dev->driver_data = uart;
+	return 0;
+}
+
+static void ns16550a_remove(struct device *dev)
+{
+	struct ns16550a_device *uart = dev->driver_data;
+	struct ns16550a_driver_data *data;
+
+	if (!uart)
+		return;
+
+	dev->driver_data = NULL;
+	data = ns16550a_driver ? ns16550a_driver->driver_data : NULL;
+
+	if (uart->port)
+		tty_driver_remove_port(ns16550a_driver, uart->port);
+
+	if (data) {
+		spin_lock(&ns16550a_driver->lock);
+		hlist_del_init(&uart->node);
+		spin_unlock(&ns16550a_driver->lock);
+	}
+
+	ns16550a_device_finalize(uart);
+	ns16550a_device_free(uart);
+}
+
+static const struct device_id ns16550a_ids[] = {
+	{ .compatible = "ns16550a" },
+	{ },
+};
+
+static struct platform_driver ns16550a_platform_driver = {
+	.driver = {
+		.name = "ns16550a",
+		.id_table = ns16550a_ids,
+		.probe = ns16550a_probe,
+		.remove = ns16550a_remove,
+	},
+};
+
 static int ns16550a_device_enable_irq(struct ns16550a_device *dev, u32 hart_id)
 {
 	int err;
@@ -215,7 +289,6 @@ static const struct tty_ops ns16550a_ops = {
 	.put_char = ns16550a_tty_put_char,
 };
 
-static struct tty_driver *ns16550a_driver;
 
 void ns16550a_driver_init(void)
 {
@@ -246,6 +319,10 @@ void ns16550a_driver_init(void)
 		panic("%s(): tty_register_driver failed\n", __func__);
 
 	ns16550a_driver = driver;
+
+	err = platform_driver_register(&ns16550a_platform_driver);
+	if (err)
+		panic("%s(): platform_driver_register failed\n", __func__);
 }
 postcore_initcall(ns16550a_driver_init);
 

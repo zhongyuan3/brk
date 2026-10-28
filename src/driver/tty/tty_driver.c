@@ -1,6 +1,6 @@
 #include <brk/chrdev.h>
 #include <brk/device.h>
-#include <brk/devnode.h>
+#include <brk/device_model.h>
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -36,9 +36,14 @@ struct tty_driver *tty_alloc_driver(int num_ports)
 	driver->cds = kcalloc(num_ports, sizeof(driver->cds[0]));
 	if (!driver->cds)
 		goto err_alloc_cds;
+	driver->devs = kcalloc(num_ports, sizeof(driver->devs[0]));
+	if (!driver->devs)
+		goto err_alloc_devs;
 
 	return driver;
 
+err_alloc_devs:
+	kfree(driver->cds);
 err_alloc_cds:
 	kfree(driver->ports);
 err_alloc_ports:
@@ -49,6 +54,7 @@ err_alloc_driver:
 
 void tty_free_driver(struct tty_driver *driver)
 {
+	kfree(driver->devs);
 	kfree(driver->cds);
 	kfree(driver->ports);
 	kfree(driver);
@@ -59,22 +65,24 @@ static void tty_driver_cleanup_port(struct tty_driver *driver, int i)
 {
 	struct tty_port *port = driver->ports[i];
 	struct char_dev *cd = driver->cds[i];
+	struct device *dev = driver->devs[i];
 
-	if (!port && !cd)
+	if (!port && !cd && !dev)
 		return;
 
 	driver->ports[i] = NULL;
 	driver->cds[i] = NULL;
+	driver->devs[i] = NULL;
 
 	if (port) {
 		port->driver = NULL;
 		tty_detach_port(port);
 	}
+	if (dev) {
+		device_unregister(dev);
+		kfree(dev);
+	}
 	if (cd) {
-		char name[32];
-
-		snprintf(name, sizeof(name), "/dev/tty%u", (unsigned)i);
-		devnode_unregister(name);
 		chrdev_unregister(cd);
 		chrdev_free(cd);
 	}
@@ -163,6 +171,7 @@ struct tty_port *tty_lookup_port(dev_t dev)
 int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port)
 {
 	struct char_dev *cd;
+	struct device *dev;
 	char name[32];
 	int slot = -1;
 	int err;
@@ -173,6 +182,12 @@ int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port)
 	cd = chrdev_alloc();
 	if (!cd)
 		return -ENOMEM;
+
+	dev = kzalloc(sizeof(*dev));
+	if (!dev) {
+		chrdev_free(cd);
+		return -ENOMEM;
+	}
 
 	/* Reserve a slot, but do the slow registration work outside the lock. */
 	spin_lock(&driver->lock);
@@ -185,13 +200,20 @@ int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port)
 	if (slot < 0) {
 		spin_unlock(&driver->lock);
 		chrdev_free(cd);
+		kfree(dev);
 		return -EBUSY;
 	}
 
 	cd->fops = &tty_fops;
 	cd->dev = MKCHRDEV(driver->major, driver->minor_start + slot);
+	snprintf(name, sizeof(name), "tty%u", (unsigned)slot);
+	device_init(dev, name);
+	dev->devt = cd->dev;
+	dev->mode = S_IFCHR | 0666;
+
 	driver->ports[slot] = port;
 	driver->cds[slot] = cd;
+	driver->devs[slot] = dev;
 	spin_unlock(&driver->lock);
 
 	err = chrdev_register(cd);
@@ -204,14 +226,13 @@ int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port)
 		goto err_slot;
 	}
 
-	snprintf(name, sizeof(name), "/dev/tty%u", (unsigned)slot);
-	err = devnode_register(name, cd->dev, S_IFCHR | 0666);
+	err = device_register(dev);
 	if (err) {
 		/*
 		 * The tty is already usable; keep it alive and report the
 		 * missing node rather than tearing down a working port.
 		 */
-		pr_warn("tty: cannot register devnode %s: %d\n", name, err);
+		pr_warn("tty: cannot register device %s: %d\n", name, err);
 	}
 
 	return 0;
@@ -222,7 +243,10 @@ err_slot:
 		driver->ports[slot] = NULL;
 	if (driver->cds[slot] == cd)
 		driver->cds[slot] = NULL;
+	if (driver->devs[slot] == dev)
+		driver->devs[slot] = NULL;
 	spin_unlock(&driver->lock);
+	kfree(dev);
 	chrdev_free(cd);
 	return err;
 }

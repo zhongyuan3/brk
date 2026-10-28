@@ -9,8 +9,10 @@
 #include <brk/ktime.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
+#include <brk/platform.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
+#include <brk/printf.h>
 #include <brk/stddef.h>
 #include <brk/string.h>
 #include <brk/types.h>
@@ -273,17 +275,34 @@ int dt_parse_rtc(struct rtc_device *rtc)
 
 int dt_init_scan_virtio_dev(void)
 {
+	struct virtio_device **vdevs;
 	int node;
+	int count = 0;
+	int i = 0;
 	u64 addr = 0;
 	u64 size = 0;
 	u32 irq = 0;
-	struct virtio_device *vdev;
+
+	for (node = fdt_node_offset_by_compatible(fdt, -1, "virtio,mmio");
+	     node >= 0;
+	     node = fdt_node_offset_by_compatible(fdt, node, "virtio,mmio"))
+		count++;
+
+	if (!count)
+		return 0;
+
+	vdevs = kcalloc(count, sizeof(*vdevs));
+	if (!vdevs)
+		return -ENOMEM;
 
 	for (node = fdt_node_offset_by_compatible(fdt, -1, "virtio,mmio");
 	     node >= 0;
 	     node = fdt_node_offset_by_compatible(fdt, node, "virtio,mmio")) {
+		struct virtio_device *vdev;
+
 		addr = 0;
 		size = 0;
+		irq = 0;
 		if (dtb_get_one_reg(node, &addr, &size))
 			continue;
 
@@ -294,8 +313,21 @@ int dt_init_scan_virtio_dev(void)
 		if (!vdev)
 			continue;
 
-		virtio_dev_add(vdev);
+		vdevs[i++] = vdev;
 	}
+
+	/*
+	 * The QEMU virt machine numbers virtio-mmio buses from the highest
+	 * MMIO address down.  DT nodes are walked in the opposite order, so
+	 * register them in reverse to keep virtio_blk0 on bus 0.
+	 */
+	while (i > 0) {
+		--i;
+		if (virtio_dev_add(vdevs[i]))
+			virtio_dev_destroy(vdevs[i]);
+	}
+
+	kfree(vdevs);
 	return 0;
 }
 
@@ -310,7 +342,8 @@ void dt_init_scan_serial(void)
 
 	int err = 0;
 	int subnode;
-	struct ns16550a_device *dev;
+	struct ns16550a_platform_data *pdata;
+	char name[DEVICE_NAME_LEN];
 
 	parent = fdt_path_offset(fdt, "/soc/");
 	if (parent < 0) {
@@ -342,34 +375,22 @@ void dt_init_scan_serial(void)
 				continue;
 			}
 
-			dev = ns16550a_device_alloc();
-			if (!dev) {
-				pr_debug(
-					"failed to allocate ns16550a device\n");
+			pdata = kzalloc(sizeof(*pdata));
+			if (!pdata)
 				continue;
-			}
+			pdata->clock_freq = fdt32_to_cpu(*clock_freq);
 
-			dev->phys_base = addr;
-			dev->size = size;
-			dev->irq = irq;
-			dev->clock_freq = fdt32_to_cpu(*clock_freq);
-			err = ns16550a_device_init(dev);
+			snprintf(name, sizeof(name), "ns16550a@%lx", addr);
+			err = platform_device_register_simple(
+				name, "ns16550a", addr, size, irq, pdata);
 			if (err) {
-				pr_debug(
-					"failed to initialize ns16550a device: %d\n",
-					err);
-				ns16550a_device_free(dev);
-				continue;
-			}
-			err = ns16550a_add_device(dev);
-			if (err) {
-				pr_debug("failed to add ns16550a device: %d\n",
+				kfree(pdata);
+				pr_debug("failed to register ns16550a device: %d\n",
 					 err);
-				ns16550a_device_finalize(dev);
-				ns16550a_device_free(dev);
 				continue;
 			}
-			pr_info("ns16550a device added: %d\n", subnode);
+			pr_info("ns16550a platform device registered: %s\n",
+				name);
 		}
 	}
 }
