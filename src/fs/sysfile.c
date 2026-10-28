@@ -126,25 +126,9 @@ u64 sys_execve(void)
 	return do_execve(path, argv, envp);
 }
 
-u64 sys_mmap(void)
-{
-	return -ENOSYS;
-}
 
-u64 sys_munmap(void)
-{
-	return -ENOSYS;
-}
 
-u64 sys_mprotect(void)
-{
-	return -ENOSYS;
-}
 
-u64 sys_msync(void)
-{
-	return -ENOSYS;
-}
 
 u64 sys_mremap(void)
 {
