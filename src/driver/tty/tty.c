@@ -35,7 +35,8 @@ struct tty *tty_alloc(void)
 		return NULL;
 	}
 	tty->rx_size = TTY_RX_BUF_SIZE;
-	refcnt_init(&tty->refcnt, 0);
+	/* The port owns the initial reference. */
+	refcnt_init(&tty->refcnt, 1);
 	return tty;
 }
 
@@ -43,6 +44,15 @@ void tty_free(struct tty *tty)
 {
 	kfree(tty->rx_buf);
 	kfree(tty);
+}
+
+static void tty_put(struct tty *tty)
+{
+	if (!tty)
+		return;
+	if (refcnt_dec_fetch(&tty->refcnt) > 0)
+		return;
+	tty_free(tty);
 }
 
 void tty_init(struct tty *tty, struct tty_port *port)
@@ -243,8 +253,8 @@ void tty_detach_port(struct tty_port *port)
 	port->tty = NULL;
 	spin_unlock_irqrestore(&port->lock, flags);
 
-	if (tty)
-		tty_free(tty);
+	/* Drop the port's reference; open files keep their own. */
+	tty_put(tty);
 }
 
 struct tty *tty_open(struct tty_port *port)
@@ -262,13 +272,26 @@ struct tty *tty_open(struct tty_port *port)
 		return NULL;
 	}
 	refcnt_inc(&tty->refcnt);
+	port->open_count++;
 	spin_unlock_irqrestore(&port->lock, flags);
 	return tty;
 }
 
 void tty_close(struct tty *tty)
 {
+	struct tty_port *port;
+	irqstate_t flags;
+
 	if (!tty)
 		return;
-	refcnt_dec(&tty->refcnt);
+
+	port = tty->port;
+	if (port) {
+		flags = spin_lock_irqsave(&port->lock);
+		if (port->open_count > 0)
+			port->open_count--;
+		spin_unlock_irqrestore(&port->lock, flags);
+	}
+
+	tty_put(tty);
 }

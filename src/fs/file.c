@@ -43,6 +43,8 @@ struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode)
 	file->mode = mode;
 	sleeplock_init(&file->pos_lock, "file.f_pos_lock");
 	file->pos = 0;
+	file->private_data = NULL;
+	file->dev_private = NULL;
 
 	int err = file->ops->open(file->inode, file);
 	if (err) {

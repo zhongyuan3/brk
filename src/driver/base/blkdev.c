@@ -1,7 +1,8 @@
 #include <arch/asm/page.h>
-#include <brk/bitmap.h>
+#include <brk/assert.h>
 #include <brk/blkdev.h>
 #include <brk/device.h>
+#include <brk/devno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/initcall.h>
@@ -10,135 +11,44 @@
 #include <brk/mm.h>
 #include <brk/pagecache.h>
 #include <brk/printk.h>
-#include <brk/slab.h>
+#include <brk/refcnt.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
 #include <uapi/types.h>
 
-struct block_dev_region {
-	struct hlist_node entry;
-	unsigned minor_start;
-	unsigned minor_count;
-};
-
-static struct hlist_head bd_regs[MAJOR_MAX];
-static BITMAP_DECLARE(bd_major_pooled, MAJOR_MAX);
-static SPINLOCK_DEFINE(bd_lock);
+static struct devno_allocator bd_devno;
 static struct hlist_head bd_htable[MAJOR_MAX];
 static SPINLOCK_DEFINE(bd_htable_lock);
 
-static int blkdev_alloc_major_no_lock(unsigned base_major, unsigned *major_out)
-{
-	size_t bit = 0;
-
-	if (bitmap_alloc_bit_from(bd_major_pooled, MAJOR_MAX, base_major,
-				  &bit)) {
-		*major_out = bit;
-		return 0;
-	}
-
-	return -ENOMEM;
-}
-
-static void blkdev_free_major_no_lock(unsigned major)
-{
-	bitmap_free_bit(bd_major_pooled, MAJOR_MAX, major);
-}
-
-static int blkdev_alloc_region_no_lock(unsigned major, unsigned base_minor,
-				       unsigned count, dev_t *dev_out)
-{
-	struct block_dev_region *curr, *new_entry;
-	int err = 0;
-	bool major_allocated = false;
-	unsigned minor = base_minor;
-	struct block_dev_region *last = NULL;
-
-	if (major == 0) {
-		err = blkdev_alloc_major_no_lock(0, &major);
-		if (err)
-			return err;
-		major_allocated = true;
-	} else {
-		if (!bitmap_test_bit(bd_major_pooled, major))
-			return -EINVAL;
-	}
-
-	hlist_for_each_entry(curr, &bd_regs[major], entry) {
-		if (curr->minor_start > minor &&
-		    curr->minor_start - minor >= count) {
-			new_entry = kzalloc(sizeof(*new_entry));
-			if (!new_entry) {
-				if (major_allocated)
-					blkdev_free_major_no_lock(major);
-				return -ENOMEM;
-			}
-			new_entry->minor_start = minor;
-			new_entry->minor_count = count;
-			hlist_add_before(&new_entry->entry, &curr->entry);
-			*dev_out = MKDEV(major, minor);
-			return 0;
-		}
-		minor = curr->minor_start + curr->minor_count;
-		last = curr;
-	}
-
-	new_entry = kzalloc(sizeof(*new_entry));
-	if (!new_entry) {
-		if (major_allocated)
-			blkdev_free_major_no_lock(major);
-		return -ENOMEM;
-	}
-	new_entry->minor_start = minor;
-	new_entry->minor_count = count;
-	if (last)
-		hlist_add_behind(&new_entry->entry, &last->entry);
-	else
-		hlist_add_head(&new_entry->entry, &bd_regs[major]);
-	*dev_out = MKDEV(major, minor);
-	return 0;
-}
-
-static bool blkdev_minor_is_allocated(unsigned major, unsigned minor)
-{
-	struct block_dev_region *curr;
-
-	if (!bitmap_test_bit(bd_major_pooled, major))
-		return false;
-
-	hlist_for_each_entry(curr, &bd_regs[major], entry) {
-		if (curr->minor_start <= minor &&
-		    curr->minor_start + curr->minor_count > minor)
-			return true;
-	}
-	return false;
-}
-
 void blkdev_registry_init(void)
 {
-	bitmap_fill(bd_major_pooled, FIRST_DYNAMIC_BLKDEV_MAJOR);
+	devno_allocator_init(&bd_devno, FIRST_DYNAMIC_BLKDEV_MAJOR);
 }
 core_initcall(blkdev_registry_init);
 
 int blkdev_register(struct block_dev *bd)
 {
-	dev_t dev = bd->dev;
+	dev_t dev;
 
-	if (!bd || !IS_BLKDEV(dev))
+	if (!bd)
 		return -EINVAL;
-	spin_lock(&bd_lock);
-	if (!blkdev_minor_is_allocated(MAJOR(dev), MINOR(dev))) {
-		spin_unlock(&bd_lock);
+	dev = bd->dev;
+	if (!IS_BLKDEV(dev))
 		return -EINVAL;
-	}
-	spin_unlock(&bd_lock);
+	if (!devno_minor_is_allocated(&bd_devno, MAJOR(dev), MINOR(dev)))
+		return -EINVAL;
 
 	pr_debug("%s: devtype=%" PRIu32 ", major=%u, minor=%u\n", __func__,
 		   DEVTYPE(dev), MAJOR(dev), MINOR(dev));
 
 	spin_lock(&bd_htable_lock);
+	if (!hlist_unhashed(&bd->hlist)) {
+		spin_unlock(&bd_htable_lock);
+		return -EBUSY;
+	}
+	bd->dead = false;
 	hlist_add_head(&bd->hlist, &bd_htable[MAJOR(dev)]);
 	spin_unlock(&bd_htable_lock);
 
@@ -159,8 +69,13 @@ static struct block_dev *blkdev_get_no_lock(dev_t dev)
 
 void blkdev_unregister(struct block_dev *bd)
 {
+	if (!bd)
+		return;
+
 	spin_lock(&bd_htable_lock);
-	hlist_del_init(&bd->hlist);
+	bd->dead = true;
+	if (!hlist_unhashed(&bd->hlist))
+		hlist_del_init(&bd->hlist);
 	spin_unlock(&bd_htable_lock);
 }
 
@@ -173,102 +88,55 @@ struct block_dev *blkdev_get(dev_t dev)
 
 	spin_lock(&bd_htable_lock);
 	bd = blkdev_get_no_lock(dev);
+	if (bd && (bd->dead || !refcnt_inc_unless_zero(&bd->ref)))
+		bd = NULL;
 	spin_unlock(&bd_htable_lock);
 	return bd;
 }
 
+void blkdev_put(struct block_dev *bd)
+{
+	if (!bd)
+		return;
+	if (refcnt_dec_fetch(&bd->ref) > 0)
+		return;
+
+	ASSERT(hlist_unhashed(&bd->hlist));
+	page_cache_destroy(bd->bd_mapping);
+	bd->bd_mapping = NULL;
+	kfree(bd);
+}
+
 int blkdev_alloc_major(unsigned *major_out)
 {
-	int err;
-
-	if (!major_out)
-		return -EINVAL;
-
-	spin_lock(&bd_lock);
-	err = blkdev_alloc_major_no_lock(0, major_out);
-	spin_unlock(&bd_lock);
-	return err;
+	return devno_alloc_major(&bd_devno, major_out);
 }
 
 void blkdev_free_major(unsigned major)
 {
-	if (major >= MAJOR_MAX)
-		return;
-
-	spin_lock(&bd_lock);
-	blkdev_free_major_no_lock(major);
-	spin_unlock(&bd_lock);
+	devno_free_major(&bd_devno, major);
 }
 
 int blkdev_alloc_minor(unsigned major, unsigned *minor_out)
 {
-	dev_t dev = 0;
-	int err;
-
-	if (major >= MAJOR_MAX || !minor_out)
-		return -EINVAL;
-
-	spin_lock(&bd_lock);
-	if (!bitmap_test_bit(bd_major_pooled, major)) {
-		spin_unlock(&bd_lock);
-		return -EINVAL;
-	}
-	err = blkdev_alloc_region_no_lock(major, 0, 1, &dev);
-	spin_unlock(&bd_lock);
-
-	if (err)
-		return err;
-	*minor_out = MINOR(dev);
-	return 0;
+	return devno_alloc_minor(&bd_devno, major, minor_out);
 }
 
 void blkdev_free_minor(unsigned major, unsigned minor)
 {
-	blkdev_free_region(major, minor, 1);
+	devno_free_minor(&bd_devno, major, minor);
 }
 
 int blkdev_alloc_region(unsigned major, unsigned base_minor, unsigned count,
 			dev_t *dev_out)
 {
-	int ret;
-
-	if (major >= MAJOR_MAX || count == 0 || !dev_out)
-		return -EINVAL;
-
-	spin_lock(&bd_lock);
-	ret = blkdev_alloc_region_no_lock(major, base_minor, count, dev_out);
-	spin_unlock(&bd_lock);
-
-	return ret;
+	return devno_alloc_region(&bd_devno, major, base_minor, count,
+				  dev_out);
 }
 
 void blkdev_free_region(unsigned major, unsigned minor, unsigned count)
 {
-	struct block_dev_region *curr;
-
-	if (major >= MAJOR_MAX || minor + count > MINOR_MAX)
-		return;
-
-	spin_lock(&bd_lock);
-	hlist_for_each_entry(curr, &bd_regs[major], entry) {
-		if (curr->minor_start + curr->minor_count <= minor)
-			continue;
-
-		if (curr->minor_start == minor && curr->minor_count == count) {
-			hlist_del_init(&curr->entry);
-			spin_unlock(&bd_lock);
-			kfree(curr);
-			return;
-		}
-
-		pr_err("%s: region %u+%u does not match %u+%u", __func__,
-			   curr->minor_start, curr->minor_count, minor, count);
-		spin_unlock(&bd_lock);
-		return;
-	}
-	spin_unlock(&bd_lock);
-	pr_err("%s: no region at minor %u count %u", __func__, minor,
-		   count);
+	devno_free_region(&bd_devno, major, minor, count);
 }
 
 int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt)
@@ -390,14 +258,15 @@ struct block_dev *blkdev_alloc(void)
 		kfree(bd);
 		return NULL;
 	}
+	refcnt_init(&bd->ref, 1);
+	hlist_node_init(&bd->hlist);
+	bd->dead = false;
 	return bd;
 }
 
 void blkdev_free(struct block_dev *bd)
 {
-	page_cache_destroy(bd->bd_mapping);
-	bd->bd_mapping = NULL;
-	kfree(bd);
+	blkdev_put(bd);
 }
 
 static int blkdev_file_open(struct fs_inode *inode, struct fs_file *file)
@@ -410,6 +279,16 @@ static int blkdev_file_open(struct fs_inode *inode, struct fs_file *file)
 
 	file->ops = &blkdev_fops;
 	file->private_data = bd;
+	return 0;
+}
+
+static int blkdev_file_release(struct fs_inode *inode, struct fs_file *file)
+{
+	struct block_dev *bd = file->private_data;
+
+	(void)inode;
+	file->private_data = NULL;
+	blkdev_put(bd);
 	return 0;
 }
 
@@ -477,6 +356,7 @@ static long blkdev_file_ioctl(struct fs_file *file, unsigned int cmd,
 
 const struct fs_file_ops blkdev_fops = {
 	.open = blkdev_file_open,
+	.release = blkdev_file_release,
 	.read = blkdev_file_read,
 	.write = blkdev_file_write,
 	.llseek = blkdev_file_llseek,

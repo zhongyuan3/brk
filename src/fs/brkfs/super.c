@@ -24,6 +24,10 @@ struct brkfs_sb_info *brkfs_sb_info_alloc(struct block_dev *bdev,
 
 void brkfs_sb_info_free(struct brkfs_sb_info *sbi)
 {
+	if (!sbi)
+		return;
+	if (sbi->s_bdev)
+		blkdev_put(sbi->s_bdev);
 	kfree(sbi);
 }
 

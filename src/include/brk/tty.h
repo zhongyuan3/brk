@@ -30,6 +30,7 @@ struct tty_port {
 	spinlock_t lock;
 	void *client_data;
 	struct task *foreground;
+	unsigned int open_count;
 };
 
 struct tty_driver {
@@ -56,8 +57,6 @@ int tty_driver_remove_port(struct tty_driver *driver, struct tty_port *port);
 
 struct tty_port *tty_port_alloc(void);
 void tty_port_free(struct tty_port *port);
-
-int tty_mknod(void);
 
 struct tty {
 	struct tty_port *port;

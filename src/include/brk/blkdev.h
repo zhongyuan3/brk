@@ -2,6 +2,7 @@
 #define BRK_BLKDEV_H
 
 #include <brk/device.h>
+#include <brk/refcnt_types.h>
 #include <brk/types.h>
 
 struct block_dev;
@@ -21,6 +22,8 @@ struct block_dev {
 	void *priv;
 	struct page_cache *bd_mapping;
 	struct hlist_node hlist;
+	refcnt_t ref;
+	bool dead;
 };
 
 void blkdev_registry_init(void);
@@ -36,6 +39,7 @@ void blkdev_free(struct block_dev *bd);
 int blkdev_register(struct block_dev *bd);
 void blkdev_unregister(struct block_dev *bd);
 struct block_dev *blkdev_get(dev_t dev);
+void blkdev_put(struct block_dev *bd);
 
 int blkdev_alloc_major(unsigned *major_out);
 void blkdev_free_major(unsigned major);
