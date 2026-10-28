@@ -158,6 +158,7 @@ struct virtio_blk_dev {
 	unsigned queue_size;
 	spinlock_t lock;
 	struct virtio_blk_config config;
+	bool flush_supported;
 };
 
 struct virtio_blk_registry {
