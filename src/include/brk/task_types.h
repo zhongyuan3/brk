@@ -74,6 +74,9 @@ struct task {
 	 * read-only after initialization
 	 */
 	pid_t pid;
+	/* Process group and session, changed only by the task itself. */
+	pid_t pgid;
+	pid_t sid;
 
 	struct sigaction_table *sigactions;
 	/* protected by @sigactions->lock */

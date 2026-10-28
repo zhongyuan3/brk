@@ -66,29 +66,17 @@ void tty_init(struct tty *tty, struct tty_port *port)
 	tty_init_winsize(tty);
 }
 
-void tty_set_foreground(struct tty *tty, struct task *task)
-{
-	irqstate_t flags;
-
-	if (!tty || !tty->port)
-		return;
-	flags = spin_lock_irqsave(&tty->port->lock);
-	tty->port->foreground = task;
-	spin_unlock_irqrestore(&tty->port->lock, flags);
-}
-
 ssize_t tty_read(struct tty *tty, char *buf, size_t n)
 {
-	if (!tty || !tty->ldisc || !tty->ldisc->read)
+	if (!tty || tty->dead || !tty->ldisc || !tty->ldisc->read)
 		return -EIO;
 
-	tty_set_foreground(tty, current_task());
 	return tty->ldisc->read(tty, buf, n);
 }
 
 ssize_t tty_write(struct tty *tty, const void *buf, size_t n)
 {
-	if (!tty || !tty->ldisc || !tty->ldisc->write)
+	if (!tty || tty->dead || !tty->ldisc || !tty->ldisc->write)
 		return -EIO;
 	return tty->ldisc->write(tty, buf, n);
 }
@@ -97,7 +85,7 @@ void tty_receive(struct tty *tty, int c)
 {
 	u8 ch = (u8)c;
 
-	if (!tty || !tty->ldisc || !tty->ldisc->receive_buf)
+	if (!tty || tty->dead || !tty->ldisc || !tty->ldisc->receive_buf)
 		return;
 	tty->ldisc->receive_buf(tty, &ch, 1);
 }
@@ -106,17 +94,18 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 {
 	struct tty_port *port;
 	struct winsize ws;
-	struct task *fg;
+	struct task *task;
+	pid_t pgrp;
 	irqstate_t flags;
 	long ret;
 
-	if (!tty || !tty->port)
-		return -EBADF;
+	if (!tty || !tty->port || tty->dead)
+		return -EIO;
 
 	port = tty->port;
-	tty_set_foreground(tty, current_task());
 
-	if (cmd == TIOCGWINSZ) {
+	switch (cmd) {
+	case TIOCGWINSZ:
 		if (!arg)
 			return -EFAULT;
 
@@ -125,20 +114,93 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 		spin_unlock_irqrestore(&port->lock, flags);
 
 		return copy_to_user((void *)arg, &ws, sizeof(ws)) ? -EFAULT : 0;
-	}
 
-	if (cmd == TIOCSWINSZ) {
+	case TIOCSWINSZ:
 		if (!arg || copy_from_user(&ws, (const void *)arg, sizeof(ws)))
 			return -EFAULT;
 
 		flags = spin_lock_irqsave(&port->lock);
 		tty->winsize = ws;
-		fg = port->foreground;
+		pgrp = port->pgrp;
 		spin_unlock_irqrestore(&port->lock, flags);
 
-		if (fg)
-			signal_send(fg, SIGWINCH);
+		if (pgrp > 0)
+			signal_send_pgrp(pgrp, SIGWINCH);
 		return 0;
+
+	case TIOCGPGRP:
+		if (!arg)
+			return -EFAULT;
+
+		flags = spin_lock_irqsave(&port->lock);
+		pgrp = port->pgrp;
+		spin_unlock_irqrestore(&port->lock, flags);
+
+		return copy_to_user((void *)arg, &pgrp, sizeof(pgrp)) ?
+			       -EFAULT :
+			       0;
+
+	case TIOCSPGRP:
+		if (!arg || copy_from_user(&pgrp, (const void *)arg,
+					   sizeof(pgrp)))
+			return -EFAULT;
+		if (pgrp <= 0)
+			return -EINVAL;
+
+		task = current_task();
+		flags = spin_lock_irqsave(&port->lock);
+		if (port->sid && port->sid != task->sid) {
+			spin_unlock_irqrestore(&port->lock, flags);
+			return -ENOTTY;
+		}
+		spin_unlock_irqrestore(&port->lock, flags);
+
+		if (!task_pgrp_exists(pgrp, task->sid))
+			return -EPERM;
+
+		flags = spin_lock_irqsave(&port->lock);
+		port->pgrp = pgrp;
+		spin_unlock_irqrestore(&port->lock, flags);
+		task_wake_all(&port->pgrp);
+		return 0;
+
+	case TIOCSCTTY:
+		task = current_task();
+		if (task->sid != task->tgid)
+			return -EPERM;
+
+		flags = spin_lock_irqsave(&port->lock);
+		if (port->sid && port->sid != task->sid) {
+			spin_unlock_irqrestore(&port->lock, flags);
+			return -EPERM;
+		}
+		port->sid = task->sid;
+		port->pgrp = task->pgid;
+		spin_unlock_irqrestore(&port->lock, flags);
+		task_wake_all(&port->pgrp);
+		return 0;
+
+	case TIOCNOTTY:
+		task = current_task();
+		flags = spin_lock_irqsave(&port->lock);
+		if (!port->sid || port->sid != task->sid) {
+			spin_unlock_irqrestore(&port->lock, flags);
+			return -ENOTTY;
+		}
+		pgrp = port->pgrp;
+		port->sid = 0;
+		port->pgrp = 0;
+		spin_unlock_irqrestore(&port->lock, flags);
+		task_wake_all(&port->pgrp);
+
+		if (pgrp > 0) {
+			signal_send_pgrp(pgrp, SIGHUP);
+			signal_send_pgrp(pgrp, SIGCONT);
+		}
+		return 0;
+
+	default:
+		break;
 	}
 
 	if (tty->ldisc && tty->ldisc->ioctl) {
@@ -187,7 +249,17 @@ void tty_detach_port(struct tty_port *port)
 
 	tty = port->tty;
 	port->tty = NULL;
+	port->dead = true;
+	if (tty)
+		tty->dead = true;
 	spin_unlock_irqrestore(&port->lock, flags);
+
+	/* Wake readers/writers waiting on this port. */
+	task_wake_all(&port->pgrp);
+	if (tty) {
+		task_wake_all(&tty->rx_r);
+		task_wake_all(&tty->stopped);
+	}
 
 	/* Drop the port's reference; open files keep their own. */
 	tty_put(tty);
@@ -196,6 +268,7 @@ void tty_detach_port(struct tty_port *port)
 struct tty *tty_open(struct tty_port *port)
 {
 	struct tty *tty;
+	struct task *task = current_task();
 
 	if (!port)
 		return NULL;
@@ -203,10 +276,23 @@ struct tty *tty_open(struct tty_port *port)
 	irqstate_t flags = spin_lock_irqsave(&port->lock);
 
 	tty = port->tty;
-	if (!tty) {
+	if (!tty || port->dead || tty->dead) {
 		spin_unlock_irqrestore(&port->lock, flags);
 		return NULL;
 	}
+
+	/*
+	 * The first session leader to open an unassociated terminal makes it
+	 * the controlling terminal.  Otherwise just remember the foreground
+	 * group if none was set yet.
+	 */
+	if (!port->sid && task->sid == task->tgid) {
+		port->sid = task->sid;
+		port->pgrp = task->pgid;
+	} else if (!port->pgrp) {
+		port->pgrp = task->pgid;
+	}
+
 	refcnt_inc(&tty->refcnt);
 	port->open_count++;
 	spin_unlock_irqrestore(&port->lock, flags);

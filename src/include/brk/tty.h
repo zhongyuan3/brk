@@ -42,9 +42,13 @@ struct tty_port {
 	struct tty_driver *driver;
 	spinlock_t lock;
 	void *client_data;
-	struct task *foreground;
+	/* Foreground process group and owning session (job control). */
+	pid_t pgrp;
+	pid_t sid;
+
 	unsigned int open_count;
 	struct termios termios;
+	bool dead;
 };
 
 struct tty_driver {
@@ -81,6 +85,9 @@ struct tty {
 	size_t rx_w;
 	size_t rx_e;
 	bool eof_pending;
+	bool lnext;
+	bool stopped;
+	bool dead;
 	struct winsize winsize;
 	refcnt_t refcnt;
 	const struct tty_ldisc_ops *ldisc;
@@ -102,7 +109,6 @@ void tty_close(struct tty *tty);
 ssize_t tty_read(struct tty *tty, char *buf, size_t n);
 ssize_t tty_write(struct tty *tty, const void *buf, size_t n);
 void tty_receive(struct tty *tty, int c);
-void tty_set_foreground(struct tty *tty, struct task *task);
 long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg);
 
 #endif

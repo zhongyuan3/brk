@@ -1,18 +1,22 @@
+#include <brk/ktime.h>
 #include <brk/signal.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
+#include <brk/timekeeper.h>
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
 #include <uapi/errno.h>
 #include <uapi/termios.h>
 
+#define VTIME_UNIT_NS 100000000ULL /* 0.1 second */
+
 void tty_termios_defaults(struct termios *t)
 {
 	memset(t, 0, sizeof(*t));
-	t->c_iflag = ICRNL;
+	t->c_iflag = ICRNL | IXON;
 	t->c_oflag = OPOST | ONLCR;
 	t->c_cflag = CS8 | CREAD | CLOCAL;
 	t->c_lflag = ISIG | ICANON | ECHO | ECHOE | ECHOK | ECHOCTL | IEXTEN;
@@ -30,6 +34,7 @@ void tty_termios_defaults(struct termios *t)
 	t->c_cc[VREPRINT] = 18; /* ^R */
 	t->c_cc[VWERASE] = 23; /* ^W */
 	t->c_cc[VLNEXT] = 22; /* ^V */
+	t->c_cc[VDISCARD] = 15; /* ^O */
 }
 
 static void n_tty_put(struct tty *tty, int c)
@@ -45,6 +50,9 @@ static void n_tty_put(struct tty *tty, int c)
 static void n_tty_output(struct tty *tty, int c)
 {
 	struct termios *t = &tty->port->termios;
+
+	if (t->c_lflag & FLUSHO)
+		return;
 
 	if ((t->c_oflag & OPOST) && (t->c_oflag & ONLCR) && c == '\n') {
 		n_tty_put(tty, '\r');
@@ -84,6 +92,11 @@ static void n_tty_kill_echo(struct tty *tty, size_t nr)
 		n_tty_erase_echo(tty);
 }
 
+static bool n_tty_background(struct tty_port *port, struct task *task)
+{
+	return port->pgrp > 0 && task->pgid != port->pgrp;
+}
+
 static void n_tty_signal(struct tty *tty, int sig, int c)
 {
 	struct tty_port *port = tty->port;
@@ -92,8 +105,8 @@ static void n_tty_signal(struct tty *tty, int sig, int c)
 	if (!(t->c_lflag & ISIG))
 		return;
 
-	if (port->foreground)
-		signal_send(port->foreground, sig);
+	if (port->pgrp > 0)
+		signal_send_pgrp(port->pgrp, sig);
 
 	if (!(t->c_lflag & NOFLSH))
 		tty->rx_e = tty->rx_w;
@@ -108,6 +121,73 @@ static void n_tty_signal(struct tty *tty, int sig, int c)
 	task_wake_all(&tty->rx_r);
 }
 
+/* Store one byte without interpreting it as an editing character. */
+static void n_tty_store(struct tty *tty, u8 c)
+{
+	struct termios *t = &tty->port->termios;
+	bool canonical = (t->c_lflag & ICANON) != 0;
+
+	if (tty->rx_e - tty->rx_r >= tty->rx_size) {
+		/* Publish the buffer and let the reader drain it. */
+		tty->rx_w = tty->rx_e;
+		task_wake_all(&tty->rx_r);
+		return;
+	}
+
+	tty->rx_buf[tty->rx_e % tty->rx_size] = c;
+	tty->rx_e++;
+	n_tty_echo_char(tty, c);
+
+	if (!canonical) {
+		tty->rx_w = tty->rx_e;
+		task_wake_all(&tty->rx_r);
+	}
+}
+
+static void n_tty_werase(struct tty *tty)
+{
+	struct termios *t = &tty->port->termios;
+	size_t start = tty->rx_w;
+	size_t end = tty->rx_e;
+
+	/* Skip trailing blanks, then remove the previous word. */
+	while (end > start) {
+		u8 c = tty->rx_buf[(end - 1) % tty->rx_size];
+
+		if (c != ' ' && c != '\t')
+			break;
+		end--;
+	}
+	while (end > start) {
+		u8 c = tty->rx_buf[(end - 1) % tty->rx_size];
+
+		if (c == ' ' || c == '\t')
+			break;
+		end--;
+	}
+
+	if (t->c_lflag & ECHOE)
+		n_tty_kill_echo(tty, tty->rx_e - end);
+	tty->rx_e = end;
+}
+
+static void n_tty_reprint(struct tty *tty)
+{
+	struct termios *t = &tty->port->termios;
+
+	if (!(t->c_lflag & ECHO))
+		return;
+
+	n_tty_put(tty, '^');
+	n_tty_put(tty, 'R');
+	n_tty_output(tty, '\n');
+
+	for (size_t i = tty->rx_w; i < tty->rx_e; ++i)
+		n_tty_echo_char(tty,
+				tty->rx_buf[i % tty->rx_size]);
+	n_tty_output(tty, '\n');
+}
+
 static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 {
 	struct tty_port *port = tty->port;
@@ -116,6 +196,7 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 
 	for (size_t i = 0; i < size; ++i) {
 		u8 c = buf[i];
+		bool canonical = (t->c_lflag & ICANON) != 0;
 
 		if ((t->c_iflag & IGNCR) && c == '\r')
 			continue;
@@ -126,37 +207,67 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 		if (c == 0)
 			continue;
 
-		if (!(t->c_lflag & ICANON)) {
-			if (tty->rx_e - tty->rx_r >= tty->rx_size) {
-				tty->rx_w = tty->rx_e;
-				task_wake_all(&tty->rx_r);
-				continue;
-			}
-			tty->rx_buf[tty->rx_e % tty->rx_size] = c;
-			tty->rx_e++;
-			tty->rx_w = tty->rx_e;
-			n_tty_echo_char(tty, c);
-			task_wake_all(&tty->rx_r);
+		/* VLNEXT: the next character is taken literally. */
+		if (tty->lnext) {
+			tty->lnext = false;
+			n_tty_store(tty, c);
 			continue;
 		}
 
-		if (c == t->c_cc[VINTR]) {
-			n_tty_signal(tty, SIGINT, c);
+		if ((t->c_lflag & IEXTEN) && c == t->c_cc[VLNEXT]) {
+			tty->lnext = true;
+			if (t->c_lflag & ECHO) {
+				n_tty_put(tty, '^');
+				n_tty_put(tty, '\b');
+			}
 			continue;
 		}
-		if (c == t->c_cc[VQUIT]) {
-			n_tty_signal(tty, SIGQUIT, c);
+
+		/* IXON output flow control. */
+		if (t->c_iflag & IXON) {
+			if (c == t->c_cc[VSTOP]) {
+				tty->stopped = true;
+				continue;
+			}
+			if (c == t->c_cc[VSTART]) {
+				tty->stopped = false;
+				task_wake_all(&tty->stopped);
+				continue;
+			}
+		}
+
+		/* VDISCARD toggles output discard. */
+		if (canonical && (t->c_lflag & IEXTEN) &&
+		    c == t->c_cc[VDISCARD]) {
+			t->c_lflag ^= FLUSHO;
 			continue;
 		}
-		if (c == t->c_cc[VSUSP]) {
-			n_tty_signal(tty, SIGTSTP, c);
+
+		if (t->c_lflag & ISIG) {
+			if (c == t->c_cc[VINTR]) {
+				n_tty_signal(tty, SIGINT, c);
+				continue;
+			}
+			if (c == t->c_cc[VQUIT]) {
+				n_tty_signal(tty, SIGQUIT, c);
+				continue;
+			}
+			if (c == t->c_cc[VSUSP]) {
+				n_tty_signal(tty, SIGTSTP, c);
+				continue;
+			}
+		}
+
+		if (!canonical) {
+			n_tty_store(tty, c);
 			continue;
 		}
 
 		if (c == t->c_cc[VERASE]) {
 			if (tty->rx_e > tty->rx_w) {
 				tty->rx_e--;
-				n_tty_erase_echo(tty);
+				if (t->c_lflag & ECHOE)
+					n_tty_erase_echo(tty);
 			}
 			continue;
 		}
@@ -170,6 +281,16 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 			continue;
 		}
 
+		if ((t->c_lflag & IEXTEN) && c == t->c_cc[VWERASE]) {
+			n_tty_werase(tty);
+			continue;
+		}
+
+		if ((t->c_lflag & IEXTEN) && c == t->c_cc[VREPRINT]) {
+			n_tty_reprint(tty);
+			continue;
+		}
+
 		if (c == t->c_cc[VEOF]) {
 			if (tty->rx_e == tty->rx_w) {
 				tty->eof_pending = true;
@@ -180,16 +301,7 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 			continue;
 		}
 
-		if (tty->rx_e - tty->rx_r >= tty->rx_size) {
-			/* Publish the full line and let the reader drain it. */
-			tty->rx_w = tty->rx_e;
-			task_wake_all(&tty->rx_r);
-			continue;
-		}
-
-		tty->rx_buf[tty->rx_e % tty->rx_size] = c;
-		tty->rx_e++;
-		n_tty_echo_char(tty, c);
+		n_tty_store(tty, c);
 
 		if (c == '\n' || c == t->c_cc[VEOL] ||
 		    c == t->c_cc[VEOL2] ||
@@ -205,8 +317,12 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 {
 	struct tty_port *port = tty->port;
+	struct task *task = current_task();
 	char tmp[256];
 	size_t total = 0;
+	size_t seen = 0;
+	u64 deadline = 0;
+	bool timed = false;
 
 	if (size == 0)
 		return 0;
@@ -214,51 +330,150 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 	sleeplock_acquire(&tty->read_lock);
 
 	while (total < size) {
-		bool canonical = (port->termios.c_lflag & ICANON) != 0;
-		size_t avail, chunk;
+		bool canonical;
+		size_t avail, min, chunk, copy, i;
+		unsigned int vtime;
 		irqstate_t flags;
 
 		flags = spin_lock_irqsave(&port->lock);
-		while (tty->rx_w == tty->rx_r) {
-			if (tty->eof_pending) {
-				tty->eof_pending = false;
-				spin_unlock_irqrestore(&port->lock, flags);
-				sleeplock_release(&tty->read_lock);
-				return total > 0 ? (ssize_t)total : 0;
-			}
-			if (!canonical && port->termios.c_cc[VMIN] == 0) {
-				spin_unlock_irqrestore(&port->lock, flags);
-				sleeplock_release(&tty->read_lock);
-				return (ssize_t)total;
-			}
-			if (signal_pending(current_task())) {
-				spin_unlock_irqrestore(&port->lock, flags);
-				sleeplock_release(&tty->read_lock);
-				return total > 0 ? (ssize_t)total : -EINTR;
-			}
-			task_sleep(&tty->rx_r, &port->lock);
-			canonical = (port->termios.c_lflag & ICANON) != 0;
+
+		/* Job control: background reads get SIGTTIN. */
+		if (n_tty_background(port, task) &&
+		    (port->termios.c_lflag & ISIG)) {
+			signal_send_pgrp(task->pgid, SIGTTIN);
+			spin_unlock_irqrestore(&port->lock, flags);
+			sleeplock_release(&tty->read_lock);
+			return total > 0 ? (ssize_t)total : -EINTR;
 		}
 
+		canonical = (port->termios.c_lflag & ICANON) != 0;
+		min = port->termios.c_cc[VMIN];
+		vtime = canonical ? 0 : port->termios.c_cc[VTIME];
+
 		avail = tty->rx_w - tty->rx_r;
+		copy = 0;
+
 		if (canonical) {
-			for (size_t i = 0; i < avail; ++i) {
-				u8 c = tty->rx_buf[(tty->rx_r + i) %
-						   tty->rx_size];
-				if (c == '\n') {
-					avail = i + 1;
-					break;
+			if (avail > 0) {
+				bool found = false;
+				size_t line = 0;
+
+				for (i = 0; i < avail; ++i) {
+					if (tty->rx_buf[(tty->rx_r + i) %
+							tty->rx_size] ==
+					    '\n') {
+						line = i + 1;
+						found = true;
+						break;
+					}
+				}
+				if (found)
+					copy = line;
+				else if (avail >= tty->rx_size)
+					copy = avail;
+			}
+
+			if (copy == 0) {
+				if (tty->eof_pending && total == 0) {
+					tty->eof_pending = false;
+					spin_unlock_irqrestore(&port->lock,
+							       flags);
+					sleeplock_release(&tty->read_lock);
+					return 0;
+				}
+				if (signal_pending(task)) {
+					spin_unlock_irqrestore(&port->lock,
+							       flags);
+					sleeplock_release(&tty->read_lock);
+					return total > 0 ? (ssize_t)total :
+							   -EINTR;
+				}
+				task_sleep(&tty->rx_r, &port->lock);
+				spin_unlock_irqrestore(&port->lock, flags);
+				continue;
+			}
+		} else {
+			if (min == 0)
+				copy = avail;
+			else
+				copy = avail >= min ? avail : 0;
+
+			if (copy == 0) {
+				u64 now;
+
+				if (signal_pending(task)) {
+					spin_unlock_irqrestore(&port->lock,
+							       flags);
+					sleeplock_release(&tty->read_lock);
+					return total > 0 ? (ssize_t)total :
+							   -EINTR;
+				}
+
+				/* MIN=0, TIME=0: non-blocking. */
+				if (min == 0 && vtime == 0) {
+					spin_unlock_irqrestore(&port->lock,
+							       flags);
+					sleeplock_release(&tty->read_lock);
+					return (ssize_t)total;
+				}
+
+				now = ktime_get_boot_ns();
+				if (vtime > 0) {
+					if (min == 0 && !timed) {
+						timed = true;
+						deadline = now +
+							(u64)vtime *
+							VTIME_UNIT_NS;
+					} else if (min > 0 && avail > 0 &&
+						   avail > seen) {
+						seen = avail;
+						timed = true;
+						deadline = now +
+							(u64)vtime *
+							VTIME_UNIT_NS;
+					}
+
+					if (timed && now >= deadline) {
+						if (avail > 0)
+							copy = avail;
+						else {
+							spin_unlock_irqrestore(
+								&port->lock,
+								flags);
+							sleeplock_release(
+								&tty->read_lock);
+							return (ssize_t)total;
+						}
+					} else {
+						task_sleep(
+							timekeeper_wait_chan(),
+							&port->lock);
+						spin_unlock_irqrestore(
+							&port->lock, flags);
+						continue;
+					}
+				} else {
+					task_sleep(&tty->rx_r, &port->lock);
+					spin_unlock_irqrestore(&port->lock,
+							       flags);
+					continue;
 				}
 			}
 		}
 
-		chunk = avail;
+		if (copy == 0) {
+			spin_unlock_irqrestore(&port->lock, flags);
+			sleeplock_release(&tty->read_lock);
+			return (ssize_t)total;
+		}
+
+		chunk = copy;
 		if (chunk > size - total)
 			chunk = size - total;
 		if (chunk > sizeof(tmp))
 			chunk = sizeof(tmp);
 
-		for (size_t i = 0; i < chunk; ++i)
+		for (i = 0; i < chunk; ++i)
 			tmp[i] = tty->rx_buf[(tty->rx_r + i) %
 					     tty->rx_size];
 		tty->rx_r += chunk;
@@ -271,10 +486,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 		}
 		total += chunk;
 
-		/*
-		 * Canonical reads return one line at a time.  Raw reads return
-		 * whatever is available instead of waiting for the full request.
-		 */
+		/* Return at most one line/chunk per read, like the old path. */
 		break;
 	}
 
@@ -285,11 +497,27 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 {
 	struct tty_port *port = tty->port;
+	struct task *task = current_task();
 	char tmp[128];
 	size_t total = 0;
 	int err = 0;
 
 	sleeplock_acquire(&tty->write_lock);
+
+	/* TOSTOP: background writers get SIGTTOU. */
+	{
+		irqstate_t flags = spin_lock_irqsave(&port->lock);
+		bool bg = n_tty_background(port, task) &&
+			  (port->termios.c_lflag & TOSTOP);
+
+		if (bg) {
+			signal_send_pgrp(task->pgid, SIGTTOU);
+			spin_unlock_irqrestore(&port->lock, flags);
+			sleeplock_release(&tty->write_lock);
+			return -EINTR;
+		}
+		spin_unlock_irqrestore(&port->lock, flags);
+	}
 
 	while (total < size) {
 		size_t chunk = size - total;
@@ -303,12 +531,30 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 			break;
 		}
 
+		/* IXON output flow control. */
+		for (;;) {
+			irqstate_t flags = spin_lock_irqsave(&port->lock);
+			bool stopped = tty->stopped &&
+				       (port->termios.c_iflag & IXON);
+
+			if (!stopped) {
+				spin_unlock_irqrestore(&port->lock, flags);
+				break;
+			}
+			task_sleep(&tty->stopped, &port->lock);
+			spin_unlock_irqrestore(&port->lock, flags);
+		}
+
 		irqstate_t flags = spin_lock_irqsave(&port->lock);
 		for (i = 0; i < chunk; ++i) {
 			int c = tmp[i];
+			struct termios *t = &port->termios;
 
-			if ((port->termios.c_oflag & OPOST) &&
-			    (port->termios.c_oflag & ONLCR) && c == '\n') {
+			if (t->c_lflag & FLUSHO)
+				continue;
+
+			if ((t->c_oflag & OPOST) &&
+			    (t->c_oflag & ONLCR) && c == '\n') {
 				err = port->driver->ops->put_char(tty, '\r');
 				if (!err)
 					err = port->driver->ops->put_char(tty,
@@ -370,9 +616,11 @@ static long n_tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 			tty->rx_w = 0;
 			tty->rx_e = 0;
 			tty->eof_pending = false;
+			tty->lnext = false;
 		}
 		spin_unlock_irqrestore(&port->lock, flags);
 		task_wake_all(&tty->rx_r);
+		task_wake_all(&tty->stopped);
 		return 0;
 
 	case TCFLSH:
@@ -382,8 +630,10 @@ static long n_tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 			tty->rx_w = 0;
 			tty->rx_e = 0;
 			tty->eof_pending = false;
+			tty->lnext = false;
 		}
 		spin_unlock_irqrestore(&port->lock, flags);
+		task_wake_all(&tty->rx_r);
 		return 0;
 
 	case FIONREAD:

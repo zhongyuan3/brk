@@ -18,6 +18,7 @@ void sigaction_table_copy(struct sigaction_table *dst,
 void sigaction_table_reset(struct sigaction_table *table);
 
 void signal_send(struct task *task, int sig);
+void signal_send_pgrp(pid_t pgrp, int sig);
 int signal_init(struct task *task, struct sigaction_table *sigactions,
 		u64 blocked);
 void signal_deinit(struct task *task);

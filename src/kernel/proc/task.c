@@ -124,6 +124,8 @@ struct task *task_create(struct task_create_args *args)
 		goto pid_alloc_failed;
 	}
 	task->tgid = (!args || args->tgid == 0) ? task->pid : args->tgid;
+	task->pgid = (args && args->pgid) ? args->pgid : task->pid;
+	task->sid = (args && args->sid) ? args->sid : task->pid;
 
 	task->kstack_base = kstack_alloc();
 	if (!task->kstack_base) {
@@ -192,9 +194,9 @@ struct task *task_create(struct task_create_args *args)
 	if (err)
 		goto signal_init_failed;
 
-	spin_lock(&tasks_lock);
+	irqstate_t flags = spin_lock_irqsave(&tasks_lock);
 	list_add_tail(&task->list, &tasks);
-	spin_unlock(&tasks_lock);
+	spin_unlock_irqrestore(&tasks_lock, flags);
 
 	return task;
 
@@ -250,6 +252,8 @@ struct task *task_create_idle(cpuid_t cpuid)
 	task->cpu = (int)cpuid;
 	task->pid = 0;
 	task->tgid = 0;
+	task->pgid = 0;
+	task->sid = 0;
 
 	task->kstack_base = kstack_alloc();
 	if (!task->kstack_base)
@@ -278,9 +282,9 @@ fail:
 
 void task_destroy(struct task *task)
 {
-	spin_lock(&tasks_lock);
+	irqstate_t flags = spin_lock_irqsave(&tasks_lock);
 	list_del_init(&task->list);
-	spin_unlock(&tasks_lock);
+	spin_unlock_irqrestore(&tasks_lock, flags);
 
 	signal_deinit(task);
 	if (task_is_leader(task))
@@ -480,7 +484,7 @@ int task_snapshot_pids(pid_t *out, int max)
 	if (!out || max <= 0)
 		return 0;
 
-	spin_lock(&tasks_lock);
+	irqstate_t flags = spin_lock_irqsave(&tasks_lock);
 	list_for_each_entry(p, &tasks, list) {
 		bool dup;
 		int i;
@@ -497,18 +501,67 @@ int task_snapshot_pids(pid_t *out, int max)
 		if (!dup)
 			out[n++] = p->tgid;
 	}
-	spin_unlock(&tasks_lock);
+	spin_unlock_irqrestore(&tasks_lock, flags);
 	return n;
 }
 
 bool task_pid_exists(pid_t tgid)
 {
 	bool found;
+	irqstate_t flags;
 
-	spin_lock(&tasks_lock);
+	flags = spin_lock_irqsave(&tasks_lock);
 	found = task_find_by_tgid_locked(tgid) != NULL;
-	spin_unlock(&tasks_lock);
+	spin_unlock_irqrestore(&tasks_lock, flags);
 	return found;
+}
+
+bool task_pgrp_exists(pid_t pgid, pid_t sid)
+{
+	struct task *p;
+	bool found = false;
+	irqstate_t flags;
+
+	if (pgid <= 0)
+		return false;
+
+	flags = spin_lock_irqsave(&tasks_lock);
+	list_for_each_entry(p, &tasks, list) {
+		if (p->pgid == pgid && p->sid == sid) {
+			found = true;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&tasks_lock, flags);
+	return found;
+}
+
+pid_t task_get_pgid(pid_t tgid)
+{
+	struct task *p = NULL;
+	pid_t pgid = -ESRCH;
+	irqstate_t flags;
+
+	flags = spin_lock_irqsave(&tasks_lock);
+	p = task_find_by_tgid_locked(tgid);
+	if (p)
+		pgid = p->pgid;
+	spin_unlock_irqrestore(&tasks_lock, flags);
+	return pgid;
+}
+
+pid_t task_get_sid(pid_t tgid)
+{
+	struct task *p = NULL;
+	pid_t sid = -ESRCH;
+	irqstate_t flags;
+
+	flags = spin_lock_irqsave(&tasks_lock);
+	p = task_find_by_tgid_locked(tgid);
+	if (p)
+		sid = p->sid;
+	spin_unlock_irqrestore(&tasks_lock, flags);
+	return sid;
 }
 
 bool task_get_info(pid_t tgid, struct task_info *info)
@@ -519,10 +572,12 @@ bool task_get_info(pid_t tgid, struct task_info *info)
 	if (!info)
 		return false;
 
-	spin_lock(&tasks_lock);
+	irqstate_t lflags;
+
+	lflags = spin_lock_irqsave(&tasks_lock);
 	target = task_find_by_tgid_locked(tgid);
 	if (!target) {
-		spin_unlock(&tasks_lock);
+		spin_unlock_irqrestore(&tasks_lock, lflags);
 		return false;
 	}
 
@@ -536,7 +591,7 @@ bool task_get_info(pid_t tgid, struct task_info *info)
 	par = target->parent;
 	info->ppid = par ? par->tgid : 0;
 
-	irqstate_t flags = spin_lock_irqsave(&target->lock);
+	spin_lock(&target->lock);
 
 	info->pid = target->tgid;
 	info->state = target->state;
@@ -550,10 +605,10 @@ bool task_get_info(pid_t tgid, struct task_info *info)
 			break;
 	}
 	info->name[TASK_NAME_MAX - 1] = '\0';
-	spin_unlock_irqrestore(&target->lock, flags);
+	spin_unlock(&target->lock);
 	info->killed = signal_pending(target);
 
-	spin_unlock(&tasks_lock);
+	spin_unlock_irqrestore(&tasks_lock, lflags);
 	return true;
 }
 
@@ -568,7 +623,7 @@ void task_dump(void)
 	struct task *task;
 	char *state;
 
-	spin_lock(&tasks_lock);
+	irqstate_t flags = spin_lock_irqsave(&tasks_lock);
 	printk("\n");
 	list_for_each_entry(task, &tasks, list) {
 		if (task->state >= 0 && task->state < countof(state_strs) &&
@@ -578,7 +633,7 @@ void task_dump(void)
 			state = "???    ";
 		printk("%ld %s %s\n", task->pid, state, task->name);
 	}
-	spin_unlock(&tasks_lock);
+	spin_unlock_irqrestore(&tasks_lock, flags);
 }
 
 int task_fork(void)
@@ -590,6 +645,8 @@ int task_fork(void)
 
 	child = task_create(&(struct task_create_args){
 		.fn = ret_from_fork,
+		.pgid = parent->pgid,
+		.sid = parent->sid,
 	});
 	if (IS_ERR(child))
 		return PTR_ERR(child);
