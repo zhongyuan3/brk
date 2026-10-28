@@ -77,3 +77,61 @@ u64 sys_gettid(void)
 {
 	return current_task()->pid;
 }
+
+u64 sys_setpgid(void)
+{
+	pid_t pid = syscall_arg_int(0);
+	pid_t pgid = syscall_arg_int(1);
+	struct task *task = current_task();
+
+	if (pid != 0 && pid != task->tgid)
+		return -ESRCH;
+	if (pgid < 0)
+		return -EINVAL;
+	if (pgid == 0)
+		pgid = task->pid;
+
+	/* A session leader cannot change its process group. */
+	if (task->sid == task->pid)
+		return -EPERM;
+	if (pgid != task->pid && !task_pgrp_exists(pgid, task->sid))
+		return -EPERM;
+
+	task->pgid = pgid;
+	return 0;
+}
+
+u64 sys_getpgrp(void)
+{
+	return current_task()->pgid;
+}
+
+u64 sys_setsid(void)
+{
+	struct task *task = current_task();
+
+	if (task->pgid == task->pid)
+		return -EPERM;
+
+	task->sid = task->pid;
+	task->pgid = task->pid;
+	return task->sid;
+}
+
+u64 sys_getpgid(void)
+{
+	pid_t pid = syscall_arg_int(0);
+
+	if (pid == 0)
+		return current_task()->pgid;
+	return task_get_pgid(pid);
+}
+
+u64 sys_getsid(void)
+{
+	pid_t pid = syscall_arg_int(0);
+
+	if (pid == 0)
+		return current_task()->sid;
+	return task_get_sid(pid);
+}

@@ -119,15 +119,65 @@ bool signal_pending(struct task *task)
 	return pending;
 }
 
+static int signal_kill_pgrp(pid_t pgrp, int sig)
+{
+	struct task *p;
+	bool found = false;
+
+	if (pgrp <= 0)
+		return -ESRCH;
+	if (sig != 0 && !sig_valid(sig))
+		return -EINVAL;
+
+	irqstate_t flags = spin_lock_irqsave(&tasks_lock);
+	list_for_each_entry(p, &tasks, list) {
+		if (p->pgid != pgrp || p->pid != p->tgid)
+			continue;
+		if (p == initial_task && sig != 0)
+			continue;
+		found = true;
+		if (sig)
+			signal_send(p, sig);
+	}
+	spin_unlock_irqrestore(&tasks_lock, flags);
+
+	return found ? 0 : -ESRCH;
+}
+
+void signal_send_pgrp(pid_t pgrp, int sig)
+{
+	(void)signal_kill_pgrp(pgrp, sig);
+}
+
 int signal_do_kill(pid_t pid, int sig)
 {
 	struct task *p, *target = NULL;
-	irqstate_t tflags, sflags;
 
 	if (sig != 0 && !sig_valid(sig))
 		return -EINVAL;
 
-	spin_lock(&tasks_lock);
+	if (pid <= 0) {
+		if (pid == -1) {
+			bool found = false;
+
+			irqstate_t flags = spin_lock_irqsave(&tasks_lock);
+			list_for_each_entry(p, &tasks, list) {
+				if (p == initial_task || p->pid != p->tgid)
+					continue;
+				found = true;
+				if (sig)
+					signal_send(p, sig);
+			}
+			spin_unlock_irqrestore(&tasks_lock, flags);
+			return found ? 0 : -ESRCH;
+		}
+
+		return signal_kill_pgrp(pid == 0 ? current_task()->pgid :
+						      -pid,
+					sig);
+	}
+
+	irqstate_t flags = spin_lock_irqsave(&tasks_lock);
 	list_for_each_entry(p, &tasks, list) {
 		if (p->pid == pid) {
 			target = p;
@@ -135,32 +185,36 @@ int signal_do_kill(pid_t pid, int sig)
 		}
 	}
 	if (!target) {
-		spin_unlock(&tasks_lock);
+		spin_unlock_irqrestore(&tasks_lock, flags);
 		return -ESRCH;
 	}
 	if (target == initial_task) {
-		spin_unlock(&tasks_lock);
+		spin_unlock_irqrestore(&tasks_lock, flags);
 		return -EPERM;
 	}
 
-	tflags = spin_lock_irqsave(&target->lock);
+	/* Keep IRQs disabled while we release tasks_lock. */
+	spin_lock(&target->lock);
 	spin_unlock(&tasks_lock);
 
 	if (target->state == TASK_STATE_ZOMBIE) {
-		spin_unlock_irqrestore(&target->lock, tflags);
+		spin_unlock(&target->lock);
+		local_irq_restore(flags);
 		return -ESRCH;
 	}
 
-	sflags = spin_lock_irqsave(&target->sigactions->lock);
-	spin_unlock_irqrestore(&target->lock, tflags);
+	spin_lock(&target->sigactions->lock);
+	spin_unlock(&target->lock);
 
 	if (sig == 0) {
-		spin_unlock_irqrestore(&target->sigactions->lock, sflags);
+		spin_unlock(&target->sigactions->lock);
+		local_irq_restore(flags);
 		return 0;
 	}
 
 	target->pending |= (1ULL << sig);
-	spin_unlock_irqrestore(&target->sigactions->lock, sflags);
+	spin_unlock(&target->sigactions->lock);
+	local_irq_restore(flags);
 
 	task_wake_spec(target);
 	return 0;

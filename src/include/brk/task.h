@@ -33,6 +33,8 @@
  */
 struct task_create_args {
 	pid_t tgid;
+	pid_t pgid;
+	pid_t sid;
 	struct uvm_space *mm;
 	struct file_desc_table *fdtable;
 	struct file_system_info *fsinfo;
@@ -50,6 +52,9 @@ struct task *task_create_idle(cpuid_t cpuid);
 void task_destroy(struct task *task);
 void task_set_killed(struct task *task);
 bool task_is_killed(struct task *task);
+bool task_pgrp_exists(pid_t pgid, pid_t sid);
+pid_t task_get_pgid(pid_t tgid);
+pid_t task_get_sid(pid_t tgid);
 void task_exit(int status);
 void task_exit_normal(int code);
 void task_exit_signal(int sig);
