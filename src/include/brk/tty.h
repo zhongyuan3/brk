@@ -2,9 +2,11 @@
 #define BRK_TTY_H
 
 #include <brk/refcnt_types.h>
+#include <brk/sleeplock_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <uapi/ioctl.h>
+#include <uapi/termios.h>
 #include <uapi/types.h>
 
 #define TTY_RX_BUF_SIZE 1024
@@ -24,6 +26,16 @@ struct tty_ops {
 	int (*put_char)(struct tty *tty, int c);
 };
 
+struct tty_ldisc_ops {
+	const char *name;
+	int (*open)(struct tty *tty);
+	void (*close)(struct tty *tty);
+	ssize_t (*read)(struct tty *tty, char *buf, size_t size);
+	ssize_t (*write)(struct tty *tty, const char *buf, size_t size);
+	void (*receive_buf)(struct tty *tty, const u8 *buf, size_t size);
+	long (*ioctl)(struct tty *tty, unsigned int cmd, unsigned long arg);
+};
+
 struct tty_port {
 	struct tty *tty;
 	struct tty_driver *driver;
@@ -31,6 +43,7 @@ struct tty_port {
 	void *client_data;
 	struct task *foreground;
 	unsigned int open_count;
+	struct termios termios;
 };
 
 struct tty_driver {
@@ -65,9 +78,17 @@ struct tty {
 	size_t rx_r;
 	size_t rx_w;
 	size_t rx_e;
+	bool eof_pending;
 	struct winsize winsize;
 	refcnt_t refcnt;
+	const struct tty_ldisc_ops *ldisc;
+	sleeplock_t read_lock;
+	sleeplock_t write_lock;
 };
+
+extern const struct tty_ldisc_ops n_tty_ldisc_ops;
+
+void tty_termios_defaults(struct termios *termios);
 
 struct tty *tty_alloc(void);
 void tty_free(struct tty *tty);
@@ -76,7 +97,7 @@ struct tty *tty_attach_port(struct tty_port *port);
 void tty_detach_port(struct tty_port *port);
 struct tty *tty_open(struct tty_port *port);
 void tty_close(struct tty *tty);
-ssize_t tty_read(struct tty *tty, void *buf, size_t n);
+ssize_t tty_read(struct tty *tty, char *buf, size_t n);
 ssize_t tty_write(struct tty *tty, const void *buf, size_t n);
 void tty_receive(struct tty *tty, int c);
 void tty_set_foreground(struct tty *tty, struct task *task);
