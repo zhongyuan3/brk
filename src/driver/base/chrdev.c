@@ -1,5 +1,6 @@
-#include <brk/bitmap.h>
+#include <brk/assert.h>
 #include <brk/chrdev.h>
+#include <brk/devno.h>
 #include <brk/device.h>
 #include <brk/error.h>
 #include <brk/fs.h>
@@ -7,125 +8,49 @@
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/printk.h>
+#include <brk/refcnt.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
 #include <uapi/types.h>
 
-struct char_dev_region {
-	struct hlist_node entry;
-	unsigned minor_start;
-	unsigned minor_count;
-};
-
-static struct hlist_head cd_regs[MAJOR_MAX];
-static BITMAP_DECLARE(cd_major_pooled, MAJOR_MAX);
-static SPINLOCK_DEFINE(cd_lock);
+static struct devno_allocator cd_devno;
 static struct hlist_head cd_htable[MAJOR_MAX];
 static SPINLOCK_DEFINE(cd_htable_lock);
 
-static int chrdev_alloc_major_no_lock(unsigned base_major, unsigned *major_out)
-{
-	size_t bit = 0;
-
-	if (bitmap_alloc_bit_from(cd_major_pooled, MAJOR_MAX, base_major,
-				  &bit)) {
-		*major_out = bit;
-		return 0;
-	}
-
-	return -ENOMEM;
-}
-
-static void chrdev_free_major_no_lock(unsigned major)
-{
-	bitmap_free_bit(cd_major_pooled, MAJOR_MAX, major);
-}
-
-static int chrdev_alloc_region_no_lock(unsigned major, unsigned base_minor,
-				       unsigned count, dev_t *dev_out)
-{
-	struct char_dev_region *curr, *new_entry;
-	int err = 0;
-	bool major_allocated = false;
-	unsigned minor = base_minor;
-	struct char_dev_region *last = NULL;
-
-	if (major == 0) {
-		err = chrdev_alloc_major_no_lock(0, &major);
-		if (err)
-			return err;
-		major_allocated = true;
-	} else {
-		if (!bitmap_test_bit(cd_major_pooled, major))
-			return -EINVAL;
-	}
-
-	hlist_for_each_entry(curr, &cd_regs[major], entry) {
-		if (curr->minor_start > minor &&
-		    curr->minor_start - minor >= count) {
-			new_entry = kzalloc(sizeof(*new_entry));
-			if (!new_entry) {
-				if (major_allocated)
-					chrdev_free_major_no_lock(major);
-				return -ENOMEM;
-			}
-			new_entry->minor_start = minor;
-			new_entry->minor_count = count;
-			hlist_add_before(&new_entry->entry, &curr->entry);
-			*dev_out = MKDEV(major, minor);
-			return 0;
-		}
-		minor = curr->minor_start + curr->minor_count;
-		last = curr;
-	}
-
-	new_entry = kzalloc(sizeof(*new_entry));
-	if (!new_entry) {
-		if (major_allocated)
-			chrdev_free_major_no_lock(major);
-		return -ENOMEM;
-	}
-	new_entry->minor_start = minor;
-	new_entry->minor_count = count;
-	if (last)
-		hlist_add_behind(&new_entry->entry, &last->entry);
-	else
-		hlist_add_head(&new_entry->entry, &cd_regs[major]);
-	*dev_out = MKDEV(major, minor);
-	return 0;
-}
-
-static bool chrdev_minor_is_allocated(unsigned major, unsigned minor)
-{
-	struct char_dev_region *curr;
-
-	if (!bitmap_test_bit(cd_major_pooled, major))
-		return false;
-
-	hlist_for_each_entry(curr, &cd_regs[major], entry) {
-		if (curr->minor_start <= minor &&
-		    curr->minor_start + curr->minor_count > minor)
-			return true;
-	}
-	return false;
-}
-
 void chrdev_registry_init(void)
 {
-	bitmap_fill(cd_major_pooled, FIRST_DYNAMIC_CHRDEV_MAJOR);
+	devno_allocator_init(&cd_devno, FIRST_DYNAMIC_CHRDEV_MAJOR);
 }
 core_initcall(chrdev_registry_init);
 
 struct char_dev *chrdev_alloc(void)
 {
-	return kzalloc(sizeof(struct char_dev));
+	struct char_dev *cd = kzalloc(sizeof(*cd));
+
+	if (!cd)
+		return NULL;
+
+	refcnt_init(&cd->ref, 1);
+	hlist_node_init(&cd->hlist);
+	cd->dead = false;
+	return cd;
+}
+
+void chrdev_put(struct char_dev *cd)
+{
+	if (!cd)
+		return;
+	if (refcnt_dec_fetch(&cd->ref) > 0)
+		return;
+
+	ASSERT(hlist_unhashed(&cd->hlist));
+	kfree(cd);
 }
 
 void chrdev_free(struct char_dev *cd)
 {
-	kfree(cd);
+	chrdev_put(cd);
 }
 
 int chrdev_register(struct char_dev *cd)
@@ -134,18 +59,31 @@ int chrdev_register(struct char_dev *cd)
 		return -EINVAL;
 	if (!cd->fops || !cd->fops->open)
 		return -EINVAL;
-	spin_lock(&cd_lock);
-	if (!chrdev_minor_is_allocated(MAJOR(cd->dev), MINOR(cd->dev))) {
-		spin_unlock(&cd_lock);
+	if (!devno_minor_is_allocated(&cd_devno, MAJOR(cd->dev),
+				      MINOR(cd->dev)))
 		return -EINVAL;
-	}
-	spin_unlock(&cd_lock);
 
 	spin_lock(&cd_htable_lock);
+	if (!hlist_unhashed(&cd->hlist)) {
+		spin_unlock(&cd_htable_lock);
+		return -EBUSY;
+	}
+	cd->dead = false;
 	hlist_add_head(&cd->hlist, &cd_htable[MAJOR(cd->dev)]);
 	spin_unlock(&cd_htable_lock);
-
 	return 0;
+}
+
+void chrdev_unregister(struct char_dev *cd)
+{
+	if (!cd)
+		return;
+
+	spin_lock(&cd_htable_lock);
+	cd->dead = true;
+	if (!hlist_unhashed(&cd->hlist))
+		hlist_del_init(&cd->hlist);
+	spin_unlock(&cd_htable_lock);
 }
 
 static struct char_dev *chrdev_get_no_lock(dev_t dev)
@@ -156,130 +94,173 @@ static struct char_dev *chrdev_get_no_lock(dev_t dev)
 		if (cd->dev == dev)
 			return cd;
 	}
-
 	return NULL;
-}
-
-void chrdev_unregister(struct char_dev *cd)
-{
-	spin_lock(&cd_htable_lock);
-	hlist_del_init(&cd->hlist);
-	spin_unlock(&cd_htable_lock);
 }
 
 struct char_dev *chrdev_get(dev_t dev)
 {
+	struct char_dev *cd;
+
 	spin_lock(&cd_htable_lock);
-	struct char_dev *cd = chrdev_get_no_lock(dev);
+	cd = chrdev_get_no_lock(dev);
+	if (cd && (cd->dead || !refcnt_inc_unless_zero(&cd->ref)))
+		cd = NULL;
 	spin_unlock(&cd_htable_lock);
 	return cd;
 }
 
 int chrdev_alloc_major(unsigned *major_out)
 {
-	int err;
-
-	if (!major_out)
-		return -EINVAL;
-
-	spin_lock(&cd_lock);
-	err = chrdev_alloc_major_no_lock(0, major_out);
-	spin_unlock(&cd_lock);
-	return err;
+	return devno_alloc_major(&cd_devno, major_out);
 }
 
 void chrdev_free_major(unsigned major)
 {
-	if (major >= MAJOR_MAX)
-		return;
-
-	spin_lock(&cd_lock);
-	chrdev_free_major_no_lock(major);
-	spin_unlock(&cd_lock);
+	devno_free_major(&cd_devno, major);
 }
 
 int chrdev_alloc_minor(unsigned major, unsigned *minor_out)
 {
-	dev_t dev = 0;
-	int err;
-
-	if (major >= MAJOR_MAX || !minor_out)
-		return -EINVAL;
-
-	spin_lock(&cd_lock);
-	if (!bitmap_test_bit(cd_major_pooled, major)) {
-		spin_unlock(&cd_lock);
-		return -EINVAL;
-	}
-	err = chrdev_alloc_region_no_lock(major, 0, 1, &dev);
-	spin_unlock(&cd_lock);
-
-	if (err)
-		return err;
-	*minor_out = MINOR(dev);
-	return 0;
+	return devno_alloc_minor(&cd_devno, major, minor_out);
 }
 
 void chrdev_free_minor(unsigned major, unsigned minor)
 {
-	chrdev_free_region(major, minor, 1);
+	devno_free_minor(&cd_devno, major, minor);
 }
 
 int chrdev_alloc_region(unsigned major, unsigned base_minor, unsigned count,
 			dev_t *dev_out)
 {
-	int ret;
-
-	if (major >= MAJOR_MAX || count == 0 || !dev_out)
-		return -EINVAL;
-
-	spin_lock(&cd_lock);
-	ret = chrdev_alloc_region_no_lock(major, base_minor, count, dev_out);
-	spin_unlock(&cd_lock);
-
-	return ret;
+	return devno_alloc_region(&cd_devno, major, base_minor, count,
+				  dev_out);
 }
 
 void chrdev_free_region(unsigned major, unsigned minor, unsigned count)
 {
-	struct char_dev_region *curr;
+	devno_free_region(&cd_devno, major, minor, count);
+}
 
-	if (major >= MAJOR_MAX || minor + count > MINOR_MAX)
-		return;
-
-	spin_lock(&cd_lock);
-	hlist_for_each_entry(curr, &cd_regs[major], entry) {
-		if (curr->minor_start + curr->minor_count <= minor)
-			continue;
-
-		if (curr->minor_start == minor && curr->minor_count == count) {
-			hlist_del_init(&curr->entry);
-			spin_unlock(&cd_lock);
-			kfree(curr);
-			return;
-		}
-
-		pr_err("%s: region %u+%u does not match %u+%u", __func__,
-			   curr->minor_start, curr->minor_count, minor, count);
-		spin_unlock(&cd_lock);
-		return;
-	}
-	spin_unlock(&cd_lock);
-	pr_err("%s: no region at minor %u count %u", __func__, minor,
-		   count);
+static struct char_dev *chrdev_file_dev(struct fs_file *file)
+{
+	return (struct char_dev *)file->dev_private;
 }
 
 static int chrdev_open(struct fs_inode *inode, struct fs_file *file)
 {
 	struct char_dev *cd;
+	int err;
 
 	cd = chrdev_get(inode->rdev);
-	if (!cd || !cd->fops || !cd->fops->open)
+	if (!cd || !cd->fops || !cd->fops->open) {
+		if (cd)
+			chrdev_put(cd);
 		return -ENODEV;
+	}
 
-	return cd->fops->open(inode, file);
+	file->ops = &chrdev_fops;
+	file->dev_private = cd;
+
+	err = cd->fops->open(inode, file);
+	if (err) {
+		file->dev_private = NULL;
+		chrdev_put(cd);
+	}
+	return err;
+}
+
+static int chrdev_release(struct fs_inode *inode, struct fs_file *file)
+{
+	struct char_dev *cd = chrdev_file_dev(file);
+	int err = 0;
+
+	if (!cd)
+		return 0;
+
+	if (cd->fops && cd->fops->release)
+		err = cd->fops->release(inode, file);
+
+	file->dev_private = NULL;
+	chrdev_put(cd);
+	return err;
+}
+
+static ssize_t chrdev_read(struct fs_file *file, char *buf, size_t size,
+			   loff_t *pos)
+{
+	struct char_dev *cd = chrdev_file_dev(file);
+
+	if (!cd || !cd->fops || !cd->fops->read)
+		return -EOPNOTSUPP;
+	return cd->fops->read(file, buf, size, pos);
+}
+
+static ssize_t chrdev_write(struct fs_file *file, const char *buf,
+			    size_t size, loff_t *pos)
+{
+	struct char_dev *cd = chrdev_file_dev(file);
+
+	if (!cd || !cd->fops || !cd->fops->write)
+		return -EOPNOTSUPP;
+	return cd->fops->write(file, buf, size, pos);
+}
+
+static loff_t chrdev_llseek(struct fs_file *file, loff_t offset, int whence)
+{
+	struct char_dev *cd = chrdev_file_dev(file);
+
+	if (!cd || !cd->fops || !cd->fops->llseek)
+		return -EOPNOTSUPP;
+	return cd->fops->llseek(file, offset, whence);
+}
+
+static int chrdev_iterate_shared(struct fs_file *file,
+				 struct fs_dir_iterator *ctx)
+{
+	struct char_dev *cd = chrdev_file_dev(file);
+
+	if (!cd || !cd->fops || !cd->fops->iterate_shared)
+		return -ENOTDIR;
+	return cd->fops->iterate_shared(file, ctx);
+}
+
+static int chrdev_fsync(struct fs_file *file, loff_t start, loff_t end,
+			int datasync)
+{
+	struct char_dev *cd = chrdev_file_dev(file);
+
+	if (!cd || !cd->fops || !cd->fops->fsync)
+		return 0;
+	return cd->fops->fsync(file, start, end, datasync);
+}
+
+static int chrdev_flush(struct fs_file *file)
+{
+	struct char_dev *cd = chrdev_file_dev(file);
+
+	if (!cd || !cd->fops || !cd->fops->flush)
+		return 0;
+	return cd->fops->flush(file);
+}
+
+static long chrdev_ioctl(struct fs_file *file, unsigned int cmd,
+			 unsigned long arg)
+{
+	struct char_dev *cd = chrdev_file_dev(file);
+
+	if (!cd || !cd->fops || !cd->fops->ioctl)
+		return -ENOTTY;
+	return cd->fops->ioctl(file, cmd, arg);
 }
 
 const struct fs_file_ops chrdev_fops = {
 	.open = chrdev_open,
+	.release = chrdev_release,
+	.read = chrdev_read,
+	.write = chrdev_write,
+	.llseek = chrdev_llseek,
+	.iterate_shared = chrdev_iterate_shared,
+	.fsync = chrdev_fsync,
+	.flush = chrdev_flush,
+	.ioctl = chrdev_ioctl,
 };

@@ -84,24 +84,48 @@ struct virtio_device *virtio_dev_get(u32 id)
 
 void virtio_init_scan(void)
 {
+	struct virtio_device **devs;
 	struct virtio_device *dev;
 	struct virtio_blk_dev *vblk;
-	int err = 0;
+	size_t count = 0;
+	size_t i = 0;
+
+	spin_lock(&vdevs_lock);
+	list_for_each_entry(dev, &vdevs, list)
+		count++;
+	spin_unlock(&vdevs_lock);
+
+	if (count == 0)
+		return;
+
+	devs = kcalloc(count, sizeof(*devs));
+	if (!devs)
+		return;
 
 	spin_lock(&vdevs_lock);
 	list_for_each_entry(dev, &vdevs, list) {
-		if (dev->id == VIRTIO_DEVICE_ID_BLK) {
-			vblk = virtio_blk_create(dev,
-						 VIRTIO_BLK_DEFAULT_QUEUE_SIZE);
-			if (!vblk)
-				continue;
-			err = virtio_blk_register(vblk);
-			if (err) {
-				virtio_blk_destroy(vblk);
-				continue;
-			}
-		}
+		if (i < count)
+			devs[i++] = dev;
 	}
 	spin_unlock(&vdevs_lock);
+
+	/*
+	 * Driver creation/registration may allocate memory, ioremap and
+	 * register IRQs; do it without vdevs_lock held.
+	 */
+	for (size_t j = 0; j < i; ++j) {
+		dev = devs[j];
+		if (dev->id != VIRTIO_DEVICE_ID_BLK)
+			continue;
+
+		vblk = virtio_blk_create(dev,
+					 VIRTIO_BLK_DEFAULT_QUEUE_SIZE);
+		if (!vblk)
+			continue;
+		if (virtio_blk_register(vblk))
+			virtio_blk_destroy(vblk);
+	}
+
+	kfree(devs);
 }
 subsys_initcall(virtio_init_scan);

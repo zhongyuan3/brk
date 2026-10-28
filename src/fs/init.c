@@ -1,4 +1,5 @@
 #include <brk/dcache.h>
+#include <brk/devnode.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
@@ -8,8 +9,6 @@
 #include <brk/printk.h>
 #include <brk/string.h>
 #include <brk/task.h>
-#include <brk/tty.h>
-#include <brk/virtio_blk.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/stat.h>
@@ -51,11 +50,8 @@ int fs_init(void)
 		return err;
 	pr_info("/dev directory created\n");
 
-	err = virtio_blk_mknod();
-	if (err)
-		return err;
-
-	err = tty_mknod();
+	/* The brkfs mount below needs /dev/virtio_blk0 to exist already. */
+	err = devnode_populate();
 	if (err)
 		return err;
 
@@ -99,7 +95,8 @@ int fs_init(void)
 		return err;
 	pr_info("/proc mounted successfully\n");
 
-	err = tty_mknod();
+	/* The /dev tmpfs is fresh, so recreate all registered device nodes. */
+	err = devnode_populate();
 	if (err)
 		return err;
 

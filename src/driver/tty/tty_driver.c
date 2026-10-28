@@ -1,5 +1,6 @@
 #include <brk/chrdev.h>
 #include <brk/device.h>
+#include <brk/devnode.h>
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -13,6 +14,7 @@
 #include <brk/types.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
+#include <uapi/stat.h>
 #include <uapi/types.h>
 
 static HLIST_HEAD_DEFINE(tty_driver_list);
@@ -69,6 +71,10 @@ static void tty_driver_cleanup_port(struct tty_driver *driver, int i)
 		tty_detach_port(port);
 	}
 	if (cd) {
+		char name[32];
+
+		snprintf(name, sizeof(name), "/dev/tty%u", (unsigned)i);
+		devnode_unregister(name);
 		chrdev_unregister(cd);
 		chrdev_free(cd);
 	}
@@ -104,8 +110,15 @@ int tty_unregister_driver(struct tty_driver *driver)
 	spin_lock(&driver->lock);
 	for (int i = 0; i < driver->num_ports; i++) {
 		struct tty_port *port = driver->ports[i];
+		bool busy = false;
 
-		if (port && port->tty && refcnt_read(&port->tty->refcnt) > 0) {
+		if (port) {
+			irqstate_t pflags = spin_lock_irqsave(&port->lock);
+
+			busy = port->open_count > 0;
+			spin_unlock_irqrestore(&port->lock, pflags);
+		}
+		if (busy) {
 			spin_unlock(&driver->lock);
 			return -EBUSY;
 		}
@@ -149,48 +162,69 @@ struct tty_port *tty_lookup_port(dev_t dev)
 
 int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port)
 {
+	struct char_dev *cd;
+	char name[32];
+	int slot = -1;
 	int err;
 
 	if (!driver || !port)
 		return -EINVAL;
 
-	struct char_dev *cd = chrdev_alloc();
+	cd = chrdev_alloc();
 	if (!cd)
 		return -ENOMEM;
 
+	/* Reserve a slot, but do the slow registration work outside the lock. */
 	spin_lock(&driver->lock);
 	for (int i = 0; i < driver->num_ports; i++) {
 		if (driver->ports[i] == NULL) {
-			driver->ports[i] = port;
-			cd->fops = &tty_fops;
-			cd->dev = MKCHRDEV(driver->major,
-					   driver->minor_start + i);
-			driver->cds[i] = cd;
-			err = chrdev_register(cd);
-			if (err) {
-				chrdev_free(cd);
-				driver->cds[i] = NULL;
-				driver->ports[i] = NULL;
-				spin_unlock(&driver->lock);
-				return err;
-			}
-			if (!tty_attach_port(port)) {
-				chrdev_unregister(cd);
-				chrdev_free(cd);
-				driver->cds[i] = NULL;
-				driver->ports[i] = NULL;
-				spin_unlock(&driver->lock);
-				return -ENOMEM;
-			}
-			spin_unlock(&driver->lock);
-			return 0;
+			slot = i;
+			break;
 		}
 	}
+	if (slot < 0) {
+		spin_unlock(&driver->lock);
+		chrdev_free(cd);
+		return -EBUSY;
+	}
+
+	cd->fops = &tty_fops;
+	cd->dev = MKCHRDEV(driver->major, driver->minor_start + slot);
+	driver->ports[slot] = port;
+	driver->cds[slot] = cd;
 	spin_unlock(&driver->lock);
 
-	chrdev_free(cd);
+	err = chrdev_register(cd);
+	if (err)
+		goto err_slot;
 
-	return -EBUSY;
+	if (!tty_attach_port(port)) {
+		err = -ENOMEM;
+		chrdev_unregister(cd);
+		goto err_slot;
+	}
+
+	snprintf(name, sizeof(name), "/dev/tty%u", (unsigned)slot);
+	err = devnode_register(name, cd->dev, S_IFCHR | 0666);
+	if (err) {
+		/*
+		 * The tty is already usable; keep it alive and report the
+		 * missing node rather than tearing down a working port.
+		 */
+		pr_warn("tty: cannot register devnode %s: %d\n", name, err);
+	}
+
+	return 0;
+
+err_slot:
+	spin_lock(&driver->lock);
+	if (driver->ports[slot] == port)
+		driver->ports[slot] = NULL;
+	if (driver->cds[slot] == cd)
+		driver->cds[slot] = NULL;
+	spin_unlock(&driver->lock);
+	chrdev_free(cd);
+	return err;
 }
 
 int tty_driver_remove_port(struct tty_driver *driver, struct tty_port *port)
@@ -199,7 +233,10 @@ int tty_driver_remove_port(struct tty_driver *driver, struct tty_port *port)
 		return -EINVAL;
 
 	spin_lock(&driver->lock);
-	if (port->tty && refcnt_read(&port->tty->refcnt) > 0) {
+	irqstate_t pflags = spin_lock_irqsave(&port->lock);
+	bool busy = port->open_count > 0;
+	spin_unlock_irqrestore(&port->lock, pflags);
+	if (busy) {
 		spin_unlock(&driver->lock);
 		return -EBUSY;
 	}
@@ -218,7 +255,11 @@ int tty_driver_remove_port(struct tty_driver *driver, struct tty_port *port)
 
 static int tty_file_open(struct fs_inode *inode, struct fs_file *file)
 {
-	file->ops = &tty_fops;
+	/*
+	 * The file keeps chrdev_fops as its dispatch table so that the
+	 * character-device core can hold a cdev reference for the whole
+	 * open lifetime.  tty_fops is reached through cdev->fops.
+	 */
 	file->private_data = NULL;
 
 	struct tty_port *port = tty_lookup_port(inode->rdev);
@@ -316,36 +357,6 @@ static const struct fs_file_ops tty_fops = {
 	.flush = tty_file_flush,
 	.ioctl = tty_file_ioctl,
 };
-
-int tty_mknod(void)
-{
-	int err = 0;
-	struct tty_driver *driver;
-	char name[32];
-
-	spin_lock(&tty_driver_lock);
-	hlist_for_each_entry(driver, &tty_driver_list, driver_list) {
-		for (int i = 0; i < driver->num_ports; i++) {
-			if (driver->ports[i]) {
-				memset(name, 0, sizeof(name));
-				snprintf(name, sizeof(name) - 1, "/dev/tty%u",
-					 i);
-				err = do_mknodat(
-					AT_FDCWD, name, S_IFCHR,
-					MKCHRDEV(driver->major,
-						 driver->minor_start + i));
-				if (err) {
-					spin_unlock(&tty_driver_lock);
-					return err;
-				}
-				pr_info("/dev/tty%u created successfully\n",
-					  i);
-			}
-		}
-	}
-	spin_unlock(&tty_driver_lock);
-	return 0;
-}
 
 struct tty_port *tty_port_alloc(void)
 {

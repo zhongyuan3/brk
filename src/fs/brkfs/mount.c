@@ -89,16 +89,27 @@ int brkfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 		return PTR_ERR(bdev);
 
 	err = brkfs_read_super(&brk_sb, bdev);
-	if (err)
+	if (err) {
+		blkdev_put(bdev);
 		return err;
+	}
 
 	err = brkfs_validate_super(&brk_sb);
-	if (err)
+	if (err) {
+		blkdev_put(bdev);
 		return err;
+	}
 
+	/*
+	 * brkfs_sb_info_alloc() takes ownership of the block-device
+	 * reference obtained by brkfs_get_bdev(); brkfs_sb_info_free()
+	 * releases it.
+	 */
 	sb_info = brkfs_sb_info_alloc(bdev, &brk_sb);
-	if (!sb_info)
+	if (!sb_info) {
+		blkdev_put(bdev);
 		return -ENOMEM;
+	}
 
 	sb = fs_super_block_alloc(args->driver);
 	if (!sb) {

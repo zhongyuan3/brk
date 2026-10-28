@@ -1,6 +1,7 @@
 #include <arch/mm.h>
 #include <brk/assert.h>
 #include <brk/blkdev.h>
+#include <brk/devnode.h>
 #include <brk/dt.h>
 #include <brk/fs.h>
 #include <brk/initcall.h>
@@ -22,6 +23,7 @@
 #include <brk/virtio_queue.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
+#include <uapi/stat.h>
 #include <uapi/types.h>
 
 static struct virtio_blk_registry __vblk_registry;
@@ -376,10 +378,21 @@ int virtio_blk_register(struct virtio_blk_dev *vblk)
 			vblk_registry->vblks[i] = vblk;
 			vblk_registry->bdevs[i] = bdev;
 			spin_unlock(&vblk_registry->lock);
+
+			char name[32];
+
+			snprintf(name, sizeof(name), "/dev/virtio_blk%u",
+				 i);
+			err = devnode_register(name, bdev->dev,
+					       S_IFBLK | 0666);
+			if (err)
+				pr_warn("virtio_blk: cannot register %s: %d\n",
+					name, err);
 			return 0;
 		}
 	}
 	spin_unlock(&vblk_registry->lock);
+	blkdev_free(bdev);
 	return -EBUSY;
 }
 
@@ -393,10 +406,15 @@ void virtio_blk_unregister(struct virtio_blk_dev *vblk)
 	spin_lock(&vblk_registry->lock);
 	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
 		if (vblk_registry->vblks[i] == vblk) {
+			char name[32];
+
 			vblk_registry->vblks[i] = NULL;
 			bdev = vblk_registry->bdevs[i];
 			vblk_registry->bdevs[i] = NULL;
+			snprintf(name, sizeof(name), "/dev/virtio_blk%u",
+				 i);
 			spin_unlock(&vblk_registry->lock);
+			devnode_unregister(name);
 			blkdev_unregister(bdev);
 			blkdev_free(bdev);
 			return;
@@ -453,34 +471,5 @@ int virtio_blk_enable_irq(u32 hart_id)
 		}
 	}
 	spin_unlock(&vblk_registry->lock);
-	return err;
-}
-
-int virtio_blk_mknod(void)
-{
-	int err = 0;
-	char name[32];
-
-	if (!vblk_registry)
-		return -EINVAL;
-
-	spin_lock(&vblk_registry->lock);
-	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
-		if (vblk_registry->vblks[i]) {
-			memset(name, 0, sizeof(name));
-			snprintf(name, sizeof(name) - 1, "/dev/virtio_blk%u",
-				 i);
-			err = do_mknodat(
-				AT_FDCWD, name, S_IFBLK,
-				MKBLKDEV(vblk_registry->major,
-					 vblk_registry->minor_start + i));
-			if (err)
-				break;
-			pr_info("/dev/virtio_blk%u created successfully\n",
-				  i);
-		}
-	}
-	spin_unlock(&vblk_registry->lock);
-
 	return err;
 }

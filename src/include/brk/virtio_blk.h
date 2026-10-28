@@ -176,6 +176,5 @@ void virtio_blk_destroy(struct virtio_blk_dev *vblk);
 int virtio_blk_register(struct virtio_blk_dev *vblk);
 void virtio_blk_unregister(struct virtio_blk_dev *vblk);
 int virtio_blk_enable_irq(u32 hart_id);
-int virtio_blk_mknod(void);
 
 #endif

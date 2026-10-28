@@ -144,7 +144,10 @@ struct fs_file {
 	fmode_t mode;
 	sleeplock_t pos_lock;
 	loff_t pos;
+	/* Driver-specific per-open state (e.g. tty). */
 	void *private_data;
+	/* Class-core per-open state (e.g. char_dev reference). */
+	void *dev_private;
 };
 
 struct fs_file_ops {
