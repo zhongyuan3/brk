@@ -1,5 +1,5 @@
 #include <brk/blkdev.h>
-#include <brk/devnode.h>
+#include <brk/device_model.h>
 #include <brk/genhd.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -47,7 +47,7 @@ void gendisk_name(const struct gendisk *disk, unsigned int partno, char *buf,
 
 struct gendisk *gendisk_alloc(unsigned int major, unsigned int first_minor,
 			      unsigned int minors, const char *name,
-			      u64 nr_sects, void *priv)
+			      u64 nr_sects, struct device *parent, void *priv)
 {
 	struct gendisk *disk;
 	struct block_dev *bdev;
@@ -74,6 +74,9 @@ struct gendisk *gendisk_alloc(unsigned int major, unsigned int first_minor,
 	disk->nr_sects = nr_sects;
 	disk->priv = priv;
 	disk->bdev = bdev;
+
+	device_init(&disk->dev, disk->disk_name);
+	disk->dev.parent = parent;
 
 	bdev->dev = MKBLKDEV(major, first_minor);
 	bdev->phy_bsize = MBR_SECTOR_SIZE;
@@ -104,7 +107,6 @@ static int add_partition(struct gendisk *disk, unsigned int partno, u64 start,
 {
 	struct block_dev *bdev;
 	struct hd_struct *part;
-	char path[GENHD_NAME_LEN + 16];
 	char name[GENHD_NAME_LEN + 8];
 	int err;
 
@@ -142,10 +144,13 @@ static int add_partition(struct gendisk *disk, unsigned int partno, u64 start,
 	part->bdev = bdev;
 
 	gendisk_name(disk, partno, name, sizeof(name));
-	snprintf(path, sizeof(path), "/dev/%s", name);
-	err = devnode_register(path, bdev->dev, S_IFBLK | 0666);
+	device_init(&part->dev, name);
+	part->dev.devt = bdev->dev;
+	part->dev.mode = S_IFBLK | 0666;
+	part->dev.parent = &disk->dev;
+	err = device_register(&part->dev);
 	if (err)
-		pr_warn("genhd: cannot register %s: %d\n", path, err);
+		pr_warn("genhd: cannot register %s: %d\n", name, err);
 
 	pr_info("genhd: %s: partition %u, start %" PRIu64
 		", sectors %" PRIu64 "\n",
@@ -208,7 +213,6 @@ static void scan_partitions(struct gendisk *disk)
 
 int add_disk(struct gendisk *disk)
 {
-	char path[GENHD_NAME_LEN + 16];
 	int err;
 
 	if (!disk || !disk->bdev || !disk->queue)
@@ -218,10 +222,12 @@ int add_disk(struct gendisk *disk)
 	if (err)
 		return err;
 
-	snprintf(path, sizeof(path), "/dev/%s", disk->disk_name);
-	err = devnode_register(path, disk->bdev->dev, S_IFBLK | 0666);
+	disk->dev.devt = disk->bdev->dev;
+	disk->dev.mode = S_IFBLK | 0666;
+	err = device_register(&disk->dev);
 	if (err)
-		pr_warn("genhd: cannot register %s: %d\n", path, err);
+		pr_warn("genhd: cannot register %s: %d\n",
+			disk->disk_name, err);
 
 	pr_info("genhd: %s: %u minors, %" PRIu64 " sectors\n",
 		disk->disk_name, disk->minors, disk->nr_sects);
@@ -270,8 +276,6 @@ void gendisk_scan_partitions(void)
 
 void del_gendisk(struct gendisk *disk)
 {
-	char path[GENHD_NAME_LEN + 16];
-
 	if (!disk)
 		return;
 
@@ -286,16 +290,14 @@ void del_gendisk(struct gendisk *disk)
 
 		if (!bdev)
 			continue;
-		gendisk_name(disk, part->partno, path, sizeof(path));
-		devnode_unregister(path);
+		device_unregister(&part->dev);
 		blkdev_unregister(bdev);
 		blkdev_free(bdev);
 		part->bdev = NULL;
 	}
 
 	if (disk->bdev) {
-		snprintf(path, sizeof(path), "/dev/%s", disk->disk_name);
-		devnode_unregister(path);
+		device_unregister(&disk->dev);
 		blkdev_unregister(disk->bdev);
 	}
 	gendisk_free(disk);

@@ -1,5 +1,5 @@
 #include <brk/dcache.h>
-#include <brk/devnode.h>
+#include <brk/devtmpfs.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
@@ -18,6 +18,7 @@
 static void register_builtin_filesystems(void)
 {
 	fs_driver_register(&tmpfs_fs_type);
+	fs_driver_register(&devtmpfs_fs_type);
 	fs_driver_register(&brkfs_fs_type);
 	fs_driver_register(&procfs_fs_type);
 	pipe_fs_init();
@@ -56,7 +57,7 @@ int fs_init(void)
 	pr_info("/dev directory created\n");
 
 	/* The brkfs mount below needs the block device nodes to exist already. */
-	err = devnode_populate();
+	err = devtmpfs_populate();
 	if (err)
 		return err;
 
@@ -100,7 +101,7 @@ int fs_init(void)
 	if (err == -EEXIST)
 		err = 0;
 
-	err = do_mount(NULL, "/dev", "tmpfs", 0, NULL);
+	err = do_mount(NULL, "/dev", "devtmpfs", 0, NULL);
 	if (err)
 		return err;
 	pr_info("/dev mounted successfully\n");
@@ -116,8 +117,12 @@ int fs_init(void)
 		return err;
 	pr_info("/proc mounted successfully\n");
 
-	/* The /dev tmpfs is fresh, so recreate all registered device nodes. */
-	err = devnode_populate();
+	/* The devtmpfs instance is fresh, so recreate all device nodes. */
+	err = devtmpfs_populate();
+	if (err)
+		return err;
+
+	err = devtmpfs_start();
 	if (err)
 		return err;
 

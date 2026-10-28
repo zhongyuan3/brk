@@ -1,8 +1,8 @@
 #include <arch/mm.h>
 #include <brk/assert.h>
 #include <brk/bio.h>
+#include <brk/device_model.h>
 #include <brk/blkdev.h>
-#include <brk/devnode.h>
 #include <brk/dt.h>
 #include <brk/fs.h>
 #include <brk/genhd.h>
@@ -433,7 +433,7 @@ int virtio_blk_register(struct virtio_blk_dev *vblk)
 			     vblk_registry->minor_start +
 				     slot * VIRTIO_BLK_MINORS_PER_DEV,
 			     VIRTIO_BLK_MINORS_PER_DEV, name,
-			     vblk->config.capacity, vblk);
+			     vblk->config.capacity, &vblk->vdev->dev, vblk);
 	if (!disk) {
 		err = -ENOMEM;
 		goto clear_slot;
@@ -484,6 +484,52 @@ void virtio_blk_unregister(struct virtio_blk_dev *vblk)
 	del_gendisk(disk);
 }
 
+static int virtio_blk_probe(struct device *dev)
+{
+	struct virtio_device *vdev = container_of(dev, struct virtio_device,
+						  dev);
+	struct virtio_blk_dev *vblk;
+	int err;
+
+	vblk = virtio_blk_create(vdev, VIRTIO_BLK_DEFAULT_QUEUE_SIZE);
+	if (!vblk)
+		return -ENOMEM;
+
+	err = virtio_blk_register(vblk);
+	if (err) {
+		virtio_blk_destroy(vblk);
+		return err;
+	}
+
+	dev->driver_data = vblk;
+	return 0;
+}
+
+static void virtio_blk_remove(struct device *dev)
+{
+	struct virtio_blk_dev *vblk = dev->driver_data;
+
+	if (!vblk)
+		return;
+
+	dev->driver_data = NULL;
+	virtio_blk_unregister(vblk);
+	virtio_blk_destroy(vblk);
+}
+
+static const struct device_id virtio_blk_ids[] = {
+	{ .device_id = VIRTIO_DEVICE_ID_BLK },
+	{ },
+};
+
+static struct device_driver virtio_blk_driver = {
+	.name = "virtio_blk",
+	.bus = &virtio_bus,
+	.id_table = virtio_blk_ids,
+	.probe = virtio_blk_probe,
+	.remove = virtio_blk_remove,
+};
+
 void virtio_blk_init(void)
 {
 	dev_t dev = 0;
@@ -512,6 +558,10 @@ void virtio_blk_init(void)
 
 	pr_info("%s: major: %u\n", __func__, vblk_registry->major);
 	pr_info("%s: minor: %u\n", __func__, vblk_registry->minor_start);
+
+	err = driver_register(&virtio_blk_driver);
+	if (err)
+		panic("%s(): driver_register failed\n", __func__);
 }
 postcore_initcall(virtio_blk_init);
 

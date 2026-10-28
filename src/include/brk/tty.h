@@ -16,6 +16,7 @@
 
 struct fs_file;
 struct char_dev;
+struct device;
 struct task;
 struct tty;
 struct tty_port;
@@ -51,6 +52,7 @@ struct tty_driver {
 	const struct tty_ops *ops;
 	struct tty_port **ports;
 	struct char_dev **cds;
+	struct device **devs;
 	int num_ports;
 	unsigned major;
 	unsigned minor_start;
