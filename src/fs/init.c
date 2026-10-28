@@ -4,9 +4,11 @@
 #include <brk/fdtable.h>
 #include <brk/fs.h>
 #include <brk/fsinfo.h>
+#include <brk/genhd.h>
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
+#include <brk/printf.h>
 #include <brk/string.h>
 #include <brk/task.h>
 #include <uapi/errno.h>
@@ -31,6 +33,9 @@ int fs_init(void)
 
 	register_builtin_filesystems();
 
+	/* Probing issues real I/O, so it runs here rather than at add_disk(). */
+	gendisk_scan_partitions();
+
 	mnt = kernel_mount(&tmpfs_fs_type, 0, NULL, NULL);
 	if (IS_ERR(mnt))
 		return PTR_ERR(mnt);
@@ -50,12 +55,28 @@ int fs_init(void)
 		return err;
 	pr_info("/dev directory created\n");
 
-	/* The brkfs mount below needs /dev/virtio_blk0 to exist already. */
+	/* The brkfs mount below needs the block device nodes to exist already. */
 	err = devnode_populate();
 	if (err)
 		return err;
 
-	err = do_mount("/dev/virtio_blk0", "/", "brkfs", 0, NULL);
+	/*
+	 * Prefer the first brkfs primary partition; fall back to a filesystem
+	 * written directly at the start of the whole disk.
+	 */
+	char root_dev[32];
+	int mount_err = -ENODEV;
+
+	for (unsigned int i = 1; i <= GENHD_MAX_PARTITIONS; ++i) {
+		snprintf(root_dev, sizeof(root_dev), "/dev/virtio_blk0p%u", i);
+		mount_err = do_mount(root_dev, "/", "brkfs", 0, NULL);
+		if (!mount_err)
+			break;
+	}
+	if (mount_err)
+		mount_err = do_mount("/dev/virtio_blk0", "/", "brkfs", 0,
+				     NULL);
+	err = mount_err;
 	if (err)
 		return err;
 	pr_info("/ mounted successfully\n");

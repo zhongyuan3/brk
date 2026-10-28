@@ -1,9 +1,11 @@
 #include <arch/mm.h>
 #include <brk/assert.h>
+#include <brk/bio.h>
 #include <brk/blkdev.h>
 #include <brk/devnode.h>
 #include <brk/dt.h>
 #include <brk/fs.h>
+#include <brk/genhd.h>
 #include <brk/initcall.h>
 #include <brk/irq.h>
 #include <brk/kernel.h>
@@ -129,49 +131,63 @@ static void virtio_blk_irq_handler(void *ctx)
 	spin_unlock_irqrestore(&vblk->lock, flags);
 }
 
-static int virtio_blk_submit(struct virtio_blk_dev *vblk,
-			     struct virtio_blk_io_desc *io)
+#define VIRTIO_BLK_MAX_SEGS 16
+
+static int virtio_blk_submit_vec(struct virtio_blk_dev *vblk, u64 sector,
+				 const struct bio_vec *vecs,
+				 unsigned int nr_vecs, bool write)
 {
-	unsigned int idx[3];
+	unsigned int idx[VIRTIO_BLK_MAX_SEGS + 2];
+	unsigned int chain = nr_vecs + 2;
+	unsigned int sidx;
 	struct virtio_blk_req *req;
+	struct virtio_blk_io_desc trans = { .completed = false };
 	char *status;
 	int err;
 	irqstate_t flags = spin_lock_irqsave(&vblk->lock);
 
-	while (virtq_alloc_desc_chain(&vblk->vq, idx, 3))
+	if (!nr_vecs || nr_vecs > VIRTIO_BLK_MAX_SEGS) {
+		spin_unlock_irqrestore(&vblk->lock, flags);
+		return -EINVAL;
+	}
+
+	while (virtq_alloc_desc_chain(&vblk->vq, idx, chain))
 		task_sleep(&vblk->vq.desc, &vblk->lock);
 
 	req = &vblk->reqs[idx[0]];
-	req->type = io->is_write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
+	req->type = write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
 	req->reserved = 0;
-	req->sector = io->sector;
+	req->sector = sector;
 
 	vblk->vq.desc[idx[0]].addr = virt_to_phys((uintptr_t)req);
 	vblk->vq.desc[idx[0]].len = sizeof(*req);
 	vblk->vq.desc[idx[0]].flags = VIRTQ_DESC_F_NEXT;
 	vblk->vq.desc[idx[0]].next = idx[1];
 
-	vblk->vq.desc[idx[1]].addr = io->buf_phys;
-	vblk->vq.desc[idx[1]].len = io->sec_count * VIRTIO_BLK_SECTOR_SIZE;
-	vblk->vq.desc[idx[1]].flags = io->is_write ? 0 : VIRTQ_DESC_F_WRITE;
-	vblk->vq.desc[idx[1]].flags |= VIRTQ_DESC_F_NEXT;
-	vblk->vq.desc[idx[1]].next = idx[2];
+	for (unsigned int i = 0; i < nr_vecs; ++i) {
+		struct virtq_desc *desc = &vblk->vq.desc[idx[i + 1]];
+
+		desc->addr = virt_to_phys((uintptr_t)vecs[i].bv_buf);
+		desc->len = vecs[i].bv_len;
+		desc->flags = write ? 0 : VIRTQ_DESC_F_WRITE;
+		desc->flags |= VIRTQ_DESC_F_NEXT;
+		desc->next = idx[i + 2];
+	}
 
 	status = &vblk->slots[idx[0]].status;
 	*status = 0xff;
-	vblk->vq.desc[idx[2]].addr = virt_to_phys((uintptr_t)status);
-	vblk->vq.desc[idx[2]].len = sizeof(*status);
-	vblk->vq.desc[idx[2]].flags = VIRTQ_DESC_F_WRITE;
-	vblk->vq.desc[idx[2]].next = 0;
+	sidx = idx[nr_vecs + 1];
+	vblk->vq.desc[sidx].addr = virt_to_phys((uintptr_t)status);
+	vblk->vq.desc[sidx].len = sizeof(*status);
+	vblk->vq.desc[sidx].flags = VIRTQ_DESC_F_WRITE;
+	vblk->vq.desc[sidx].next = 0;
 
-	io->completed = false;
-	vblk->slots[idx[0]].trans = io;
-
+	vblk->slots[idx[0]].trans = &trans;
 	virtq_submit(&vblk->vq, idx[0]);
 	virtio_mmio_queue_notify(vblk->vdev, 0);
 
-	while (!io->completed)
-		task_sleep(&io->completed, &vblk->lock);
+	while (!trans.completed)
+		task_sleep(&trans.completed, &vblk->lock);
 
 	err = virtio_blk_status_to_errno(vblk->slots[idx[0]].status);
 	vblk->slots[idx[0]].trans = NULL;
@@ -227,57 +243,47 @@ static int virtio_blk_flush(struct virtio_blk_dev *vblk)
 	return err;
 }
 
-static int virtio_blk_io(struct virtio_blk_dev *vblk, u64 sector, u64 buf_phys,
-			 size_t sec_count, bool write)
+static int virtio_blk_queue_rq(struct request_queue *q, struct request *rq)
 {
-	struct virtio_blk_io_desc trans = {
-		.buf_phys = buf_phys,
-		.sector = sector,
-		.sec_count = sec_count,
-		.is_write = write,
-		.completed = false,
-	};
-
-	return virtio_blk_submit(vblk, &trans);
-}
-
-static int virtio_blk_bdev_rw(struct block_dev *bdev, u64 blk_id, void *buf,
-			      u32 blk_cnt, bool write)
-{
+	struct gendisk *disk = q->disk;
+	struct virtio_blk_dev *vblk = disk->priv;
+	struct bio_vec segs[VIRTIO_BLK_MAX_SEGS];
+	unsigned int nr = 0;
+	u64 sector = rq->rq_start;
+	u64 seg_sector = rq->rq_start;
+	bool write = rq->rq_op == REQ_OP_WRITE;
 	int err;
-	u64 buf_phys;
-	struct virtio_blk_dev *vbd = bdev->priv;
 
-	err = blkdev_check_bounds(bdev, blk_id, blk_cnt);
-	if (err)
-		return err;
+	if (!vblk)
+		return -ENODEV;
 
-	if (!vbd)
-		return -EINVAL;
+	if (rq->rq_op == REQ_OP_FLUSH)
+		return vblk->flush_supported ? virtio_blk_flush(vblk) : 0;
 
-	buf_phys = virt_to_phys((uintptr_t)buf);
-	return virtio_blk_io(vbd, blk_id, buf_phys, blk_cnt, write);
-}
+	for (struct bio *bio = rq->rq_bio; bio; bio = bio->bi_next) {
+		for (unsigned int i = 0; i < bio->bi_nr_vecs; ++i) {
+			if (!nr)
+				seg_sector = sector;
+			segs[nr++] = bio->bi_io_vec[i];
+			sector += bio->bi_io_vec[i].bv_len >> 9;
 
-static int virtio_blk_bdev_read(struct block_dev *bdev, u64 blk_id, void *buf,
-				u32 blk_cnt)
-{
-	return virtio_blk_bdev_rw(bdev, blk_id, buf, blk_cnt, false);
-}
+			if (nr == VIRTIO_BLK_MAX_SEGS) {
+				err = virtio_blk_submit_vec(vblk, seg_sector,
+							    segs, nr, write);
+				if (err)
+					return err;
+				nr = 0;
+			}
+		}
+	}
 
-static int virtio_blk_bdev_write(struct block_dev *bdev, u64 blk_id,
-				 const void *buf, u32 blk_cnt)
-{
-	return virtio_blk_bdev_rw(bdev, blk_id, (void *)buf, blk_cnt, true);
-}
+	if (nr) {
+		err = virtio_blk_submit_vec(vblk, seg_sector, segs, nr, write);
+		if (err)
+			return err;
+	}
 
-static int virtio_blk_bdev_flush(struct block_dev *bdev)
-{
-	struct virtio_blk_dev *vbd = bdev->priv;
-
-	if (!vbd || !vbd->flush_supported)
-		return 0;
-	return virtio_blk_flush(vbd);
+	return 0;
 }
 
 static struct virtio_blk_dev *virtio_blk_alloc(unsigned queue_size)
@@ -397,64 +403,69 @@ void virtio_blk_destroy(struct virtio_blk_dev *vblk)
 
 int virtio_blk_register(struct virtio_blk_dev *vblk)
 {
-	struct block_dev *bdev;
+	struct gendisk *disk;
+	char name[32];
+	unsigned int slot;
 	int err;
 
 	if (!vblk_registry)
 		return -EINVAL;
-
 	if (!vblk || !vblk->vdev)
 		return -EINVAL;
 
-	bdev = blkdev_alloc();
-	if (!bdev)
-		return -ENOMEM;
+	spin_lock(&vblk_registry->lock);
+	for (slot = 0; slot < vblk_registry->num_vblks; ++slot) {
+		if (!vblk_registry->vblks[slot])
+			break;
+	}
+	if (slot == vblk_registry->num_vblks) {
+		spin_unlock(&vblk_registry->lock);
+		return -EBUSY;
+	}
+	vblk_registry->vblks[slot] = vblk;
+	spin_unlock(&vblk_registry->lock);
 
 	pr_info("%s: capacity: %" PRIu64 "\n", __func__,
-		  vblk->config.capacity);
+		vblk->config.capacity);
 
-	bdev->ops.read = virtio_blk_bdev_read;
-	bdev->ops.write = virtio_blk_bdev_write;
-	bdev->ops.flush = virtio_blk_bdev_flush;
-	bdev->phy_bcnt = vblk->config.capacity;
-	bdev->phy_bsize = VIRTIO_BLK_SECTOR_SIZE;
-	bdev->priv = vblk;
+	snprintf(name, sizeof(name), "virtio_blk%u", slot);
+	disk = gendisk_alloc(vblk_registry->major,
+			     vblk_registry->minor_start +
+				     slot * VIRTIO_BLK_MINORS_PER_DEV,
+			     VIRTIO_BLK_MINORS_PER_DEV, name,
+			     vblk->config.capacity, vblk);
+	if (!disk) {
+		err = -ENOMEM;
+		goto clear_slot;
+	}
+
+	err = blk_init_queue(disk, virtio_blk_queue_rq);
+	if (err) {
+		gendisk_free(disk);
+		goto clear_slot;
+	}
+
+	err = add_disk(disk);
+	if (err) {
+		gendisk_free(disk);
+		goto clear_slot;
+	}
 
 	spin_lock(&vblk_registry->lock);
-	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
-		if (vblk_registry->vblks[i] == NULL) {
-			bdev->dev = MKBLKDEV(vblk_registry->major,
-					     vblk_registry->minor_start + i);
-			err = blkdev_register(bdev);
-			if (err) {
-				spin_unlock(&vblk_registry->lock);
-				blkdev_free(bdev);
-				return err;
-			}
-			vblk_registry->vblks[i] = vblk;
-			vblk_registry->bdevs[i] = bdev;
-			spin_unlock(&vblk_registry->lock);
-
-			char name[32];
-
-			snprintf(name, sizeof(name), "/dev/virtio_blk%u",
-				 i);
-			err = devnode_register(name, bdev->dev,
-					       S_IFBLK | 0666);
-			if (err)
-				pr_warn("virtio_blk: cannot register %s: %d\n",
-					name, err);
-			return 0;
-		}
-	}
+	vblk_registry->disks[slot] = disk;
 	spin_unlock(&vblk_registry->lock);
-	blkdev_free(bdev);
-	return -EBUSY;
+	return 0;
+
+clear_slot:
+	spin_lock(&vblk_registry->lock);
+	vblk_registry->vblks[slot] = NULL;
+	spin_unlock(&vblk_registry->lock);
+	return err;
 }
 
 void virtio_blk_unregister(struct virtio_blk_dev *vblk)
 {
-	struct block_dev *bdev = NULL;
+	struct gendisk *disk = NULL;
 
 	if (!vblk || !vblk->vdev)
 		return;
@@ -462,21 +473,15 @@ void virtio_blk_unregister(struct virtio_blk_dev *vblk)
 	spin_lock(&vblk_registry->lock);
 	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
 		if (vblk_registry->vblks[i] == vblk) {
-			char name[32];
-
 			vblk_registry->vblks[i] = NULL;
-			bdev = vblk_registry->bdevs[i];
-			vblk_registry->bdevs[i] = NULL;
-			snprintf(name, sizeof(name), "/dev/virtio_blk%u",
-				 i);
-			spin_unlock(&vblk_registry->lock);
-			devnode_unregister(name);
-			blkdev_unregister(bdev);
-			blkdev_free(bdev);
-			return;
+			disk = vblk_registry->disks[i];
+			vblk_registry->disks[i] = NULL;
+			break;
 		}
 	}
 	spin_unlock(&vblk_registry->lock);
+
+	del_gendisk(disk);
 }
 
 void virtio_blk_init(void)
@@ -488,15 +493,15 @@ void virtio_blk_init(void)
 
 	vblk_registry = &__vblk_registry;
 	spinlock_init(&vblk_registry->lock, "virtio_blk_driver");
-	vblk_registry->vblks = kcalloc(VIRTIO_BLK_MINOR_COUNT,
+	vblk_registry->vblks = kcalloc(VIRTIO_BLK_MAX_DEVS,
 				       sizeof(vblk_registry->vblks[0]));
 	if (!vblk_registry->vblks)
 		panic("%s(): kcalloc failed\n", __func__);
-	vblk_registry->bdevs = kcalloc(VIRTIO_BLK_MINOR_COUNT,
-				       sizeof(vblk_registry->bdevs[0]));
-	if (!vblk_registry->bdevs)
+	vblk_registry->disks = kcalloc(VIRTIO_BLK_MAX_DEVS,
+				       sizeof(vblk_registry->disks[0]));
+	if (!vblk_registry->disks)
 		panic("%s(): kcalloc failed\n", __func__);
-	vblk_registry->num_vblks = VIRTIO_BLK_MINOR_COUNT;
+	vblk_registry->num_vblks = VIRTIO_BLK_MAX_DEVS;
 
 	err = blkdev_alloc_region(VIRTIO_BLK_MAJOR, VIRTIO_BLK_MINOR_START,
 				  VIRTIO_BLK_MINOR_COUNT, &dev);

@@ -8,24 +8,27 @@
 struct block_dev;
 struct page_cache;
 struct cached_page;
-
-struct block_dev_ops {
-	int (*read)(struct block_dev *, u64, void *, u32);
-	int (*write)(struct block_dev *, u64, const void *, u32);
-	/* Drain the device's volatile write cache, if it has one. */
-	int (*flush)(struct block_dev *);
-};
+struct request_queue;
 
 struct block_dev {
 	dev_t dev;
 	u32 phy_bsize;
 	u64 phy_bcnt;
-	struct block_dev_ops ops;
-	void *priv;
 	struct page_cache *bd_mapping;
 	struct hlist_node hlist;
 	refcnt_t ref;
 	bool dead;
+
+	/*
+	 * Partition view.  A partition owns a reference to the whole-disk
+	 * block_dev and forwards every I/O request at bd_start_sect blocks
+	 * into it.  Both use the same phy_bsize.
+	 */
+	struct block_dev *bd_parent;
+	u64 bd_start_sect;
+
+	/* Request queue, only set on the whole-disk view. */
+	struct request_queue *bd_queue;
 };
 
 void blkdev_registry_init(void);
