@@ -195,7 +195,7 @@ int signal_do_kill(pid_t pid, int sig)
 
 	/* Keep IRQs disabled while we release tasks_lock. */
 	spin_lock(&target->lock);
-	spin_unlock(&tasks_lock);
+	raw_spin_unlock(&tasks_lock);
 
 	if (target->state == TASK_STATE_ZOMBIE) {
 		spin_unlock(&target->lock);
