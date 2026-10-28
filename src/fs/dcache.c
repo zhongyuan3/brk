@@ -141,6 +141,30 @@ void fs_dentry_instantiate(struct fs_dentry *dentry, struct fs_inode *inode)
 	spin_unlock(&dentry->lock);
 }
 
+void fs_dentry_make_negative(struct fs_dentry *dentry)
+{
+	struct fs_inode *inode;
+	irqstate_t flags;
+
+	if (!dentry)
+		return;
+
+	flags = spin_lock_irqsave(&dentry->lock);
+	inode = dentry->inode;
+	dentry->inode = NULL;
+	dentry->flags |= DCACHE_NEGATIVE;
+	spin_unlock_irqrestore(&dentry->lock, flags);
+
+	if (!inode)
+		return;
+
+	spin_lock(&inode->lock);
+	list_del_init(&dentry->alias);
+	spin_unlock(&inode->lock);
+
+	fs_inode_put(inode);
+}
+
 struct fs_dentry *fs_dentry_get(struct fs_dentry *dentry)
 {
 	pr_debug("duplicating dentry: name=%.*s, refcnt=%d\n",

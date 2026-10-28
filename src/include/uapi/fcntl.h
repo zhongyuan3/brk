@@ -17,6 +17,17 @@
 #ifndef O_TRUNC
 #define O_TRUNC 00001000 /* not fcntl */
 #endif
+
+/* renameat2() flags */
+#ifndef RENAME_NOREPLACE
+#define RENAME_NOREPLACE (1 << 0)
+#endif
+#ifndef RENAME_EXCHANGE
+#define RENAME_EXCHANGE (1 << 1)
+#endif
+#ifndef RENAME_WHITEOUT
+#define RENAME_WHITEOUT (1 << 2)
+#endif
 #ifndef O_APPEND
 #define O_APPEND 00002000
 #endif

@@ -1,5 +1,9 @@
 #include "brkfs.h"
+#include <brk/printk.h>
+#include <brk/blkdev.h>
 #include <brk/fs.h>
+#include <brk/pagecache.h>
+#include <brk/sleeplock.h>
 #include <brk/kmalloc.h>
 #include <brk/string.h>
 #include <uapi/dirent.h>
@@ -128,11 +132,23 @@ out:
 static int brkfs_dir_fsync(struct fs_file *file, loff_t start, loff_t end,
 			   int datasync)
 {
-	(void)file;
+	struct fs_inode *inode = file->inode;
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
+	int err;
+
 	(void)start;
 	(void)end;
 	(void)datasync;
-	return -EISDIR;
+
+	/* Persist the directory inode and all filesystem metadata pages. */
+	sleeplock_acquire(&inode->rwsem);
+	err = brkfs_inode_write(sbi, inode);
+	if (!err)
+		err = page_cache_flush(sbi->s_bdev->bd_mapping);
+	if (!err)
+		err = blkdev_flush(sbi->s_bdev);
+	sleeplock_release(&inode->rwsem);
+	return err;
 }
 
 static int brkfs_dir_flush(struct fs_file *file)
@@ -499,9 +515,12 @@ int brkfs_dir_is_empty(struct fs_inode *dir)
 		if (bno == 0)
 			continue;
 
-		ret = brkfs_block_read(sbi, bno, blk);
-		if (ret)
+		int err = brkfs_block_read(sbi, bno, blk);
+
+		if (err) {
+			ret = err;
 			goto out;
+		}
 
 		ent = (struct brkfs_dir_entry *)blk;
 		left = bs;

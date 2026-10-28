@@ -737,6 +737,68 @@ u64 sys_ioctl(void)
 	return (u64)(long)ret;
 }
 
+u64 sys_ftruncate(void)
+{
+	int fd = syscall_arg_int(0);
+	loff_t length = (loff_t)syscall_arg_raw(1);
+	struct fs_file *fp;
+	int ret;
+
+	if (length < 0)
+		return -EINVAL;
+
+	fp = fdtable_get_file(current_task()->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
+
+	if (!(fp->mode & FMODE_WRITE)) {
+		fs_file_put(fp);
+		return -EINVAL;
+	}
+
+	ret = fs_file_truncate(fp, length);
+	fs_file_put(fp);
+	return ret;
+}
+
+u64 sys_truncate(void)
+{
+	const char *pathname = syscall_arg_ptr(0);
+	loff_t length = (loff_t)syscall_arg_raw(1);
+	struct fs_iattr attr = {
+		.valid = ATTR_SIZE,
+		.size = length,
+	};
+	struct fs_path path;
+	struct fs_inode *inode;
+	int err;
+
+	if (length < 0)
+		return -EINVAL;
+
+	err = fs_path_lookup(pathname, 0, &path);
+	if (err)
+		return err;
+
+	inode = path.dentry->inode;
+	if (!inode) {
+		fs_path_put(&path);
+		return -ENOENT;
+	}
+	if (!S_ISREG(inode->mode)) {
+		fs_path_put(&path);
+		return S_ISDIR(inode->mode) ? -EISDIR : -EINVAL;
+	}
+	if (!inode->ops || !inode->ops->setattr) {
+		fs_path_put(&path);
+		return -EOPNOTSUPP;
+	}
+
+	err = inode->ops->setattr(path.dentry, &attr);
+	fs_path_put(&path);
+	return err;
+}
+
 static u64 do_fsync(int datasync)
 {
 	struct fs_file *fp = NULL;

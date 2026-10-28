@@ -17,6 +17,8 @@ u64 sys_exit(void);
 u64 sys_open(void);
 u64 sys_close(void);
 u64 sys_ioctl(void);
+u64 sys_truncate(void);
+u64 sys_ftruncate(void);
 u64 sys_fstat(void);
 u64 sys_lstat(void);
 u64 sys_openat(void);

@@ -389,11 +389,37 @@ int do_creat(const char *pathname, umode_t mode)
 	return err;
 }
 
+static bool rename_dentry_is_ancestor(struct fs_dentry *dentry,
+				      struct fs_inode *inode)
+{
+	while (dentry) {
+		if (dentry->inode == inode)
+			return true;
+		if (!dentry->parent || dentry->parent == dentry)
+			break;
+		dentry = dentry->parent;
+	}
+	return false;
+}
+
 int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 		const char *newpathname, unsigned int flags)
 {
+	struct fs_path oldpath = { 0 };
+	struct fs_path newpath = { 0 };
+	struct fs_path old_parent = { 0 };
+	struct fs_path new_parent = { 0 };
+	struct fs_inode *old_inode;
+	struct fs_inode *new_inode;
+	struct fs_inode *old_dir;
+	struct fs_inode *new_dir;
+	bool new_exists;
 	int err;
-	struct fs_path oldpath, newpath;
+
+	if (flags & ~(RENAME_NOREPLACE | RENAME_EXCHANGE))
+		return -EINVAL;
+	if (flags & RENAME_EXCHANGE)
+		return -EINVAL;
 
 	err = fs_path_lookup_at(olddirfd, oldpathname, 0, &oldpath);
 	if (err)
@@ -410,40 +436,110 @@ int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 		return err;
 	}
 
-	spin_lock(&newpath.dentry->lock);
-	if (!(newpath.dentry->flags & DCACHE_NEGATIVE)) {
-		spin_unlock(&newpath.dentry->lock);
-		fs_path_put(&oldpath);
-		fs_path_put(&newpath);
-		return -EEXIST;
+	err = fs_path_dot_dot(&oldpath, &old_parent);
+	if (err)
+		goto out_both;
+	err = fs_path_dot_dot(&newpath, &new_parent);
+	if (err)
+		goto out_old_parent;
+
+	old_inode = oldpath.dentry->inode;
+	new_inode = newpath.dentry->inode;
+	old_dir = old_parent.dentry->inode;
+	new_dir = new_parent.dentry->inode;
+	new_exists = new_inode != NULL;
+
+	if (!old_inode || !old_dir || !new_dir ||
+	    !S_ISDIR(old_dir->mode) || !S_ISDIR(new_dir->mode)) {
+		err = -ENOTDIR;
+		goto out;
 	}
-	spin_unlock(&newpath.dentry->lock);
-
-	struct fs_path parent_path;
-	err = fs_path_dot_dot(&newpath, &parent_path);
-	if (err) {
-		fs_path_put(&oldpath);
-		fs_path_put(&newpath);
-		return err;
+	if (old_inode->sb != new_dir->sb) {
+		err = -EXDEV;
+		goto out;
 	}
-	struct fs_inode *parent_inode = parent_path.dentry->inode;
-	struct fs_inode *old_inode = oldpath.dentry->inode;
-
-	/* Renaming a directory into itself would self-deadlock on rwsem. */
-	if (old_inode == parent_inode) {
-		err = -EINVAL;
-		goto out_paths;
+	if (fs_dentry_is_mounted(oldpath.dentry) ||
+	    fs_dentry_is_mounted(newpath.dentry)) {
+		err = -EBUSY;
+		goto out;
+	}
+	if (old_inode == new_inode) {
+		/* Same inode (hard links or identical path): nothing to do. */
+		err = 0;
+		goto out;
+	}
+	if (!old_dir->ops || !old_dir->ops->rename) {
+		err = -EOPNOTSUPP;
+		goto out;
 	}
 
-	sleeplock_acquire(&parent_inode->rwsem);
-	sleeplock_acquire(&old_inode->rwsem);
-	err = parent_inode->ops->rename(old_inode, oldpath.dentry, parent_inode,
-					newpath.dentry, flags);
-	sleeplock_release(&old_inode->rwsem);
-	sleeplock_release(&parent_inode->rwsem);
+	if (S_ISDIR(old_inode->mode)) {
+		if (rename_dentry_is_ancestor(new_parent.dentry, old_inode)) {
+			err = -EINVAL;
+			goto out;
+		}
+		/*
+		 * There is no d_move() in this dcache yet.  Cross-directory
+		 * directory renames would leave child dentries parented to the
+		 * old dentry, so only same-directory renames are safe.
+		 */
+		if (old_dir != new_dir) {
+			err = -EXDEV;
+			goto out;
+		}
+	}
 
-out_paths:
-	fs_path_put(&parent_path);
+	if (new_exists) {
+		if (flags & RENAME_NOREPLACE) {
+			err = -EEXIST;
+			goto out;
+		}
+		if (S_ISDIR(old_inode->mode) && !S_ISDIR(new_inode->mode)) {
+			err = -ENOTDIR;
+			goto out;
+		}
+		if (!S_ISDIR(old_inode->mode) && S_ISDIR(new_inode->mode)) {
+			err = -EISDIR;
+			goto out;
+		}
+	}
+
+	/* Lock parent directories in a stable order. */
+	if (old_dir == new_dir) {
+		sleeplock_acquire(&old_dir->rwsem);
+	} else if ((uintptr_t)old_dir < (uintptr_t)new_dir) {
+		sleeplock_acquire(&old_dir->rwsem);
+		sleeplock_acquire(&new_dir->rwsem);
+	} else {
+		sleeplock_acquire(&new_dir->rwsem);
+		sleeplock_acquire(&old_dir->rwsem);
+	}
+
+	err = old_dir->ops->rename(old_dir, oldpath.dentry, new_dir,
+				   newpath.dentry, flags);
+
+	if (old_dir != new_dir)
+		sleeplock_release(&new_dir->rwsem);
+	sleeplock_release(&old_dir->rwsem);
+
+	if (!err) {
+		/*
+		 * Update the dcache after the filesystem committed the name
+		 * change.  grab one reference for the new dentry; making the
+		 * old dentry negative drops its own reference.
+		 */
+		fs_inode_get(old_inode);
+		if (new_exists)
+			fs_dentry_make_negative(newpath.dentry);
+		fs_dentry_make_negative(oldpath.dentry);
+		fs_dentry_instantiate(newpath.dentry, old_inode);
+	}
+
+out:
+	fs_path_put(&new_parent);
+out_old_parent:
+	fs_path_put(&old_parent);
+out_both:
 	fs_path_put(&oldpath);
 	fs_path_put(&newpath);
 	return err;
