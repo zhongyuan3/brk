@@ -147,6 +147,10 @@ clean:
 clean-kernel:
 	$(RM) -r $(KERNEL_BUILD_ROOT)
 
+.PHONY: clean-rootfs
+clean-rootfs:
+	$(RM) -r $(ROOTFS_IMG)
+
 .PHONY: debug
 debug: $(KERNEL_ELF) $(ROOTFS_IMG)
 	$(QEMU) $(QEMU_OPTS) -kernel $(KERNEL_ELF) -d int
