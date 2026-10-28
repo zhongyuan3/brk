@@ -124,7 +124,22 @@ int fs_file_stat(struct fs_file *file, struct stat *buf)
 
 int fs_file_truncate(struct fs_file *file, loff_t size)
 {
-	(void)file;
-	(void)size;
-	return 0;
+	struct fs_iattr attr = {
+		.valid = ATTR_SIZE,
+		.size = size,
+		.file = file,
+	};
+
+	if (!file || !file->inode)
+		return -EINVAL;
+	if (size < 0)
+		return -EINVAL;
+
+	/* O_TRUNC on devices/FIFOs/directories is a no-op. */
+	if (!S_ISREG(file->inode->mode))
+		return 0;
+	if (!file->inode->ops || !file->inode->ops->setattr)
+		return -EOPNOTSUPP;
+
+	return file->inode->ops->setattr(file->path.dentry, &attr);
 }

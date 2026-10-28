@@ -16,6 +16,15 @@ struct fs_dentry_ops;
 struct fs_mount_state;
 struct fs_path;
 
+/* fs_iattr.valid bits */
+#define ATTR_MODE (1u << 0)
+#define ATTR_UID (1u << 1)
+#define ATTR_GID (1u << 2)
+#define ATTR_SIZE (1u << 3)
+#define ATTR_ATIME (1u << 4)
+#define ATTR_MTIME (1u << 5)
+#define ATTR_CTIME (1u << 6)
+
 struct fs_iattr {
 	unsigned int valid;
 	umode_t mode;

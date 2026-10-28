@@ -59,6 +59,7 @@ struct fs_dentry *fs_dentry_make_root(struct fs_inode *root_inode);
 struct fs_dentry *fs_dentry_alloc_anon(struct fs_inode *inode,
 				       const struct qstr *name);
 void fs_dentry_instantiate(struct fs_dentry *dentry, struct fs_inode *inode);
+void fs_dentry_make_negative(struct fs_dentry *dentry);
 struct fs_dentry *fs_dentry_get(struct fs_dentry *dentry);
 void fs_dentry_put(struct fs_dentry *dentry);
 /*

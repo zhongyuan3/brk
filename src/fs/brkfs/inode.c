@@ -12,10 +12,8 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
+#include <uapi/fcntl.h>
 #include <uapi/stat.h>
-
-#define ATTR_MODE (1u << 0)
-#define ATTR_SIZE (1u << 3)
 
 static void brkfs_inode_attach_ops(struct fs_inode *inode)
 {
@@ -458,12 +456,155 @@ static int brkfs_rename(struct fs_inode *old_dir, struct fs_dentry *old_dentry,
 			struct fs_inode *new_dir, struct fs_dentry *new_dentry,
 			unsigned int flags)
 {
-	(void)old_dir;
-	(void)old_dentry;
-	(void)new_dir;
-	(void)new_dentry;
-	(void)flags;
-	return -EOPNOTSUPP;
+	struct brkfs_sb_info *sbi = old_dir->sb->private_data;
+	struct fs_inode *inode = old_dentry->inode;
+	struct fs_inode *target = new_dentry->inode;
+	struct fs_inode *first;
+	struct fs_inode *second;
+	bool is_dir;
+	bool replace = target != NULL;
+	u32 ino;
+	u32 tino = 0;
+	int err;
+
+	if (!inode || !S_ISDIR(old_dir->mode) || !S_ISDIR(new_dir->mode))
+		return -ENOTDIR;
+	if (replace && (flags & RENAME_NOREPLACE))
+		return -EEXIST;
+
+	is_dir = S_ISDIR(inode->mode);
+	if (is_dir && old_dir != new_dir)
+		return -EXDEV;
+
+	/* Verify the cached view still matches the on-disk directories. */
+	err = brkfs_dir_lookup(old_dir, old_dentry->name.name,
+			       old_dentry->name.len, &ino, NULL);
+	if (err)
+		return err;
+	if (ino != inode->ino)
+		return -ENOENT;
+
+	err = brkfs_dir_lookup(new_dir, new_dentry->name.name,
+			       new_dentry->name.len, &tino, NULL);
+	if (err == 0) {
+		if (!replace || tino != target->ino)
+			return -EEXIST;
+	} else if (err != -ENOENT) {
+		return err;
+	} else if (replace) {
+		return -ENOENT;
+	} else {
+		replace = false;
+	}
+
+	/*
+	 * Lock the moved inode and the replaced inode in a stable order.
+	 * Parent directories are already locked by the VFS.
+	 */
+	first = inode;
+	second = target;
+	if (second && (uintptr_t)second < (uintptr_t)first) {
+		struct fs_inode *tmp = first;
+
+		first = second;
+		second = tmp;
+	}
+	sleeplock_acquire(&first->rwsem);
+	if (second)
+		sleeplock_acquire(&second->rwsem);
+
+	if (replace && S_ISDIR(target->mode)) {
+		err = brkfs_dir_is_empty(target);
+		if (err < 0)
+			goto out_unlock;
+		if (err == 0) {
+			err = -ENOTEMPTY;
+			goto out_unlock;
+		}
+	}
+
+	/* Remove the replaced entry first so the new name can reuse space. */
+	if (replace) {
+		err = brkfs_dir_remove(new_dir, new_dentry->name.name,
+				       new_dentry->name.len);
+		if (err)
+			goto out_unlock;
+	}
+
+	err = brkfs_dir_add(new_dir, (u32)inode->ino,
+			    new_dentry->name.name, new_dentry->name.len,
+			    inode->mode);
+	if (err)
+		goto rollback_target;
+
+	err = brkfs_dir_remove(old_dir, old_dentry->name.name,
+			       old_dentry->name.len);
+	if (err) {
+		(void)brkfs_dir_remove(new_dir, new_dentry->name.name,
+				       new_dentry->name.len);
+		goto rollback_target;
+	}
+
+	/*
+	 * The source and destination are now consistent.  Update link counts
+	 * and timestamps.  For a replaced directory, new_dir loses the ".."
+	 * link that the removed directory held; adding the renamed directory
+	 * restores it (and same-directory directory renames never change the
+	 * parent's link count).
+	 */
+	if (replace) {
+		if (S_ISDIR(target->mode)) {
+			target->nlink = 0;
+			inode_touch_ctime(target);
+			err = brkfs_inode_write(sbi, target);
+			if (!err) {
+				new_dir->nlink--;
+				inode_touch_mtime_ctime(new_dir);
+			}
+		} else {
+			target->nlink--;
+			inode_touch_ctime(target);
+			err = brkfs_inode_write(sbi, target);
+		}
+		if (err)
+			goto out_unlock;
+	}
+
+	inode_touch_ctime(inode);
+	err = brkfs_inode_write(sbi, inode);
+	if (err)
+		goto out_unlock;
+
+	inode_touch_mtime_ctime(old_dir);
+	err = brkfs_inode_write(sbi, old_dir);
+	if (err)
+		goto out_unlock;
+
+	if (new_dir != old_dir) {
+		inode_touch_mtime_ctime(new_dir);
+		err = brkfs_inode_write(sbi, new_dir);
+	}
+
+	goto out_unlock;
+
+rollback_target:
+	if (replace) {
+		int rerr = brkfs_dir_add(new_dir, tino,
+					 new_dentry->name.name,
+					 new_dentry->name.len,
+					 target->mode);
+
+		if (rerr)
+			pr_warn("%s(): rollback of %.*s failed: %d\n",
+				__func__, (int)new_dentry->name.len,
+				new_dentry->name.name, rerr);
+	}
+
+out_unlock:
+	if (second)
+		sleeplock_release(&second->rwsem);
+	sleeplock_release(&first->rwsem);
+	return err;
 }
 
 static int brkfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
@@ -849,6 +990,58 @@ int brkfs_truncate_inode_blocks(struct fs_inode *inode, loff_t new_size)
 			inf->i_block[bi] = 0;
 		}
 	}
+
+	/*
+	 * Free the single-indirect range.  Double/triple indirect blocks are
+	 * not implemented by the allocator, so the file cannot extend past
+	 * this range.
+	 */
+	if (old_n > BRKFS_DIRECT_BLOCKS) {
+		u32 idb = inf->i_block[BRKFS_INDIRECT_BLOCK];
+		u32 ptrs_per_blk = bs / sizeof(u32);
+
+		if (idb) {
+			struct brkfs_block bb;
+			u32 *ptrs;
+			u32 start;
+			u32 end;
+			bool keep = false;
+
+			if (brkfs_get_block(sbi, idb, &bb))
+				return -EIO;
+
+			cached_page_lock(bb.cp);
+			ptrs = bb.data;
+
+			start = new_n > BRKFS_DIRECT_BLOCKS ?
+					new_n - BRKFS_DIRECT_BLOCKS :
+					0;
+			end = old_n - BRKFS_DIRECT_BLOCKS;
+			if (end > ptrs_per_blk)
+				end = ptrs_per_blk;
+
+			for (u32 i = 0; i < ptrs_per_blk; i++) {
+				if (i >= start && i < end) {
+					if (ptrs[i]) {
+						brkfs_data_free(sbi, ptrs[i]);
+						ptrs[i] = 0;
+					}
+				} else if (ptrs[i]) {
+					keep = true;
+				}
+			}
+
+			cached_page_mark_dirty(bb.cp);
+			cached_page_unlock(bb.cp);
+			brkfs_put_block(&bb);
+
+			if (!keep) {
+				brkfs_data_free(sbi, idb);
+				inf->i_block[BRKFS_INDIRECT_BLOCK] = 0;
+			}
+		}
+	}
+
 	inode->size = new_size;
 	return 0;
 }

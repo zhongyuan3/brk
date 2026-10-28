@@ -1205,9 +1205,79 @@ static int tmpfs_getattr(const struct fs_path *path, struct stat *stat,
 
 static int tmpfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 {
-	(void)dentry;
-	(void)attr;
-	return -EOPNOTSUPP;
+	struct fs_inode *inode = dentry->inode;
+	struct tmpfs_inode *t_inode;
+	struct tmpfs_super_block *t_sb;
+	struct page *pg, *prev, *next;
+	u32 first_free;
+	int err = 0;
+
+	if (!inode || !inode->private_data)
+		return -EINVAL;
+
+	t_inode = inode->private_data;
+	t_sb = inode->sb->private_data;
+
+	sleeplock_acquire(&inode->rwsem);
+	sleeplock_acquire(&t_sb->s_lock);
+
+	if (attr->valid & ATTR_SIZE) {
+		if (attr->size < 0) {
+			err = -EINVAL;
+			goto out;
+		}
+		if (!S_ISREG(inode->mode)) {
+			err = S_ISDIR(inode->mode) ? -EISDIR : -EINVAL;
+			goto out;
+		}
+
+		if ((u64)attr->size < t_inode->i_size) {
+			/*
+			 * Keep the page that contains the new EOF (it may need
+			 * its tail zeroed), free everything after it.
+			 */
+			first_free = (u32)(((u64)attr->size + PAGE_SIZE - 1) /
+					   PAGE_SIZE);
+
+			pg = t_inode->i_page;
+			prev = NULL;
+			for (u32 i = 0; pg && i < first_free; ++i) {
+				prev = pg;
+				pg = pg->tmpfs_next;
+			}
+			while (pg) {
+				next = pg->tmpfs_next;
+				page_free(pg, 0);
+				pg = next;
+			}
+			if (prev)
+				prev->tmpfs_next = NULL;
+			else
+				t_inode->i_page = NULL;
+
+			if (attr->size % PAGE_SIZE) {
+				struct page *last = tmpfs_inode_data_page_ro(
+					t_inode, attr->size);
+
+				if (last)
+					memset((u8 *)page_to_virt(last) +
+						       (attr->size % PAGE_SIZE),
+					       0,
+					       PAGE_SIZE -
+						       (attr->size % PAGE_SIZE));
+			}
+		}
+
+		t_inode->i_size = (u32)attr->size;
+		inode->size = attr->size;
+		tmpfs_stamp_times(t_inode);
+		tmpfs_inode_times_to_vfs(t_inode, inode);
+	}
+
+out:
+	sleeplock_release(&t_sb->s_lock);
+	sleeplock_release(&inode->rwsem);
+	return err;
 }
 
 static int tmpfs_file_open(struct fs_inode *inode, struct fs_file *file)
