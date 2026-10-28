@@ -27,14 +27,10 @@
 extern initcall_t __initcall_start[];
 extern initcall_t __initcall_end[];
 
-// static void test_schedule(void);
-
 void start_kernel(void)
 {
 	arch_init();
 	mm_core_init();
-
-	// console_set_log_level(KERN_INFO);
 
 	clocksource_init();
 	rtc_init();
@@ -54,10 +50,6 @@ void start_kernel(void)
 
 	local_irq_enable();
 
-	// pr_debug("smp: boot cpu entering idle\n");
-	// pr_debug("test schedule\n");
-	// test_schedule();
-
 	task_scheduler();
 }
 
@@ -68,29 +60,3 @@ void do_initcalls(void)
 	for (fn = __initcall_start; fn < __initcall_end; ++fn)
 		(*fn)();
 }
-
-#define def_kthread_entry(fn_name)                                  \
-	void fn_name(void *data)                                    \
-	{                                                           \
-		unsigned long x = 0;                                \
-		for (;; ++x) {                                      \
-			if (x % (unsigned long)data == 0) {         \
-				pr_debug("this is " #fn_name "\n"); \
-				task_yield();                       \
-			}                                           \
-		}                                                   \
-	}
-
-// def_kthread_entry(kthrd0);
-// def_kthread_entry(kthrd1);
-// def_kthread_entry(kthrd2);
-
-// static void test_schedule(void)
-// {
-// 	struct task *t0 = kthread_create(kthrd0, (void *)500000);
-// 	struct task *t1 = kthread_create(kthrd1, (void *)100000);
-// 	struct task *t2 = kthread_create(kthrd2, (void *)200000000);
-// 	kthread_join(t0);
-// 	kthread_join(t1);
-// 	kthread_join(t2);
-// }

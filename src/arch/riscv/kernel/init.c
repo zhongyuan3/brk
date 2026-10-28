@@ -19,18 +19,6 @@
 
 struct boot_info boot_info;
 
-// static int debug_console_put_char(struct console *cons, int ch)
-// {
-// 	(void)cons;
-// 	sbi_console_putchar(ch);
-// 	return 0;
-// }
-
-// static struct console debug_console = {
-// 	.active = true,
-// 	.put_char = debug_console_put_char,
-// };
-
 void primary_entry(unsigned long hart_id, unsigned long dtb_pa,
 		   unsigned long kernel_image_offset)
 {
@@ -42,9 +30,6 @@ void primary_entry(unsigned long hart_id, unsigned long dtb_pa,
 	boot_info.boot_hart_id = hart_id;
 	boot_info.dtb_pa = dtb_pa;
 	boot_info.kernel_image_offset = kernel_image_offset;
-
-	// console_register(&debug_console);
-	// pr_debug("debug_console registered\n");
 
 	start_kernel();
 }
@@ -63,8 +48,6 @@ void secondary_entry(unsigned long hart_id)
 	local_irq_enable();
 
 	pr_debug("smp: hart %lu online\n", hart_id);
-	// while (1) {
-	// }
 
 	task_scheduler();
 }

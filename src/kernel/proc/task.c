@@ -319,9 +319,6 @@ void init_task_do(void)
 {
 	complete_task_switch();
 
-	// while (1) {
-	// }
-
 	int err = fs_init();
 	if (err)
 		panic("failed to initialize filesystem: %s\n", strerror(err));
@@ -334,7 +331,7 @@ void init_task_do(void)
 	if (err < 0)
 		panic("execve %s failed: %s\n", argv[0], strerror(err));
 	else
-	 	pr_debug("execve /bin/init ok\n");
+		pr_debug("execve /bin/init ok\n");
 
 	/*
 	 * Start persistent kernel logging only after the initial exec
