@@ -44,6 +44,8 @@ struct uvm_space {
 	struct uvm_region *stack;
 	struct uvm_region *heap;
 	u64 brk;
+	/* Top-down mmap allocation cursor, below the user stack. */
+	u64 mmap_top;
 	refcnt_t refcnt;
 };
 

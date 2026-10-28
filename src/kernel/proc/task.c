@@ -408,6 +408,11 @@ int task_set_brk(u64 addr)
 
 	new_heap_end = round_up(addr, PAGE_SIZE);
 	incr = new_heap_end - curr_heap_end;
+
+	/* Do not let brk grow into an mmap region (or the stack). */
+	if (incr && uvm_range_conflicts(mm, curr_heap_end, incr))
+		return -ENOMEM;
+
 	size_t old_npgs = heap->nr_pages;
 	size_t new_npgs = old_npgs + (incr >> PAGE_SHIFT);
 	struct page **new_pgs = kcalloc(new_npgs, sizeof(struct page *));

@@ -1,4 +1,5 @@
 obj-y += mm.o
+obj-y += mmap.o
 obj-y += memblock.o
 obj-y += pgalloc.o
 obj-y += slab.o

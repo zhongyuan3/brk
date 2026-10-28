@@ -15,6 +15,17 @@ struct uvm_space *uvm_space_get(struct uvm_space *mm);
 void uvm_space_put(struct uvm_space *mm);
 int uvm_space_copy(struct uvm_space *dst, struct uvm_space *src);
 
+/* Anonymous, private mmap/munmap/mprotect (Phase A). */
+int uvm_mmap_anon(struct uvm_space *mm, u64 hint, size_t len, int prot,
+		  int flags, int fd, u64 offset, u64 *addr_out);
+int uvm_munmap(struct uvm_space *mm, u64 addr, size_t len);
+int uvm_mprotect(struct uvm_space *mm, u64 addr, size_t len, int prot);
+int uvm_msync(struct uvm_space *mm, u64 addr, size_t len, int flags);
+/* True if [addr, addr+size) overlaps an existing user mapping. */
+bool uvm_range_conflicts(struct uvm_space *mm, u64 addr, size_t size);
+/* Read the current R/W/X permission bits of one mapped user page. */
+int uvm_pte_flags(struct uvm_space *mm, u64 addr, unsigned int *flags);
+
 struct uvm_region *uvm_region_alloc(void);
 void uvm_region_free(struct uvm_region *region);
 

@@ -61,6 +61,7 @@ struct uvm_space *uvm_space_create(void)
 	}
 
 	mm->brk = 0;
+	mm->mmap_top = 0;
 
 	return mm;
 }
@@ -130,7 +131,8 @@ void uvm_space_put(struct uvm_space *mm)
 }
 
 static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
-				 struct uvm_space *mm)
+				 struct uvm_space *dst_mm,
+				 struct uvm_space *src_mm)
 {
 	size_t npgs;
 	struct page **pgs;
@@ -144,15 +146,20 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 	size_t i = 0;
 	u64 addr = src->addr;
 	size_t size = src->size;
-	unsigned int flags = src->flags;
 	while (size > 0 && i < npgs) {
 		struct page *pg = page_alloc(0);
+		unsigned int flags;
 		if (!pg) {
 			err = -ENOMEM;
 			goto failed;
 		}
+		err = uvm_pte_flags(src_mm, addr, &flags);
+		if (err) {
+			page_free(pg, 0);
+			goto failed;
+		}
 		u64 dst_pa = page_to_phys(pg);
-		err = map_user_pages(mm->pgd, addr, PAGE_SIZE, dst_pa, flags);
+		err = map_user_pages(dst_mm->pgd, addr, PAGE_SIZE, dst_pa, flags);
 		if (err) {
 			ASSERT(pg);
 			page_free(pg, 0);
@@ -177,7 +184,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 
 failed:
 	for (u64 a = src->addr; a < addr; a += PAGE_SIZE)
-		unmap_user_pages(mm->pgd, a, PAGE_SIZE);
+		unmap_user_pages(dst_mm->pgd, a, PAGE_SIZE);
 	for (size_t j = 0; j < i; ++j) {
 		ASSERT(pgs[j]);
 		page_free(pgs[j], 0);
@@ -203,7 +210,7 @@ static int uvm_space_copy_segments(struct uvm_space *dst, struct uvm_space *src)
 			err = -ENOMEM;
 			goto failed;
 		}
-		err = uvm_space_copy_region(vma, curr, dst);
+		err = uvm_space_copy_region(vma, curr, dst, src);
 		if (err) {
 			uvm_region_free(vma);
 			goto failed;
@@ -250,8 +257,16 @@ static int uvm_space_copy_stack(struct uvm_space *dst, struct uvm_space *src)
 	}
 
 	u64 pa = page_to_phys(pg);
-	int err = map_user_pages(dst->pgd, src->stack->addr, src->stack->size,
-				 pa, src->stack->flags);
+	unsigned int flags;
+	int err = uvm_pte_flags(src, src->stack->addr, &flags);
+
+	if (err) {
+		page_free(pg, USTACK_PAGE_ORDER);
+		kfree(pgs);
+		return err;
+	}
+	err = map_user_pages(dst->pgd, src->stack->addr, src->stack->size,
+			     pa, flags);
 	if (err) {
 		ASSERT(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
@@ -279,7 +294,7 @@ static int uvm_space_copy_heap(struct uvm_space *dst, struct uvm_space *src)
 	if (src->heap->size == 0)
 		return 0;
 
-	return uvm_space_copy_region(dst->heap, src->heap, dst);
+	return uvm_space_copy_region(dst->heap, src->heap, dst, src);
 }
 
 int uvm_space_copy(struct uvm_space *dst, struct uvm_space *src)
@@ -303,6 +318,8 @@ int uvm_space_copy(struct uvm_space *dst, struct uvm_space *src)
 		return err;
 	}
 
+	dst->brk = src->brk;
+	dst->mmap_top = src->mmap_top;
 	return 0;
 }
 

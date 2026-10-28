@@ -345,6 +345,7 @@ static int map_stack(struct uvm_space *mm)
 	mm->stack->addr = base;
 	mm->stack->size = USTACK_SIZE;
 	mm->stack->flags = PTE_R | PTE_W;
+	mm->mmap_top = base;
 	mm->stack->pages = pgs;
 	mm->stack->nr_pages = 1;
 	return 0;
