@@ -1,5 +1,6 @@
 #include <arch/asm/page.h>
 #include <brk/assert.h>
+#include <brk/bio.h>
 #include <brk/blkdev.h>
 #include <brk/device.h>
 #include <brk/devno.h>
@@ -98,15 +99,21 @@ struct block_dev *blkdev_get(dev_t dev)
 
 void blkdev_put(struct block_dev *bd)
 {
+	struct block_dev *parent;
+
 	if (!bd)
 		return;
 	if (refcnt_dec_fetch(&bd->ref) > 0)
 		return;
 
 	ASSERT(hlist_unhashed(&bd->hlist));
+	parent = bd->bd_parent;
 	page_cache_destroy(bd->bd_mapping);
 	bd->bd_mapping = NULL;
 	kfree(bd);
+
+	/* A partition view pins the whole-disk block_dev. */
+	blkdev_put(parent);
 }
 
 int blkdev_alloc_major(unsigned *major_out)
@@ -160,41 +167,75 @@ int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt)
 	return 0;
 }
 
-int blkdev_read(struct block_dev *bd, u64 blk_id, void *buf, u32 blk_cnt)
+static int blkdev_submit_buf(struct block_dev *bd, u64 blk_id, void *buf,
+			     size_t len, enum req_op op)
 {
+	size_t done = 0;
 	int err;
 
-	if (!bd->ops.read)
-		return -EOPNOTSUPP;
+	if (len == 0)
+		return 0;
+	if (bd->phy_bsize != 512 || (len & 511))
+		return -EINVAL;
 
-	err = blkdev_check_bounds(bd, blk_id, blk_cnt);
+	err = blkdev_check_bounds(bd, blk_id, (u32)(len >> 9));
 	if (err)
 		return err;
 
-	return bd->ops.read(bd, blk_id, buf, blk_cnt);
+	while (done < len) {
+		struct bio bio;
+		size_t chunk;
+		unsigned int i;
+
+		bio_init(&bio, bd, op);
+		bio.bi_sector = blk_id + (done >> 9);
+
+		for (i = 0; i < BIO_MAX_VECS && done < len; ++i) {
+			chunk = len - done;
+			if (chunk > PAGE_SIZE)
+				chunk = PAGE_SIZE;
+
+			err = bio_add_buf(&bio, (u8 *)buf + done, chunk);
+			if (err)
+				return err;
+			done += chunk;
+		}
+
+		err = submit_bio_wait(&bio);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+
+int blkdev_read(struct block_dev *bd, u64 blk_id, void *buf, u32 blk_cnt)
+{
+	if (!bd)
+		return -EINVAL;
+	return blkdev_submit_buf(bd, blk_id, buf,
+				 (size_t)blk_cnt * bd->phy_bsize,
+				 REQ_OP_READ);
 }
 
 int blkdev_write(struct block_dev *bd, u64 blk_id, const void *buf, u32 blk_cnt)
 {
-	int err;
-
-	if (!bd->ops.write)
-		return -EOPNOTSUPP;
-
-	err = blkdev_check_bounds(bd, blk_id, blk_cnt);
-	if (err)
-		return err;
-
-	return bd->ops.write(bd, blk_id, buf, blk_cnt);
+	if (!bd)
+		return -EINVAL;
+	return blkdev_submit_buf(bd, blk_id, (void *)buf,
+				 (size_t)blk_cnt * bd->phy_bsize,
+				 REQ_OP_WRITE);
 }
 
 int blkdev_flush(struct block_dev *bd)
 {
+	struct bio bio;
+
 	if (!bd)
 		return -EINVAL;
-	if (!bd->ops.flush)
-		return 0;
-	return bd->ops.flush(bd);
+
+	bio_init(&bio, bd, REQ_OP_FLUSH);
+	return submit_bio_wait(&bio);
 }
 
 static int blkdev_read_page(struct page_cache *m, struct cached_page *cp)
@@ -233,7 +274,7 @@ static int blkdev_read_page(struct page_cache *m, struct cached_page *cp)
 	if (err)
 		return err;
 
-	err = bd->ops.read(bd, sector, buf, valid);
+	err = blkdev_read(bd, sector, buf, valid);
 	if (err)
 		return err;
 
@@ -275,7 +316,7 @@ static int blkdev_write_page(struct page_cache *m, struct cached_page *cp)
 		return err;
 
 	buf = (void *)page_to_virt(cp->page);
-	return bd->ops.write(bd, sector, buf, valid);
+	return blkdev_write(bd, sector, buf, valid);
 }
 
 static const struct page_cache_ops bdev_pc_ops = {

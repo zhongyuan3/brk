@@ -161,9 +161,11 @@ struct virtio_blk_dev {
 	bool flush_supported;
 };
 
+struct gendisk;
+
 struct virtio_blk_registry {
 	struct virtio_blk_dev **vblks;
-	struct block_dev **bdevs;
+	struct gendisk **disks;
 	unsigned num_vblks;
 	spinlock_t lock;
 	unsigned major;

@@ -44,7 +44,12 @@ static struct block_dev *brkfs_get_bdev(const char *dev_name)
 	if (err)
 		return ERR_PTR(err);
 
-	inode = path.dentry->inode;
+	/* A lookup may succeed for a negative dentry (missing device node). */
+	inode = path.dentry ? path.dentry->inode : NULL;
+	if (!inode) {
+		fs_path_put(&path);
+		return ERR_PTR(-ENOENT);
+	}
 	if (!S_ISBLK(inode->mode)) {
 		fs_path_put(&path);
 		return ERR_PTR(-ENOTBLK);
