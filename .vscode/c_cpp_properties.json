@@ -7,7 +7,7 @@
                 "${workspaceFolder}/src/include",
                 "${workspaceFolder}/vendor/libfdt"
             ],
-            "compilerPath": "/usr/bin/riscv64-unknown-elf-gcc"
+            "compilerPath": "/usr/bin/riscv64-linux-gnu-gcc"
         }
     ],
     "version": 4
