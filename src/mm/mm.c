@@ -1,4 +1,5 @@
 #include <arch/asm/large_page.h>
+#include <arch/csr.h>
 #include <arch/pgtable.h>
 #include <arch/pgtable_types.h>
 #include <brk/assert.h>
@@ -98,7 +99,7 @@ static void uvm_space_free_heap(struct uvm_space *mm)
 		unmap_user_pages(mm->pgd, mm->heap->addr, mm->heap->size);
 		for (size_t i = 0; i < mm->heap->nr_pages; ++i) {
 			ASSERT(mm->heap->pages[i]);
-			page_free(mm->heap->pages[i], 0);
+			page_put(mm->heap->pages[i]);
 		}
 		kfree(mm->heap->pages);
 	}
@@ -152,7 +153,7 @@ void uvm_region_free_range(struct uvm_region *region, size_t start, size_t nr)
 				region->cached[idx] = NULL;
 			}
 		} else if (region->pages[idx]) {
-			page_free(region->pages[idx], 0);
+			page_put(region->pages[idx]);
 			region->pages[idx] = NULL;
 		}
 	}
@@ -275,6 +276,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 	}
 
 	struct page **pgs = kcalloc(npgs, sizeof(struct page *));
+	bool cow = false;
 
 	if (!pgs)
 		return -ENOMEM;
@@ -284,33 +286,62 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 	 * backing page and no PTE.  Keep them untouched in the child too.
 	 */
 	for (i = 0; i < npgs; i++) {
-		struct page *pg;
+		struct page *src_pg = src->pages[i];
 		unsigned int flags;
 		u64 page_addr = src->addr + i * PAGE_SIZE;
-		u64 dst_pa;
 
-		if (!src->pages[i])
+		if (!src_pg)
 			continue;
 
-		pg = page_alloc(0);
-		if (!pg) {
-			err = -ENOMEM;
-			goto failed;
+		if (!uvm_page_is_mapped(src_mm, page_addr)) {
+			/* PROT_NONE: keep a private copy with no PTE. */
+			struct page *pg = page_alloc(0);
+
+			if (!pg) {
+				err = -ENOMEM;
+				goto failed;
+			}
+			memcpy((void *)page_to_virt(pg),
+			       (void *)page_to_virt(src_pg), PAGE_SIZE);
+			pgs[i] = pg;
+			continue;
 		}
-		dst_pa = page_to_phys(pg);
-		memcpy((void *)phys_to_virt(dst_pa),
-		       (void *)page_to_virt(src->pages[i]), PAGE_SIZE);
-		pgs[i] = pg;
 
-		if (!uvm_page_is_mapped(src_mm, page_addr))
-			continue;
 		err = uvm_pte_flags(src_mm, page_addr, &flags);
 		if (err)
 			goto failed;
-		err = map_user_pages(dst_mm->pgd, page_addr, PAGE_SIZE,
-				     dst_pa, flags);
-		if (err)
-			goto failed;
+
+		page_get(src_pg);
+		pgs[i] = src_pg;
+
+		if (src->flags & PTE_W) {
+			/*
+			 * Share the page read-only with a COW marker in both
+			 * address spaces; the first store takes a private copy.
+			 */
+			err = map_user_pages(
+				dst_mm->pgd, page_addr, PAGE_SIZE,
+				page_to_phys(src_pg),
+				(flags & ~PTE_W) | PTE_COW);
+			if (err)
+				goto failed;
+			err = uvm_cow_protect(src_mm, page_addr);
+			if (err)
+				goto failed;
+			cow = true;
+		} else {
+			/*
+			 * Keep an existing COW marker when the source PTE was
+			 * already read-only due to an earlier fork.
+			 */
+			if (uvm_pte_is_cow(src_mm, page_addr))
+				flags |= PTE_COW;
+			err = map_user_pages(dst_mm->pgd, page_addr,
+					     PAGE_SIZE,
+					     page_to_phys(src_pg), flags);
+			if (err)
+				goto failed;
+		}
 	}
 
 	dst->kind = UVM_REGION_ANON;
@@ -319,18 +350,20 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 	dst->flags = src->flags;
 	dst->pages = pgs;
 	dst->nr_pages = npgs;
+
+	if (cow)
+		sfence_vma();
 	return 0;
 
 failed:
-	for (size_t j = 0; j < i; ++j) {
+	for (size_t j = 0; j <= i && j < npgs; ++j) {
+		u64 page_addr = src->addr + j * PAGE_SIZE;
+
 		if (!pgs[j])
 			continue;
-		if (uvm_page_is_mapped(dst_mm,
-				       src->addr + j * PAGE_SIZE))
-			unmap_user_pages(dst_mm->pgd,
-					 src->addr + j * PAGE_SIZE,
-					 PAGE_SIZE);
-		page_free(pgs[j], 0);
+		if (uvm_page_is_mapped(dst_mm, page_addr))
+			unmap_user_pages(dst_mm->pgd, page_addr, PAGE_SIZE);
+		page_put(pgs[j]);
 	}
 	kfree(pgs);
 	return err;

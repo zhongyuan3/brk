@@ -14,6 +14,7 @@
 #define PTE_G 32 /* Global*/
 #define PTE_A 64 /* Accessed */
 #define PTE_D 128 /* Dirty */
+#define PTE_COW 256 /* Software: page is shared and must be copied on write */
 
 /* Sv39: three-level page table with 1GiB and 2MiB superpages. */
 #define PGD_SHIFT 30

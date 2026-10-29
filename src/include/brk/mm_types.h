@@ -15,6 +15,8 @@ struct fs_file;
 
 struct page {
 	unsigned int flags;
+	/* 1 while owned; extra references come from COW-shared anonymous pages. */
+	refcnt_t refcnt;
 
 	union {
 		struct { /* Buddy */
