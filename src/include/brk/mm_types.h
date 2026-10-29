@@ -5,6 +5,14 @@
 #include <brk/refcnt_types.h>
 #include <brk/types.h>
 
+struct cached_page;
+struct fs_inode;
+struct fs_file;
+
+/* VMA backing store. */
+#define UVM_REGION_ANON 0
+#define UVM_REGION_SHARED_FILE 1
+
 struct page {
 	unsigned int flags;
 
@@ -34,8 +42,15 @@ struct uvm_region {
 	u64 addr;
 	size_t size;
 	struct page **pages;
+	struct cached_page **cached;
 	size_t nr_pages;
 	unsigned int flags;
+	unsigned int kind;
+
+	/* Shared file mapping: keep the inode and file offset alive. */
+	struct fs_inode *inode;
+	struct fs_file *file;
+	loff_t file_offset;
 };
 
 struct uvm_space {
