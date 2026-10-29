@@ -18,6 +18,10 @@ int uvm_space_copy(struct uvm_space *dst, struct uvm_space *src);
 /* Anonymous, private mmap/munmap/mprotect (Phase A). */
 int uvm_mmap_anon(struct uvm_space *mm, u64 hint, size_t len, int prot,
 		  int flags, int fd, u64 offset, u64 *addr_out);
+/* File-backed, MAP_PRIVATE: eagerly copy the file into anonymous pages. */
+int uvm_mmap_file_private(struct uvm_space *mm, u64 hint, size_t len,
+			  int prot, int flags, int fd, u64 offset,
+			  u64 *addr_out);
 int uvm_munmap(struct uvm_space *mm, u64 addr, size_t len);
 int uvm_mprotect(struct uvm_space *mm, u64 addr, size_t len, int prot);
 int uvm_msync(struct uvm_space *mm, u64 addr, size_t len, int flags);

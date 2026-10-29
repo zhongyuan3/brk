@@ -4,6 +4,9 @@
 #include <arch/mm.h>
 #include <arch/pgtable.h>
 #include <brk/assert.h>
+#include <brk/error.h>
+#include <brk/fdtable.h>
+#include <brk/fs.h>
 #include <brk/kmalloc.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
@@ -14,6 +17,7 @@
 #include <brk/types.h>
 #include <uapi/errno.h>
 #include <uapi/mman.h>
+#include <uapi/stat.h>
 
 static bool ranges_overlap(u64 a, size_t alen, u64 b, size_t blen)
 {
@@ -137,8 +141,8 @@ static unsigned int prot_to_pte(int prot)
 	return flags;
 }
 
-static int map_anon_region(struct uvm_space *mm, u64 addr, size_t size,
-			   int prot)
+static int map_region(struct uvm_space *mm, u64 addr, size_t size,
+		      int prot, struct fs_file *fp, loff_t file_off)
 {
 	size_t nr_pages = size / PAGE_SIZE;
 	struct uvm_region *vma;
@@ -168,6 +172,35 @@ static int map_anon_region(struct uvm_space *mm, u64 addr, size_t size,
 
 		va = (void *)page_to_virt(pg);
 		memset(va, 0, PAGE_SIZE);
+
+		if (fp) {
+			loff_t pos = file_off + (loff_t)(i * PAGE_SIZE);
+			size_t got = 0;
+
+			if (!fp->ops || !fp->ops->read) {
+				err = -EINVAL;
+				page_free(pg, 0);
+				break;
+			}
+
+			while (got < PAGE_SIZE) {
+				ssize_t n = fp->ops->read(
+					fp, (char *)va + got,
+					PAGE_SIZE - got, &pos);
+
+				if (n < 0) {
+					err = (int)n;
+					break;
+				}
+				if (n == 0)
+					break;
+				got += (size_t)n;
+			}
+			if (err) {
+				page_free(pg, 0);
+				break;
+			}
+		}
 
 		err = map_user_pages(mm->pgd, addr + i * PAGE_SIZE, PAGE_SIZE,
 				     page_to_phys(pg), pte_flags);
@@ -230,12 +263,81 @@ int uvm_mmap_anon(struct uvm_space *mm, u64 hint, size_t len, int prot,
 	if (err)
 		return err;
 
-	err = map_anon_region(mm, addr, (size_t)size, prot);
+	err = map_region(mm, addr, (size_t)size, prot, NULL, 0);
 	if (err)
 		return err;
 
 	*addr_out = addr;
 	return 0;
+}
+
+int uvm_mmap_file_private(struct uvm_space *mm, u64 hint, size_t len,
+			  int prot, int flags, int fd, u64 offset,
+			  u64 *addr_out)
+{
+	struct fs_file *fp;
+	u64 size;
+	u64 addr = 0;
+	loff_t file_off;
+	int err;
+
+	if (!mm || !addr_out || len == 0)
+		return -EINVAL;
+	if (flags & MAP_SHARED)
+		return -EOPNOTSUPP;
+	if (flags & MAP_ANONYMOUS)
+		return -EINVAL;
+	if (flags & ~(MAP_PRIVATE | MAP_FIXED))
+		return -EINVAL;
+	if (!(flags & MAP_PRIVATE))
+		return -EINVAL;
+	if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))
+		return -EINVAL;
+	if (fd < 0)
+		return -EBADF;
+	if (offset & (PAGE_SIZE - 1))
+		return -EINVAL;
+	if (offset > 0x7fffffffffffffffULL)
+		return -EINVAL;
+	if (len > USER_SPACE_SIZE_MAX)
+		return -ENOMEM;
+
+	size = (u64)len;
+	size = (size + PAGE_SIZE - 1) & ~(u64)(PAGE_SIZE - 1);
+	if (size == 0 || size > USER_SPACE_SIZE_MAX)
+		return -ENOMEM;
+	if (offset > 0x7fffffffffffffffULL - size)
+		return -EINVAL;
+
+	file_off = (loff_t)offset;
+
+	fp = fdtable_get_file(current_task()->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
+
+	if (!fp->inode || !S_ISREG(fp->inode->mode)) {
+		err = -ENODEV;
+		goto out_put;
+	}
+	if (!(fp->mode & FMODE_READ)) {
+		err = -EACCES;
+		goto out_put;
+	}
+
+	err = choose_addr(mm, hint, (size_t)size, flags, &addr);
+	if (err)
+		goto out_put;
+
+	err = map_region(mm, addr, (size_t)size, prot, fp, file_off);
+	if (err)
+		goto out_put;
+
+	*addr_out = addr;
+	err = 0;
+
+out_put:
+	fs_file_put(fp);
+	return err;
 }
 
 int uvm_munmap(struct uvm_space *mm, u64 addr, size_t len)
@@ -432,8 +534,12 @@ u64 sys_mmap(void)
 	if (!task || !task->mm)
 		return -EFAULT;
 
-	err = uvm_mmap_anon(task->mm, hint, len, prot, flags, fd, offset,
-			    &addr);
+	if (flags & MAP_ANONYMOUS)
+		err = uvm_mmap_anon(task->mm, hint, len, prot, flags, fd,
+				    offset, &addr);
+	else
+		err = uvm_mmap_file_private(task->mm, hint, len, prot, flags,
+					    fd, offset, &addr);
 	if (err)
 		return (u64)(long)err;
 	return addr;
