@@ -59,6 +59,8 @@ else
 $(error Unknown build type '$(BUILD)')
 endif
 
+CFLAGS += -std=gnu11
+
 CFLAGS += -nostdinc
 CFLAGS += -MMD
 CFLAGS += -MP
