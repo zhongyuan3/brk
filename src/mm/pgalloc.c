@@ -4,6 +4,7 @@
 #include <brk/mm_types.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
+#include <brk/refcnt.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 
@@ -134,8 +135,10 @@ struct page *page_alloc(unsigned int order)
 again:
 	if (order == 0) {
 		curr = pcp_alloc();
-		if (curr)
+		if (curr) {
+			refcnt_init(&curr->refcnt, 1);
 			return curr;
+		}
 	}
 
 	spin_lock(&areas_lock);
@@ -172,6 +175,7 @@ found:
 	}
 
 	curr->flags &= ~PAGE_FLAGS_FREE;
+	refcnt_init(&curr->refcnt, 1);
 	spin_unlock(&areas_lock);
 	return curr;
 }
@@ -225,6 +229,21 @@ void page_free(struct page *pg, unsigned int order)
 		return;
 
 	__page_free_to_buddy(pg, order);
+}
+
+void page_get(struct page *pg)
+{
+	if (pg)
+		refcnt_inc(&pg->refcnt);
+}
+
+void page_put(struct page *pg)
+{
+	if (!pg)
+		return;
+	if (refcnt_dec_fetch(&pg->refcnt) > 0)
+		return;
+	page_free(pg, 0);
 }
 
 void page_alloc_init(void)

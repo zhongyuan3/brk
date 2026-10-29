@@ -701,10 +701,13 @@ static int region_clone_to(struct uvm_space *mm, struct uvm_region *old,
 			if (!uvm_page_is_mapped(mm,
 						old->addr + i * PAGE_SIZE))
 				continue;
-			err = uvm_pte_flags(mm, old->addr + i * PAGE_SIZE,
-					    &flags);
-			if (err)
-				break;
+
+			/*
+			 * The clone gets a private copy, so use the VMA
+			 * protection rather than the (possibly COW
+			 * read-only) source PTE flags.
+			 */
+			flags = old->flags & (PTE_R | PTE_W | PTE_X);
 			err = map_user_pages(mm->pgd, addr + i * PAGE_SIZE,
 					     PAGE_SIZE, page_to_phys(pg),
 					     flags);
@@ -960,7 +963,43 @@ static struct uvm_region *find_region_containing(struct uvm_space *mm,
 		if (addr >= r->addr && addr - r->addr < r->size)
 			return r;
 	}
+
+	/*
+	 * The brk heap is not linked into ->seg, but COW faults can occur
+	 * there after fork.  The stack is included so that its guard area
+	 * still resolves to a permission/fault error rather than a panic.
+	 */
+	if (mm->heap->size && addr >= mm->heap->addr &&
+	    addr - mm->heap->addr < mm->heap->size)
+		return mm->heap;
+	if (mm->stack->size && addr >= mm->stack->addr &&
+	    addr - mm->stack->addr < mm->stack->size)
+		return mm->stack;
+
 	return NULL;
+}
+
+static pte_t *lookup_pte(struct uvm_space *mm, u64 addr)
+{
+	pgd_t *pgde;
+	pmd_t *pmd, *pmde;
+	pte_t *pt, *pte;
+
+	if (!mm)
+		return NULL;
+
+	pgde = &mm->pgd[pgd_index(addr)];
+	if (!pgd_is_valid(*pgde) || pgd_is_leaf(*pgde))
+		return NULL;
+	pmd = (pmd_t *)phys_to_virt(pgd_next(*pgde));
+	pmde = &pmd[pmd_index(addr)];
+	if (!pmd_is_valid(*pmde) || pmd_is_leaf(*pmde))
+		return NULL;
+	pt = (pte_t *)phys_to_virt(pmd_next(*pmde));
+	pte = &pt[pte_index(addr)];
+	if (!pte_is_valid(*pte))
+		return NULL;
+	return pte;
 }
 
 static bool update_present_pte(struct uvm_space *mm, u64 addr,
@@ -982,11 +1021,50 @@ static bool update_present_pte(struct uvm_space *mm, u64 addr,
 	if (!pte_is_valid(*pte))
 		return false;
 
+	/*
+	 * A COW page must stay read-only even when the VMA asks for write:
+	 * the next store faults and gets a private copy.  PROT_NONE clears
+	 * the PTE (the caller breaks COW first).
+	 */
+	if (pte_flags(*pte) & PTE_COW)
+		flags = (flags & ~PTE_W) | PTE_COW;
+
 	if (flags & (PTE_R | PTE_W | PTE_X))
 		pte_set_leaf(pte, pte_leaf(*pte), flags | PTE_U);
 	else
 		pte_clear(pte);
 	return true;
+}
+
+/*
+ * Replace a COW page with a private copy without changing its protection.
+ * Used by mprotect(PROT_NONE), which would otherwise lose the COW marker
+ * when it clears the PTE.
+ */
+static int cow_replace_page(struct uvm_space *mm, struct uvm_region *r,
+			    size_t idx, u64 addr)
+{
+	pte_t *pte = lookup_pte(mm, addr);
+	struct page *old, *pg;
+	unsigned int flags;
+
+	if (!pte || !(pte_flags(*pte) & PTE_COW))
+		return 0;
+	if (r->kind != UVM_REGION_ANON || !r->pages[idx])
+		return -EFAULT;
+
+	old = r->pages[idx];
+	pg = page_alloc(0);
+	if (!pg)
+		return -ENOMEM;
+
+	memcpy((void *)page_to_virt(pg), (void *)page_to_virt(old), PAGE_SIZE);
+	r->pages[idx] = pg;
+	page_put(old);
+
+	flags = pte_flags(*pte) & (PTE_R | PTE_X | PTE_U);
+	pte_set_leaf(pte, page_to_phys(pg), flags);
+	return 0;
 }
 
 static struct uvm_region *split_region_at(struct uvm_space *mm,
@@ -1074,6 +1152,34 @@ int uvm_handle_fault(struct uvm_space *mm, u64 addr, bool write, bool instr)
 	if ((r->flags & need) != need)
 		return -EACCES;
 
+	/* Break COW before handing out a writable mapping. */
+	if (write && r->kind == UVM_REGION_ANON) {
+		pte_t *pte = lookup_pte(mm, page);
+
+		if (pte && (pte_flags(*pte) & PTE_COW)) {
+			struct page *old = r->pages[idx];
+			struct page *pg;
+
+			if (!old)
+				return -EFAULT;
+			pg = page_alloc(0);
+			if (!pg)
+				return -ENOMEM;
+
+			memcpy((void *)page_to_virt(pg),
+			       (void *)page_to_virt(old), PAGE_SIZE);
+			r->pages[idx] = pg;
+			page_put(old);
+
+			pte_set_leaf(pte, page_to_phys(pg),
+				     (r->flags &
+				      (PTE_R | PTE_W | PTE_X)) |
+					     PTE_U);
+			sfence_vma();
+			return 0;
+		}
+	}
+
 	if (r->kind == UVM_REGION_SHARED_FILE) {
 		struct cached_page *cp = r->cached[idx];
 
@@ -1155,33 +1261,49 @@ int uvm_mprotect(struct uvm_space *mm, u64 addr, size_t len, int prot)
 		}
 
 		r->flags = pte_flags;
-		for (u64 a = rstart; a < rend; a += PAGE_SIZE)
+		for (u64 a = rstart; a < rend; a += PAGE_SIZE) {
+			if (!pte_flags) {
+				size_t idx =
+					(size_t)((a - rstart) >> PAGE_SHIFT);
+				int err = cow_replace_page(mm, r, idx, a);
+
+				if (err)
+					return err;
+			}
 			update_present_pte(mm, a, pte_flags);
+		}
 	}
 
 	sfence_vma();
 	return 0;
 }
 
+
 bool uvm_page_is_mapped(struct uvm_space *mm, u64 addr)
 {
-	pgd_t *pgde;
-	pmd_t *pmd, *pmde;
-	pte_t *pt, *pte;
+	return lookup_pte(mm, addr) != NULL;
+}
 
-	if (!mm)
-		return false;
+int uvm_cow_protect(struct uvm_space *mm, u64 addr)
+{
+	pte_t *pte = lookup_pte(mm, addr);
+	unsigned int flags;
 
-	pgde = &mm->pgd[pgd_index(addr)];
-	if (!pgd_is_valid(*pgde) || pgd_is_leaf(*pgde))
-		return false;
-	pmd = (pmd_t *)phys_to_virt(pgd_next(*pgde));
-	pmde = &pmd[pmd_index(addr)];
-	if (!pmd_is_valid(*pmde) || pmd_is_leaf(*pmde))
-		return false;
-	pt = (pte_t *)phys_to_virt(pmd_next(*pmde));
-	pte = &pt[pte_index(addr)];
-	return pte_is_valid(*pte);
+	if (!pte)
+		return -ENOENT;
+
+	flags = pte_flags(*pte);
+	if (!(flags & PTE_COW) || (flags & PTE_W))
+		pte_set_leaf(pte, pte_leaf(*pte),
+			     (flags & ~(PTE_W | PTE_COW)) | PTE_COW);
+	return 0;
+}
+
+bool uvm_pte_is_cow(struct uvm_space *mm, u64 addr)
+{
+	pte_t *pte = lookup_pte(mm, addr);
+
+	return pte && (pte_flags(*pte) & PTE_COW);
 }
 
 int uvm_pte_flags(struct uvm_space *mm, u64 addr, unsigned int *flags)

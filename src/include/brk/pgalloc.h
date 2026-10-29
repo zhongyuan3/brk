@@ -84,4 +84,8 @@ struct page *page_alloc(unsigned int order);
 struct page *page_zalloc(unsigned int order);
 void page_free(struct page *pg, unsigned int order);
 
+/* Reference counting for pages that may be shared by COW mappings. */
+void page_get(struct page *pg);
+void page_put(struct page *pg);
+
 #endif

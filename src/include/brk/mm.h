@@ -34,6 +34,10 @@ int uvm_mremap(struct uvm_space *mm, u64 old_addr, size_t old_len,
  * must raise SIGSEGV.
  */
 int uvm_handle_fault(struct uvm_space *mm, u64 addr, bool write, bool instr);
+/* Remove write permission and mark one page copy-on-write (fork). */
+int uvm_cow_protect(struct uvm_space *mm, u64 addr);
+/* True when the leaf PTE for @addr carries the software COW marker. */
+bool uvm_pte_is_cow(struct uvm_space *mm, u64 addr);
 int uvm_munmap(struct uvm_space *mm, u64 addr, size_t len);
 int uvm_mprotect(struct uvm_space *mm, u64 addr, size_t len, int prot);
 int uvm_msync(struct uvm_space *mm, u64 addr, size_t len, int flags);
