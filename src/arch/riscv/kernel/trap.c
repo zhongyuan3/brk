@@ -2,6 +2,7 @@
 #include <arch/irqflags.h>
 #include <arch/sbi.h>
 #include <arch/timer.h>
+#include <arch/asm/vmlayout.h>
 #include <arch/trap.h>
 #include <arch/trapframe.h>
 #include <brk/assert.h>
@@ -9,6 +10,7 @@
 #include <brk/cpu.h>
 #include <brk/irq.h>
 #include <brk/kernel.h>
+#include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/signal.h>
@@ -19,6 +21,7 @@
 #include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>
+#include <uapi/errno.h>
 
 static const char *const exception_names[] = {
 	[EXCEPTION_INSTRUCTION_MISALIGNED] = "Instruction address misaligned",
@@ -204,6 +207,41 @@ static void handle_interrupt(unsigned long code, struct riscv_trap_frame *frame,
 	}
 }
 
+/*
+ * Resolve a demand-paging fault.  Returns true when the faulting instruction
+ * can simply be retried (the PTE was populated), or when the fault belongs to
+ * user mode and SIGSEGV has been queued.  Kernel-mode faults on kernel
+ * addresses are left to the caller, which panics.
+ */
+static bool handle_page_fault(unsigned long code,
+			      struct riscv_trap_frame *frame, bool from_user,
+			      struct task *task)
+{
+	bool write = (code == EXCEPTION_STORE_PAGE_FAULT);
+	bool instr = (code == EXCEPTION_INSTRUCTION_PAGE_FAULT);
+	int err = -EFAULT;
+
+	/*
+	 * A supervisor access to a user address is only legitimate when SUM
+	 * is set (copy_from_user/copy_to_user during a syscall).  Without it
+	 * retrying would fault forever, so let the caller panic.
+	 */
+	if (!from_user && !(frame->sstatus & SSTATUS_SUM))
+		return false;
+
+	if (task && task->mm)
+		err = uvm_handle_fault(task->mm, frame->stval, write, instr);
+	if (!err)
+		return true;
+
+	if (from_user) {
+		signal_send(task, SIGSEGV);
+		return true;
+	}
+
+	return false;
+}
+
 static void handle_exception(unsigned long code, struct riscv_trap_frame *frame,
 			     bool from_user, struct task *task)
 {
@@ -215,6 +253,13 @@ static void handle_exception(unsigned long code, struct riscv_trap_frame *frame,
 			intr_on();
 			syscall();
 		}
+		break;
+	case EXCEPTION_INSTRUCTION_PAGE_FAULT:
+	case EXCEPTION_LOAD_PAGE_FAULT:
+	case EXCEPTION_STORE_PAGE_FAULT:
+		if (handle_page_fault(code, frame, from_user, task))
+			break;
+		trap_panic(exception_name(code), code, frame);
 		break;
 	default:
 		if (from_user) {

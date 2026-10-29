@@ -77,7 +77,7 @@ static void uvm_space_free_segments(struct uvm_space *mm)
 
 	list_for_each_entry_safe(curr, next, &mm->seg, list) {
 		list_del(&curr->list);
-		unmap_user_pages(mm->pgd, curr->addr, curr->size);
+		uvm_region_unmap_range(mm, curr, 0, curr->nr_pages);
 		uvm_region_release(curr);
 	}
 }
@@ -141,6 +141,12 @@ void uvm_region_free_range(struct uvm_region *region, size_t start, size_t nr)
 			struct cached_page *cp = region->cached[idx];
 
 			if (cp) {
+				/*
+				 * Hardware dirty bits are not tracked, so a
+				 * shared page may have been written before a
+				 * later mprotect made this VMA read-only.
+				 * Write it back unconditionally.
+				 */
 				cached_page_mark_dirty(cp);
 				cached_page_put(cp);
 				region->cached[idx] = NULL;
@@ -171,6 +177,23 @@ void uvm_region_release(struct uvm_region *region)
 	uvm_region_free(region);
 }
 
+void uvm_region_unmap_range(struct uvm_space *mm, struct uvm_region *region,
+			    size_t start, size_t nr)
+{
+	if (!mm || !region || start >= region->nr_pages)
+		return;
+	if (nr > region->nr_pages - start)
+		nr = region->nr_pages - start;
+
+	for (size_t i = 0; i < nr; i++) {
+		size_t idx = start + i;
+		u64 addr = region->addr + idx * PAGE_SIZE;
+
+		if (uvm_page_is_mapped(mm, addr))
+			unmap_user_pages(mm->pgd, addr, PAGE_SIZE);
+	}
+}
+
 static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 				 struct uvm_space *dst_mm,
 				 struct uvm_space *src_mm)
@@ -199,22 +222,30 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 
 		while (size > 0 && i < npgs) {
 			struct cached_page *cp = src->cached[i];
-			unsigned int flags;
+			unsigned int flags = 0;
+			bool mapped;
 
 			if (!cp) {
 				err = -EIO;
 				goto failed_shared;
 			}
-			err = uvm_pte_flags(src_mm, addr, &flags);
-			if (err)
-				goto failed_shared;
 
 			cached_page_get(cp);
-			err = map_user_pages(dst_mm->pgd, addr, PAGE_SIZE,
-					     page_to_phys(cp->page), flags);
-			if (err) {
-				cached_page_put(cp);
-				goto failed_shared;
+			mapped = uvm_page_is_mapped(src_mm, addr);
+			if (mapped) {
+				err = uvm_pte_flags(src_mm, addr, &flags);
+				if (err) {
+					cached_page_put(cp);
+					goto failed_shared;
+				}
+				err = map_user_pages(dst_mm->pgd, addr,
+						     PAGE_SIZE,
+						     page_to_phys(cp->page),
+						     flags);
+				if (err) {
+					cached_page_put(cp);
+					goto failed_shared;
+				}
 			}
 			dst->cached[i] = cp;
 			dst->nr_pages = i + 1;
@@ -229,8 +260,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 		return 0;
 
 	failed_shared:
-		for (u64 a = src->addr; a < addr; a += PAGE_SIZE)
-			unmap_user_pages(dst_mm->pgd, a, PAGE_SIZE);
+		uvm_region_unmap_range(dst_mm, dst, 0, dst->nr_pages);
 		uvm_region_free_range(dst, 0, dst->nr_pages);
 		kfree(dst->cached);
 		dst->cached = NULL;
@@ -249,37 +279,38 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 	if (!pgs)
 		return -ENOMEM;
 
-	while (size > 0 && i < npgs) {
-		struct page *pg = page_alloc(0);
+	/*
+	 * Anonymous mappings are demand-paged, so untouched pages have no
+	 * backing page and no PTE.  Keep them untouched in the child too.
+	 */
+	for (i = 0; i < npgs; i++) {
+		struct page *pg;
 		unsigned int flags;
+		u64 page_addr = src->addr + i * PAGE_SIZE;
+		u64 dst_pa;
 
+		if (!src->pages[i])
+			continue;
+
+		pg = page_alloc(0);
 		if (!pg) {
 			err = -ENOMEM;
 			goto failed;
 		}
-		err = uvm_pte_flags(src_mm, addr, &flags);
-		if (err) {
-			page_free(pg, 0);
-			goto failed;
-		}
-		u64 dst_pa = page_to_phys(pg);
-
-		err = map_user_pages(dst_mm->pgd, addr, PAGE_SIZE, dst_pa,
-				     flags);
-		if (err) {
-			ASSERT(pg);
-			page_free(pg, 0);
-			goto failed;
-		}
-		void *dst_va = (void *)phys_to_virt(dst_pa);
-		void *src_va = (void *)page_to_virt(src->pages[i]);
-
-		memcpy(dst_va, src_va, PAGE_SIZE);
+		dst_pa = page_to_phys(pg);
+		memcpy((void *)phys_to_virt(dst_pa),
+		       (void *)page_to_virt(src->pages[i]), PAGE_SIZE);
 		pgs[i] = pg;
-		dst->nr_pages = i + 1;
-		addr += PAGE_SIZE;
-		size -= PAGE_SIZE;
-		++i;
+
+		if (!uvm_page_is_mapped(src_mm, page_addr))
+			continue;
+		err = uvm_pte_flags(src_mm, page_addr, &flags);
+		if (err)
+			goto failed;
+		err = map_user_pages(dst_mm->pgd, page_addr, PAGE_SIZE,
+				     dst_pa, flags);
+		if (err)
+			goto failed;
 	}
 
 	dst->kind = UVM_REGION_ANON;
@@ -291,10 +322,14 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 	return 0;
 
 failed:
-	for (u64 a = src->addr; a < addr; a += PAGE_SIZE)
-		unmap_user_pages(dst_mm->pgd, a, PAGE_SIZE);
 	for (size_t j = 0; j < i; ++j) {
-		ASSERT(pgs[j]);
+		if (!pgs[j])
+			continue;
+		if (uvm_page_is_mapped(dst_mm,
+				       src->addr + j * PAGE_SIZE))
+			unmap_user_pages(dst_mm->pgd,
+					 src->addr + j * PAGE_SIZE,
+					 PAGE_SIZE);
 		page_free(pgs[j], 0);
 	}
 	kfree(pgs);
@@ -332,7 +367,7 @@ failed:
 	if (!list_empty(&seg)) {
 		list_for_each_entry_safe(curr, next, &seg, list) {
 			list_del(&curr->list);
-			unmap_user_pages(dst->pgd, curr->addr, curr->size);
+			uvm_region_unmap_range(dst, curr, 0, curr->nr_pages);
 			uvm_region_release(curr);
 		}
 	}
