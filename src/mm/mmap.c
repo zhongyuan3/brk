@@ -142,6 +142,30 @@ static unsigned int prot_to_pte(int prot)
 	return flags;
 }
 
+static int map_anon_lazy(struct uvm_space *mm, u64 addr, size_t size,
+			 int prot)
+{
+	struct uvm_region *vma = uvm_region_alloc();
+	size_t nr_pages = size / PAGE_SIZE;
+
+	if (!vma)
+		return -ENOMEM;
+
+	vma->kind = UVM_REGION_ANON;
+	vma->addr = addr;
+	vma->size = size;
+	vma->flags = prot_to_pte(prot);
+	vma->nr_pages = nr_pages;
+	vma->pages = kcalloc(nr_pages, sizeof(vma->pages[0]));
+	if (!vma->pages) {
+		uvm_region_free(vma);
+		return -ENOMEM;
+	}
+
+	list_add_tail(&vma->list, &mm->seg);
+	return 0;
+}
+
 static int map_region(struct uvm_space *mm, u64 addr, size_t size,
 		      int prot, struct fs_file *fp, loff_t file_off)
 {
@@ -203,19 +227,24 @@ static int map_region(struct uvm_space *mm, u64 addr, size_t size,
 			}
 		}
 
-		err = map_user_pages(mm->pgd, addr + i * PAGE_SIZE, PAGE_SIZE,
-				     page_to_phys(pg), pte_flags);
-		if (err) {
-			page_free(pg, 0);
-			break;
+		if (pte_flags) {
+			err = map_user_pages(mm->pgd, addr + i * PAGE_SIZE,
+					     PAGE_SIZE, page_to_phys(pg),
+					     pte_flags);
+			if (err) {
+				page_free(pg, 0);
+				break;
+			}
 		}
 		pages[i] = pg;
 	}
 
 	if (err) {
 		for (size_t j = 0; j < i; j++) {
-			unmap_user_pages(mm->pgd, addr + j * PAGE_SIZE,
-					 PAGE_SIZE);
+			if (pte_flags)
+				unmap_user_pages(mm->pgd,
+						 addr + j * PAGE_SIZE,
+						 PAGE_SIZE);
 			page_free(pages[j], 0);
 		}
 		kfree(pages);
@@ -264,7 +293,7 @@ int uvm_mmap_anon(struct uvm_space *mm, u64 hint, size_t len, int prot,
 	if (err)
 		return err;
 
-	err = map_region(mm, addr, (size_t)size, prot, NULL, 0);
+	err = map_anon_lazy(mm, addr, (size_t)size, prot);
 	if (err)
 		return err;
 
@@ -451,27 +480,21 @@ int uvm_mmap_file_shared(struct uvm_space *mm, u64 hint, size_t len,
 			break;
 		}
 
+		cached[i] = cp;
+		vma->nr_pages = i + 1;
+		if (!pte_flags)
+			continue;
+
 		err = map_user_pages(mm->pgd, addr + i * PAGE_SIZE,
 				     PAGE_SIZE, page_to_phys(cp->page),
 				     pte_flags);
-		if (err) {
-			cached_page_put(cp);
+		if (err)
 			break;
-		}
-		cached[i] = cp;
-		vma->nr_pages = i + 1;
 	}
 
 	if (err) {
-		for (size_t i = 0; i < vma->nr_pages; i++)
-			unmap_user_pages(mm->pgd, addr + i * PAGE_SIZE,
-					 PAGE_SIZE);
-		uvm_region_free_range(vma, 0, vma->nr_pages);
-		kfree(vma->cached);
-		fs_inode_put(vma->inode);
-		if (vma->file)
-			fs_file_put(vma->file);
-		uvm_region_free(vma);
+		uvm_region_unmap_range(mm, vma, 0, vma->nr_pages);
+		uvm_region_release(vma);
 		goto out_put;
 	}
 
@@ -531,25 +554,24 @@ static int region_grow_in_place(struct uvm_space *mm, struct uvm_region *r,
 				err = PTR_ERR(cp);
 				break;
 			}
+			newc[i] = cp;
+			r->nr_pages = i + 1;
+			if (!r->flags)
+				continue;
+
 			err = map_user_pages(mm->pgd,
 					     r->addr + i * PAGE_SIZE,
 					     PAGE_SIZE,
 					     page_to_phys(cp->page), r->flags);
-			if (err) {
-				cached_page_put(cp);
+			if (err)
 				break;
-			}
-			newc[i] = cp;
-			r->nr_pages = i + 1;
 		}
 
 		if (err) {
-			for (size_t i = old_nr; i < r->nr_pages; i++) {
-				unmap_user_pages(mm->pgd,
-						 r->addr + i * PAGE_SIZE,
-						 PAGE_SIZE);
+			uvm_region_unmap_range(mm, r, old_nr,
+					       r->nr_pages - old_nr);
+			for (size_t i = old_nr; i < r->nr_pages; i++)
 				cached_page_put(newc[i]);
-			}
 			kfree(newc);
 			r->nr_pages = old_nr;
 			return err;
@@ -563,39 +585,6 @@ static int region_grow_in_place(struct uvm_space *mm, struct uvm_region *r,
 		if (!newp)
 			return -ENOMEM;
 		memcpy(newp, r->pages, old_nr * sizeof(newp[0]));
-
-		for (size_t i = old_nr; i < new_nr; i++) {
-			struct page *pg = page_alloc(0);
-
-			if (!pg) {
-				err = -ENOMEM;
-				break;
-			}
-			memset((void *)page_to_virt(pg), 0, PAGE_SIZE);
-			err = map_user_pages(mm->pgd,
-					     r->addr + i * PAGE_SIZE,
-					     PAGE_SIZE, page_to_phys(pg),
-					     r->flags);
-			if (err) {
-				page_free(pg, 0);
-				break;
-			}
-			newp[i] = pg;
-			r->nr_pages = i + 1;
-		}
-
-		if (err) {
-			for (size_t i = old_nr; i < r->nr_pages; i++) {
-				unmap_user_pages(mm->pgd,
-						 r->addr + i * PAGE_SIZE,
-						 PAGE_SIZE);
-				page_free(newp[i], 0);
-			}
-			kfree(newp);
-			r->nr_pages = old_nr;
-			return err;
-		}
-
 		kfree(r->pages);
 		r->pages = newp;
 	}
@@ -638,17 +627,23 @@ static int region_clone_to(struct uvm_space *mm, struct uvm_region *old,
 
 		for (i = 0; i < nr; i++) {
 			struct cached_page *cp;
-			unsigned int flags;
+			unsigned int flags = 0;
 
 			if (i < old->nr_pages) {
 				cp = old->cached[i];
+				if (!cp)
+					continue;
 				cached_page_get(cp);
-				err = uvm_pte_flags(mm,
-						    old->addr + i * PAGE_SIZE,
-						    &flags);
-				if (err) {
-					cached_page_put(cp);
-					break;
+				if (uvm_page_is_mapped(
+					    mm, old->addr + i * PAGE_SIZE)) {
+					err = uvm_pte_flags(
+						mm,
+						old->addr + i * PAGE_SIZE,
+						&flags);
+					if (err) {
+						cached_page_put(cp);
+						break;
+					}
 				}
 			} else {
 				cp = read_mapping_page(
@@ -663,15 +658,19 @@ static int region_clone_to(struct uvm_space *mm, struct uvm_region *old,
 				flags = old->flags;
 			}
 
+			r->cached[i] = cp;
+			r->nr_pages = i + 1;
+			if (!flags)
+				continue;
+
 			err = map_user_pages(mm->pgd, addr + i * PAGE_SIZE,
 					     PAGE_SIZE,
 					     page_to_phys(cp->page), flags);
 			if (err) {
 				cached_page_put(cp);
+				r->cached[i] = NULL;
 				break;
 			}
-			r->cached[i] = cp;
-			r->nr_pages = i + 1;
 		}
 	} else {
 		r->pages = kcalloc(nr, sizeof(r->pages[0]));
@@ -681,44 +680,42 @@ static int region_clone_to(struct uvm_space *mm, struct uvm_region *old,
 		}
 
 		for (i = 0; i < nr; i++) {
-			struct page *pg = page_alloc(0);
-			unsigned int flags;
+			struct page *pg;
+			unsigned int flags = 0;
 
+			/* Unfaulted pages stay unfaulted in the copy. */
+			if (i >= old->nr_pages || !old->pages[i])
+				continue;
+
+			pg = page_alloc(0);
 			if (!pg) {
 				err = -ENOMEM;
 				break;
 			}
-			memset((void *)page_to_virt(pg), 0, PAGE_SIZE);
-			if (i < old->nr_pages) {
-				memcpy((void *)page_to_virt(pg),
-				       (void *)page_to_virt(old->pages[i]),
-				       PAGE_SIZE);
-				err = uvm_pte_flags(mm,
-						    old->addr + i * PAGE_SIZE,
-						    &flags);
-				if (err) {
-					page_free(pg, 0);
-					break;
-				}
-			} else {
-				flags = old->flags;
-			}
+			memcpy((void *)page_to_virt(pg),
+			       (void *)page_to_virt(old->pages[i]),
+			       PAGE_SIZE);
+			r->pages[i] = pg;
+			r->nr_pages = i + 1;
+
+			if (!uvm_page_is_mapped(mm,
+						old->addr + i * PAGE_SIZE))
+				continue;
+			err = uvm_pte_flags(mm, old->addr + i * PAGE_SIZE,
+					    &flags);
+			if (err)
+				break;
 			err = map_user_pages(mm->pgd, addr + i * PAGE_SIZE,
 					     PAGE_SIZE, page_to_phys(pg),
 					     flags);
-			if (err) {
-				page_free(pg, 0);
+			if (err)
 				break;
-			}
-			r->pages[i] = pg;
-			r->nr_pages = i + 1;
 		}
+		r->nr_pages = nr;
 	}
 
 	if (err) {
-		for (size_t j = 0; j < r->nr_pages; j++)
-			unmap_user_pages(mm->pgd, addr + j * PAGE_SIZE,
-					 PAGE_SIZE);
+		uvm_region_unmap_range(mm, r, 0, r->nr_pages);
 		uvm_region_release(r);
 		return err;
 	}
@@ -767,9 +764,11 @@ int uvm_mremap(struct uvm_space *mm, u64 old_addr, size_t old_len,
 	}
 
 	if (new_size < old_size && !fixed) {
-		unmap_user_pages(mm->pgd, old_addr + new_size,
-				 (size_t)(old_size - new_size));
-		uvm_region_free_range(r, new_size / PAGE_SIZE,
+		size_t new_nr = new_size / PAGE_SIZE;
+
+		uvm_region_unmap_range(mm, r, new_nr,
+				       r->nr_pages - new_nr);
+		uvm_region_free_range(r, new_nr,
 				      (old_size - new_size) / PAGE_SIZE);
 		r->nr_pages = new_size / PAGE_SIZE;
 		r->size = (size_t)new_size;
@@ -821,7 +820,7 @@ int uvm_mremap(struct uvm_space *mm, u64 old_addr, size_t old_len,
 
 	list_add_tail(&new_r->list, &mm->seg);
 	list_del(&r->list);
-	unmap_user_pages(mm->pgd, r->addr, r->size);
+	uvm_region_unmap_range(mm, r, 0, r->nr_pages);
 	uvm_region_release(r);
 	sfence_vma();
 
@@ -883,7 +882,7 @@ int uvm_munmap(struct uvm_space *mm, u64 addr, size_t len)
 			}
 		}
 
-		unmap_user_pages(mm->pgd, lo, nr * PAGE_SIZE);
+		uvm_region_unmap_range(mm, r, off, nr);
 
 		if (lo == rstart && hi == rend) {
 			list_del(&r->list);
@@ -952,11 +951,163 @@ int uvm_munmap(struct uvm_space *mm, u64 addr, size_t len)
 	return 0;
 }
 
+static struct uvm_region *find_region_containing(struct uvm_space *mm,
+						  u64 addr)
+{
+	struct uvm_region *r;
+
+	list_for_each_entry(r, &mm->seg, list) {
+		if (addr >= r->addr && addr - r->addr < r->size)
+			return r;
+	}
+	return NULL;
+}
+
+static bool update_present_pte(struct uvm_space *mm, u64 addr,
+			       unsigned int flags)
+{
+	pgd_t *pgde;
+	pmd_t *pmd, *pmde;
+	pte_t *pt, *pte;
+
+	pgde = &mm->pgd[pgd_index(addr)];
+	if (!pgd_is_valid(*pgde) || pgd_is_leaf(*pgde))
+		return false;
+	pmd = (pmd_t *)phys_to_virt(pgd_next(*pgde));
+	pmde = &pmd[pmd_index(addr)];
+	if (!pmd_is_valid(*pmde) || pmd_is_leaf(*pmde))
+		return false;
+	pt = (pte_t *)phys_to_virt(pmd_next(*pmde));
+	pte = &pt[pte_index(addr)];
+	if (!pte_is_valid(*pte))
+		return false;
+
+	if (flags & (PTE_R | PTE_W | PTE_X))
+		pte_set_leaf(pte, pte_leaf(*pte), flags | PTE_U);
+	else
+		pte_clear(pte);
+	return true;
+}
+
+static struct uvm_region *split_region_at(struct uvm_space *mm,
+					  struct uvm_region *r, u64 at)
+{
+	struct uvm_region *right;
+	size_t off, right_nr;
+
+	(void)mm;
+	if (at <= r->addr || at >= r->addr + r->size)
+		return ERR_PTR(-EINVAL);
+
+	off = (size_t)((at - r->addr) >> PAGE_SHIFT);
+	right_nr = r->nr_pages - off;
+
+	right = uvm_region_alloc();
+	if (!right)
+		return ERR_PTR(-ENOMEM);
+
+	right->kind = r->kind;
+	right->addr = at;
+	right->size = r->addr + r->size - at;
+	right->flags = r->flags;
+	right->file_offset = r->file_offset + (loff_t)(at - r->addr);
+	right->nr_pages = right_nr;
+
+	if (r->kind == UVM_REGION_SHARED_FILE) {
+		right->inode = fs_inode_get(r->inode);
+		right->file = fs_file_get(r->file);
+		right->cached = kcalloc(right_nr, sizeof(right->cached[0]));
+		if (!right->cached) {
+			fs_inode_put(right->inode);
+			if (right->file)
+				fs_file_put(right->file);
+			uvm_region_free(right);
+			return ERR_PTR(-ENOMEM);
+		}
+		memcpy(right->cached, r->cached + off,
+		       right_nr * sizeof(right->cached[0]));
+	} else {
+		right->pages = kcalloc(right_nr, sizeof(right->pages[0]));
+		if (!right->pages) {
+			uvm_region_free(right);
+			return ERR_PTR(-ENOMEM);
+		}
+		memcpy(right->pages, r->pages + off,
+		       right_nr * sizeof(right->pages[0]));
+	}
+
+	r->nr_pages = off;
+	r->size = at - r->addr;
+	list_add(&right->list, &r->list);
+	return right;
+}
+
+int uvm_handle_fault(struct uvm_space *mm, u64 addr, bool write, bool instr)
+{
+	struct uvm_region *r;
+	u64 page = addr & ~(u64)(PAGE_SIZE - 1);
+	unsigned int need, flags;
+	unsigned long pa;
+	size_t idx;
+	int err;
+
+	if (!mm)
+		return -EFAULT;
+	if (addr > USER_SPACE_SIZE_MAX)
+		return -EFAULT;
+
+	r = find_region_containing(mm, page);
+	if (!r)
+		return -EFAULT;
+
+	idx = (size_t)((page - r->addr) >> PAGE_SHIFT);
+	if (idx >= r->nr_pages)
+		return -EFAULT;
+
+	if (instr)
+		need = PTE_X;
+	else if (write)
+		need = PTE_W;
+	else
+		need = PTE_R;
+
+	if ((r->flags & need) != need)
+		return -EACCES;
+
+	if (r->kind == UVM_REGION_SHARED_FILE) {
+		struct cached_page *cp = r->cached[idx];
+
+		if (!cp)
+			return -EFAULT;
+		pa = page_to_phys(cp->page);
+	} else {
+		if (!r->pages[idx]) {
+			struct page *pg = page_alloc(0);
+
+			if (!pg)
+				return -ENOMEM;
+			memset((void *)page_to_virt(pg), 0, PAGE_SIZE);
+			r->pages[idx] = pg;
+		}
+		pa = page_to_phys(r->pages[idx]);
+	}
+
+	flags = r->flags & (PTE_R | PTE_W | PTE_X);
+	if (!update_present_pte(mm, page, flags)) {
+		err = map_user_pages(mm->pgd, page, PAGE_SIZE, pa, flags);
+		if (err)
+			return err;
+	}
+	sfence_vma();
+	return 0;
+}
+
 int uvm_mprotect(struct uvm_space *mm, u64 addr, size_t len, int prot)
 {
 	u64 size;
 	u64 end;
 	unsigned int pte_flags;
+	struct uvm_region *r, *next;
 
 	if (!mm || len == 0)
 		return -EINVAL;
@@ -971,36 +1122,66 @@ int uvm_mprotect(struct uvm_space *mm, u64 addr, size_t len, int prot)
 	    size > USER_SPACE_SIZE_MAX - addr)
 		return -EINVAL;
 	end = addr + size;
-	pte_flags = prot_to_pte(prot);
+	pte_flags = prot_to_pte(prot) & (PTE_R | PTE_W | PTE_X);
 
-	for (u64 a = addr; a < end; a += PAGE_SIZE) {
-		pgd_t *pgde = &mm->pgd[pgd_index(a)];
-		pmd_t *pmd, *pmde;
-		pte_t *pt, *pte;
+	/*
+	 * Split VMAs at the range boundaries so each region carries a single
+	 * protection value.  Pages that have not faulted in yet simply inherit
+	 * the new flags when they are finally populated.
+	 */
+	list_for_each_entry_safe(r, next, &mm->seg, list) {
+		u64 rstart = r->addr;
+		u64 rend = rstart + r->size;
 
-		if (!pgd_is_valid(*pgde) || pgd_is_leaf(*pgde))
-			return -ENOMEM;
-		pmd = (pmd_t *)phys_to_virt(pgd_next(*pgde));
-		pmde = &pmd[pmd_index(a)];
-		if (!pmd_is_valid(*pmde) || pmd_is_leaf(*pmde))
-			return -ENOMEM;
-		pt = (pte_t *)phys_to_virt(pmd_next(*pmde));
-		pte = &pt[pte_index(a)];
-		if (!pte_is_valid(*pte))
-			return -ENOMEM;
+		if (rend <= addr || rstart >= end)
+			continue;
 
-		pte_set_leaf(pte, pte_leaf(*pte), pte_flags | PTE_U);
-	}
+		if (rstart < addr) {
+			struct uvm_region *right = split_region_at(mm, r, addr);
 
-	struct uvm_region *r;
+			if (IS_ERR(right))
+				return PTR_ERR(right);
+			r = right;
+			rstart = r->addr;
+			rend = rstart + r->size;
+		}
 
-	list_for_each_entry(r, &mm->seg, list) {
-		if (r->addr >= addr && r->addr + r->size <= end)
-			r->flags = pte_flags;
+		if (rend > end) {
+			struct uvm_region *right = split_region_at(mm, r, end);
+
+			if (IS_ERR(right))
+				return PTR_ERR(right);
+			rend = end;
+		}
+
+		r->flags = pte_flags;
+		for (u64 a = rstart; a < rend; a += PAGE_SIZE)
+			update_present_pte(mm, a, pte_flags);
 	}
 
 	sfence_vma();
 	return 0;
+}
+
+bool uvm_page_is_mapped(struct uvm_space *mm, u64 addr)
+{
+	pgd_t *pgde;
+	pmd_t *pmd, *pmde;
+	pte_t *pt, *pte;
+
+	if (!mm)
+		return false;
+
+	pgde = &mm->pgd[pgd_index(addr)];
+	if (!pgd_is_valid(*pgde) || pgd_is_leaf(*pgde))
+		return false;
+	pmd = (pmd_t *)phys_to_virt(pgd_next(*pgde));
+	pmde = &pmd[pmd_index(addr)];
+	if (!pmd_is_valid(*pmde) || pmd_is_leaf(*pmde))
+		return false;
+	pt = (pte_t *)phys_to_virt(pmd_next(*pmde));
+	pte = &pt[pte_index(addr)];
+	return pte_is_valid(*pte);
 }
 
 int uvm_pte_flags(struct uvm_space *mm, u64 addr, unsigned int *flags)

@@ -41,6 +41,7 @@ struct uvm_region {
 	struct list_head list;
 	u64 addr;
 	size_t size;
+	/* Demand-paged anonymous pages; entries are NULL until faulted. */
 	struct page **pages;
 	struct cached_page **cached;
 	size_t nr_pages;
