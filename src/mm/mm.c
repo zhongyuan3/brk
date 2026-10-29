@@ -7,7 +7,9 @@
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/memblock.h>
+#include <brk/fs.h>
 #include <brk/mm.h>
+#include <brk/pagecache.h>
 #include <brk/mm_types.h>
 #include <brk/pgalloc.h>
 #include <brk/refcnt.h>
@@ -76,12 +78,7 @@ static void uvm_space_free_segments(struct uvm_space *mm)
 	list_for_each_entry_safe(curr, next, &mm->seg, list) {
 		list_del(&curr->list);
 		unmap_user_pages(mm->pgd, curr->addr, curr->size);
-		for (size_t i = 0; i < curr->nr_pages; ++i) {
-			ASSERT(curr->pages[i]);
-			page_free(curr->pages[i], 0);
-		}
-		kfree(curr->pages);
-		uvm_region_free(curr);
+		uvm_region_release(curr);
 	}
 }
 
@@ -130,25 +127,132 @@ void uvm_space_put(struct uvm_space *mm)
 	uvm_space_destroy(mm);
 }
 
+void uvm_region_free_range(struct uvm_region *region, size_t start, size_t nr)
+{
+	if (!region || start >= region->nr_pages)
+		return;
+	if (nr > region->nr_pages - start)
+		nr = region->nr_pages - start;
+
+	for (size_t i = 0; i < nr; i++) {
+		size_t idx = start + i;
+
+		if (region->kind == UVM_REGION_SHARED_FILE) {
+			struct cached_page *cp = region->cached[idx];
+
+			if (cp) {
+				cached_page_mark_dirty(cp);
+				cached_page_put(cp);
+				region->cached[idx] = NULL;
+			}
+		} else if (region->pages[idx]) {
+			page_free(region->pages[idx], 0);
+			region->pages[idx] = NULL;
+		}
+	}
+}
+
+void uvm_region_release(struct uvm_region *region)
+{
+	if (!region)
+		return;
+
+	uvm_region_free_range(region, 0, region->nr_pages);
+	kfree(region->pages);
+	kfree(region->cached);
+
+	if (region->kind == UVM_REGION_SHARED_FILE) {
+		if (region->inode)
+			fs_inode_put(region->inode);
+		if (region->file)
+			fs_file_put(region->file);
+	}
+
+	uvm_region_free(region);
+}
+
 static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 				 struct uvm_space *dst_mm,
 				 struct uvm_space *src_mm)
 {
-	size_t npgs;
-	struct page **pgs;
-	int err = 0;
-
-	npgs = src->nr_pages;
-	pgs = kcalloc(npgs, sizeof(struct page *));
-	if (!pgs)
-		return -ENOMEM;
-
+	size_t npgs = src->nr_pages;
 	size_t i = 0;
 	u64 addr = src->addr;
 	size_t size = src->size;
+	int err = 0;
+
+	if (src->kind == UVM_REGION_SHARED_FILE) {
+		dst->kind = UVM_REGION_SHARED_FILE;
+		dst->inode = fs_inode_get(src->inode);
+		dst->file = fs_file_get(src->file);
+		dst->file_offset = src->file_offset;
+		dst->cached = kcalloc(npgs, sizeof(dst->cached[0]));
+		if (!dst->cached) {
+			fs_inode_put(dst->inode);
+			dst->inode = NULL;
+			if (dst->file) {
+				fs_file_put(dst->file);
+				dst->file = NULL;
+			}
+			return -ENOMEM;
+		}
+
+		while (size > 0 && i < npgs) {
+			struct cached_page *cp = src->cached[i];
+			unsigned int flags;
+
+			if (!cp) {
+				err = -EIO;
+				goto failed_shared;
+			}
+			err = uvm_pte_flags(src_mm, addr, &flags);
+			if (err)
+				goto failed_shared;
+
+			cached_page_get(cp);
+			err = map_user_pages(dst_mm->pgd, addr, PAGE_SIZE,
+					     page_to_phys(cp->page), flags);
+			if (err) {
+				cached_page_put(cp);
+				goto failed_shared;
+			}
+			dst->cached[i] = cp;
+			dst->nr_pages = i + 1;
+			addr += PAGE_SIZE;
+			size -= PAGE_SIZE;
+			++i;
+		}
+
+		dst->addr = src->addr;
+		dst->size = src->size;
+		dst->flags = src->flags;
+		return 0;
+
+	failed_shared:
+		for (u64 a = src->addr; a < addr; a += PAGE_SIZE)
+			unmap_user_pages(dst_mm->pgd, a, PAGE_SIZE);
+		uvm_region_free_range(dst, 0, dst->nr_pages);
+		kfree(dst->cached);
+		dst->cached = NULL;
+		if (dst->inode)
+			fs_inode_put(dst->inode);
+		dst->inode = NULL;
+		if (dst->file) {
+			fs_file_put(dst->file);
+			dst->file = NULL;
+		}
+		return err;
+	}
+
+	struct page **pgs = kcalloc(npgs, sizeof(struct page *));
+
+	if (!pgs)
+		return -ENOMEM;
+
 	while (size > 0 && i < npgs) {
 		struct page *pg = page_alloc(0);
 		unsigned int flags;
+
 		if (!pg) {
 			err = -ENOMEM;
 			goto failed;
@@ -159,7 +263,9 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 			goto failed;
 		}
 		u64 dst_pa = page_to_phys(pg);
-		err = map_user_pages(dst_mm->pgd, addr, PAGE_SIZE, dst_pa, flags);
+
+		err = map_user_pages(dst_mm->pgd, addr, PAGE_SIZE, dst_pa,
+				     flags);
 		if (err) {
 			ASSERT(pg);
 			page_free(pg, 0);
@@ -167,19 +273,21 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 		}
 		void *dst_va = (void *)phys_to_virt(dst_pa);
 		void *src_va = (void *)page_to_virt(src->pages[i]);
+
 		memcpy(dst_va, src_va, PAGE_SIZE);
 		pgs[i] = pg;
+		dst->nr_pages = i + 1;
 		addr += PAGE_SIZE;
 		size -= PAGE_SIZE;
 		++i;
 	}
 
+	dst->kind = UVM_REGION_ANON;
 	dst->addr = src->addr;
 	dst->size = src->size;
 	dst->flags = src->flags;
 	dst->pages = pgs;
 	dst->nr_pages = npgs;
-
 	return 0;
 
 failed:
@@ -197,8 +305,6 @@ static int uvm_space_copy_segments(struct uvm_space *dst, struct uvm_space *src)
 {
 	LIST_DEFINE(seg);
 	struct uvm_region *curr, *next;
-	size_t npgs;
-	struct page **pgs;
 	int err = 0;
 
 	if (list_empty(&src->seg))
@@ -227,14 +333,7 @@ failed:
 		list_for_each_entry_safe(curr, next, &seg, list) {
 			list_del(&curr->list);
 			unmap_user_pages(dst->pgd, curr->addr, curr->size);
-			npgs = curr->nr_pages;
-			pgs = curr->pages;
-			for (size_t i = 0; i < npgs; ++i) {
-				ASSERT(pgs[i]);
-				page_free(pgs[i], 0);
-			}
-			kfree(curr->pages);
-			uvm_region_free(curr);
+			uvm_region_release(curr);
 		}
 	}
 	return err;

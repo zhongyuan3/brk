@@ -22,6 +22,12 @@ int uvm_mmap_anon(struct uvm_space *mm, u64 hint, size_t len, int prot,
 int uvm_mmap_file_private(struct uvm_space *mm, u64 hint, size_t len,
 			  int prot, int flags, int fd, u64 offset,
 			  u64 *addr_out);
+/* File-backed, MAP_SHARED: map page cache pages directly. */
+int uvm_mmap_file_shared(struct uvm_space *mm, u64 hint, size_t len,
+			 int prot, int flags, int fd, u64 offset,
+			 u64 *addr_out);
+int uvm_mremap(struct uvm_space *mm, u64 old_addr, size_t old_len,
+	       size_t new_len, int flags, u64 new_addr, u64 *addr_out);
 int uvm_munmap(struct uvm_space *mm, u64 addr, size_t len);
 int uvm_mprotect(struct uvm_space *mm, u64 addr, size_t len, int prot);
 int uvm_msync(struct uvm_space *mm, u64 addr, size_t len, int flags);
@@ -32,6 +38,9 @@ int uvm_pte_flags(struct uvm_space *mm, u64 addr, unsigned int *flags);
 
 struct uvm_region *uvm_region_alloc(void);
 void uvm_region_free(struct uvm_region *region);
+void uvm_region_free_range(struct uvm_region *region, size_t start,
+			   size_t nr);
+void uvm_region_release(struct uvm_region *region);
 
 struct map_pages_context {
 	pgd_t *root;

@@ -130,10 +130,6 @@ u64 sys_execve(void)
 
 
 
-u64 sys_mremap(void)
-{
-	return -ENOSYS;
-}
 
 u64 sys_fstat(void)
 {
