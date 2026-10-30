@@ -52,6 +52,7 @@
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
+#include <brk/net/net.h>
 #include <brk/pagecache.h>
 #include <brk/path.h>
 #include <brk/pgalloc.h>
@@ -116,6 +117,10 @@ static int procfs_show_pagecache_shrink(const struct procfs_entry *e, pid_t pid,
 static ssize_t procfs_write_pagecache_shrink(const struct procfs_entry *e,
 					     const char *buf, size_t size,
 					     loff_t *pos);
+static int procfs_show_ping(const struct procfs_entry *e, pid_t pid,
+			    char *buf, size_t size);
+static ssize_t procfs_write_ping(const struct procfs_entry *e, const char *buf,
+				 size_t size, loff_t *pos);
 static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
 				  char *buf, size_t size);
 static int procfs_show_pid_stat(const struct procfs_entry *e, pid_t pid,
@@ -161,6 +166,13 @@ static const struct procfs_entry procfs_root_entries[] = {
 	  .mode = S_IFREG | 0644,
 	  .show = procfs_show_pagecache_shrink,
 	  .write = procfs_write_pagecache_shrink },
+	{ .name = "ping",
+	  .name_len = 4,
+	  .idx = 7,
+	  .d_type = DT_REG,
+	  .mode = S_IFREG | 0644,
+	  .show = procfs_show_ping,
+	  .write = procfs_write_ping },
 };
 #define PROCFS_ROOT_ENTRIES_NR countof(procfs_root_entries)
 
@@ -432,6 +444,41 @@ static ssize_t procfs_write_pagecache_shrink(const struct procfs_entry *e,
 	return (ssize_t)size;
 }
 
+static int procfs_show_ping(const struct procfs_entry *e, pid_t pid, char *buf,
+			    size_t size)
+{
+	(void)e;
+	(void)pid;
+
+	return snprintf(buf, size,
+			"# write an IPv4 address to send one ICMP echo request\n"
+			"# example: echo 10.0.2.2 > /proc/ping\n");
+}
+
+static ssize_t procfs_write_ping(const struct procfs_entry *e, const char *buf,
+				 size_t size, loff_t *pos)
+{
+	u32 addr;
+	int err;
+
+	(void)e;
+
+	if (*pos != 0 || size == 0)
+		return -EINVAL;
+
+	err = net_parse_ipv4(buf, size, &addr);
+	if (err)
+		return err;
+
+	err = net_ping(addr);
+	/* -EAGAIN means the first packet is queued behind ARP. */
+	if (err && err != -EAGAIN)
+		return err;
+
+	*pos = (loff_t)size;
+	return (ssize_t)size;
+}
+
 static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
 				  char *buf, size_t size)
 {
@@ -691,8 +738,15 @@ static int procfs_getattr(const struct fs_path *path, struct stat *stat,
 static int procfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 {
 	(void)dentry;
-	(void)attr;
-	return -EROFS;
+
+	/*
+	 * Debug control files are generated on open.  Ignore size/time
+	 * updates (shell redirection uses O_TRUNC) but still reject mode and
+	 * ownership changes.
+	 */
+	if (attr->valid & ~(ATTR_SIZE | ATTR_ATIME | ATTR_MTIME | ATTR_CTIME))
+		return -EROFS;
+	return 0;
 }
 
 static const struct fs_inode_ops procfs_root_iops = {

@@ -85,4 +85,18 @@ u64 sys_sync(void);
 u64 sys_syncfs(void);
 u64 sys_gettid(void);
 
+u64 sys_socket(void);
+u64 sys_bind(void);
+u64 sys_connect(void);
+u64 sys_listen(void);
+u64 sys_accept(void);
+u64 sys_accept4(void);
+u64 sys_sendto(void);
+u64 sys_recvfrom(void);
+u64 sys_shutdown(void);
+u64 sys_getsockname(void);
+u64 sys_getpeername(void);
+u64 sys_setsockopt(void);
+u64 sys_getsockopt(void);
+
 #endif

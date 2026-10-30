@@ -94,6 +94,19 @@ QEMU_OPTS += -drive file=$(ROOTFS_IMG),if=none,format=raw,id=x0
 QEMU_OPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 QEMU_OPTS += -global virtio-mmio.force-legacy=false
 
+# Set QEMU_NET=0 to boot without a network device.  The NIC sits on the
+# second virtio-mmio bus because virtio-mmio-bus.0 is taken by the disk.
+QEMU_NET ?= 1
+ifeq ($(QEMU_NET),1)
+QEMU_OPTS += -netdev user,id=net0
+QEMU_OPTS += -device virtio-net-device,netdev=net0,bus=virtio-mmio-bus.1
+endif
+
+# Optional pcap capture, e.g. make run QEMU_NET_DUMP=/tmp/brk-net.pcap
+ifneq ($(QEMU_NET_DUMP),)
+QEMU_OPTS += -object filter-dump,id=netdump,netdev=net0,file=$(QEMU_NET_DUMP)
+endif
+
 .PHONY: all brk run gdb-server gdb-client rootfs clean clean-kernel help FORCE
 
 all: brk
