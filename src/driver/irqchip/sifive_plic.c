@@ -187,30 +187,32 @@ static void plic_hwirq_clear_enable(struct sifive_plic *p, unsigned int hart,
 static void plic_selftest(struct sifive_plic *p)
 {
 	bool h0, h1, h0_after, h1_after;
+	u32 test_hwirq = p->ndev - 1;
 	unsigned int virq;
 
 	if (p->ndev <= 1)
 		return;
 
 	/*
-	 * Map an unused hwirq and verify that irq_set_affinity() moves the
-	 * PLIC enable bit between two harts.  The later virtio scan reuses
-	 * this mapping for the same hwirq, so leave it mapped.
+	 * Use the last PLIC source, which no QEMU virt device uses, so the
+	 * test never disturbs a real device IRQ.  The mapping is left in
+	 * place (it is harmless and shows up as <none> in /proc/interrupts).
 	 */
-	virq = irq_create_mapping(p->domain, 1, IRQ_TYPE_LEVEL_HIGH);
+	virq = irq_create_mapping(p->domain, test_hwirq, IRQ_TYPE_LEVEL_HIGH);
 	if (!virq) {
-		pr_err("plic: affinity selftest: cannot map hwirq 1\n");
+		pr_err("plic: affinity selftest: cannot map hwirq %u\n",
+		       test_hwirq);
 		return;
 	}
 
 	irq_set_affinity(virq, 0);
-	h0 = plic_hwirq_enabled(p, 0, 1);
-	h1 = nr_harts > 1 ? plic_hwirq_enabled(p, 1, 1) : false;
+	h0 = plic_hwirq_enabled(p, 0, test_hwirq);
+	h1 = nr_harts > 1 ? plic_hwirq_enabled(p, 1, test_hwirq) : false;
 
 	if (nr_harts > 1) {
 		irq_set_affinity(virq, 1);
-		h0_after = plic_hwirq_enabled(p, 0, 1);
-		h1_after = plic_hwirq_enabled(p, 1, 1);
+		h0_after = plic_hwirq_enabled(p, 0, test_hwirq);
+		h1_after = plic_hwirq_enabled(p, 1, test_hwirq);
 		irq_set_affinity(virq, 0);
 
 		if (h0 && !h1 && !h0_after && h1_after)
@@ -228,9 +230,9 @@ static void plic_selftest(struct sifive_plic *p)
 			       h0, h1);
 	}
 
-	plic_hwirq_clear_enable(p, 0, 1);
+	plic_hwirq_clear_enable(p, 0, test_hwirq);
 	if (nr_harts > 1)
-		plic_hwirq_clear_enable(p, 1, 1);
+		plic_hwirq_clear_enable(p, 1, test_hwirq);
 }
 
 static int plic_probe(int fdt_node)
