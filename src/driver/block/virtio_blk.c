@@ -118,10 +118,12 @@ static void virtio_blk_vq_used(struct virtq *vq, u32 id, u32 len, void *ctx)
 	task_wake_all(&io->completed);
 }
 
-static void virtio_blk_irq_handler(void *ctx)
+static irqreturn_t virtio_blk_irq_handler(int irq, void *dev_id)
 {
-	struct virtio_blk_dev *vblk = ctx;
+	struct virtio_blk_dev *vblk = dev_id;
 	irqstate_t flags = spin_lock_irqsave(&vblk->lock);
+
+	(void)irq;
 
 	virtio_mmio_ack_interrupt(vblk->vdev);
 
@@ -130,6 +132,7 @@ static void virtio_blk_irq_handler(void *ctx)
 	virtq_process_used(&vblk->vq, virtio_blk_vq_used, vblk);
 
 	spin_unlock_irqrestore(&vblk->lock, flags);
+	return IRQ_HANDLED;
 }
 
 #define VIRTIO_BLK_MAX_SEGS 16
@@ -358,18 +361,17 @@ static int virtio_blk_setup(struct virtio_blk_dev *vblk,
 	if (err)
 		return err;
 
-	err = irq_register_handler(vdev->irq, virtio_blk_irq_handler, vblk,
-				   NULL, NULL);
+	err = request_irq(vdev->irq, virtio_blk_irq_handler, 0,
+			  "virtio_blk", vblk);
 	if (err)
 		return err;
-	irq_set_priority(vdev->irq, 1);
 
 	return 0;
 }
 
 static void virtio_blk_detach(struct virtio_blk_dev *vblk)
 {
-	irq_unregister_handler(vblk->vdev->irq, NULL, NULL);
+	free_irq(vblk->vdev->irq, vblk);
 }
 
 struct virtio_blk_dev *virtio_blk_create(struct virtio_device *vdev,
@@ -564,24 +566,4 @@ void virtio_blk_init(void)
 	if (err)
 		panic("%s(): driver_register failed\n", __func__);
 }
-postcore_initcall(virtio_blk_init);
-
-int virtio_blk_enable_irq(u32 hart_id)
-{
-	int err = 0;
-
-	if (!vblk_registry)
-		return -EINVAL;
-
-	spin_lock(&vblk_registry->lock);
-	for (unsigned i = 0; i < vblk_registry->num_vblks; i++) {
-		if (vblk_registry->vblks[i]) {
-			err = irq_enable_source(
-				hart_id, vblk_registry->vblks[i]->vdev->irq);
-			if (err)
-				break;
-		}
-	}
-	spin_unlock(&vblk_registry->lock);
-	return err;
-}
+subsys_initcall(virtio_blk_init);

@@ -1,184 +1,299 @@
+#include <arch/hart.h>
 #include <arch/pgtable.h>
 #include <brk/dt.h>
+#include <brk/initcall.h>
 #include <brk/ioremap.h>
 #include <brk/irq.h>
+#include <brk/irq/irqchip.h>
+#include <brk/irq/irqdesc.h>
+#include <brk/irq/irqdomain.h>
+#include <brk/kernel.h>
 #include <brk/kmalloc.h>
-#include <brk/mm.h>
-#include <brk/panic.h>
-#include <brk/plic.h>
-#include <brk/sifive_plic.h>
+#include <brk/mmio.h>
+#include <brk/printk.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <libfdt.h>
 #include <uapi/errno.h>
 
 #define PLIC_PRIORITY_OFFSET 0x000000
-#define PLIC_PENDING_OFFSET 0x001000
 #define PLIC_ENABLE_OFFSET 0x002000
 #define PLIC_THRESHOLD_OFFSET 0x200000
 #define PLIC_CLAIM_COMPLETE_OFFSET 0x200004
 
 struct sifive_plic {
-	u64 mem_base;
-	u64 priority_base;
-	u64 pending_base;
-	u64 enable_base;
-	u64 threshold_base;
-	u64 claim_complete_base;
+	u8 *base;
+	u32 ndev;
+	struct irq_domain *domain;
+	struct irq_controller controller;
 };
 
-static bool plic_source_is_valid(struct plic_device *plic, u32 source)
+static inline u32 plic_ctx(unsigned int hart)
 {
-	return source < plic->ndev;
+	return 2 * hart + 1;
 }
 
-static volatile u32 *plic_senable(struct sifive_plic *plic_data, u32 hart_id)
+static inline volatile u32 *plic_enable_reg(struct sifive_plic *p,
+					    unsigned int hart)
 {
-	size_t ctx = 2 * hart_id + 1;
-	return (volatile u32 *)(uintptr_t)(plic_data->enable_base + ctx * 0x80);
+	return (volatile u32 *)(p->base + PLIC_ENABLE_OFFSET +
+				plic_ctx(hart) * 0x80);
 }
 
-static int plic_enable(void *data, u32 hart_id, u32 source)
+static inline volatile u32 *plic_threshold_reg(struct sifive_plic *p,
+					       unsigned int hart)
 {
-	volatile u32 *senable;
-	struct plic_device *plic = data;
-	struct sifive_plic *plic_data = plic->client_data;
+	return (volatile u32 *)(p->base + PLIC_THRESHOLD_OFFSET +
+				plic_ctx(hart) * 0x1000);
+}
 
-	if (!plic_source_is_valid(plic, source))
-		return -EINVAL;
+static inline volatile u32 *plic_claim_reg(struct sifive_plic *p,
+					   unsigned int hart)
+{
+	return (volatile u32 *)(p->base + PLIC_CLAIM_COMPLETE_OFFSET +
+				plic_ctx(hart) * 0x1000);
+}
 
-	senable = plic_senable(plic_data, hart_id);
-	if (!senable)
-		return -EINVAL;
+static void plic_set_priority(struct sifive_plic *p, u32 hwirq, u32 priority)
+{
+	((volatile u32 *)(p->base + PLIC_PRIORITY_OFFSET))[hwirq] = priority;
+}
 
-	senable[source / 32] |= (1 << (source % 32));
+static void plic_irq_mask(struct irq_data *d)
+{
+	struct sifive_plic *p = d->chip_data;
+	volatile u32 *en;
+
+	if (!p || d->hwirq >= p->ndev)
+		return;
+
+	en = plic_enable_reg(p, d->hart);
+	en[d->hwirq / 32] &= ~(1u << (d->hwirq % 32));
+}
+
+static void plic_irq_unmask(struct irq_data *d)
+{
+	struct sifive_plic *p = d->chip_data;
+	volatile u32 *en;
+
+	if (!p || d->hwirq >= p->ndev)
+		return;
+
+	en = plic_enable_reg(p, d->hart);
+	en[d->hwirq / 32] |= 1u << (d->hwirq % 32);
+}
+
+static int plic_irq_set_affinity(struct irq_data *d, unsigned int hart)
+{
+	plic_irq_mask(d);
+	d->hart = hart;
+	plic_irq_unmask(d);
 	return 0;
 }
 
-static int plic_disable(void *data, u32 hart_id, u32 source)
-{
-	volatile u32 *senable;
-	struct plic_device *plic = data;
-	struct sifive_plic *plic_data = plic->client_data;
-
-	if (!plic_source_is_valid(plic, source))
-		return -EINVAL;
-
-	senable = plic_senable(plic_data, hart_id);
-	if (!senable)
-		return -EINVAL;
-
-	senable[source / 32] &= ~(1 << (source % 32));
-	return 0;
-}
-
-static int plic_set_priority(void *data, u32 source, unsigned int priority)
-{
-	struct plic_device *plic = data;
-	struct sifive_plic *plic_data = plic->client_data;
-	if (!plic_source_is_valid(plic, source))
-		return -EINVAL;
-
-	((volatile u32 *)(uintptr_t)(plic_data->priority_base))[source] =
-		priority;
-
-	return 0;
-}
-
-static volatile u32 *plic_sthreshold(struct sifive_plic *plic_data, u32 hart_id)
-{
-	size_t ctx = 2 * hart_id + 1;
-	return (volatile u32 *)(uintptr_t)(plic_data->threshold_base +
-					   ctx * 0x1000);
-}
-
-static int plic_set_threshold(struct sifive_plic *plic_data, u32 hart_id,
-			      unsigned int threshold)
-{
-	volatile u32 *sthreshold;
-
-	sthreshold = plic_sthreshold(plic_data, hart_id);
-	if (!sthreshold)
-		return -EINVAL;
-
-	*sthreshold = threshold;
-	return 0;
-}
-
-static volatile u32 *plic_sclaim_complete(struct sifive_plic *plic_data,
-					  u32 hart_id)
-{
-	size_t ctx = 2 * hart_id + 1;
-	return (volatile u32 *)(uintptr_t)(plic_data->claim_complete_base +
-					   ctx * 0x1000);
-}
-
-static int plic_claim(void *data, u32 hart_id, u32 *source)
-{
-	volatile u32 *sclaim;
-	struct plic_device *plic = data;
-	struct sifive_plic *plic_data = plic->client_data;
-
-	sclaim = plic_sclaim_complete(plic_data, hart_id);
-	if (!sclaim)
-		return -EINVAL;
-
-	*source = *sclaim;
-	return 0;
-}
-
-static int plic_complete(void *data, u32 hart_id, u32 source)
-{
-	volatile u32 *scomplete;
-	struct plic_device *plic = data;
-	struct sifive_plic *plic_data = plic->client_data;
-
-	if (!plic_source_is_valid(plic, source))
-		return -EINVAL;
-
-	scomplete = plic_sclaim_complete(plic_data, hart_id);
-	if (!scomplete)
-		return -EINVAL;
-
-	*scomplete = source;
-	return 0;
-}
-
-static u32 plic_get_ndev(void *data)
-{
-	struct plic_device *plic = data;
-	return plic->ndev;
-}
-
-static int plic_init_hart(void *data, u32 hart_id)
-{
-	struct plic_device *plic = data;
-	struct sifive_plic *plic_data = plic->client_data;
-	return plic_set_threshold(plic_data, hart_id, 0);
-}
-
-static struct irq_chip sifive_plic_irq_chip = {
-	.get_ndev = plic_get_ndev,
-	.init_hart = plic_init_hart,
-	.claim = plic_claim,
-	.complete = plic_complete,
-	.set_priority = plic_set_priority,
-	.enable = plic_enable,
-	.disable = plic_disable,
+static struct irq_chip plic_chip = {
+	.name = "sifive-plic",
+	.irq_mask = plic_irq_mask,
+	.irq_unmask = plic_irq_unmask,
+	.irq_set_affinity = plic_irq_set_affinity,
 };
 
-int sifive_plic_init(struct plic_device *plic)
+static int plic_domain_xlate(struct irq_domain *d, int fdt_node,
+			     const u32 *intspec, unsigned int intsize,
+			     irq_hw_number_t *out_hwirq, unsigned int *out_type)
 {
-	struct sifive_plic *plic_data = kzalloc(sizeof(struct sifive_plic));
-	plic_data->mem_base =
-		(uintptr_t)ioremap(plic->phys_base, plic->size, PTE_R | PTE_W);
-	plic_data->priority_base = plic_data->mem_base + PLIC_PRIORITY_OFFSET;
-	plic_data->pending_base = plic_data->mem_base + PLIC_PENDING_OFFSET;
-	plic_data->enable_base = plic_data->mem_base + PLIC_ENABLE_OFFSET;
-	plic_data->threshold_base = plic_data->mem_base + PLIC_THRESHOLD_OFFSET;
-	plic_data->claim_complete_base =
-		plic_data->mem_base + PLIC_CLAIM_COMPLETE_OFFSET;
-	plic->client_data = plic_data;
-	plic->chip = &sifive_plic_irq_chip;
+	(void)d;
+	(void)fdt_node;
 
+	if (intsize < 1)
+		return -EINVAL;
+
+	*out_hwirq = intspec[0];
+	*out_type = intsize >= 2 ? intspec[1] : IRQ_TYPE_LEVEL_HIGH;
 	return 0;
 }
+
+static int plic_domain_map(struct irq_domain *d, unsigned int virq,
+			   irq_hw_number_t hwirq, unsigned int type)
+{
+	struct sifive_plic *p = d->host_data;
+
+	if (hwirq == 0 || hwirq >= p->ndev)
+		return -EINVAL;
+
+	irq_set_chip_and_handler(virq, &plic_chip, handle_simple_irq);
+	irq_set_chip_data(virq, p);
+	irq_set_type(virq, type);
+
+	/* PLIC priority 0 means "never interrupt". */
+	plic_set_priority(p, hwirq, 1);
+	return 0;
+}
+
+static const struct irq_domain_ops plic_domain_ops = {
+	.xlate = plic_domain_xlate,
+	.map = plic_domain_map,
+};
+
+static int plic_init_hart(struct irq_controller *ctrl, unsigned int hart)
+{
+	struct sifive_plic *p = ctrl->priv;
+
+	*plic_threshold_reg(p, hart) = 0;
+	return 0;
+}
+
+static int plic_handle_irq(struct irq_controller *ctrl, unsigned int hart)
+{
+	struct sifive_plic *p = ctrl->priv;
+	volatile u32 *claim = plic_claim_reg(p, hart);
+	u32 hwirq = *claim;
+	unsigned int virq;
+
+	if (!hwirq) {
+		irq_note_spurious();
+		return 0;
+	}
+
+	virq = irq_find_mapping(ctrl->domain, hwirq);
+	if (virq) {
+		generic_handle_irq(virq);
+	} else {
+		irq_note_spurious();
+		pr_warn("plic: unmapped hwirq %u\n", hwirq);
+	}
+
+	*claim = hwirq;
+	return 1;
+}
+
+static bool plic_hwirq_enabled(struct sifive_plic *p, unsigned int hart,
+			       u32 hwirq)
+{
+	volatile u32 *en = plic_enable_reg(p, hart);
+
+	return (en[hwirq / 32] & (1u << (hwirq % 32))) != 0;
+}
+
+static void plic_hwirq_clear_enable(struct sifive_plic *p, unsigned int hart,
+				    u32 hwirq)
+{
+	volatile u32 *en = plic_enable_reg(p, hart);
+
+	en[hwirq / 32] &= ~(1u << (hwirq % 32));
+}
+
+static void plic_selftest(struct sifive_plic *p)
+{
+	bool h0, h1, h0_after, h1_after;
+	unsigned int virq;
+
+	if (p->ndev <= 1)
+		return;
+
+	/*
+	 * Map an unused hwirq and verify that irq_set_affinity() moves the
+	 * PLIC enable bit between two harts.  The later virtio scan reuses
+	 * this mapping for the same hwirq, so leave it mapped.
+	 */
+	virq = irq_create_mapping(p->domain, 1, IRQ_TYPE_LEVEL_HIGH);
+	if (!virq) {
+		pr_err("plic: affinity selftest: cannot map hwirq 1\n");
+		return;
+	}
+
+	irq_set_affinity(virq, 0);
+	h0 = plic_hwirq_enabled(p, 0, 1);
+	h1 = nr_harts > 1 ? plic_hwirq_enabled(p, 1, 1) : false;
+
+	if (nr_harts > 1) {
+		irq_set_affinity(virq, 1);
+		h0_after = plic_hwirq_enabled(p, 0, 1);
+		h1_after = plic_hwirq_enabled(p, 1, 1);
+		irq_set_affinity(virq, 0);
+
+		if (h0 && !h1 && !h0_after && h1_after)
+			pr_info("plic: affinity selftest passed (hart 0 <-> 1)\n");
+		else
+			pr_err("plic: affinity selftest failed "
+			       "(h0=%d h1=%d h0_after=%d h1_after=%d)\n",
+			       h0, h1, h0_after, h1_after);
+	} else {
+		if (h0 && !h1)
+			pr_info("plic: single-hart affinity selftest passed\n");
+		else
+			pr_err("plic: single-hart affinity selftest failed "
+			       "(h0=%d h1=%d)\n",
+			       h0, h1);
+	}
+
+	plic_hwirq_clear_enable(p, 0, 1);
+	if (nr_harts > 1)
+		plic_hwirq_clear_enable(p, 1, 1);
+}
+
+static int plic_probe(int fdt_node)
+{
+	const u32 *ndev;
+	struct sifive_plic *p;
+	u64 addr = 0, size = 0;
+	int len;
+
+	if (dt_get_reg(fdt_node, 0, &addr, &size))
+		return -EINVAL;
+
+	p = kzalloc(sizeof(*p));
+	if (!p)
+		return -ENOMEM;
+
+	p->base = ioremap(addr, size, PTE_R | PTE_W);
+	if (!p->base) {
+		kfree(p);
+		return -ENOMEM;
+	}
+
+	ndev = fdt_getprop(dt_get_fdt(), fdt_node, "riscv,ndev", &len);
+	p->ndev = ndev && len == sizeof(u32) ? fdt32_to_cpu(*ndev) : 1024;
+	if (p->ndev < 2)
+		p->ndev = 2;
+
+	p->domain =
+		irq_domain_add_linear(fdt_node, p->ndev, &plic_domain_ops, p);
+	if (!p->domain) {
+		iounmap(p->base, size);
+		kfree(p);
+		return -ENOMEM;
+	}
+
+	p->controller.name = "sifive-plic";
+	p->controller.domain = p->domain;
+	p->controller.priv = p;
+	p->controller.handle_irq = plic_handle_irq;
+	p->controller.init_hart = plic_init_hart;
+	list_init(&p->controller.list);
+	irq_register_controller(&p->controller);
+
+	plic_selftest(p);
+
+	pr_info("plic: %u sources at %#" PRIx64 "\n", p->ndev, addr);
+	return 0;
+}
+
+static const char *const plic_compatibles[] = {
+	"sifive,plic-1.0.0",
+	"riscv,plic0",
+	NULL,
+};
+
+static struct irqchip_driver plic_driver = {
+	.name = "sifive-plic",
+	.compatibles = plic_compatibles,
+	.probe = plic_probe,
+};
+
+static void plic_driver_register(void)
+{
+	irqchip_register_driver(&plic_driver);
+}
+core_initcall(plic_driver_register);

@@ -238,9 +238,9 @@ static void vnet_tx_used(struct virtq *vq, u32 id, u32 len, void *ctx)
 		virtq_free_desc(vq, id);
 }
 
-static void vnet_irq(void *ctx)
+static irqreturn_t vnet_irq(int irq, void *dev_id)
 {
-	struct virtio_net_dev *vnet = ctx;
+	struct virtio_net_dev *vnet = dev_id;
 	struct vnet_rx_pkt pkts[VIRTIO_NET_QUEUE_SIZE];
 	struct vnet_rx_collect collect = {
 		.vnet = vnet,
@@ -252,6 +252,8 @@ static void vnet_irq(void *ctx)
 	void *cb_ctx;
 	u32 status;
 	irqstate_t flags;
+
+	(void)irq;
 
 	flags = spin_lock_irqsave(&vnet->lock);
 
@@ -281,6 +283,7 @@ static void vnet_irq(void *ctx)
 			vnet->rx_dropped++;
 		kfree(pkt->data);
 	}
+	return IRQ_HANDLED;
 }
 
 static int vnet_ndo_start_xmit(struct sk_buff *skb, struct net_device *dev)
@@ -401,14 +404,14 @@ struct virtio_net_dev *virtio_net_create(struct virtio_device *vdev)
 	if (err)
 		goto err_free_bufs;
 
-	err = irq_register_handler(vdev->irq, vnet_irq, vnet, NULL, NULL);
+	err = request_irq(vdev->irq, vnet_irq, IRQF_SHARED, "virtio_net",
+			  vnet);
 	if (err)
 		goto err_free_bufs;
-	irq_set_priority(vdev->irq, 1);
 
 	err = virtio_mmio_driver_ok(vdev);
 	if (err) {
-		irq_unregister_handler(vdev->irq, NULL, NULL);
+		free_irq(vdev->irq, vnet);
 		goto err_free_bufs;
 	}
 
@@ -441,7 +444,7 @@ struct virtio_net_dev *virtio_net_create(struct virtio_device *vdev)
 
 err_reset:
 	virtio_mmio_reset(vdev);
-	irq_unregister_handler(vdev->irq, NULL, NULL);
+	free_irq(vdev->irq, vnet);
 err_free_bufs:
 	vnet_free_bufs(vnet);
 err_free_tx_vq:
@@ -468,7 +471,7 @@ void virtio_net_destroy(struct virtio_net_dev *vnet)
 	if (vnet->vdev) {
 		/* Stop the device before its descriptor memory disappears. */
 		virtio_mmio_reset(vnet->vdev);
-		irq_unregister_handler(vnet->vdev->irq, NULL, NULL);
+		free_irq(vnet->vdev->irq, vnet);
 	}
 
 	vnet_free_bufs(vnet);
@@ -538,6 +541,22 @@ int virtio_net_transmit(struct virtio_net_dev *vnet, const void *frame,
 const u8 *virtio_net_get_mac(struct virtio_net_dev *vnet)
 {
 	return vnet ? vnet->mac : NULL;
+}
+
+unsigned int virtio_net_first_irq(void)
+{
+	unsigned int irq = 0;
+	irqstate_t flags = spin_lock_irqsave(&vnet_registry_lock);
+
+	for (unsigned int i = 0; i < VIRTIO_NET_MAX_DEVS; i++) {
+		if (vnet_devs[i]) {
+			irq = vnet_devs[i]->vdev->irq;
+			break;
+		}
+	}
+
+	spin_unlock_irqrestore(&vnet_registry_lock, flags);
+	return irq;
 }
 
 static int virtio_net_probe(struct device *dev)
@@ -619,21 +638,3 @@ void virtio_net_init(void)
 		panic("%s(): driver_register failed: %d\n", __func__, err);
 }
 subsys_initcall(virtio_net_init);
-
-int virtio_net_enable_irq(u32 hart_id)
-{
-	int err = 0;
-	irqstate_t flags;
-
-	flags = spin_lock_irqsave(&vnet_registry_lock);
-	for (unsigned int i = 0; i < VIRTIO_NET_MAX_DEVS; i++) {
-		if (!vnet_devs[i])
-			continue;
-		err = irq_enable_source(hart_id, vnet_devs[i]->vdev->irq);
-		if (err)
-			break;
-	}
-	spin_unlock_irqrestore(&vnet_registry_lock, flags);
-
-	return err;
-}

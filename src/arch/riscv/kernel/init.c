@@ -45,6 +45,8 @@ void secondary_entry(unsigned long hart_id)
 
 	trap_init();
 
+	irq_init_hart(hart_id);
+
 	local_irq_enable();
 
 	pr_debug("smp: hart %lu online\n", hart_id);

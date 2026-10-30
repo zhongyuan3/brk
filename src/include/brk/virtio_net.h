@@ -113,7 +113,7 @@ int virtio_net_transmit(struct virtio_net_dev *vnet, const void *frame,
 
 const u8 *virtio_net_get_mac(struct virtio_net_dev *vnet);
 
-/* Enable the PLIC source of every probed virtio-net device. */
-int virtio_net_enable_irq(u32 hart_id);
+/* Return the virq of the first probed virtio-net device (0 if none). */
+unsigned int virtio_net_first_irq(void);
 
 #endif
