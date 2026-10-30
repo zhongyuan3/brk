@@ -50,6 +50,7 @@ struct proto_ops {
 	int (*shutdown)(struct socket *sock, int how);
 	int (*getname)(struct socket *sock, struct sockaddr *addr, int *addrlen,
 		       bool peer);
+	unsigned int (*poll)(struct socket *sock, unsigned int events);
 };
 
 struct socket {

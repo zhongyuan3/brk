@@ -162,6 +162,8 @@ struct fs_file_ops {
 	int (*fsync)(struct fs_file *, loff_t, loff_t, int);
 	int (*flush)(struct fs_file *);
 	long (*ioctl)(struct fs_file *, unsigned int, unsigned long);
+	/* Readiness for poll/select; returns POLL* revents. */
+	unsigned int (*poll)(struct fs_file *file, unsigned int events);
 };
 
 int fs_driver_register(struct fs_driver *fs);
@@ -205,6 +207,7 @@ loff_t fs_file_lseek(struct fs_file *file, loff_t len, int whence);
 ssize_t fs_file_read(struct fs_file *file, void *buf, size_t size);
 ssize_t fs_file_write(struct fs_file *file, const void *buf, size_t size);
 long fs_file_ioctl(struct fs_file *file, unsigned int cmd, unsigned long arg);
+unsigned int fs_file_poll(struct fs_file *file, unsigned int events);
 int fs_file_stat(struct fs_file *file, struct stat *buf);
 int fs_file_truncate(struct fs_file *file, loff_t size);
 void fs_file_cache_init(void);

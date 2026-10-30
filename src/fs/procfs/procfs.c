@@ -53,6 +53,7 @@
 #include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/net/net.h>
+#include <brk/net/tcp.h>
 #include <brk/pagecache.h>
 #include <brk/path.h>
 #include <brk/pgalloc.h>
@@ -121,6 +122,8 @@ static int procfs_show_ping(const struct procfs_entry *e, pid_t pid,
 			    char *buf, size_t size);
 static ssize_t procfs_write_ping(const struct procfs_entry *e, const char *buf,
 				 size_t size, loff_t *pos);
+static int procfs_show_tcp(const struct procfs_entry *e, pid_t pid, char *buf,
+			   size_t size);
 static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
 				  char *buf, size_t size);
 static int procfs_show_pid_stat(const struct procfs_entry *e, pid_t pid,
@@ -173,6 +176,12 @@ static const struct procfs_entry procfs_root_entries[] = {
 	  .mode = S_IFREG | 0644,
 	  .show = procfs_show_ping,
 	  .write = procfs_write_ping },
+	{ .name = "tcp",
+	  .name_len = 3,
+	  .idx = 8,
+	  .d_type = DT_REG,
+	  .mode = S_IFREG | 0444,
+	  .show = procfs_show_tcp },
 };
 #define PROCFS_ROOT_ENTRIES_NR countof(procfs_root_entries)
 
@@ -477,6 +486,15 @@ static ssize_t procfs_write_ping(const struct procfs_entry *e, const char *buf,
 
 	*pos = (loff_t)size;
 	return (ssize_t)size;
+}
+
+static int procfs_show_tcp(const struct procfs_entry *e, pid_t pid, char *buf,
+			   size_t size)
+{
+	(void)e;
+	(void)pid;
+
+	return tcp_proc_show(buf, size);
 }
 
 static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
