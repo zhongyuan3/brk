@@ -36,8 +36,6 @@ struct ns16550a_platform_data {
 void ns16550a_driver_init(void);
 int ns16550a_add_device(struct ns16550a_device *dev);
 
-int ns16550a_enable_irq(u32 hart_id);
-
 /*
  * Stop sending kernel printk records to the UART console.  The tty device
  * (/dev/tty0) remains fully usable for user I/O.

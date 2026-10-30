@@ -48,11 +48,13 @@
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fs.h>
+#include <brk/irq.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/net/net.h>
+#include <brk/net/irqtest.h>
 #include <brk/net/tcp.h>
 #include <brk/pagecache.h>
 #include <brk/path.h>
@@ -124,6 +126,12 @@ static ssize_t procfs_write_ping(const struct procfs_entry *e, const char *buf,
 				 size_t size, loff_t *pos);
 static int procfs_show_tcp(const struct procfs_entry *e, pid_t pid, char *buf,
 			   size_t size);
+static int procfs_show_interrupts(const struct procfs_entry *e, pid_t pid,
+				  char *buf, size_t size);
+static int procfs_show_irqtest(const struct procfs_entry *e, pid_t pid,
+			       char *buf, size_t size);
+static ssize_t procfs_write_irqtest(const struct procfs_entry *e,
+				    const char *buf, size_t size, loff_t *pos);
 static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
 				  char *buf, size_t size);
 static int procfs_show_pid_stat(const struct procfs_entry *e, pid_t pid,
@@ -182,6 +190,19 @@ static const struct procfs_entry procfs_root_entries[] = {
 	  .d_type = DT_REG,
 	  .mode = S_IFREG | 0444,
 	  .show = procfs_show_tcp },
+	{ .name = "interrupts",
+	  .name_len = 10,
+	  .idx = 9,
+	  .d_type = DT_REG,
+	  .mode = S_IFREG | 0444,
+	  .show = procfs_show_interrupts },
+	{ .name = "irqtest",
+	  .name_len = 7,
+	  .idx = 10,
+	  .d_type = DT_REG,
+	  .mode = S_IFREG | 0644,
+	  .show = procfs_show_irqtest,
+	  .write = procfs_write_irqtest },
 };
 #define PROCFS_ROOT_ENTRIES_NR countof(procfs_root_entries)
 
@@ -495,6 +516,42 @@ static int procfs_show_tcp(const struct procfs_entry *e, pid_t pid, char *buf,
 	(void)pid;
 
 	return tcp_proc_show(buf, size);
+}
+
+static int procfs_show_interrupts(const struct procfs_entry *e, pid_t pid,
+				  char *buf, size_t size)
+{
+	(void)e;
+	(void)pid;
+
+	return irq_proc_show(buf, size);
+}
+
+static int procfs_show_irqtest(const struct procfs_entry *e, pid_t pid,
+			       char *buf, size_t size)
+{
+	(void)e;
+	(void)pid;
+
+	return irq_exttest_show(buf, size);
+}
+
+static ssize_t procfs_write_irqtest(const struct procfs_entry *e,
+				    const char *buf, size_t size, loff_t *pos)
+{
+	int err;
+
+	(void)e;
+
+	if (*pos != 0 || size == 0)
+		return -EINVAL;
+
+	err = irq_exttest_run(buf, size);
+	if (err)
+		return err;
+
+	*pos = (loff_t)size;
+	return (ssize_t)size;
 }
 
 static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,

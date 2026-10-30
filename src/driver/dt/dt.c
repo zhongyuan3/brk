@@ -5,6 +5,7 @@
 #include <brk/device.h>
 #include <brk/dt.h>
 #include <brk/initcall.h>
+#include <brk/irq/irqdomain.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/memblock.h>
@@ -186,20 +187,34 @@ int dt_init_scan_cpu(void)
 	return 0;
 }
 
-static int dtb_get_one_reg(int node, u64 *addr, u64 *size)
+void *dt_get_fdt(void)
 {
-	int len;
-	u32 const *reg;
-	int addr_cells, size_cells;
+	return fdt;
+}
+
+int dt_get_reg(int node, int index, u64 *addr, u64 *size)
+{
+	int len, addr_cells, size_cells, cell_bytes, nr;
+	const u32 *reg;
+
+	if (!addr || !size || index < 0)
+		return -EINVAL;
 
 	if (get_parent_addr_cells(node, &addr_cells, &size_cells))
 		return -EINVAL;
 
-	int cell_bytes = (addr_cells + size_cells) * sizeof(u32);
-
+	cell_bytes = (addr_cells + size_cells) * sizeof(u32);
 	reg = fdt_getprop(fdt, node, "reg", &len);
 	if (!reg || len < cell_bytes || len % cell_bytes != 0)
 		return -EINVAL;
+
+	nr = len / cell_bytes;
+	if (index >= nr)
+		return -EINVAL;
+
+	reg += index * (addr_cells + size_cells);
+	*addr = 0;
+	*size = 0;
 
 	for (int i = 0; i < addr_cells; ++i)
 		*addr = (*addr << 32) | fdt32_to_cpu(*reg++);
@@ -209,44 +224,9 @@ static int dtb_get_one_reg(int node, u64 *addr, u64 *size)
 	return 0;
 }
 
-int dt_parse_plic(struct plic_device *plic)
+static int dtb_get_one_reg(int node, u64 *addr, u64 *size)
 {
-	int node;
-	const u32 *ndev;
-	int len;
-	u64 addr = 0;
-	u64 size = 0;
-
-	node = fdt_path_offset(fdt, "/soc/plic");
-	if (node < 0)
-		return -EINVAL;
-
-	if (dtb_get_one_reg(node, &addr, &size))
-		return -EINVAL;
-
-	plic->phys_base = addr;
-	plic->size = size;
-
-	ndev = fdt_getprop(fdt, node, "riscv,ndev", &len);
-	if (!ndev || len != sizeof(u32))
-		return -EINVAL;
-
-	plic->ndev = fdt32_to_cpu(*ndev);
-
-	return 0;
-}
-
-static int dtb_get_irq(int node, u32 *irq)
-{
-	int len;
-	const u32 *prop;
-
-	prop = fdt_getprop(fdt, node, "interrupts", &len);
-	if (!prop || len != sizeof(u32))
-		return -EINVAL;
-
-	*irq = fdt32_to_cpu(*prop);
-	return 0;
+	return dt_get_reg(node, 0, addr, size);
 }
 
 int dt_parse_rtc(struct rtc_device *rtc)
@@ -254,21 +234,16 @@ int dt_parse_rtc(struct rtc_device *rtc)
 	int node;
 	u64 addr = 0;
 	u64 size = 0;
-	u32 irq = 0;
 
 	node = fdt_node_offset_by_compatible(fdt, -1, "google,goldfish-rtc");
 	if (node < 0)
 		return node;
 
-	if (dtb_get_one_reg(node, &addr, &size))
-		return -EINVAL;
-
-	if (dtb_get_irq(node, &irq))
+	if (dt_get_reg(node, 0, &addr, &size))
 		return -EINVAL;
 
 	rtc->phys_base = addr;
 	rtc->size = size;
-	rtc->irq = irq;
 
 	return 0;
 }
@@ -313,7 +288,8 @@ int dt_init_scan_virtio_dev(void)
 		if (dtb_get_one_reg(node, &addr, &size))
 			continue;
 
-		if (dtb_get_irq(node, &irq))
+		irq = irq_of_parse_and_map(node, 0);
+		if (!irq)
 			continue;
 
 		vdev = virtio_dev_create(addr, size, irq);
@@ -371,8 +347,9 @@ void dt_init_scan_serial(void)
 				pr_debug("failed to get one reg: %d\n", err);
 				continue;
 			}
-			if (dtb_get_irq(subnode, &irq)) {
-				pr_debug("failed to get irq: %d\n", err);
+			irq = irq_of_parse_and_map(subnode, 0);
+			if (!irq) {
+				pr_debug("failed to map irq\n");
 				continue;
 			}
 			clock_freq = fdt_getprop(fdt, subnode,

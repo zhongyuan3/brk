@@ -7,7 +7,6 @@
 struct rtc_device {
 	u64 phys_base;
 	size_t size;
-	u32 irq;
 };
 
 void rtc_init(void);

@@ -86,21 +86,22 @@ static int ns16550a_device_getc(struct ns16550a_device *dev)
 	return ret;
 }
 
-static void ns16550a_device_handle_irq(void *ctx)
+static irqreturn_t ns16550a_device_handle_irq(int irq, void *dev_id)
 {
-	struct ns16550a_device *dev = ctx;
-	int c;
+	struct ns16550a_device *dev = dev_id;
 	struct tty_port *port = dev->port;
+	int c;
+
+	(void)irq;
 
 	c = ns16550a_device_getc(dev);
 	if (c < 0)
-		return;
+		return IRQ_NONE;
 
-	if (!port)
-		return;
-
-	if (port->tty)
+	if (port && port->tty)
 		tty_receive(port->tty, c);
+
+	return IRQ_HANDLED;
 }
 
 int ns16550a_device_init(struct ns16550a_device *dev)
@@ -134,8 +135,8 @@ int ns16550a_device_init(struct ns16550a_device *dev)
 	/* Enable receive interrupts */
 	ns16550a_device_write_reg(dev, IER, IER_RX_ENABLE);
 
-	err = irq_register_handler(dev->irq, ns16550a_device_handle_irq, dev,
-				   NULL, NULL);
+	err = request_irq(dev->irq, ns16550a_device_handle_irq, 0,
+			  "ns16550a", dev);
 	if (err) {
 		iounmap((void *)dev->mem_base, dev->size);
 		return err;
@@ -146,7 +147,7 @@ int ns16550a_device_init(struct ns16550a_device *dev)
 
 void ns16550a_device_finalize(struct ns16550a_device *dev)
 {
-	irq_unregister_handler(dev->irq, NULL, NULL);
+	free_irq(dev->irq, dev);
 	iounmap((void *)dev->mem_base, dev->size);
 }
 
@@ -222,20 +223,6 @@ static struct platform_driver ns16550a_platform_driver = {
 		.remove = ns16550a_remove,
 	},
 };
-
-static int ns16550a_device_enable_irq(struct ns16550a_device *dev, u32 hart_id)
-{
-	int err;
-	err = irq_enable_source(hart_id, dev->irq);
-	if (err)
-		return err;
-	err = irq_set_priority(dev->irq, 1);
-	if (err) {
-		irq_disable_source(hart_id, dev->irq);
-		return err;
-	}
-	return 0;
-}
 
 static int ns16550a_device_putc(struct ns16550a_device *dev, int c)
 {
@@ -324,7 +311,7 @@ void ns16550a_driver_init(void)
 	if (err)
 		panic("%s(): platform_driver_register failed\n", __func__);
 }
-postcore_initcall(ns16550a_driver_init);
+subsys_initcall(ns16550a_driver_init);
 
 int ns16550a_add_device(struct ns16550a_device *dev)
 {
@@ -362,24 +349,4 @@ int ns16550a_add_device(struct ns16550a_device *dev)
 	}
 
 	return 0;
-}
-
-int ns16550a_enable_irq(u32 hart_id)
-{
-	struct ns16550a_device *dev;
-
-	if (!ns16550a_driver)
-		return -ENXIO;
-
-	struct ns16550a_driver_data *data = ns16550a_driver->driver_data;
-	int err = 0;
-
-	spin_lock(&ns16550a_driver->lock);
-	hlist_for_each_entry(dev, &data->devices, node) {
-		err = ns16550a_device_enable_irq(dev, hart_id);
-		if (err)
-			break;
-	}
-	spin_unlock(&ns16550a_driver->lock);
-	return err;
 }
