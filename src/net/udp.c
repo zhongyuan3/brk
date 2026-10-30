@@ -13,6 +13,7 @@
 #include <brk/types.h>
 #include <brk/uaccess.h>
 #include <uapi/errno.h>
+#include <uapi/poll.h>
 #include <uapi/socket.h>
 
 #define UDP_EPHEMERAL_START 49152
@@ -361,6 +362,28 @@ static int udp_shutdown(struct socket *sock, int how)
 	return 0;
 }
 
+static unsigned int udp_poll(struct socket *sock, unsigned int events)
+{
+	struct sock *sk = sock->sk;
+	unsigned int rev = 0;
+	irqstate_t flags;
+
+	if (!sk)
+		return POLLERR;
+
+	flags = spin_lock_irqsave(&sk->lock);
+	if (!skb_queue_empty(&sk->rcv_queue) || sk->eof)
+		rev |= POLLIN | POLLRDNORM;
+	if (sk->err)
+		rev |= POLLERR;
+	if (sk->shutdown)
+		rev |= POLLHUP;
+	spin_unlock_irqrestore(&sk->lock, flags);
+
+	rev |= POLLOUT | POLLWRNORM;
+	return rev & (events | POLLERR | POLLHUP);
+}
+
 static int udp_getname(struct socket *sock, struct sockaddr *addr, int *addrlen,
 		       bool peer)
 {
@@ -413,6 +436,7 @@ static const struct proto_ops udp_proto_ops = {
 	.recvmsg = udp_recvmsg,
 	.shutdown = udp_shutdown,
 	.getname = udp_getname,
+	.poll = udp_poll,
 };
 
 int udp_sock_create(struct socket *sock, int protocol)

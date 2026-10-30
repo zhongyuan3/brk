@@ -14,6 +14,7 @@
 #include <brk/types.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
+#include <uapi/poll.h>
 #include <uapi/stat.h>
 #include <uapi/types.h>
 
@@ -370,6 +371,42 @@ static long tty_file_ioctl(struct fs_file *file, unsigned int cmd,
 	return tty_ioctl(tty, cmd, arg);
 }
 
+static unsigned int tty_file_poll(struct fs_file *file, unsigned int events)
+{
+	struct tty *tty = file->private_data;
+	struct tty_port *port;
+	unsigned int rev = 0;
+	irqstate_t flags;
+
+	if (!tty || !tty->port || tty->dead)
+		return POLLERR | POLLHUP;
+
+	port = tty->port;
+	flags = spin_lock_irqsave(&port->lock);
+	if (tty->eof_pending) {
+		rev |= POLLIN | POLLRDNORM;
+	} else if (tty->rx_w != tty->rx_r) {
+		bool ready = true;
+
+		if (port->termios.c_lflag & ICANON) {
+			size_t avail = tty->rx_w - tty->rx_r;
+
+			ready = avail >= tty->rx_size;
+			for (size_t i = 0; !ready && i < avail; i++) {
+				if (tty->rx_buf[(tty->rx_r + i) % tty->rx_size] ==
+				    '\n')
+					ready = true;
+			}
+		}
+		if (ready)
+			rev |= POLLIN | POLLRDNORM;
+	}
+	rev |= POLLOUT | POLLWRNORM;
+	spin_unlock_irqrestore(&port->lock, flags);
+
+	return rev & (events | POLLERR | POLLHUP);
+}
+
 static const struct fs_file_ops tty_fops = {
 	.open = tty_file_open,
 	.release = tty_file_release,
@@ -380,6 +417,7 @@ static const struct fs_file_ops tty_fops = {
 	.fsync = tty_file_sync,
 	.flush = tty_file_flush,
 	.ioctl = tty_file_ioctl,
+	.poll = tty_file_poll,
 };
 
 struct tty_port *tty_port_alloc(void)

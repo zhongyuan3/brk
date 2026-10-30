@@ -7,6 +7,7 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
+#include <uapi/poll.h>
 #include <uapi/socket.h>
 
 int sock_create(int family, int type, int protocol, struct socket **res)
@@ -111,10 +112,21 @@ static long socket_ioctl(struct fs_file *file, unsigned int cmd,
 	return -ENOTTY;
 }
 
+static unsigned int socket_file_poll(struct fs_file *file, unsigned int events)
+{
+	struct socket *sock = file->private_data;
+
+	if (!sock || !sock->ops || !sock->ops->poll)
+		return POLLERR;
+
+	return sock->ops->poll(sock, events);
+}
+
 const struct fs_file_ops socket_file_ops = {
 	.release = socket_file_release,
 	.read = socket_read,
 	.write = socket_write,
 	.llseek = socket_llseek,
 	.ioctl = socket_ioctl,
+	.poll = socket_file_poll,
 };

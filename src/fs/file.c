@@ -11,6 +11,7 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
+#include <uapi/poll.h>
 
 static struct slab_allocator file_cache;
 
@@ -143,6 +144,17 @@ long fs_file_ioctl(struct fs_file *file, unsigned int cmd, unsigned long arg)
 	if (!file->ops->ioctl)
 		return -ENOTTY;
 	return file->ops->ioctl(file, cmd, arg);
+}
+
+unsigned int fs_file_poll(struct fs_file *file, unsigned int events)
+{
+	if (!file)
+		return POLLNVAL;
+	if (file->ops && file->ops->poll)
+		return file->ops->poll(file, events);
+
+	/* Regular files are always ready for both directions. */
+	return (POLLIN | POLLOUT) & (events | POLLERR | POLLHUP);
 }
 
 int fs_file_stat(struct fs_file *file, struct stat *buf)

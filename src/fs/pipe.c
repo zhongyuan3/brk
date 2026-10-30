@@ -15,6 +15,7 @@
 #include <brk/types.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
+#include <uapi/poll.h>
 #include <uapi/stat.h>
 
 #define PIPEFS_MAGIC 0x50495045 /* "PIPE" */
@@ -389,12 +390,36 @@ static loff_t pipe_llseek(struct fs_file *file, loff_t offset, int whence)
 	return -ESPIPE;
 }
 
+static unsigned int pipe_poll(struct fs_file *file, unsigned int events)
+{
+	struct anon_pipe *pipe = file->inode->private_data;
+	unsigned int rev = 0;
+	irqstate_t flags;
+
+	if (!pipe)
+		return POLLERR;
+
+	flags = spin_lock_irqsave(&pipe->lock);
+	if (pipe->count > 0)
+		rev |= POLLIN | POLLRDNORM;
+	if (pipe->writers == 0)
+		rev |= POLLHUP;
+	if (pipe->count < PIPE_RING_CAP && pipe->readers > 0)
+		rev |= POLLOUT | POLLWRNORM;
+	if (pipe->readers == 0)
+		rev |= POLLERR;
+	spin_unlock_irqrestore(&pipe->lock, flags);
+
+	return rev & (events | POLLERR | POLLHUP);
+}
+
 static const struct fs_file_ops pipe_fifo_fops = {
 	.open = pipe_open,
 	.release = pipe_release,
 	.read = pipe_read,
 	.write = pipe_write,
 	.llseek = pipe_llseek,
+	.poll = pipe_poll,
 };
 
 static unsigned long pipe_alloc_ino(void)

@@ -3,6 +3,7 @@
 #include <arch/sbi.h>
 #include <arch/timer.h>
 #include <brk/clocksource.h>
+#include <brk/net/tcp.h>
 #include <brk/printk.h>
 #include <brk/task.h>
 #include <brk/timekeeper.h>
@@ -36,8 +37,10 @@ void program_next_tick(void)
 
 void handle_tick(void)
 {
-	if (this_cpuid() == boot_info.boot_hart_id)
+	if (this_cpuid() == boot_info.boot_hart_id) {
 		timekeeper_tick();
+		tcp_timer_tick();
+	}
 
 	task_wake_all(timekeeper_wait_chan());
 
