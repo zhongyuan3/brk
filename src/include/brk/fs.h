@@ -142,6 +142,8 @@ struct fs_file {
 	const struct fs_file_ops *ops;
 	spinlock_t lock;
 	fmode_t mode;
+	/* Anonymous object (socket, ...): no path/inode to release. */
+	bool anon;
 	sleeplock_t pos_lock;
 	loff_t pos;
 	/* Driver-specific per-open state (e.g. tty). */
@@ -195,6 +197,8 @@ int fs_inode_attach_page_cache(struct fs_inode *inode,
 			       const struct page_cache_ops *ops);
 
 struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode);
+struct fs_file *fs_file_alloc_anon(const struct fs_file_ops *ops,
+				   void *private_data);
 struct fs_file *fs_file_get(struct fs_file *file);
 void fs_file_put(struct fs_file *file);
 loff_t fs_file_lseek(struct fs_file *file, loff_t len, int whence);

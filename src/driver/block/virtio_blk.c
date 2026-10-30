@@ -102,12 +102,13 @@ static void virtio_blk_free_vq(struct virtio_blk_dev *vblk)
 	virtq_free(&vblk->vq);
 }
 
-static void virtio_blk_vq_used(struct virtq *vq, u32 id, void *ctx)
+static void virtio_blk_vq_used(struct virtq *vq, u32 id, u32 len, void *ctx)
 {
 	struct virtio_blk_dev *vblk = ctx;
 	struct virtio_blk_io_desc *io;
 
 	(void)vq;
+	(void)len;
 
 	if (id >= vblk->vq.num || !vblk->slots[id].trans)
 		panic("%s(): invalid used id %" PRIu32 "\n", __func__, id);

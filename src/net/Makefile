@@ -1,0 +1,14 @@
+obj-y += skbuff.o
+obj-y += checksum.o
+obj-y += netdevice.o
+obj-y += eth.o
+obj-y += loopback.o
+obj-y += route.o
+obj-y += arp.o
+obj-y += ip.o
+obj-y += icmp.o
+obj-y += udp.o
+obj-y += tcp.o
+obj-y += socket.o
+obj-y += sys_socket.o
+obj-y += init.o

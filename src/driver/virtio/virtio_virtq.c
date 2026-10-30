@@ -122,11 +122,12 @@ void virtq_process_used(struct virtq *vq, virtq_used_fn fn, void *ctx)
 	u16 curr_used_idx = vq->used->idx;
 
 	while (vq->used_idx != curr_used_idx) {
-		u32 id;
+		u32 id, len;
 
 		__sync_synchronize();
 		id = vq->used->ring[vq->used_idx % vq->num].id;
-		fn(vq, id, ctx);
+		len = vq->used->ring[vq->used_idx % vq->num].len;
+		fn(vq, id, len, ctx);
 		vq->used_idx += 1;
 	}
 }

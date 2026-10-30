@@ -1,6 +1,7 @@
 subdir-y += base
 subdir-y += dt
 subdir-y += block
+subdir-y += net
 subdir-y += char
 subdir-y += tty
 subdir-y += virtio

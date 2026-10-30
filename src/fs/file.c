@@ -8,6 +8,7 @@
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
 
@@ -41,6 +42,7 @@ struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode)
 
 	spinlock_init(&file->lock, "file.f_lock");
 	file->mode = mode;
+	file->anon = false;
 	sleeplock_init(&file->pos_lock, "file.f_pos_lock");
 	file->pos = 0;
 	file->private_data = NULL;
@@ -62,6 +64,32 @@ struct fs_file *fs_file_get(struct fs_file *file)
 	return file;
 }
 
+struct fs_file *fs_file_alloc_anon(const struct fs_file_ops *ops,
+				   void *private_data)
+{
+	struct fs_file *file;
+
+	if (!ops)
+		return ERR_PTR(-EINVAL);
+
+	file = slab_alloc(&file_cache);
+	if (!file)
+		return ERR_PTR(-ENOMEM);
+
+	memset(&file->path, 0, sizeof(file->path));
+	refcnt_init(&file->count, 1);
+	file->inode = NULL;
+	file->ops = ops;
+	spinlock_init(&file->lock, "file.f_lock");
+	file->mode = FMODE_READ | FMODE_WRITE;
+	file->anon = true;
+	sleeplock_init(&file->pos_lock, "file.f_pos_lock");
+	file->pos = 0;
+	file->private_data = private_data;
+	file->dev_private = NULL;
+	return file;
+}
+
 void fs_file_put(struct fs_file *file)
 {
 	const struct fs_file_ops *fop;
@@ -73,7 +101,8 @@ void fs_file_put(struct fs_file *file)
 	if (fop->release)
 		fop->release(file->inode, file);
 
-	fs_path_put(&file->path);
+	if (!file->anon)
+		fs_path_put(&file->path);
 
 	slab_free(&file_cache, file);
 }
@@ -118,7 +147,16 @@ long fs_file_ioctl(struct fs_file *file, unsigned int cmd, unsigned long arg)
 
 int fs_file_stat(struct fs_file *file, struct stat *buf)
 {
-	const struct fs_inode_ops *i_op = file->inode->ops;
+	const struct fs_inode_ops *i_op;
+
+	if (file->anon) {
+		memset(buf, 0, sizeof(*buf));
+		buf->st_mode = S_IFSOCK | 0777;
+		buf->st_nlink = 1;
+		return 0;
+	}
+
+	i_op = file->inode->ops;
 	return i_op->getattr(&file->path, buf, 0, 0);
 }
 

@@ -275,6 +275,7 @@ int dt_parse_rtc(struct rtc_device *rtc)
 
 int dt_init_scan_virtio_dev(void)
 {
+	static bool scanned;
 	struct virtio_device **vdevs;
 	int node;
 	int count = 0;
@@ -283,13 +284,19 @@ int dt_init_scan_virtio_dev(void)
 	u64 size = 0;
 	u32 irq = 0;
 
+	/* Several drivers may call this during their initcall. */
+	if (scanned)
+		return 0;
+
 	for (node = fdt_node_offset_by_compatible(fdt, -1, "virtio,mmio");
 	     node >= 0;
 	     node = fdt_node_offset_by_compatible(fdt, node, "virtio,mmio"))
 		count++;
 
-	if (!count)
+	if (!count) {
+		scanned = true;
 		return 0;
+	}
 
 	vdevs = kcalloc(count, sizeof(*vdevs));
 	if (!vdevs)
@@ -328,6 +335,7 @@ int dt_init_scan_virtio_dev(void)
 	}
 
 	kfree(vdevs);
+	scanned = true;
 	return 0;
 }
 

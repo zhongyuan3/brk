@@ -54,7 +54,7 @@ struct virtq {
 	u16 used_idx;
 };
 
-typedef void (*virtq_used_fn)(struct virtq *vq, u32 id, void *ctx);
+typedef void (*virtq_used_fn)(struct virtq *vq, u32 id, u32 len, void *ctx);
 
 int virtq_alloc(struct virtq *vq, unsigned int num);
 void virtq_free(struct virtq *vq);

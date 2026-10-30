@@ -22,6 +22,7 @@
 #include <brk/types.h>
 #include <brk/uart.h>
 #include <brk/virtio_blk.h>
+#include <brk/virtio_net.h>
 #include <brk/vmalloc.h>
 
 extern initcall_t __initcall_start[];
@@ -47,6 +48,7 @@ void start_kernel(void)
 	irq_init_hart(this_cpuid());
 	ns16550a_enable_irq(this_cpuid());
 	virtio_blk_enable_irq(this_cpuid());
+	virtio_net_enable_irq(this_cpuid());
 
 	local_irq_enable();
 

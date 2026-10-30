@@ -81,6 +81,19 @@ static u64 (*systable[])(void) = {
 	[SYS_sync] = sys_sync,
 	[SYS_syncfs] = sys_syncfs,
 	[SYS_gettid] = sys_gettid,
+	[SYS_socket] = sys_socket,
+	[SYS_connect] = sys_connect,
+	[SYS_accept] = sys_accept,
+	[SYS_accept4] = sys_accept4,
+	[SYS_sendto] = sys_sendto,
+	[SYS_recvfrom] = sys_recvfrom,
+	[SYS_shutdown] = sys_shutdown,
+	[SYS_bind] = sys_bind,
+	[SYS_listen] = sys_listen,
+	[SYS_getsockname] = sys_getsockname,
+	[SYS_getpeername] = sys_getpeername,
+	[SYS_setsockopt] = sys_setsockopt,
+	[SYS_getsockopt] = sys_getsockopt,
 };
 
 void syscall(void)
