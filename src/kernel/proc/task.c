@@ -330,7 +330,7 @@ void init_task_do(void)
 	else
 		pr_info("file system initialized\n");
 
-	char *argv[] = { "/bin/init", 0 };
+	char *argv[] = { "/sbin/init", 0 };
 	char *envp[] = { 0 };
 	err = do_execve(argv[0], argv, envp);
 	if (err < 0)
@@ -340,7 +340,7 @@ void init_task_do(void)
 
 	/*
 	 * Start persistent kernel logging only after the initial exec
-	 * succeeded.  Until klogd has opened /kernel.log the UART console
+	 * succeeded.  Until klogd has opened /var/log/kernel.log the UART console
 	 * stays active, so an exec failure is still visible.
 	 */
 	int klog_err = klog_start();

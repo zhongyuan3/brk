@@ -13,7 +13,7 @@
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 
-#define KLOG_PATH "/kernel.log"
+#define KLOG_PATH "/var/log/kernel.log"
 
 /*
  * KERN_INFO keeps the on-disk log useful without flooding the disk with the
@@ -140,7 +140,7 @@ int klog_start(void)
 
 	/*
 	 * kthread_create() gives the new task an empty fsinfo.  Inherit the
-	 * current root/cwd so absolute paths such as /kernel.log resolve
+	 * current root/cwd so absolute paths such as /var/log/kernel.log resolve
 	 * correctly before the thread opens its file.
 	 */
 	fsinfo_copy(task->fsinfo, current_task()->fsinfo);
