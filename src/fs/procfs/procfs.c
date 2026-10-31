@@ -802,6 +802,8 @@ static int procfs_getattr(const struct fs_path *path, struct stat *stat,
 	stat->st_ino = inode->ino;
 	stat->st_mode = inode->mode;
 	stat->st_nlink = inode->nlink;
+	stat->st_uid = inode->uid;
+	stat->st_gid = inode->gid;
 	stat->st_rdev = inode->rdev;
 	stat->st_size = inode->size;
 	stat->st_blksize = PAGE_SIZE;

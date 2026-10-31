@@ -15,6 +15,7 @@
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <brk/types.h>
 #include <uapi/dirent.h>
 #include <uapi/errno.h>
@@ -119,7 +120,8 @@ static struct tmpfs_inode *tmpfs_inode_get(struct tmpfs_super_block *sb,
 }
 
 static struct tmpfs_inode *tmpfs_inode_alloc(struct tmpfs_super_block *sb,
-					     umode_t mode, dev_t rdev)
+					     umode_t mode, dev_t rdev,
+					     kuid_t uid, kgid_t gid)
 {
 	struct tmpfs_inode *imap;
 	struct page **pg, *new_pg;
@@ -138,6 +140,8 @@ again:
 				imap[i].i_mode = mode;
 				imap[i].i_nlink = 1;
 				imap[i].i_rdev = rdev;
+				imap[i].i_uid = uid;
+				imap[i].i_gid = gid;
 				tmpfs_stamp_times(&imap[i]);
 				return &imap[i];
 			}
@@ -177,14 +181,15 @@ static void tmpfs_inode_free(struct tmpfs_super_block *sb, u32 ino)
 }
 
 static struct tmpfs_inode *tmpfs_inode_alloc_dir(struct tmpfs_super_block *sb,
-						 umode_t mode)
+						 umode_t mode, kuid_t uid,
+						 kgid_t gid)
 {
 	struct tmpfs_inode *ip;
 	struct page *pg;
 	struct tmpfs_dir_entry *ent;
 
 	mode |= S_IFDIR;
-	ip = tmpfs_inode_alloc(sb, mode, 0);
+	ip = tmpfs_inode_alloc(sb, mode, 0, uid, gid);
 	if (!ip)
 		return NULL;
 
@@ -222,6 +227,8 @@ static int tmpfs_inode_read(struct tmpfs_super_block *sb,
 	inode->nlink = t_inode->i_nlink;
 	inode->size = t_inode->i_size;
 	inode->rdev = t_inode->i_rdev;
+	inode->uid = t_inode->i_uid;
+	inode->gid = t_inode->i_gid;
 	inode->private_data = t_inode; /* Cache the inode */
 	tmpfs_inode_times_to_vfs(t_inode, inode);
 
@@ -429,7 +436,7 @@ static struct tmpfs_super_block *tmpfs_alloc_super(void)
 	sb->s_icnt = TMPFS_INODE_PER_PAGE;
 	sleeplock_init(&sb->s_lock, "tmpfs_super_block.s_lock");
 
-	root_ip = tmpfs_inode_alloc_dir(sb, 0755);
+	root_ip = tmpfs_inode_alloc_dir(sb, 0755, 0, 0);
 	if (!root_ip) {
 		tmpfs_free_super(sb);
 		return NULL;
@@ -651,6 +658,8 @@ static int tmpfs_write_inode(struct fs_inode *inode, int sync)
 	t_inode->i_nlink = inode->nlink;
 	t_inode->i_mode = inode->mode;
 	t_inode->i_size = inode->size;
+	t_inode->i_uid = inode->uid;
+	t_inode->i_gid = inode->gid;
 	tmpfs_vfs_times_to_inode(inode, t_inode);
 	sleeplock_release(&t_sb->s_lock);
 
@@ -667,6 +676,8 @@ static void tmpfs_evict_inode(struct fs_inode *inode)
 		t_inode->i_nlink = inode->nlink;
 		t_inode->i_mode = inode->mode;
 		t_inode->i_size = inode->size;
+		t_inode->i_uid = inode->uid;
+		t_inode->i_gid = inode->gid;
 		tmpfs_vfs_times_to_inode(inode, t_inode);
 	} else {
 		tmpfs_inode_free(t_sb, t_inode->i_no);
@@ -761,7 +772,9 @@ static int tmpfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -EEXIST;
 	}
 	mode |= S_IFREG;
-	t_new_inode = tmpfs_inode_alloc(t_sb, mode, 0);
+	t_new_inode = tmpfs_inode_alloc(t_sb, mode, 0,
+					 current_task()->fsuid,
+					 current_task()->fsgid);
 	if (!t_new_inode) {
 		sleeplock_release(&t_sb->s_lock);
 		return -ENOMEM;
@@ -906,7 +919,9 @@ static int tmpfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -EEXIST;
 	}
 
-	t_inode = tmpfs_inode_alloc(t_sb, S_IFLNK | 0777, 0);
+	t_inode = tmpfs_inode_alloc(t_sb, S_IFLNK | 0777, 0,
+				    current_task()->fsuid,
+				    current_task()->fsgid);
 	if (!t_inode) {
 		sleeplock_release(&t_sb->s_lock);
 		return -ENOMEM;
@@ -997,7 +1012,8 @@ static int tmpfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 		sleeplock_release(&t_sb->s_lock);
 		return -EEXIST;
 	}
-	t_inode = tmpfs_inode_alloc_dir(t_sb, mode);
+	t_inode = tmpfs_inode_alloc_dir(t_sb, mode, current_task()->fsuid,
+					current_task()->fsgid);
 	if (!t_inode) {
 		sleeplock_release(&t_sb->s_lock);
 		return -ENOMEM;
@@ -1145,7 +1161,9 @@ static int tmpfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -EEXIST;
 	}
 
-	t_inode = tmpfs_inode_alloc(t_sb, mode, dev);
+	t_inode = tmpfs_inode_alloc(t_sb, mode, dev,
+				    current_task()->fsuid,
+				    current_task()->fsgid);
 	if (!t_inode) {
 		sleeplock_release(&t_sb->s_lock);
 		return -ENOMEM;
@@ -1195,6 +1213,8 @@ static int tmpfs_getattr(const struct fs_path *path, struct stat *stat,
 	stat->st_ino = inode->ino;
 	stat->st_mode = inode->mode;
 	stat->st_nlink = inode->nlink;
+	stat->st_uid = inode->uid;
+	stat->st_gid = inode->gid;
 	stat->st_rdev = inode->rdev;
 	stat->st_size = inode->size;
 	stat->st_blksize = PAGE_SIZE;
@@ -1276,6 +1296,18 @@ static int tmpfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 
 	if (attr->valid & ATTR_MODE) {
 		inode->mode = (inode->mode & S_IFMT) | (attr->mode & 07777);
+		t_inode->i_mode = inode->mode;
+		inode_touch_ctime(inode);
+	}
+
+	if (attr->valid & (ATTR_UID | ATTR_GID)) {
+		if (attr->valid & ATTR_UID)
+			inode->uid = attr->uid;
+		if (attr->valid & ATTR_GID)
+			inode->gid = attr->gid;
+		inode->mode &= ~(S_ISUID | S_ISGID);
+		t_inode->i_uid = inode->uid;
+		t_inode->i_gid = inode->gid;
 		t_inode->i_mode = inode->mode;
 		inode_touch_ctime(inode);
 	}

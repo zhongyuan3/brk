@@ -6,6 +6,7 @@
 #include <brk/fsinfo.h>
 #include <brk/mount.h>
 #include <brk/path.h>
+#include <brk/permission.h>
 #include <brk/printk.h>
 #include <brk/string.h>
 #include <brk/task.h>
@@ -162,6 +163,10 @@ static int __path_lookup(int dirfd, const char *name, unsigned int flags,
 		}
 
 		follow_mount(path);
+
+		err = inode_permission(dir_inode, MAY_EXEC);
+		if (err)
+			goto lookup_error;
 
 		if ((flags & LOOKUP_PARENT) && *p == '\0') {
 			/*

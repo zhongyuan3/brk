@@ -18,6 +18,15 @@ static bool sig_valid(int sig)
 	return sig > 0 && sig < NSIG;
 }
 
+static bool signal_may_send(const struct task *target)
+{
+	struct task *current = current_task();
+
+	if (current->euid == 0)
+		return true;
+	return target->euid == current->euid;
+}
+
 static bool sig_default_terminate(int sig)
 {
 	switch (sig) {
@@ -123,6 +132,7 @@ static int signal_kill_pgrp(pid_t pgrp, int sig)
 {
 	struct task *p;
 	bool found = false;
+	bool sent = false;
 
 	if (pgrp <= 0)
 		return -ESRCH;
@@ -136,12 +146,17 @@ static int signal_kill_pgrp(pid_t pgrp, int sig)
 		if (p == initial_task && sig != 0)
 			continue;
 		found = true;
+		if (!signal_may_send(p))
+			continue;
 		if (sig)
 			signal_send(p, sig);
+		sent = true;
 	}
 	spin_unlock_irqrestore(&tasks_lock, flags);
 
-	return found ? 0 : -ESRCH;
+	if (sent)
+		return 0;
+	return found ? -EPERM : -ESRCH;
 }
 
 void signal_send_pgrp(pid_t pgrp, int sig)
@@ -159,17 +174,23 @@ int signal_do_kill(pid_t pid, int sig)
 	if (pid <= 0) {
 		if (pid == -1) {
 			bool found = false;
+			bool sent = false;
 
 			irqstate_t flags = spin_lock_irqsave(&tasks_lock);
 			list_for_each_entry(p, &tasks, list) {
 				if (p == initial_task || p->pid != p->tgid)
 					continue;
 				found = true;
+				if (!signal_may_send(p))
+					continue;
 				if (sig)
 					signal_send(p, sig);
+				sent = true;
 			}
 			spin_unlock_irqrestore(&tasks_lock, flags);
-			return found ? 0 : -ESRCH;
+			if (sent)
+				return 0;
+			return found ? -EPERM : -ESRCH;
 		}
 
 		return signal_kill_pgrp(pid == 0 ? current_task()->pgid :
@@ -189,6 +210,10 @@ int signal_do_kill(pid_t pid, int sig)
 		return -ESRCH;
 	}
 	if (target == initial_task) {
+		spin_unlock_irqrestore(&tasks_lock, flags);
+		return -EPERM;
+	}
+	if (!signal_may_send(target)) {
 		spin_unlock_irqrestore(&tasks_lock, flags);
 		return -EPERM;
 	}

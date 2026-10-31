@@ -78,6 +78,17 @@ struct task {
 	pid_t pgid;
 	pid_t sid;
 
+	/* Process credentials, inherited on fork. */
+	kuid_t uid;
+	kuid_t euid;
+	kuid_t suid;
+	kuid_t fsuid;
+	kgid_t gid;
+	kgid_t egid;
+	kgid_t sgid;
+	kgid_t fsgid;
+	umode_t umask;
+
 	struct sigaction_table *sigactions;
 	/* protected by @sigactions->lock */
 	u64 pending;

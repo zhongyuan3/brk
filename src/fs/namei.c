@@ -1,10 +1,41 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/path.h>
+#include <brk/permission.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
+#include <brk/task.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
+
+static umode_t apply_umask(umode_t mode)
+{
+	return mode & ~current_task()->umask;
+}
+
+static int may_create_in(struct fs_inode *dir)
+{
+	return inode_permission(dir, MAY_WRITE | MAY_EXEC);
+}
+
+static int may_delete(struct fs_inode *dir, struct fs_dentry *victim)
+{
+	struct task *task = current_task();
+	struct fs_inode *inode = victim ? victim->inode : NULL;
+	int err;
+
+	err = inode_permission(dir, MAY_WRITE | MAY_EXEC);
+	if (err)
+		return err;
+
+	if (dir->mode & S_ISVTX) {
+		if (task->fsuid != 0 && task->fsuid != dir->uid &&
+		    (!inode || task->fsuid != inode->uid))
+			return -EPERM;
+	}
+
+	return 0;
+}
 
 struct fs_file *do_openat(int dirfd, const char *pathname, int flags,
 			  umode_t mode)
@@ -13,6 +44,7 @@ struct fs_file *do_openat(int dirfd, const char *pathname, int flags,
 	struct fs_file *file;
 	struct fs_path path;
 	bool retried = false;
+	umode_t create_mode = apply_umask(mode);
 
 	if ((flags & O_RDWR) && (flags & O_WRONLY))
 		return ERR_PTR(-EINVAL);
@@ -46,8 +78,14 @@ retry:
 			return ERR_PTR(err);
 		}
 		struct fs_inode *inode = parent_path.dentry->inode;
+		err = may_create_in(inode);
+		if (err) {
+			fs_path_put(&parent_path);
+			fs_path_put(&path);
+			return ERR_PTR(err);
+		}
 		sleeplock_acquire(&inode->rwsem);
-		err = inode->ops->create(inode, path.dentry, mode, excl);
+		err = inode->ops->create(inode, path.dentry, create_mode, excl);
 		sleeplock_release(&inode->rwsem);
 		fs_path_put(&parent_path);
 
@@ -84,6 +122,23 @@ retry:
 		fs_path_put(&path);
 		return ERR_PTR(-ENOENT);
 	}
+
+	int acc = flags & O_ACCMODE;
+	int perm_mask = 0;
+
+	if (acc != O_WRONLY)
+		perm_mask |= MAY_READ;
+	if (acc != O_RDONLY)
+		perm_mask |= MAY_WRITE;
+	if (flags & O_TRUNC)
+		perm_mask |= MAY_WRITE;
+
+	err = inode_permission(file_inode, perm_mask);
+	if (err) {
+		fs_path_put(&path);
+		return ERR_PTR(err);
+	}
+
 	if (S_ISDIR(file_inode->mode))
 		fmode |= FMODE_DIR;
 
@@ -137,8 +192,15 @@ int do_mkdirat(int dirfd, const char *pathname, umode_t mode)
 		return err;
 	}
 	struct fs_inode *inode = parent_path.dentry->inode;
+	err = may_create_in(inode);
+	if (err) {
+		fs_path_put(&parent_path);
+		fs_path_put(&path);
+		return err;
+	}
 	sleeplock_acquire(&inode->rwsem);
-	err = inode->ops->mkdir(inode, path.dentry, mode | S_IFDIR);
+	err = inode->ops->mkdir(inode, path.dentry,
+				apply_umask(mode) | S_IFDIR);
 	sleeplock_release(&inode->rwsem);
 
 	fs_path_put(&parent_path);
@@ -150,6 +212,9 @@ int do_mknodat(int dirfd, const char *pathname, umode_t mode, dev_t dev)
 {
 	int err;
 	struct fs_path path;
+
+	if (current_task()->fsuid != 0)
+		return -EPERM;
 
 	err = fs_path_lookup_at(dirfd, pathname, 0, &path);
 	if (err)
@@ -170,8 +235,16 @@ int do_mknodat(int dirfd, const char *pathname, umode_t mode, dev_t dev)
 		return err;
 	}
 	struct fs_inode *inode = parent_path.dentry->inode;
+	err = may_create_in(inode);
+	if (err) {
+		fs_path_put(&parent_path);
+		fs_path_put(&path);
+		return err;
+	}
 	sleeplock_acquire(&inode->rwsem);
-	err = inode->ops->mknod(inode, path.dentry, mode, dev);
+	err = inode->ops->mknod(inode, path.dentry,
+				apply_umask(mode & 07777) | (mode & S_IFMT),
+				dev);
 	sleeplock_release(&inode->rwsem);
 
 	fs_path_put(&parent_path);
@@ -233,6 +306,15 @@ int do_linkat(int olddirfd, const char *oldpathname, int newdirfd,
 		goto out_paths;
 	}
 
+	err = may_create_in(parent_inode);
+	if (err)
+		goto out_paths;
+
+	if (!inode_owner_or_capable(old_inode)) {
+		err = -EPERM;
+		goto out_paths;
+	}
+
 	sleeplock_acquire(&parent_inode->rwsem);
 	sleeplock_acquire(&old_inode->rwsem);
 	err = parent_inode->ops->link(oldpath.dentry, parent_inode,
@@ -273,6 +355,12 @@ int do_unlinkat(int dirfd, const char *pathname, int flags)
 		return err;
 	}
 	struct fs_inode *inode = parent_path.dentry->inode;
+	err = may_delete(inode, path.dentry);
+	if (err) {
+		fs_path_put(&parent_path);
+		fs_path_put(&path);
+		return err;
+	}
 	sleeplock_acquire(&inode->rwsem);
 	err = inode->ops->unlink(inode, path.dentry);
 	sleeplock_release(&inode->rwsem);
@@ -306,6 +394,12 @@ int do_symlinkat(int dirfd, const char *pathname, const char *target)
 		return err;
 	}
 	struct fs_inode *inode = parent_path.dentry->inode;
+	err = may_create_in(inode);
+	if (err) {
+		fs_path_put(&parent_path);
+		fs_path_put(&path);
+		return err;
+	}
 	sleeplock_acquire(&inode->rwsem);
 	err = inode->ops->symlink(inode, path.dentry, target);
 	sleeplock_release(&inode->rwsem);
@@ -504,6 +598,16 @@ int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 		}
 	}
 
+	err = may_delete(old_dir, oldpath.dentry);
+	if (err)
+		goto out;
+	if (new_exists)
+		err = may_delete(new_dir, newpath.dentry);
+	else
+		err = inode_permission(new_dir, MAY_WRITE | MAY_EXEC);
+	if (err)
+		goto out;
+
 	/* Lock parent directories in a stable order. */
 	if (old_dir == new_dir) {
 		sleeplock_acquire(&old_dir->rwsem);
@@ -569,6 +673,12 @@ int do_rmdir(const char *pathname)
 		return err;
 	}
 	struct fs_inode *inode = parent_path.dentry->inode;
+	err = may_delete(inode, path.dentry);
+	if (err) {
+		fs_path_put(&parent_path);
+		fs_path_put(&path);
+		return err;
+	}
 	sleeplock_acquire(&inode->rwsem);
 	err = inode->ops->rmdir(inode, path.dentry);
 	sleeplock_release(&inode->rwsem);

@@ -126,6 +126,7 @@ struct task *task_create(struct task_create_args *args)
 	task->tgid = (!args || args->tgid == 0) ? task->pid : args->tgid;
 	task->pgid = (args && args->pgid) ? args->pgid : task->pid;
 	task->sid = (args && args->sid) ? args->sid : task->pid;
+	task->umask = 022;
 
 	task->kstack_base = kstack_alloc();
 	if (!task->kstack_base) {
@@ -661,6 +662,16 @@ int task_fork(void)
 
 	memcpy(child->frame, parent->frame, TRAP_FRAME_SIZE);
 	signal_copy(child, parent);
+
+	child->uid = parent->uid;
+	child->euid = parent->euid;
+	child->suid = parent->suid;
+	child->fsuid = parent->fsuid;
+	child->gid = parent->gid;
+	child->egid = parent->egid;
+	child->sgid = parent->sgid;
+	child->fsgid = parent->fsgid;
+	child->umask = parent->umask;
 
 	fdtable_copy(child->fdtable, parent->fdtable);
 	fsinfo_copy(child->fsinfo, parent->fsinfo);
