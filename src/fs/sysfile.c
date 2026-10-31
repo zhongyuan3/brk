@@ -170,6 +170,65 @@ u64 sys_stat(void)
 	return ret;
 }
 
+u64 sys_fstatfs(void)
+{
+	int fd = syscall_arg_int(0);
+	struct statfs *buf = syscall_arg_ptr(1);
+	struct task *task = current_task();
+	struct fs_file *fp;
+	int ret;
+
+	fp = fdtable_get_file(task->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
+
+	ret = fs_statfs(fp->inode->sb, buf);
+	fs_file_put(fp);
+	return ret;
+}
+
+u64 sys_statfs(void)
+{
+	const char *path = syscall_arg_ptr(0);
+	struct statfs *buf = syscall_arg_ptr(1);
+	struct fs_path p = { 0 };
+	struct fs_inode *inode;
+	int ret;
+
+	ret = fs_path_lookup(path, 0, &p);
+	if (ret)
+		return ret;
+
+	inode = p.dentry ? p.dentry->inode : NULL;
+	if (!inode) {
+		fs_path_put(&p);
+		return -ENOENT;
+	}
+
+	ret = fs_statfs(inode->sb, buf);
+	fs_path_put(&p);
+	return ret;
+}
+
+u64 sys_fallocate(void)
+{
+	int fd = syscall_arg_int(0);
+	int mode = syscall_arg_int(1);
+	loff_t offset = (loff_t)syscall_arg_raw(2);
+	loff_t len = (loff_t)syscall_arg_raw(3);
+	struct task *task = current_task();
+	struct fs_file *fp;
+	int ret;
+
+	fp = fdtable_get_file(task->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
+
+	ret = fs_file_fallocate(fp, mode, offset, len);
+	fs_file_put(fp);
+	return ret;
+}
+
 u64 sys_link(void)
 {
 	char *oldpath = syscall_arg_ptr(0);

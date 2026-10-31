@@ -193,3 +193,13 @@ int fs_file_truncate(struct fs_file *file, loff_t size)
 
 	return file->inode->ops->setattr(file->path.dentry, &attr);
 }
+
+int fs_file_fallocate(struct fs_file *file, int mode, loff_t offset,
+		      loff_t len)
+{
+	if (!file || !file->inode)
+		return -EINVAL;
+	if (!file->ops || !file->ops->fallocate)
+		return -EOPNOTSUPP;
+	return file->ops->fallocate(file, mode, offset, len);
+}

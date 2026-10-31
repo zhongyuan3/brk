@@ -7,6 +7,7 @@
 #include <brk/sleeplock_types.h>
 #include <brk/types.h>
 #include <uapi/stat.h>
+#include <uapi/statfs.h>
 #include <uapi/time.h>
 
 #define SEEK_SET 0
@@ -89,6 +90,7 @@ struct fs_super_block_ops {
 	 * sync_filesystem() after all dirty inode writebacks have completed.
 	 */
 	int (*sync_fs)(struct fs_super_block *);
+	int (*statfs)(struct fs_super_block *, struct statfs *);
 };
 
 struct fs_inode {
@@ -162,6 +164,7 @@ struct fs_file_ops {
 	int (*fsync)(struct fs_file *, loff_t, loff_t, int);
 	int (*flush)(struct fs_file *);
 	long (*ioctl)(struct fs_file *, unsigned int, unsigned long);
+	int (*fallocate)(struct fs_file *, int mode, loff_t offset, loff_t len);
 	/* Readiness for poll/select; returns POLL* revents. */
 	unsigned int (*poll)(struct fs_file *file, unsigned int events);
 };
@@ -209,7 +212,10 @@ ssize_t fs_file_write(struct fs_file *file, const void *buf, size_t size);
 long fs_file_ioctl(struct fs_file *file, unsigned int cmd, unsigned long arg);
 unsigned int fs_file_poll(struct fs_file *file, unsigned int events);
 int fs_file_stat(struct fs_file *file, struct stat *buf);
+int fs_statfs(struct fs_super_block *sb, struct statfs *buf);
 int fs_file_truncate(struct fs_file *file, loff_t size);
+int fs_file_fallocate(struct fs_file *file, int mode, loff_t offset,
+		      loff_t len);
 void fs_file_cache_init(void);
 
 struct fs_file *do_openat(int dirfd, const char *path, int flags, umode_t mode);

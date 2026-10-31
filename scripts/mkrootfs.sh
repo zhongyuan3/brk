@@ -22,17 +22,16 @@ for d in "$USER_ROOT" "$TOOLS_ROOT"; do
 	fi
 done
 
-MKFS=$TOOLS_ROOT/mkfs.brkfs
-CP=$TOOLS_ROOT/cp.brkfs
-if [[ ! -x $MKFS ]] || [[ ! -x $CP ]]; then
+BRKFS=$TOOLS_ROOT/brkfs
+if [[ ! -x $BRKFS ]]; then
 	if [[ -n ${SKIP_TOOLS_BUILD:-} ]]; then
-		echo "${0##*/}: $MKFS or $CP not found (SKIP_TOOLS_BUILD is set)" >&2
+		echo "${0##*/}: $BRKFS not found (SKIP_TOOLS_BUILD is set)" >&2
 		exit 1
 	fi
 	make -C "$TOOLS_ROOT"
 fi
-[[ -x $MKFS && -x $CP ]] || {
-	echo "${0##*/}: expected host tools: $MKFS $CP" >&2
+[[ -x $BRKFS ]] || {
+	echo "${0##*/}: expected host tool: $BRKFS" >&2
 	exit 1
 }
 
@@ -41,18 +40,18 @@ if [[ -z ${SKIP_USER_BUILD:-} ]]; then
 fi
 
 BLOCK_SIZE=4096
-BLOCK_COUNT=1024
+BLOCK_COUNT=2048
 
 mkdir -p "$(dirname "$IMG")"
 rm -f "$IMG"
 dd if=/dev/zero of="$IMG" bs=$BLOCK_SIZE count=$BLOCK_COUNT status=none
-"$MKFS" -bs $BLOCK_SIZE "$IMG"
+"$BRKFS" mkfs -bs $BLOCK_SIZE "$IMG"
 
 mapfile -t bins < <(ls $USER_ROOT/build/64/bin)
 
 for name in "${bins[@]}"; do
 	src=$USER_ROOT/build/64/bin/$name
-	"$CP" -r "$src" "/bin/$name" "$IMG"
+	"$BRKFS" cp --parents "$src" "/bin/$name" "$IMG"
 done
-"$CP" "$KERNEL_ROOT/README.md" "/README.md" "$IMG"
-"$CP" "$KERNEL_ROOT/LICENSE" "/LICENSE" "$IMG"
+"$BRKFS" cp "$KERNEL_ROOT/README.md" "/README.md" "$IMG"
+"$BRKFS" cp "$KERNEL_ROOT/LICENSE" "/LICENSE" "$IMG"

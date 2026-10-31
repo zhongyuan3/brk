@@ -45,23 +45,38 @@ int brkfs_data_alloc(struct brkfs_sb_info *sbi, u32 *bno)
 				 sbi->s_sb.s_data_blocks_count, &bit);
 	if (err)
 		return err;
+	spin_lock(&sbi->s_super_lock);
+	if (sbi->s_sb.s_free_blocks > 0)
+		sbi->s_sb.s_free_blocks--;
+	sbi->s_super_dirty = true;
+	spin_unlock(&sbi->s_super_lock);
 	*bno = sbi->s_sb.s_first_data_block + bit;
 	return 0;
 }
 
 int brkfs_data_free(struct brkfs_sb_info *sbi, u32 bno)
 {
-	u32 bit = bno - sbi->s_sb.s_first_data_block;
+	u32 bit;
 
-	if (bno < sbi->s_sb.s_first_data_block) {
+	if (bno < sbi->s_sb.s_first_data_block ||
+	    bno >= sbi->s_sb.s_first_data_block + sbi->s_sb.s_data_blocks_count) {
 		pr_warn("%s(): Invalid bno: %" PRIu32
 			  ", first data block: %" PRIu32 "\n",
 			  __func__, bno, sbi->s_sb.s_first_data_block);
 		return -EINVAL;
 	}
 
-	return brkfs_bitmap_free(sbi, sbi->s_sb.s_data_block_bitmap,
-				 sbi->s_sb.s_data_blocks_count, bit);
+	bit = bno - sbi->s_sb.s_first_data_block;
+
+	int err = brkfs_bitmap_free(sbi, sbi->s_sb.s_data_block_bitmap,
+				    sbi->s_sb.s_data_blocks_count, bit);
+	if (!err) {
+		spin_lock(&sbi->s_super_lock);
+		sbi->s_sb.s_free_blocks++;
+		sbi->s_super_dirty = true;
+		spin_unlock(&sbi->s_super_lock);
+	}
+	return err;
 }
 
 int brkfs_bitmap_alloc(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
@@ -98,11 +113,9 @@ int brkfs_bitmap_alloc(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
 			break;
 
 		err = brkfs_get_block(sbi, bno, &next_bb);
-		if (err) {
-			brkfs_put_block(&curr_bb);
+		if (err)
 			return err;
-		}
-		brkfs_put_block(&curr_bb);
+
 		curr_bb = next_bb;
 	}
 

@@ -9,6 +9,32 @@
 #include <uapi/dirent.h>
 #include <uapi/errno.h>
 
+static int brkfs_dir_get_block(struct fs_inode *dir, u64 blk_idx, u32 *bno,
+			       bool create)
+{
+	struct brkfs_sb_info *sbi = dir->sb->private_data;
+
+	return brkfs_inode_getblk(dir,
+				  (loff_t)blk_idx * sbi->s_sb.s_blocksize,
+				  bno, create ? BRKFS_GETBLK_CREATE : 0,
+				  sbi);
+}
+
+static int brkfs_dir_read_block(struct brkfs_sb_info *sbi, u32 bno, u8 *buf)
+{
+	int err = brkfs_block_read(sbi, bno, buf);
+
+	if (!err && !brkfs_dir_checksum_ok(buf, sbi->s_sb.s_blocksize))
+		return -EIO;
+	return err;
+}
+
+static int brkfs_dir_write_block(struct brkfs_sb_info *sbi, u32 bno, u8 *buf)
+{
+	brkfs_dir_set_checksum(buf, sbi->s_sb.s_blocksize);
+	return brkfs_block_write(sbi, bno, buf);
+}
+
 static int brkfs_dir_open(struct fs_inode *inode, struct fs_file *file)
 {
 	file->ops = &brkfs_dir_fops;
@@ -66,11 +92,10 @@ static int brkfs_dir_iterate_shared(struct fs_file *file,
 {
 	struct fs_inode *inode = file->inode;
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
-	struct brkfs_inode_info *di = inode->private_data;
 	size_t bsz = sbi->s_sb.s_blocksize;
 	loff_t off = ctx->pos;
 	u8 *blk;
-	unsigned int bi;
+	u64 nblocks;
 	int err = 0;
 
 	if (!S_ISDIR(inode->mode))
@@ -80,23 +105,25 @@ static int brkfs_dir_iterate_shared(struct fs_file *file,
 	if (!blk)
 		return -ENOMEM;
 
-	for (bi = 0; bi < BRKFS_DIRECT_BLOCKS; bi++) {
-		u32 pblk = di->i_block[bi];
+	nblocks = (inode->size + bsz - 1) / bsz;
+	for (u64 bi = 0; bi < nblocks; bi++) {
+		u32 pblk;
 		loff_t blk_base = (loff_t)bi * (loff_t)bsz;
 		struct brkfs_dir_entry *ent;
 		size_t left;
 
-		if (blk_base >= inode->size)
+		err = brkfs_dir_get_block(inode, bi, &pblk, false);
+		if (err)
 			break;
 		if (pblk == 0)
 			continue;
 
-		err = brkfs_block_read(sbi, pblk, blk);
+		err = brkfs_dir_read_block(sbi, pblk, blk);
 		if (err)
 			break;
 
 		ent = (struct brkfs_dir_entry *)blk;
-		left = bsz;
+		left = bsz - BRKFS_DIR_CSUM_SIZE;
 		while (left >= BRKFS_DIR_ENTRY_MIN_LEN) {
 			u16 el = ent->entry_len;
 
@@ -216,11 +243,11 @@ static int brkfs_dir_ensure_first_block(struct fs_inode *dir)
 	e->inode = 0;
 	e->name_len = 0;
 	e->file_type = 0;
-	e->entry_len = (u16)bs;
+	e->entry_len = (u16)(bs - BRKFS_DIR_CSUM_SIZE);
 
 	info->i_block[0] = bno;
 	dir->size = (loff_t)bs;
-	err = brkfs_block_write(sbi, bno, blk);
+	err = brkfs_dir_write_block(sbi, bno, blk);
 	kfree(blk);
 	return err;
 }
@@ -283,11 +310,10 @@ int brkfs_dir_add(struct fs_inode *dir, u32 child_ino, const char *name,
 		  unsigned int name_len, umode_t child_mode)
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
-	struct brkfs_inode_info *di = dir->private_data;
 	size_t bs = sbi->s_sb.s_blocksize;
 	u8 ftype = brkfs_mode_to_dt(child_mode);
 	u8 *blk;
-	unsigned int bi;
+	u64 nblocks;
 	int err;
 	i32 walk;
 
@@ -302,51 +328,55 @@ int brkfs_dir_add(struct fs_inode *dir, u32 child_ino, const char *name,
 	if (!blk)
 		return -ENOMEM;
 
-	for (bi = 0; bi < BRKFS_DIRECT_BLOCKS; bi++) {
-		u32 bno = di->i_block[bi];
-		loff_t blk_base = bi * bs;
+	size_t usable = bs - BRKFS_DIR_CSUM_SIZE;
 
-		if (blk_base >= dir->size)
-			break;
+	nblocks = dir->size / bs;
+	for (u64 bi = 0; bi < nblocks; bi++) {
+		u32 bno;
+		loff_t blk_base = (loff_t)bi * bs;
+
+		err = brkfs_dir_get_block(dir, bi, &bno, false);
+		if (err)
+			goto out;
 		if (bno == 0)
 			continue;
 
-		err = brkfs_block_read(sbi, bno, blk);
+		err = brkfs_dir_read_block(sbi, bno, blk);
 		if (err)
 			goto out;
-		walk = blk_base;
-		if (__brkfs_dir_add_in_block(blk, bs, child_ino, name, name_len,
-					     ftype, &walk) == 0) {
-			err = brkfs_block_write(sbi, bno, blk);
+		walk = (i32)blk_base;
+		if (__brkfs_dir_add_in_block(blk, usable, child_ino, name,
+					     name_len, ftype, &walk) == 0) {
+			err = brkfs_dir_write_block(sbi, bno, blk);
 			goto out;
 		}
 	}
 
-	if (bi < BRKFS_DIRECT_BLOCKS) {
-		u32 bno;
-
-		err = brkfs_data_alloc(sbi, &bno);
-		if (err)
-			goto out;
-		memset(blk, 0, bs);
-
-		struct brkfs_dir_entry *e = (struct brkfs_dir_entry *)blk;
-		e->inode = 0;
-		e->name_len = 0;
-		e->file_type = 0;
-		e->entry_len = bs;
-
-		di->i_block[bi] = bno;
-		dir->size = (bi + 1) * bs;
-		walk = bi * bs;
-		if (__brkfs_dir_add_in_block(blk, bs, child_ino, name, name_len,
-					     ftype, &walk) == 0)
-			err = brkfs_block_write(sbi, bno, blk);
-		else
-			err = -ENOMEM;
-	} else {
-		err = -ENOSPC;
+	if (dir->size % bs != 0) {
+		err = -EIO;
+		goto out;
 	}
+
+	u32 bno;
+
+	err = brkfs_dir_get_block(dir, nblocks, &bno, true);
+	if (err)
+		goto out;
+	memset(blk, 0, bs);
+
+	struct brkfs_dir_entry *e = (struct brkfs_dir_entry *)blk;
+	e->inode = 0;
+	e->name_len = 0;
+	e->file_type = 0;
+	e->entry_len = (u16)usable;
+
+	dir->size = (nblocks + 1) * bs;
+	walk = (i32)(nblocks * bs);
+	if (__brkfs_dir_add_in_block(blk, usable, child_ino, name, name_len,
+				     ftype, &walk) == 0)
+		err = brkfs_dir_write_block(sbi, bno, blk);
+	else
+		err = -ENOMEM;
 
 out:
 	kfree(blk);
@@ -408,7 +438,8 @@ int brkfs_new_dir_body(struct fs_inode *inode, u32 parent_ino)
 
 	r1 = brkfs_dirent_reclen(1);
 	r2 = brkfs_dirent_reclen(2);
-	if (r1 + r2 + BRKFS_DIR_ENTRY_MIN_LEN > bs) {
+	if (r1 + r2 + BRKFS_DIR_ENTRY_MIN_LEN >
+	    bs - BRKFS_DIR_CSUM_SIZE) {
 		kfree(blk);
 		return -EIO;
 	}
@@ -428,7 +459,7 @@ int brkfs_new_dir_body(struct fs_inode *inode, u32 parent_ino)
 	e2->name[0] = '.';
 	e2->name[1] = '.';
 
-	rest = bs - r1 - r2;
+	rest = bs - BRKFS_DIR_CSUM_SIZE - r1 - r2;
 	hole = (struct brkfs_dir_entry *)(blk + r1 + r2);
 	hole->inode = 0;
 	hole->name_len = 0;
@@ -442,7 +473,7 @@ int brkfs_new_dir_body(struct fs_inode *inode, u32 parent_ino)
 	}
 	di->i_block[0] = bno;
 	inode->size = bs;
-	err = brkfs_block_write(sbi, bno, blk);
+	err = brkfs_dir_write_block(sbi, bno, blk);
 	kfree(blk);
 	return err;
 }
@@ -451,30 +482,31 @@ int brkfs_dir_remove(struct fs_inode *dir, const char *name,
 		     unsigned int name_len)
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
-	struct brkfs_inode_info *di = dir->private_data;
 	size_t bs = sbi->s_sb.s_blocksize;
 	u8 *blk;
-	unsigned int bi;
+	u64 nblocks;
 	int err = -ENOENT;
 
 	blk = kmalloc(bs);
 	if (!blk)
 		return -ENOMEM;
 
-	for (bi = 0; bi < BRKFS_DIRECT_BLOCKS; bi++) {
-		u32 bno = di->i_block[bi];
-		loff_t blk_base = bi * bs;
+	nblocks = (dir->size + bs - 1) / bs;
+	for (u64 bi = 0; bi < nblocks; bi++) {
+		u32 bno;
 
-		if (blk_base >= dir->size)
-			break;
+		err = brkfs_dir_get_block(dir, bi, &bno, false);
+		if (err)
+			goto out;
 		if (bno == 0)
 			continue;
 
-		err = brkfs_block_read(sbi, bno, blk);
+		err = brkfs_dir_read_block(sbi, bno, blk);
 		if (err)
 			goto out;
-		if (__brkfs_dir_remove_in_block(blk, bs, name_len, name) == 0) {
-			err = brkfs_block_write(sbi, bno, blk);
+		if (__brkfs_dir_remove_in_block(blk, bs - BRKFS_DIR_CSUM_SIZE,
+						name_len, name) == 0) {
+			err = brkfs_dir_write_block(sbi, bno, blk);
 			goto out;
 		}
 	}
@@ -492,38 +524,41 @@ out:
 int brkfs_dir_is_empty(struct fs_inode *dir)
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
-	struct brkfs_inode_info *di = dir->private_data;
 	size_t bs = sbi->s_sb.s_blocksize;
 	u8 *blk;
+	u64 nblocks;
 	int ret = 1;
 
-	if (!di || !S_ISDIR(dir->mode))
+	if (!S_ISDIR(dir->mode))
 		return -ENOTDIR;
 
 	blk = kmalloc(bs);
 	if (!blk)
 		return -ENOMEM;
 
-	for (unsigned int bi = 0; bi < BRKFS_DIRECT_BLOCKS; bi++) {
-		u32 bno = di->i_block[bi];
-		loff_t blk_base = (loff_t)bi * bs;
+	nblocks = (dir->size + bs - 1) / bs;
+	for (u64 bi = 0; bi < nblocks; bi++) {
+		u32 bno;
 		struct brkfs_dir_entry *ent;
 		size_t left;
 
-		if (blk_base >= dir->size)
-			break;
+		int err = brkfs_dir_get_block(dir, bi, &bno, false);
+
+		if (err) {
+			ret = err;
+			goto out;
+		}
 		if (bno == 0)
 			continue;
 
-		int err = brkfs_block_read(sbi, bno, blk);
-
+		err = brkfs_dir_read_block(sbi, bno, blk);
 		if (err) {
 			ret = err;
 			goto out;
 		}
 
 		ent = (struct brkfs_dir_entry *)blk;
-		left = bs;
+		left = bs - BRKFS_DIR_CSUM_SIZE;
 		while (left >= BRKFS_DIR_ENTRY_MIN_LEN) {
 			u16 el = ent->entry_len;
 
@@ -552,10 +587,9 @@ int brkfs_dir_lookup(struct fs_inode *dir, const char *name,
 		     unsigned int name_len, u32 *ino_out, u8 *type_out)
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
-	struct brkfs_inode_info *di = dir->private_data;
 	size_t bs = sbi->s_sb.s_blocksize;
 	u8 *blk;
-	unsigned int bi;
+	u64 nblocks;
 
 	if (!S_ISDIR(dir->mode))
 		return -ENOTDIR;
@@ -564,24 +598,28 @@ int brkfs_dir_lookup(struct fs_inode *dir, const char *name,
 	if (!blk)
 		return -ENOMEM;
 
-	for (bi = 0; bi < BRKFS_DIRECT_BLOCKS; bi++) {
-		u32 bno = di->i_block[bi];
-		loff_t blk_base = bi * bs;
+	nblocks = (dir->size + bs - 1) / bs;
+	for (u64 bi = 0; bi < nblocks; bi++) {
+		u32 bno;
 		struct brkfs_dir_entry *ent;
 		size_t left;
 
-		if (blk_base >= dir->size)
-			break;
+		int err = brkfs_dir_get_block(dir, bi, &bno, false);
+
+		if (err) {
+			kfree(blk);
+			return err;
+		}
 		if (bno == 0)
 			continue;
 
-		int err = brkfs_block_read(sbi, bno, blk);
+		err = brkfs_dir_read_block(sbi, bno, blk);
 		if (err) {
 			kfree(blk);
 			return err;
 		}
 		ent = (struct brkfs_dir_entry *)blk;
-		left = bs;
+		left = bs - BRKFS_DIR_CSUM_SIZE;
 		while (left >= BRKFS_DIR_ENTRY_MIN_LEN) {
 			u16 el = ent->entry_len;
 
