@@ -7,6 +7,7 @@
 #include <brk/fsinfo.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
+#include <brk/ktime.h>
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printk.h>
@@ -16,11 +17,13 @@
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <brk/uaccess.h>
 #include <uapi/dirent.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/limits.h>
 #include <uapi/stat.h>
+#include <uapi/time.h>
 #include <uapi/types.h>
 #include <uapi/utsname.h>
 
@@ -422,14 +425,18 @@ u64 sys_readlinkat(void)
 u64 sys_mkdir(void)
 {
 	char *path = syscall_arg_ptr(0);
-	return do_mkdirat(AT_FDCWD, path, 0);
+	umode_t mode = syscall_arg_raw(1);
+
+	return do_mkdirat(AT_FDCWD, path, mode);
 }
 
 u64 sys_mkdirat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	char *pathname = syscall_arg_ptr(1);
-	return do_mkdirat(dirfd, pathname, 0);
+	umode_t mode = syscall_arg_raw(2);
+
+	return do_mkdirat(dirfd, pathname, mode);
 }
 
 u64 sys_mknod(void)
@@ -836,6 +843,246 @@ u64 sys_truncate(void)
 	err = inode->ops->setattr(path.dentry, &attr);
 	fs_path_put(&path);
 	return err;
+}
+
+static int setattr_path_at(int dirfd, const char *path, struct fs_iattr *attr)
+{
+	struct fs_path p;
+	struct fs_inode *inode;
+	int err;
+
+	if (!path)
+		return -EINVAL;
+
+	err = fs_path_lookup_at(dirfd, path, 0, &p);
+	if (err)
+		return err;
+
+	inode = p.dentry->inode;
+	if (!inode)
+		err = -ENOENT;
+	else if (!inode->ops || !inode->ops->setattr)
+		err = -EOPNOTSUPP;
+	else
+		err = inode->ops->setattr(p.dentry, attr);
+
+	fs_path_put(&p);
+	return err;
+}
+
+static int setattr_fd(int fd, struct fs_iattr *attr)
+{
+	struct fs_file *fp;
+	int err;
+
+	fp = fdtable_get_file(current_task()->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
+
+	if (!fp->inode)
+		err = -EINVAL;
+	else if (!fp->inode->ops || !fp->inode->ops->setattr)
+		err = -EOPNOTSUPP;
+	else
+		err = fp->inode->ops->setattr(fp->path.dentry, attr);
+
+	fs_file_put(fp);
+	return err;
+}
+
+static int times_from_user_timespec(struct fs_iattr *attr,
+				    const struct timespec times[2])
+{
+	struct timespec now;
+	struct timespec ts;
+
+	if (!times) {
+		ktime_get_real_ts(&now);
+		attr->valid |= ATTR_ATIME | ATTR_MTIME;
+		attr->atime = now;
+		attr->mtime = now;
+		return 0;
+	}
+
+	for (int i = 0; i < 2; i++) {
+		ts = times[i];
+		if (ts.tv_nsec == UTIME_OMIT)
+			continue;
+		if (ts.tv_nsec == UTIME_NOW) {
+			ktime_get_real_ts(&now);
+			ts = now;
+		} else if (ts.tv_nsec < 0 || ts.tv_nsec >= 1000000000L) {
+			return -EINVAL;
+		}
+
+		if (i == 0) {
+			attr->atime = ts;
+			attr->valid |= ATTR_ATIME;
+		} else {
+			attr->mtime = ts;
+			attr->valid |= ATTR_MTIME;
+		}
+	}
+	return 0;
+}
+
+static int set_times_path_at(int dirfd, const char *path,
+			     const struct timespec times[2])
+{
+	struct fs_iattr attr = { 0 };
+	int err;
+
+	err = times_from_user_timespec(&attr, times);
+	if (err || !attr.valid)
+		return err;
+
+	return setattr_path_at(dirfd, path, &attr);
+}
+
+static int set_times_fd(int fd, const struct timespec times[2])
+{
+	struct fs_iattr attr = { 0 };
+	int err;
+
+	err = times_from_user_timespec(&attr, times);
+	if (err || !attr.valid)
+		return err;
+
+	return setattr_fd(fd, &attr);
+}
+
+u64 sys_chmod(void)
+{
+	const char *path = syscall_arg_ptr(0);
+	umode_t mode = syscall_arg_raw(1);
+	struct fs_iattr attr = {
+		.valid = ATTR_MODE,
+		.mode = mode & 07777,
+	};
+
+	return setattr_path_at(AT_FDCWD, path, &attr);
+}
+
+u64 sys_fchmod(void)
+{
+	int fd = syscall_arg_int(0);
+	umode_t mode = syscall_arg_raw(1);
+	struct fs_iattr attr = {
+		.valid = ATTR_MODE,
+		.mode = mode & 07777,
+	};
+
+	return setattr_fd(fd, &attr);
+}
+
+u64 sys_fchmodat(void)
+{
+	int dirfd = syscall_arg_int(0);
+	const char *path = syscall_arg_ptr(1);
+	umode_t mode = syscall_arg_raw(2);
+	struct fs_iattr attr = {
+		.valid = ATTR_MODE,
+		.mode = mode & 07777,
+	};
+
+	return setattr_path_at(dirfd, path, &attr);
+}
+
+u64 sys_utime(void)
+{
+	const char *path = syscall_arg_ptr(0);
+	const struct utimbuf *utimbuf = syscall_arg_ptr(1);
+	struct timespec times[2];
+
+	if (utimbuf) {
+		struct utimbuf ub;
+
+		if (copy_from_user(&ub, utimbuf, sizeof(ub)))
+			return -EFAULT;
+		times[0].tv_sec = ub.actime;
+		times[0].tv_nsec = 0;
+		times[1].tv_sec = ub.modtime;
+		times[1].tv_nsec = 0;
+		return set_times_path_at(AT_FDCWD, path, times);
+	}
+
+	return set_times_path_at(AT_FDCWD, path, NULL);
+}
+
+static int timeval_pair_to_timespec(const struct timeval tv[2],
+				    struct timespec ts[2])
+{
+	for (int i = 0; i < 2; i++) {
+		if (tv[i].tv_usec < 0 || tv[i].tv_usec >= 1000000)
+			return -EINVAL;
+		ts[i].tv_sec = tv[i].tv_sec;
+		ts[i].tv_nsec = (long)tv[i].tv_usec * 1000L;
+	}
+	return 0;
+}
+
+u64 sys_utimes(void)
+{
+	const char *path = syscall_arg_ptr(0);
+	const struct timeval *utimes = syscall_arg_ptr(1);
+	struct timeval tv[2];
+	struct timespec ts[2];
+	int err;
+
+	if (!utimes)
+		return set_times_path_at(AT_FDCWD, path, NULL);
+
+	if (copy_from_user(tv, utimes, sizeof(tv)))
+		return -EFAULT;
+	err = timeval_pair_to_timespec(tv, ts);
+	if (err)
+		return err;
+
+	return set_times_path_at(AT_FDCWD, path, ts);
+}
+
+u64 sys_futimesat(void)
+{
+	int dirfd = syscall_arg_int(0);
+	const char *path = syscall_arg_ptr(1);
+	const struct timeval *utimes = syscall_arg_ptr(2);
+	struct timeval tv[2];
+	struct timespec ts[2];
+	int err;
+
+	if (!path)
+		return -EINVAL;
+
+	if (!utimes)
+		return set_times_path_at(dirfd, path, NULL);
+
+	if (copy_from_user(tv, utimes, sizeof(tv)))
+		return -EFAULT;
+	err = timeval_pair_to_timespec(tv, ts);
+	if (err)
+		return err;
+
+	return set_times_path_at(dirfd, path, ts);
+}
+
+u64 sys_utimensat(void)
+{
+	int dirfd = syscall_arg_int(0);
+	const char *path = syscall_arg_ptr(1);
+	const struct timespec *utimes = syscall_arg_ptr(2);
+	int flags = syscall_arg_raw(3);
+	struct timespec ts[2];
+
+	if (flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH))
+		return -EINVAL;
+
+	if (utimes && copy_from_user(ts, utimes, sizeof(ts)))
+		return -EFAULT;
+
+	if (!path || ((flags & AT_EMPTY_PATH) && path[0] == '\0'))
+		return set_times_fd(dirfd, utimes ? ts : NULL);
+
+	return set_times_path_at(dirfd, path, utimes ? ts : NULL);
 }
 
 static u64 do_fsync(int datasync)

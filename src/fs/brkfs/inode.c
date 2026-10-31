@@ -911,7 +911,13 @@ static int brkfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 	sleeplock_acquire(&inode->rwsem);
 
 	if (attr->valid & ATTR_MODE) {
-		inode->mode = attr->mode;
+		inode->mode = (inode->mode & S_IFMT) | (attr->mode & 07777);
+		inode_touch_ctime(inode);
+	}
+	if (attr->valid & (ATTR_ATIME | ATTR_MTIME | ATTR_CTIME)) {
+		inode_times_set(inode,
+				(attr->valid & ATTR_ATIME) ? &attr->atime : NULL,
+				(attr->valid & ATTR_MTIME) ? &attr->mtime : NULL);
 		inode_touch_ctime(inode);
 	}
 	if (attr->valid & ATTR_SIZE) {

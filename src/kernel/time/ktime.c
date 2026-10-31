@@ -75,6 +75,19 @@ void inode_times_set_all_now(struct fs_inode *inode)
 	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
+void inode_times_set(struct fs_inode *inode, const struct timespec *atime,
+		     const struct timespec *mtime)
+{
+	irqstate_t flags = spin_lock_irqsave(&inode->lock);
+
+	if (atime)
+		inode->atime = *atime;
+	if (mtime)
+		inode->mtime = *mtime;
+
+	spin_unlock_irqrestore(&inode->lock, flags);
+}
+
 void inode_touch_mtime(struct fs_inode *inode)
 {
 	struct timespec ts;
