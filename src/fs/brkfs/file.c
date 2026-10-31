@@ -12,6 +12,7 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
+#include <uapi/fcntl.h>
 
 static int brkfs_file_read_page(struct page_cache *m, struct cached_page *cp)
 {
@@ -20,7 +21,6 @@ static int brkfs_file_read_page(struct page_cache *m, struct cached_page *cp)
 	u32 bs = sbi->s_sb.s_blocksize;
 	loff_t off = (loff_t)cp->index << PAGE_SHIFT;
 	u8 *data = cached_page_addr(cp);
-	struct block_dev *bd = sbi->s_bdev;
 
 	if (bs > PAGE_SIZE || PAGE_SIZE % bs != 0) {
 		pr_warn("%s(): unsupported blocksize %" PRIu32 "\n", __func__,
@@ -42,9 +42,13 @@ static int brkfs_file_read_page(struct page_cache *m, struct cached_page *cp)
 			continue;
 		}
 
-		u32 sec_cnt = bs / bd->phy_bsize;
-		u64 sector = bno * sec_cnt;
-		err = blkdev_read(bd, sector, data + boff, sec_cnt);
+		/*
+		 * Read through the block-device page cache.  Data blocks can
+		 * share a PAGE_SIZE page with metadata blocks (indirect
+		 * blocks, bitmaps) when the filesystem block size is smaller
+		 * than PAGE_SIZE, so both paths must use the same cache.
+		 */
+		err = brkfs_block_read(sbi, bno, data + boff);
 		if (err)
 			return err;
 	}
@@ -59,7 +63,6 @@ static int brkfs_file_write_page(struct page_cache *m, struct cached_page *cp)
 	loff_t off = (loff_t)cp->index << PAGE_SHIFT;
 	u8 *data = cached_page_addr(cp);
 	int ret = 0;
-	struct block_dev *bd = sbi->s_bdev;
 
 	if (bs > PAGE_SIZE || PAGE_SIZE % bs != 0) {
 		pr_warn("%s(): unsupported blocksize %" PRIu32 "\n", __func__,
@@ -68,19 +71,30 @@ static int brkfs_file_write_page(struct page_cache *m, struct cached_page *cp)
 	}
 
 	for (size_t boff = 0; boff < PAGE_SIZE; boff += bs) {
+		loff_t block_off = off + (loff_t)boff;
+		size_t valid;
 		u32 bno;
 		int err;
 
-		err = brkfs_inode_getblk(inode, off + boff, &bno,
+		/* Do not allocate blocks past EOF.  Pages may be dirtied by a
+		 * write that ends in the middle of the page. */
+		if (block_off >= inode->size)
+			break;
+
+		valid = (size_t)(inode->size - block_off);
+		if (valid > bs)
+			valid = bs;
+		if (valid < bs)
+			memset(data + boff + valid, 0, bs - valid);
+
+		err = brkfs_inode_getblk(inode, block_off, &bno,
 					 BRKFS_GETBLK_CREATE, sbi);
 		if (err)
 			return err;
 		if (bno == 0)
 			return -ENOSPC;
 
-		u32 sec_cnt = bs / bd->phy_bsize;
-		u64 sector = bno * sec_cnt;
-		err = blkdev_write(bd, sector, data + boff, sec_cnt);
+		err = brkfs_block_write(sbi, bno, data + boff);
 		if (err) {
 			ret = err;
 			break;
@@ -297,6 +311,67 @@ int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
 	return err;
 }
 
+static int brkfs_file_fallocate(struct fs_file *file, int mode, loff_t offset,
+				loff_t len)
+{
+	struct fs_inode *inode = file->inode;
+	struct brkfs_sb_info *sbi = inode->sb->private_data;
+	u32 bs = sbi->s_sb.s_blocksize;
+	loff_t end;
+	int err = 0;
+
+	if (mode & ~FALLOC_FL_KEEP_SIZE)
+		return -EOPNOTSUPP;
+	if (!S_ISREG(inode->mode))
+		return -EINVAL;
+	if (offset < 0 || len <= 0)
+		return -EINVAL;
+	if ((u64)offset + (u64)len > 0xffffffffu)
+		return -EFBIG;
+
+	end = offset + len;
+
+	sleeplock_acquire(&inode->rwsem);
+
+	for (loff_t off = offset; off < end; off += bs) {
+		u32 bno;
+
+		err = brkfs_inode_getblk(inode, off, &bno, 0, sbi);
+		if (err)
+			break;
+		if (bno != 0)
+			continue;
+
+		err = brkfs_inode_getblk(inode, off, &bno,
+					 BRKFS_GETBLK_CREATE, sbi);
+		if (err)
+			break;
+
+		u8 *zero = kmalloc(bs);
+
+		if (!zero) {
+			err = -ENOMEM;
+			break;
+		}
+		memset(zero, 0, bs);
+		err = brkfs_block_write(sbi, bno, zero);
+		kfree(zero);
+		if (err)
+			break;
+	}
+
+	if (!err && !(mode & FALLOC_FL_KEEP_SIZE) && end > inode->size) {
+		inode->size = end;
+		inode_touch_mtime_ctime(inode);
+	}
+
+	if (!err)
+		err = brkfs_inode_write(sbi, inode);
+
+	sleeplock_release(&inode->rwsem);
+	return err;
+}
+
 const struct fs_file_ops brkfs_file_fops = {
 	.open = brkfs_file_open,
 	.release = brkfs_file_release,
@@ -307,4 +382,5 @@ const struct fs_file_ops brkfs_file_fops = {
 	.fsync = brkfs_file_fsync,
 	.flush = brkfs_file_flush,
 	.ioctl = brkfs_file_ioctl,
+	.fallocate = brkfs_file_fallocate,
 };

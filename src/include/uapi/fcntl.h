@@ -94,4 +94,8 @@
 
 #define AT_FDCWD -100
 
+#define FALLOC_FL_KEEP_SIZE 0x01
+#define FALLOC_FL_PUNCH_HOLE 0x02
+#define FALLOC_FL_ZERO_RANGE 0x04
+
 #endif
