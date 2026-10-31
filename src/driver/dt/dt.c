@@ -10,10 +10,10 @@
 #include <brk/ktime.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
-#include <brk/platform.h>
 #include <brk/panic.h>
-#include <brk/printk.h>
+#include <brk/platform.h>
 #include <brk/printf.h>
+#include <brk/printk.h>
 #include <brk/stddef.h>
 #include <brk/string.h>
 #include <brk/types.h>
@@ -87,12 +87,12 @@ static int for_each_node_reg(int node, int addr_cells, int size_cells,
 	return 0;
 }
 
-void dt_set_dtb(unsigned long dtb)
+void dt_set_fdt(unsigned long addr)
 {
-	fdt = (void *)dtb;
+	fdt = (void *)addr;
 }
 
-static int __memblock_add_reserve(u64 addr, size_t size, void *add)
+static int __memblock_add_or_reserve(u64 addr, size_t size, void *add)
 {
 	if (add == NULL)
 		return memblock_reserve(addr, size);
@@ -115,7 +115,7 @@ int dt_init_scan_mem(void)
 		return err;
 
 	err = for_each_node_reg(node, addr_cells, size_cells,
-				__memblock_add_reserve, (void *)1);
+				__memblock_add_or_reserve, (void *)1);
 	if (err)
 		return err;
 
@@ -138,7 +138,7 @@ int dt_init_scan_rsvd_mem(void)
 
 	fdt_for_each_subnode(subnode, fdt, node) {
 		err = for_each_node_reg(subnode, addr_cells, size_cells,
-					__memblock_add_reserve, (void *)0);
+					__memblock_add_or_reserve, (void *)0);
 		if (err)
 			return err;
 	}
@@ -170,18 +170,18 @@ int dt_setup_timebase_freq(void)
 int dt_init_scan_cpu(void)
 {
 	int node, subnode;
+	int len;
+	const char *type;
 
 	node = fdt_path_offset(fdt, "/cpus");
 	if (node < 0)
 		return -EINVAL;
 
 	fdt_for_each_subnode(subnode, fdt, node) {
-		const char *type = fdt_getprop(fdt, subnode, "device_type", 0);
-		if (type && !strcmp(type, "cpu")) {
-			pr_debug("dtb: found cpu: %s\n",
-				 fdt_get_name(fdt, subnode, 0));
+		len = 0;
+		type = fdt_getprop(fdt, subnode, "device_type", &len);
+		if (type && !strncmp(type, "cpu", len))
 			nr_harts += 1;
-		}
 	}
 
 	return 0;
@@ -370,8 +370,9 @@ void dt_init_scan_serial(void)
 				name, "ns16550a", addr, size, irq, pdata);
 			if (err) {
 				kfree(pdata);
-				pr_debug("failed to register ns16550a device: %d\n",
-					 err);
+				pr_debug(
+					"failed to register ns16550a device: %d\n",
+					err);
 				continue;
 			}
 			pr_info("ns16550a platform device registered: %s\n",

@@ -51,6 +51,7 @@ void local_irq_disable(void);
 void local_irq_enable(void);
 irqstate_t local_irq_save(void);
 void local_irq_restore(irqstate_t state);
+bool local_irq_enabled(void);
 
 void __switch_to(unsigned long *old_sp, unsigned long *new_sp);
 void set_thread_pointer(unsigned long value);

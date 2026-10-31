@@ -118,14 +118,28 @@ void setup_vm_early(unsigned long dtb_pa, bool boot)
 	fence_i();
 }
 
-static void phys_mem_init(void)
+static int phys_mem_init(void)
 {
-	dt_init_scan_mem();
-	dt_init_scan_rsvd_mem();
-	memblock_reserve(_SKERNEL_PHYS, _KERNEL_SIZE);
-	memblock_reserve(boot_info.dtb_pa, fdt_totalsize(boot_info.dtb_pa));
+	int err;
+
+	err = dt_init_scan_mem();
+	if (err)
+		return err;
+
+	err = dt_init_scan_rsvd_mem();
+	if (err)
+		return err;
+
+	err = memblock_reserve(_SKERNEL_PHYS, _KERNEL_SIZE);
+	if (err)
+		return err;
+
+	err = memblock_reserve(boot_info.dtb_pa,
+			       fdt_totalsize(boot_info.dtb_pa));
+	if (err)
+		return err;
+
 	phys_offset = memblock_start_of_dram();
-	memblock_dump_all();
 }
 
 struct mapping_region {
@@ -237,7 +251,7 @@ static void final_pgtable_init(void)
 			break;
 
 		pr_debug("mm: map %s: va=%#lx,pa=%#lx,sz=%lu\n", rngs[i].name,
-			   rngs[i].addr, rngs[i].paddr, rngs[i].size);
+			 rngs[i].addr, rngs[i].paddr, rngs[i].size);
 
 		struct map_pages_context ctx = {
 			.root = kernel_pgdir,
@@ -278,8 +292,8 @@ static void vmemmap_init(void)
 		ASSERT(paddr);
 		memset((void *)phys_to_virt(paddr), 0, sz);
 		vaddr = (unsigned long)pfn_to_page(start);
-		pr_debug("mm: vmemmap: va=%#lx,pa=%#lx,sz=%lu\n", vaddr,
-			   paddr, sz);
+		pr_debug("mm: vmemmap: va=%#lx,pa=%#lx,sz=%lu\n", vaddr, paddr,
+			 sz);
 		struct map_pages_context ctx = {
 			.root = kernel_pgdir,
 			.addr = (void *)vaddr,
@@ -301,13 +315,20 @@ void load_final_page_table(void)
 	sfence_vma();
 }
 
-void paging_init(void)
+int paging_init(void)
 {
-	phys_mem_init();
+	int err;
+
+	err = phys_mem_init();
+	if (err != 0)
+		return err;
+
 	final_pgtable_init();
 	load_final_page_table();
-	dt_set_dtb(phys_to_virt(boot_info.dtb_pa));
+	dt_set_fdt(phys_to_virt(boot_info.dtb_pa));
 	vmemmap_init();
+
+	return 0;
 }
 
 void switch_pgtable(pgd_t *pgd)

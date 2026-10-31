@@ -72,7 +72,7 @@ static inline u64 virt_to_phys(uintptr_t vaddr)
 	return (vaddr - PAGE_OFFSET) + phys_offset;
 }
 
-void paging_init(void);
+int paging_init(void);
 void load_final_page_table(void);
 
 #endif
