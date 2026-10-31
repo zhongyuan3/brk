@@ -45,14 +45,32 @@ struct fs_file *do_openat(int dirfd, const char *pathname, int flags,
 	struct fs_path path;
 	bool retried = false;
 	umode_t create_mode = apply_umask(mode);
+	unsigned int lookup_flags;
+
+	if (flags & O_NOFOLLOW)
+		lookup_flags = 0;
+	else if ((flags & O_CREAT) && (flags & O_EXCL))
+		lookup_flags = 0;
+	else
+		lookup_flags = LOOKUP_FOLLOW;
 
 	if ((flags & O_RDWR) && (flags & O_WRONLY))
 		return ERR_PTR(-EINVAL);
 
 retry:
-	err = fs_path_lookup_at(dirfd, pathname, 0, &path);
+	err = fs_path_lookup_at(dirfd, pathname, lookup_flags, &path);
 	if (err)
 		return ERR_PTR(err);
+
+	if ((flags & O_NOFOLLOW) &&
+	    !((flags & O_CREAT) && (flags & O_EXCL))) {
+		struct fs_inode *link_inode = fs_dentry_inode(path.dentry);
+
+		if (link_inode && S_ISLNK(link_inode->mode)) {
+			fs_path_put(&path);
+			return ERR_PTR(-ELOOP);
+		}
+	}
 
 	spin_lock(&path.dentry->lock);
 	bool exists = !(path.dentry->flags & DCACHE_NEGATIVE);

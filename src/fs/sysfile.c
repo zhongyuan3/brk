@@ -153,13 +153,13 @@ u64 sys_fstat(void)
 	return ret;
 }
 
-static u64 stat_path(const char *path, struct stat *buf)
+static u64 stat_path(const char *path, struct stat *buf, unsigned int flags)
 {
 	struct fs_path p;
 	struct fs_inode *inode;
 	int ret;
 
-	ret = fs_path_lookup(path, 0, &p);
+	ret = fs_path_lookup(path, flags, &p);
 	if (ret)
 		return ret;
 
@@ -183,7 +183,7 @@ u64 sys_lstat(void)
 	const char *path = syscall_arg_ptr(0);
 	struct stat *buf = syscall_arg_ptr(1);
 
-	return stat_path(path, buf);
+	return stat_path(path, buf, 0);
 }
 
 u64 sys_stat(void)
@@ -191,10 +191,11 @@ u64 sys_stat(void)
 	const char *path = syscall_arg_ptr(0);
 	struct stat *buf = syscall_arg_ptr(1);
 
-	return stat_path(path, buf);
+	return stat_path(path, buf, LOOKUP_FOLLOW);
 }
 
-static u64 access_path_at(int dirfd, const char *path, int mode)
+static u64 access_path_at(int dirfd, const char *path, int mode,
+			  unsigned int lookup_flags)
 {
 	struct fs_path p;
 	struct fs_inode *inode;
@@ -203,7 +204,7 @@ static u64 access_path_at(int dirfd, const char *path, int mode)
 	if (mode & ~7)
 		return -EINVAL;
 
-	ret = fs_path_lookup_at(dirfd, path, 0, &p);
+	ret = fs_path_lookup_at(dirfd, path, lookup_flags, &p);
 	if (ret)
 		return ret;
 
@@ -223,7 +224,7 @@ u64 sys_access(void)
 	const char *path = syscall_arg_ptr(0);
 	int mode = syscall_arg_int(1);
 
-	return access_path_at(AT_FDCWD, path, mode);
+	return access_path_at(AT_FDCWD, path, mode, LOOKUP_FOLLOW);
 }
 
 u64 sys_faccessat(void)
@@ -232,7 +233,22 @@ u64 sys_faccessat(void)
 	const char *path = syscall_arg_ptr(1);
 	int mode = syscall_arg_int(2);
 
-	return access_path_at(dirfd, path, mode);
+	return access_path_at(dirfd, path, mode, LOOKUP_FOLLOW);
+}
+
+u64 sys_faccessat2(void)
+{
+	int dirfd = syscall_arg_int(0);
+	const char *path = syscall_arg_ptr(1);
+	int mode = syscall_arg_int(2);
+	int flags = syscall_arg_int(3);
+	unsigned int lookup_flags;
+
+	if (flags & ~(AT_SYMLINK_NOFOLLOW | AT_EACCESS))
+		return -EINVAL;
+
+	lookup_flags = (flags & AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW;
+	return access_path_at(dirfd, path, mode, lookup_flags);
 }
 
 u64 sys_fstatfs(void)
@@ -260,7 +276,7 @@ u64 sys_statfs(void)
 	struct fs_inode *inode;
 	int ret;
 
-	ret = fs_path_lookup(path, 0, &p);
+	ret = fs_path_lookup(path, LOOKUP_FOLLOW, &p);
 	if (ret)
 		return ret;
 
@@ -402,7 +418,7 @@ u64 sys_chdir(void)
 	struct task *task = current_task();
 	struct fs_path new_path;
 
-	int err = fs_path_lookup(pathname, 0, &new_path);
+	int err = fs_path_lookup(pathname, LOOKUP_FOLLOW, &new_path);
 	if (err)
 		return err;
 
@@ -907,7 +923,7 @@ u64 sys_truncate(void)
 	if (length < 0)
 		return -EINVAL;
 
-	err = fs_path_lookup(pathname, 0, &path);
+	err = fs_path_lookup(pathname, LOOKUP_FOLLOW, &path);
 	if (err)
 		return err;
 
@@ -954,7 +970,8 @@ static int check_setattr_perm(struct fs_inode *inode, struct fs_iattr *attr)
 	return 0;
 }
 
-static int setattr_path_at(int dirfd, const char *path, struct fs_iattr *attr)
+static int setattr_path_at(int dirfd, const char *path, struct fs_iattr *attr,
+			   unsigned int lookup_flags)
 {
 	struct fs_path p;
 	struct fs_inode *inode;
@@ -963,7 +980,7 @@ static int setattr_path_at(int dirfd, const char *path, struct fs_iattr *attr)
 	if (!path)
 		return -EINVAL;
 
-	err = fs_path_lookup_at(dirfd, path, 0, &p);
+	err = fs_path_lookup_at(dirfd, path, lookup_flags, &p);
 	if (err)
 		return err;
 
@@ -1054,7 +1071,8 @@ static int times_from_user_timespec(struct fs_iattr *attr,
 }
 
 static int set_times_path_at(int dirfd, const char *path,
-			     const struct timespec times[2])
+			     const struct timespec times[2],
+			     unsigned int lookup_flags)
 {
 	struct fs_iattr attr = { 0 };
 	int err;
@@ -1063,7 +1081,7 @@ static int set_times_path_at(int dirfd, const char *path,
 	if (err || !attr.valid)
 		return err;
 
-	return setattr_path_at(dirfd, path, &attr);
+	return setattr_path_at(dirfd, path, &attr, lookup_flags);
 }
 
 static int set_times_fd(int fd, const struct timespec times[2])
@@ -1087,7 +1105,7 @@ u64 sys_chmod(void)
 		.mode = mode & 07777,
 	};
 
-	return setattr_path_at(AT_FDCWD, path, &attr);
+	return setattr_path_at(AT_FDCWD, path, &attr, LOOKUP_FOLLOW);
 }
 
 u64 sys_fchmod(void)
@@ -1112,7 +1130,7 @@ u64 sys_fchmodat(void)
 		.mode = mode & 07777,
 	};
 
-	return setattr_path_at(dirfd, path, &attr);
+	return setattr_path_at(dirfd, path, &attr, LOOKUP_FOLLOW);
 }
 
 static void chown_attr_init(struct fs_iattr *attr, long uid, long gid)
@@ -1140,7 +1158,7 @@ u64 sys_chown(void)
 	if (!attr.valid)
 		return 0;
 
-	return setattr_path_at(AT_FDCWD, path, &attr);
+	return setattr_path_at(AT_FDCWD, path, &attr, LOOKUP_FOLLOW);
 }
 
 u64 sys_fchown(void)
@@ -1163,13 +1181,22 @@ u64 sys_fchownat(void)
 	const char *path = syscall_arg_ptr(1);
 	long uid = syscall_arg_int(2);
 	long gid = syscall_arg_int(3);
+	int flags = syscall_arg_raw(4);
 	struct fs_iattr attr;
+	unsigned int lookup_flags;
 
 	chown_attr_init(&attr, uid, gid);
 	if (!attr.valid)
 		return 0;
 
-	return setattr_path_at(dirfd, path, &attr);
+	if (flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH))
+		return -EINVAL;
+
+	if ((flags & AT_EMPTY_PATH) && path && path[0] == '\0')
+		return setattr_fd(dirfd, &attr);
+
+	lookup_flags = (flags & AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW;
+	return setattr_path_at(dirfd, path, &attr, lookup_flags);
 }
 
 u64 sys_utime(void)
@@ -1187,10 +1214,11 @@ u64 sys_utime(void)
 		times[0].tv_nsec = 0;
 		times[1].tv_sec = ub.modtime;
 		times[1].tv_nsec = 0;
-		return set_times_path_at(AT_FDCWD, path, times);
+		return set_times_path_at(AT_FDCWD, path, times,
+					 LOOKUP_FOLLOW);
 	}
 
-	return set_times_path_at(AT_FDCWD, path, NULL);
+	return set_times_path_at(AT_FDCWD, path, NULL, LOOKUP_FOLLOW);
 }
 
 static int timeval_pair_to_timespec(const struct timeval tv[2],
@@ -1214,7 +1242,7 @@ u64 sys_utimes(void)
 	int err;
 
 	if (!utimes)
-		return set_times_path_at(AT_FDCWD, path, NULL);
+		return set_times_path_at(AT_FDCWD, path, NULL, LOOKUP_FOLLOW);
 
 	if (copy_from_user(tv, utimes, sizeof(tv)))
 		return -EFAULT;
@@ -1222,7 +1250,7 @@ u64 sys_utimes(void)
 	if (err)
 		return err;
 
-	return set_times_path_at(AT_FDCWD, path, ts);
+	return set_times_path_at(AT_FDCWD, path, ts, LOOKUP_FOLLOW);
 }
 
 u64 sys_futimesat(void)
@@ -1238,7 +1266,7 @@ u64 sys_futimesat(void)
 		return -EINVAL;
 
 	if (!utimes)
-		return set_times_path_at(dirfd, path, NULL);
+		return set_times_path_at(dirfd, path, NULL, LOOKUP_FOLLOW);
 
 	if (copy_from_user(tv, utimes, sizeof(tv)))
 		return -EFAULT;
@@ -1246,7 +1274,7 @@ u64 sys_futimesat(void)
 	if (err)
 		return err;
 
-	return set_times_path_at(dirfd, path, ts);
+	return set_times_path_at(dirfd, path, ts, LOOKUP_FOLLOW);
 }
 
 u64 sys_utimensat(void)
@@ -1263,10 +1291,15 @@ u64 sys_utimensat(void)
 	if (utimes && copy_from_user(ts, utimes, sizeof(ts)))
 		return -EFAULT;
 
+	unsigned int lookup_flags = (flags & AT_SYMLINK_NOFOLLOW) ?
+					    0 :
+					    LOOKUP_FOLLOW;
+
 	if (!path || ((flags & AT_EMPTY_PATH) && path[0] == '\0'))
 		return set_times_fd(dirfd, utimes ? ts : NULL);
 
-	return set_times_path_at(dirfd, path, utimes ? ts : NULL);
+	return set_times_path_at(dirfd, path, utimes ? ts : NULL,
+				 lookup_flags);
 }
 
 static u64 do_fsync(int datasync)
