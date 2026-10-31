@@ -140,14 +140,17 @@ int fs_path_dot_dot(struct fs_path *path, struct fs_path *dotdot)
 	return 0;
 }
 
-static int __path_lookup(int dirfd, const char *name, unsigned int flags,
-			 struct fs_path *path, struct qstr *component_name)
-{
-	int err = path_init(dirfd, &name, path);
-	if (err)
-		return err;
+#define MAXSYMLINKS 40
 
+static int path_walk(struct fs_path *path, const char *name,
+		     unsigned int flags, struct qstr *component_name)
+{
+	int err;
+	int depth = 0;
 	const char *p = name;
+	char target[PATH_MAX];
+	char restbuf[PATH_MAX];
+	char combined[PATH_MAX];
 
 	while ((p = skip_component(p, component_name))) {
 		struct fs_inode *dir_inode = fs_dentry_inode(path->dentry);
@@ -194,6 +197,83 @@ static int __path_lookup(int dirfd, const char *name, unsigned int flags,
 		if (err)
 			goto lookup_error;
 
+		struct fs_inode *inode = fs_dentry_inode(component_path.dentry);
+
+		if (inode && S_ISLNK(inode->mode)) {
+			if (flags & LOOKUP_NO_SYMLINKS) {
+				fs_path_put(&component_path);
+				err = -ELOOP;
+				goto lookup_error;
+			}
+			if (*p != '\0' || (flags & LOOKUP_FOLLOW)) {
+				size_t tlen, rlen, off;
+				int len;
+
+				if (depth++ >= MAXSYMLINKS) {
+					fs_path_put(&component_path);
+					err = -ELOOP;
+					goto lookup_error;
+				}
+				if (!inode->ops || !inode->ops->readlink) {
+					fs_path_put(&component_path);
+					err = -EINVAL;
+					goto lookup_error;
+				}
+				len = inode->ops->readlink(component_path.dentry,
+							   target,
+							   (int)sizeof(target) -
+								   1);
+				if (len < 0) {
+					fs_path_put(&component_path);
+					err = len;
+					goto lookup_error;
+				}
+				if ((size_t)len >= sizeof(target) - 1) {
+					fs_path_put(&component_path);
+					err = -ENAMETOOLONG;
+					goto lookup_error;
+				}
+				target[len] = '\0';
+				if (!target[0]) {
+					fs_path_put(&component_path);
+					err = -ENOENT;
+					goto lookup_error;
+				}
+
+				tlen = strlen(target);
+				rlen = strlen(p);
+				if (tlen + (p[0] ? 1 : 0) + rlen + 1 >
+				    sizeof(combined)) {
+					fs_path_put(&component_path);
+					err = -ENAMETOOLONG;
+					goto lookup_error;
+				}
+
+				memcpy(restbuf, p, rlen + 1);
+				memcpy(combined, target, tlen);
+				off = tlen;
+				if (p[0])
+					combined[off++] = '/';
+				memcpy(combined + off, restbuf, rlen + 1);
+
+				fs_path_put(&component_path);
+
+				if (target[0] == '/') {
+					const char *q = combined;
+
+					fs_path_put(path);
+					memset(path, 0, sizeof(*path));
+					err = path_init(AT_FDCWD, &q, path);
+					if (err)
+						goto lookup_error;
+					p = q;
+				} else {
+					p = combined;
+				}
+				continue;
+			}
+		}
+
 		fs_path_put(path);
 		*path = component_path;
 
@@ -219,6 +299,16 @@ lookup_error:
 	memset(path, 0, sizeof(*path));
 	memset(component_name, 0, sizeof(*component_name));
 	return err;
+}
+
+static int __path_lookup(int dirfd, const char *name, unsigned int flags,
+			 struct fs_path *path, struct qstr *component_name)
+{
+	int err = path_init(dirfd, &name, path);
+	if (err)
+		return err;
+
+	return path_walk(path, name, flags, component_name);
 }
 
 int fs_path_lookup_at(int dir_fd, const char *name, unsigned int flags,

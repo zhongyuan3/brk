@@ -32,6 +32,7 @@ u64 sys_openat(void);
 u64 sys_stat(void);
 u64 sys_access(void);
 u64 sys_faccessat(void);
+u64 sys_faccessat2(void);
 u64 sys_statfs(void);
 u64 sys_fstatfs(void);
 u64 sys_fallocate(void);

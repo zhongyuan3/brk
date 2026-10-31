@@ -67,6 +67,7 @@ static u64 (*systable[])(void) = {
 	[SYS_stat] = sys_stat,
 	[SYS_access] = sys_access,
 	[SYS_faccessat] = sys_faccessat,
+	[SYS_faccessat2] = sys_faccessat2,
 	[SYS_statfs] = sys_statfs,
 	[SYS_fstatfs] = sys_fstatfs,
 	[SYS_fallocate] = sys_fallocate,
