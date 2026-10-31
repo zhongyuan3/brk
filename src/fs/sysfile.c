@@ -584,7 +584,7 @@ u64 sys_mount(void)
 	unsigned long flags = syscall_arg_raw(3);
 	void *data = syscall_arg_ptr(4);
 
-	if (current_task()->fsuid != 0)
+	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 	return do_mount(source, target, type, flags, data);
 }
@@ -596,7 +596,7 @@ u64 sys_umount2(void)
 	struct fs_path path;
 	int err;
 
-	if (current_task()->fsuid != 0)
+	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
 	/*
@@ -940,15 +940,11 @@ u64 sys_truncate(void)
 
 static int check_setattr_perm(struct fs_inode *inode, struct fs_iattr *attr)
 {
-	struct task *task = current_task();
-
 	if (!inode)
 		return -ENOENT;
 
-	if (attr->valid & (ATTR_UID | ATTR_GID)) {
-		if (task->fsuid != 0)
-			return -EPERM;
-	}
+	if ((attr->valid & (ATTR_UID | ATTR_GID)) && !capable(CAP_CHOWN))
+		return -EPERM;
 
 	if (attr->valid & (ATTR_MODE | ATTR_ATIME | ATTR_MTIME | ATTR_CTIME)) {
 		if (!inode_owner_or_capable(inode))

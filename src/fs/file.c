@@ -4,12 +4,12 @@
 #include <brk/initcall.h>
 #include <brk/kernel.h>
 #include <brk/path.h>
+#include <brk/permission.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
-#include <brk/task.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
 #include <uapi/poll.h>
@@ -134,11 +134,10 @@ ssize_t fs_file_read(struct fs_file *file, void *buf, size_t size)
 void fs_remove_inode_privs(struct fs_inode *inode, struct fs_dentry *dentry)
 {
 	struct fs_iattr attr;
-	struct task *task = current_task();
 
 	if (!inode || !dentry || !inode->ops || !inode->ops->setattr)
 		return;
-	if (task->fsuid == 0)
+	if (capable(CAP_FSETID))
 		return;
 	if (!(inode->mode & (S_ISUID | S_ISGID)))
 		return;

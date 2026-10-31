@@ -91,6 +91,9 @@ struct task {
 	kgid_t groups[NGROUPS_MAX];
 	int ngroups;
 	umode_t umask;
+	u64 cap_effective;
+	u64 cap_permitted;
+	u64 cap_inheritable;
 
 	struct sigaction_table *sigactions;
 	/* protected by @sigactions->lock */

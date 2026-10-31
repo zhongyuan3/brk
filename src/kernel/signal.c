@@ -3,6 +3,7 @@
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
+#include <brk/permission.h>
 #include <brk/refcnt.h>
 #include <brk/signal.h>
 #include <brk/spinlock.h>
@@ -22,7 +23,7 @@ static bool signal_may_send(const struct task *target)
 {
 	struct task *current = current_task();
 
-	if (current->euid == 0)
+	if (capable(CAP_KILL))
 		return true;
 	return target->euid == current->euid;
 }

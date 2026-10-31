@@ -53,5 +53,8 @@ for name in "${bins[@]}"; do
 	src=$USER_ROOT/build/64/bin/$name
 	"$BRKFS" cp --parents "$src" "/bin/$name" "$IMG"
 done
+if [[ -d $USER_ROOT/etc ]]; then
+	"$BRKFS" cp -r --parents "$USER_ROOT/etc" "/etc" "$IMG"
+fi
 "$BRKFS" cp "$KERNEL_ROOT/README.md" "/README.md" "$IMG"
 "$BRKFS" cp "$KERNEL_ROOT/LICENSE" "/LICENSE" "$IMG"

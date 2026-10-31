@@ -32,6 +32,7 @@
 #include <brk/types.h>
 #include <brk/vmalloc.h>
 #include <brk/writeback.h>
+#include <uapi/capability.h>
 #include <uapi/errno.h>
 #include <uapi/limits.h>
 #include <uapi/signal.h>
@@ -127,6 +128,9 @@ struct task *task_create(struct task_create_args *args)
 	task->pgid = (args && args->pgid) ? args->pgid : task->pid;
 	task->sid = (args && args->sid) ? args->sid : task->pid;
 	task->umask = 022;
+	task->cap_effective = CAP_FULL_SET;
+	task->cap_permitted = CAP_FULL_SET;
+	task->cap_inheritable = 0;
 
 	task->kstack_base = kstack_alloc();
 	if (!task->kstack_base) {
@@ -675,6 +679,9 @@ int task_fork(void)
 	memcpy(child->groups, parent->groups,
 	       sizeof(child->groups[0]) * (size_t)parent->ngroups);
 	child->umask = parent->umask;
+	child->cap_effective = parent->cap_effective;
+	child->cap_permitted = parent->cap_permitted;
+	child->cap_inheritable = parent->cap_inheritable;
 
 	fdtable_copy(child->fdtable, parent->fdtable);
 	fsinfo_copy(child->fsinfo, parent->fsinfo);

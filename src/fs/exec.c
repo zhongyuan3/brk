@@ -22,6 +22,7 @@
 #include <brk/types.h>
 #include <brk/vmalloc.h>
 #include <uapi/elf.h>
+#include <uapi/capability.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/limits.h>
@@ -440,6 +441,13 @@ static int __do_execve(const char *path, struct exec_args *args)
 			task->euid = file_uid;
 			task->suid = file_uid;
 			task->fsuid = file_uid;
+			if (file_uid == 0) {
+				task->cap_effective = CAP_FULL_SET;
+				task->cap_permitted = CAP_FULL_SET;
+			} else {
+				task->cap_effective = 0;
+				task->cap_permitted = 0;
+			}
 		}
 		if ((file_mode & S_ISGID) && (file_mode & S_IXGRP)) {
 			task->egid = file_gid;

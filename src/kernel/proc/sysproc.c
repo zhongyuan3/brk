@@ -2,6 +2,7 @@
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/pgalloc.h>
+#include <brk/permission.h>
 #include <brk/printk.h>
 #include <brk/signal.h>
 #include <brk/string.h>
@@ -99,15 +100,27 @@ u64 sys_getegid(void)
 	return current_task()->egid;
 }
 
+static void update_caps_after_setuid(struct task *task, kuid_t old_euid)
+{
+	if (old_euid != 0 && task->euid == 0) {
+		task->cap_effective = CAP_FULL_SET;
+		task->cap_permitted = CAP_FULL_SET;
+	} else if (old_euid == 0 && task->euid != 0) {
+		task->cap_effective = 0;
+		task->cap_permitted = 0;
+	}
+}
+
 u64 sys_setuid(void)
 {
 	struct task *task = current_task();
 	int uid = syscall_arg_int(0);
+	kuid_t old_euid = task->euid;
 
 	if (uid < 0)
 		return -EINVAL;
 
-	if (task->euid == 0) {
+	if (capable(CAP_SETUID)) {
 		task->uid = task->euid = task->suid = (kuid_t)uid;
 		task->fsuid = (kuid_t)uid;
 	} else if ((kuid_t)uid == task->uid || (kuid_t)uid == task->suid) {
@@ -116,6 +129,7 @@ u64 sys_setuid(void)
 	} else {
 		return -EPERM;
 	}
+	update_caps_after_setuid(task, old_euid);
 	return 0;
 }
 
@@ -127,7 +141,7 @@ u64 sys_setgid(void)
 	if (gid < 0)
 		return -EINVAL;
 
-	if (task->euid == 0) {
+	if (capable(CAP_SETGID)) {
 		task->gid = task->egid = task->sgid = (kgid_t)gid;
 		task->fsgid = (kgid_t)gid;
 	} else if ((kgid_t)gid == task->gid || (kgid_t)gid == task->sgid) {
@@ -144,10 +158,11 @@ u64 sys_setreuid(void)
 	struct task *task = current_task();
 	int ruid = syscall_arg_int(0);
 	int euid = syscall_arg_int(1);
+	kuid_t old_euid = task->euid;
 
 	if (ruid < -1 || euid < -1)
 		return -EINVAL;
-	if (task->euid != 0) {
+	if (!capable(CAP_SETUID)) {
 		if ((ruid != -1 && (kuid_t)ruid != task->uid) ||
 		    (euid != -1 && (kuid_t)euid != task->uid &&
 		     (kuid_t)euid != task->suid))
@@ -160,6 +175,7 @@ u64 sys_setreuid(void)
 		task->euid = (kuid_t)euid;
 		task->fsuid = (kuid_t)euid;
 	}
+	update_caps_after_setuid(task, old_euid);
 	return 0;
 }
 
@@ -171,7 +187,7 @@ u64 sys_setregid(void)
 
 	if (rgid < -1 || egid < -1)
 		return -EINVAL;
-	if (task->euid != 0) {
+	if (!capable(CAP_SETGID)) {
 		if ((rgid != -1 && (kgid_t)rgid != task->gid) ||
 		    (egid != -1 && (kgid_t)egid != task->gid &&
 		     (kgid_t)egid != task->sgid))
@@ -189,7 +205,7 @@ u64 sys_setregid(void)
 
 static bool resuid_valid(struct task *task, int ruid, int euid, int suid)
 {
-	if (task->euid == 0)
+	if (capable(CAP_SETUID))
 		return true;
 
 	if (ruid != -1 && (kuid_t)ruid != task->uid &&
@@ -210,6 +226,7 @@ u64 sys_setresuid(void)
 	int ruid = syscall_arg_int(0);
 	int euid = syscall_arg_int(1);
 	int suid = syscall_arg_int(2);
+	kuid_t old_euid = task->euid;
 
 	if (ruid < -1 || euid < -1 || suid < -1)
 		return -EINVAL;
@@ -223,6 +240,7 @@ u64 sys_setresuid(void)
 	if (suid != -1)
 		task->suid = (kuid_t)suid;
 	task->fsuid = task->euid;
+	update_caps_after_setuid(task, old_euid);
 	return 0;
 }
 
@@ -248,7 +266,7 @@ u64 sys_getresuid(void)
 
 static bool resgid_valid(struct task *task, int rgid, int egid, int sgid)
 {
-	if (task->euid == 0)
+	if (capable(CAP_SETGID))
 		return true;
 
 	if (rgid != -1 && (kgid_t)rgid != task->gid &&
@@ -312,7 +330,7 @@ u64 sys_setfsuid(void)
 	kuid_t old = task->fsuid;
 
 	if (uid >= 0 &&
-	    (task->euid == 0 || (kuid_t)uid == task->uid ||
+	    (capable(CAP_SETUID) || (kuid_t)uid == task->uid ||
 	     (kuid_t)uid == task->euid || (kuid_t)uid == task->suid))
 		task->fsuid = (kuid_t)uid;
 	return old;
@@ -325,7 +343,7 @@ u64 sys_setfsgid(void)
 	kgid_t old = task->fsgid;
 
 	if (gid >= 0 &&
-	    (task->euid == 0 || (kgid_t)gid == task->gid ||
+	    (capable(CAP_SETGID) || (kgid_t)gid == task->gid ||
 	     (kgid_t)gid == task->egid || (kgid_t)gid == task->sgid))
 		task->fsgid = (kgid_t)gid;
 	return old;
@@ -364,7 +382,7 @@ u64 sys_setgroups(void)
 
 	if (size < 0 || size > NGROUPS_MAX)
 		return -EINVAL;
-	if (task->euid != 0)
+	if (!capable(CAP_SETGID))
 		return -EPERM;
 	if (size && !list)
 		return -EFAULT;
@@ -376,6 +394,74 @@ u64 sys_setgroups(void)
 	for (int i = 0; i < size; i++)
 		task->groups[i] = (kgid_t)groups[i];
 	task->ngroups = size;
+	return 0;
+}
+
+u64 sys_capget(void)
+{
+	struct task *task = current_task();
+	struct cap_header hdr;
+	struct cap_data data[2];
+	struct cap_header *uhdr = syscall_arg_ptr(0);
+	struct cap_data *udata = syscall_arg_ptr(1);
+
+	if (!uhdr || !udata)
+		return -EFAULT;
+	if (copy_from_user(&hdr, uhdr, sizeof(hdr)))
+		return -EFAULT;
+	if (hdr.version != _LINUX_CAPABILITY_VERSION_3)
+		return -EINVAL;
+	if (hdr.pid != 0 && hdr.pid != task->tgid)
+		return -EINVAL;
+
+	memset(data, 0, sizeof(data));
+	data[0].effective = (unsigned int)task->cap_effective;
+	data[0].permitted = (unsigned int)task->cap_permitted;
+	data[0].inheritable = (unsigned int)task->cap_inheritable;
+	data[1].effective = (unsigned int)(task->cap_effective >> 32);
+	data[1].permitted = (unsigned int)(task->cap_permitted >> 32);
+	data[1].inheritable = (unsigned int)(task->cap_inheritable >> 32);
+
+	if (copy_to_user(udata, data, sizeof(data)))
+		return -EFAULT;
+	return 0;
+}
+
+u64 sys_capset(void)
+{
+	struct task *task = current_task();
+	struct cap_header hdr;
+	struct cap_data data[2];
+	struct cap_header *uhdr = syscall_arg_ptr(0);
+	struct cap_data *udata = syscall_arg_ptr(1);
+	u64 effective, permitted, inheritable;
+
+	if (!uhdr || !udata)
+		return -EFAULT;
+	if (copy_from_user(&hdr, uhdr, sizeof(hdr)))
+		return -EFAULT;
+	if (hdr.version != _LINUX_CAPABILITY_VERSION_3)
+		return -EINVAL;
+	if (hdr.pid != 0 && hdr.pid != task->tgid)
+		return -EINVAL;
+	if (copy_from_user(data, udata, sizeof(data)))
+		return -EFAULT;
+
+	effective = (u64)data[0].effective | ((u64)data[1].effective << 32);
+	permitted = (u64)data[0].permitted | ((u64)data[1].permitted << 32);
+	inheritable = (u64)data[0].inheritable |
+		      ((u64)data[1].inheritable << 32);
+
+	if (permitted & ~task->cap_permitted)
+		return -EPERM;
+	if (effective & ~permitted)
+		return -EPERM;
+	if (!capable(CAP_SETPCAP) && (inheritable & ~task->cap_inheritable))
+		return -EPERM;
+
+	task->cap_effective = effective;
+	task->cap_permitted = permitted;
+	task->cap_inheritable = inheritable;
 	return 0;
 }
 

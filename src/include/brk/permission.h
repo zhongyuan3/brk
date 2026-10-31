@@ -2,6 +2,7 @@
 #define BRK_PERMISSION_H
 
 #include <brk/types.h>
+#include <uapi/capability.h>
 
 struct fs_inode;
 
@@ -12,5 +13,6 @@ struct fs_inode;
 
 int inode_permission(const struct fs_inode *inode, int mask);
 bool inode_owner_or_capable(const struct fs_inode *inode);
+bool capable(int cap);
 
 #endif

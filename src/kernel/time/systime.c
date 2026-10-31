@@ -3,6 +3,7 @@
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/pgalloc.h>
+#include <brk/permission.h>
 #include <brk/printk.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
@@ -26,7 +27,7 @@ u64 sys_settimeofday(void)
 {
 	const struct timeval *tv;
 
-	if (current_task()->fsuid != 0)
+	if (!capable(CAP_SYS_TIME))
 		return -EPERM;
 
 	tv = syscall_arg_ptr(0);

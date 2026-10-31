@@ -29,7 +29,7 @@ static int may_delete(struct fs_inode *dir, struct fs_dentry *victim)
 		return err;
 
 	if (dir->mode & S_ISVTX) {
-		if (task->fsuid != 0 && task->fsuid != dir->uid &&
+		if (!capable(CAP_FOWNER) && task->fsuid != dir->uid &&
 		    (!inode || task->fsuid != inode->uid))
 			return -EPERM;
 	}
@@ -217,7 +217,7 @@ int do_mknodat(int dirfd, const char *pathname, umode_t mode, dev_t dev)
 	int err;
 	struct fs_path path;
 
-	if (current_task()->fsuid != 0)
+	if (!capable(CAP_MKNOD))
 		return -EPERM;
 
 	err = fs_path_lookup_at(dirfd, pathname, 0, &path);
