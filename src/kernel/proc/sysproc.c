@@ -331,6 +331,54 @@ u64 sys_setfsgid(void)
 	return old;
 }
 
+u64 sys_getgroups(void)
+{
+	struct task *task = current_task();
+	int size = syscall_arg_int(0);
+	u32 *list = syscall_arg_ptr(1);
+
+	if (size < 0)
+		return -EINVAL;
+	if (size == 0)
+		return task->ngroups;
+	if (size < task->ngroups)
+		return -EINVAL;
+	if (!list)
+		return -EFAULT;
+
+	for (int i = 0; i < task->ngroups; i++) {
+		u32 gid = task->groups[i];
+
+		if (copy_to_user(&list[i], &gid, sizeof(gid)))
+			return -EFAULT;
+	}
+	return task->ngroups;
+}
+
+u64 sys_setgroups(void)
+{
+	struct task *task = current_task();
+	int size = syscall_arg_int(0);
+	const u32 *list = syscall_arg_ptr(1);
+	kgid_t groups[NGROUPS_MAX];
+
+	if (size < 0 || size > NGROUPS_MAX)
+		return -EINVAL;
+	if (task->euid != 0)
+		return -EPERM;
+	if (size && !list)
+		return -EFAULT;
+
+	if (size && copy_from_user(groups, list,
+				   sizeof(groups[0]) * (size_t)size))
+		return -EFAULT;
+
+	for (int i = 0; i < size; i++)
+		task->groups[i] = (kgid_t)groups[i];
+	task->ngroups = size;
+	return 0;
+}
+
 u64 sys_umask(void)
 {
 	struct task *task = current_task();

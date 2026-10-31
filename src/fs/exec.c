@@ -360,6 +360,9 @@ static int __do_execve(const char *path, struct exec_args *args)
 	struct task *task = current_task();
 	struct fs_file *f = NULL;
 	struct uvm_space *new_mm = NULL;
+	umode_t file_mode;
+	kuid_t file_uid;
+	kgid_t file_gid;
 	int err = 0;
 
 	f = do_openat(AT_FDCWD, path, O_RDONLY, 0);
@@ -371,6 +374,10 @@ static int __do_execve(const char *path, struct exec_args *args)
 	err = inode_permission(f->inode, MAY_EXEC);
 	if (err)
 		goto err;
+
+	file_mode = f->inode->mode;
+	file_uid = f->inode->uid;
+	file_gid = f->inode->gid;
 
 	err = exec_read_elf_header(f, &elf_hdr);
 	if (err)
@@ -428,6 +435,17 @@ static int __do_execve(const char *path, struct exec_args *args)
 		signal_reset(task);
 		task->frame->sepc = elf_hdr.e_entry;
 		task->frame->sp = sp;
+
+		if (file_mode & S_ISUID) {
+			task->euid = file_uid;
+			task->suid = file_uid;
+			task->fsuid = file_uid;
+		}
+		if ((file_mode & S_ISGID) && (file_mode & S_IXGRP)) {
+			task->egid = file_gid;
+			task->sgid = file_gid;
+			task->fsgid = file_gid;
+		}
 	}
 
 	return args->argc;

@@ -671,6 +671,9 @@ int task_fork(void)
 	child->egid = parent->egid;
 	child->sgid = parent->sgid;
 	child->fsgid = parent->fsgid;
+	child->ngroups = parent->ngroups;
+	memcpy(child->groups, parent->groups,
+	       sizeof(child->groups[0]) * (size_t)parent->ngroups);
 	child->umask = parent->umask;
 
 	fdtable_copy(child->fdtable, parent->fdtable);

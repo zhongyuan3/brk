@@ -110,6 +110,8 @@ u64 sys_setresgid(void);
 u64 sys_getresgid(void);
 u64 sys_setfsuid(void);
 u64 sys_setfsgid(void);
+u64 sys_getgroups(void);
+u64 sys_setgroups(void);
 u64 sys_umask(void);
 u64 sys_chown(void);
 u64 sys_fchown(void);

@@ -9,6 +9,7 @@
 #include <uapi/types.h>
 
 #define TASK_NAME_MAX 32
+#define NGROUPS_MAX 32
 
 struct sigaction_table;
 struct uvm_space;
@@ -87,6 +88,8 @@ struct task {
 	kgid_t egid;
 	kgid_t sgid;
 	kgid_t fsgid;
+	kgid_t groups[NGROUPS_MAX];
+	int ngroups;
 	umode_t umask;
 
 	struct sigaction_table *sigactions;
