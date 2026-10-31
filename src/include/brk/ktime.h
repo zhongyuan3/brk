@@ -22,6 +22,8 @@ u64 ktime_get_boot_ns(void);
 u64 ktime_nanosleep(const struct timespec *dur, struct timespec *rem);
 
 void inode_times_set_all_now(struct fs_inode *inode);
+void inode_times_set(struct fs_inode *inode, const struct timespec *atime,
+		     const struct timespec *mtime);
 void inode_touch_mtime(struct fs_inode *inode);
 void inode_touch_ctime(struct fs_inode *inode);
 void inode_touch_mtime_ctime(struct fs_inode *inode);

@@ -1274,6 +1274,20 @@ static int tmpfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 		tmpfs_inode_times_to_vfs(t_inode, inode);
 	}
 
+	if (attr->valid & ATTR_MODE) {
+		inode->mode = (inode->mode & S_IFMT) | (attr->mode & 07777);
+		t_inode->i_mode = inode->mode;
+		inode_touch_ctime(inode);
+	}
+
+	if (attr->valid & (ATTR_ATIME | ATTR_MTIME | ATTR_CTIME)) {
+		inode_times_set(inode,
+				(attr->valid & ATTR_ATIME) ? &attr->atime : NULL,
+				(attr->valid & ATTR_MTIME) ? &attr->mtime : NULL);
+		inode_touch_ctime(inode);
+		tmpfs_vfs_times_to_inode(inode, t_inode);
+	}
+
 out:
 	sleeplock_release(&t_sb->s_lock);
 	sleeplock_release(&inode->rwsem);

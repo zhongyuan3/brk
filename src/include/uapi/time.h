@@ -20,6 +20,11 @@ struct timespec {
 	long tv_nsec;
 };
 
+struct utimbuf {
+	time_t actime;
+	time_t modtime;
+};
+
 struct tm {
 	int tm_sec; /* Seconds.	[0-60] (1 leap second) */
 	int tm_min; /* Minutes.	[0-59] */
