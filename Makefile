@@ -151,7 +151,9 @@ gdb-server: $(KERNEL_ELF) $(ROOTFS_IMG)
 gdb-client: $(KERNEL_ELF)
 	$(GDB) --tui -quiet -ex "target remote :1234" $(KERNEL_ELF)
 
-rootfs: $(ROOTFS_IMG)
+rootfs:
+	@$(RM) $(ROOTFS_IMG)
+	@./scripts/mkrootfs.sh "$(ROOTFS_IMG)"
 
 $(ROOTFS_IMG): scripts/mkrootfs.sh
 	@./scripts/mkrootfs.sh "$(ROOTFS_IMG)"
