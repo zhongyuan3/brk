@@ -5,7 +5,7 @@
 #include <brk/types.h>
 #include <brk/uart.h>
 
-void dt_set_dtb(unsigned long dtb);
+void dt_set_fdt(unsigned long addr);
 void *dt_get_fdt(void);
 
 int dt_init_scan_mem(void);

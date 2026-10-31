@@ -184,7 +184,7 @@ static void task_sched(void)
 	struct task *curr = current_task();
 	struct cpu *cpu = this_cpu();
 
-	ASSERT(!intr_enabled());
+	ASSERT(!local_irq_enabled());
 	ASSERT(curr->lock.locked);
 	ASSERT(cpu->preempt_count == 0);
 	ASSERT(curr->oncpu == (int)cpu->id);
@@ -269,7 +269,7 @@ void task_sleep(void *chan, spinlock_t *lock)
 {
 	struct task *task = current_task();
 
-	ASSERT(!intr_enabled());
+	ASSERT(!local_irq_enabled());
 	ASSERT(lock->locked);
 	ASSERT(preempt_count() == 0);
 

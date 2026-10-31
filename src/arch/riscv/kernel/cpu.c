@@ -20,24 +20,31 @@ void cpu_idle(void)
 
 void local_irq_disable(void)
 {
-	intr_off();
+	write_sstatus(read_sstatus() & ~SSTATUS_SIE);
 }
 
 void local_irq_enable(void)
 {
-	intr_on();
+	write_sstatus(read_sstatus() | SSTATUS_SIE);
 }
 
 irqstate_t local_irq_save(void)
 {
-	irqstate_t state = intr_off_get();
-	return state;
+	unsigned long old;
+	unsigned long i = SSTATUS_SIE;
+	asm volatile("csrrc %0, sstatus, %1" : "=r"(old) : "r"(i));
+	return old;
 }
 
 void local_irq_restore(irqstate_t state)
 {
-	if (state > 0)
-		intr_on();
+	if ((state & SSTATUS_SIE) != 0)
+		local_irq_enable();
+}
+
+bool local_irq_enabled(void)
+{
+	return read_sstatus() & SSTATUS_SIE;
 }
 
 void set_thread_pointer(unsigned long value)

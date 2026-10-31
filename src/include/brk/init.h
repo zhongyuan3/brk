@@ -3,8 +3,9 @@
 
 void start_kernel(void);
 
-void arch_init(void);
+/* architecture-specific */
 
-void smp_boot_release_secondary_harts(void);
+int arch_init(void);
+void bring_up_secondaries(void);
 
 #endif

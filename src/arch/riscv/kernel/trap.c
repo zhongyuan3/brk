@@ -250,7 +250,7 @@ static void handle_exception(unsigned long code, struct riscv_trap_frame *frame,
 		if (from_user) {
 			signal_deliver_pending(task);
 			frame->sepc += 4;
-			intr_on();
+			local_irq_enable();
 			syscall();
 		}
 		break;

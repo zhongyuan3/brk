@@ -25,7 +25,7 @@ void primary_entry(unsigned long hart_id, unsigned long dtb_pa,
 	cpu_init(hart_id);
 	setup_trap_entry();
 
-	dt_set_dtb(dtb_pa);
+	dt_set_fdt(dtb_pa);
 
 	boot_info.boot_hart_id = hart_id;
 	boot_info.dtb_pa = dtb_pa;
@@ -54,10 +54,17 @@ void secondary_entry(unsigned long hart_id)
 	task_scheduler();
 }
 
-void arch_init(void)
+int arch_init(void)
 {
-	paging_init();
-	dt_init_scan_cpu();
+	int err;
+
+	err = paging_init();
+	if (err)
+		return err;
+
+	err = dt_init_scan_cpu();
+	if (err)
+		return err;
 }
 
 static void smp_wake_secondary_harts(unsigned long boot_hart_id)
@@ -70,7 +77,7 @@ static void smp_wake_secondary_harts(unsigned long boot_hart_id)
 	}
 }
 
-void smp_boot_release_secondary_harts(void)
+void bring_up_secondaries(void)
 {
 	static bool released;
 

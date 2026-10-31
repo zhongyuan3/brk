@@ -125,35 +125,6 @@ static inline u64 read_time(void)
 	return time;
 }
 
-static inline void intr_on(void)
-{
-	write_sstatus(read_sstatus() | SSTATUS_SIE);
-}
-
-static inline void intr_off(void)
-{
-	write_sstatus(read_sstatus() & ~SSTATUS_SIE);
-}
-
-static inline bool intr_enabled(void)
-{
-	return read_sstatus() & SSTATUS_SIE;
-}
-
-/**
- * @brief Atomically disable the interrupts and return the previous state
- *
- * @return true if interrupts were enabled
- * @return false if interrupts were disabled
- */
-static inline bool intr_off_get(void)
-{
-	unsigned long old;
-	unsigned long i = SSTATUS_SIE;
-	asm volatile("csrrc %0, sstatus, %1" : "=r"(old) : "r"(i));
-	return (old & SSTATUS_SIE) != 0;
-}
-
 static inline unsigned long read_sscratch(void)
 {
 	unsigned long x;

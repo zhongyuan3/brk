@@ -352,7 +352,7 @@ void init_task_do(void)
 		pr_warn("writeback: failed to start flush thread: %d\n",
 			writeback_err);
 
-	smp_boot_release_secondary_harts();
+	bring_up_secondaries();
 
 	unsigned long sstatus = read_sstatus();
 	sstatus &= ~SSTATUS_SPP;
