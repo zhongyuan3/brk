@@ -9,6 +9,7 @@
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
 #include <uapi/poll.h>
@@ -130,9 +131,37 @@ ssize_t fs_file_read(struct fs_file *file, void *buf, size_t size)
 	return ret;
 }
 
+void fs_remove_inode_privs(struct fs_inode *inode, struct fs_dentry *dentry)
+{
+	struct fs_iattr attr;
+	struct task *task = current_task();
+
+	if (!inode || !dentry || !inode->ops || !inode->ops->setattr)
+		return;
+	if (task->fsuid == 0)
+		return;
+	if (!(inode->mode & (S_ISUID | S_ISGID)))
+		return;
+
+	attr.valid = ATTR_MODE;
+	attr.mode = inode->mode & ~(S_ISUID | S_ISGID);
+	attr.file = NULL;
+	inode->ops->setattr(dentry, &attr);
+}
+
+void fs_file_remove_privs(struct fs_file *file)
+{
+	if (!file || file->anon || !file->inode)
+		return;
+	fs_remove_inode_privs(file->inode, file->path.dentry);
+}
+
 ssize_t fs_file_write(struct fs_file *file, const void *buf, size_t size)
 {
 	loff_t *pos = &file->pos;
+
+	fs_file_remove_privs(file);
+
 	sleeplock_acquire(&file->pos_lock);
 	ssize_t ret = file->ops->write(file, buf, size, pos);
 	sleeplock_release(&file->pos_lock);
@@ -191,6 +220,8 @@ int fs_file_truncate(struct fs_file *file, loff_t size)
 	if (!file->inode->ops || !file->inode->ops->setattr)
 		return -EOPNOTSUPP;
 
+	fs_file_remove_privs(file);
+
 	return file->inode->ops->setattr(file->path.dentry, &attr);
 }
 
@@ -201,5 +232,8 @@ int fs_file_fallocate(struct fs_file *file, int mode, loff_t offset,
 		return -EINVAL;
 	if (!file->ops || !file->ops->fallocate)
 		return -EOPNOTSUPP;
+
+	fs_file_remove_privs(file);
+
 	return file->ops->fallocate(file, mode, offset, len);
 }

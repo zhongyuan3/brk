@@ -147,6 +147,10 @@ retry:
 		fs_path_put(&path);
 		return ERR_CAST(file);
 	}
+
+	if (perm_mask & MAY_WRITE)
+		fs_file_remove_privs(file);
+
 	fs_path_put(&path);
 
 	if (flags & O_TRUNC) {

@@ -212,6 +212,8 @@ ssize_t fs_file_write(struct fs_file *file, const void *buf, size_t size);
 long fs_file_ioctl(struct fs_file *file, unsigned int cmd, unsigned long arg);
 unsigned int fs_file_poll(struct fs_file *file, unsigned int events);
 int fs_file_stat(struct fs_file *file, struct stat *buf);
+void fs_remove_inode_privs(struct fs_inode *inode, struct fs_dentry *dentry);
+void fs_file_remove_privs(struct fs_file *file);
 int fs_statfs(struct fs_super_block *sb, struct statfs *buf);
 int fs_file_truncate(struct fs_file *file, loff_t size);
 int fs_file_fallocate(struct fs_file *file, int mode, loff_t offset,

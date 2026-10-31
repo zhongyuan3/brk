@@ -931,6 +931,8 @@ u64 sys_truncate(void)
 		return perm;
 	}
 
+	fs_remove_inode_privs(inode, path.dentry);
+
 	err = inode->ops->setattr(path.dentry, &attr);
 	fs_path_put(&path);
 	return err;
