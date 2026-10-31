@@ -234,7 +234,8 @@ int brkfs_bitmap_free(struct brkfs_sb_info *sbi, u32 start_bno, u32 nbits,
 		      u32 bit);
 
 int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, u32 ino, umode_t mode,
-			  unsigned int nlink, dev_t rdev);
+			  unsigned int nlink, dev_t rdev, kuid_t uid,
+			  kgid_t gid);
 
 int brkfs_dir_lookup(struct fs_inode *dir, const char *name,
 		     unsigned int name_len, u32 *ino_out, u8 *type_out);

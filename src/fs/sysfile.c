@@ -10,6 +10,7 @@
 #include <brk/ktime.h>
 #include <brk/mount.h>
 #include <brk/path.h>
+#include <brk/permission.h>
 #include <brk/printk.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
@@ -152,25 +153,86 @@ u64 sys_fstat(void)
 	return ret;
 }
 
+static u64 stat_path(const char *path, struct stat *buf)
+{
+	struct fs_path p;
+	struct fs_inode *inode;
+	int ret;
+
+	ret = fs_path_lookup(path, 0, &p);
+	if (ret)
+		return ret;
+
+	inode = p.dentry->inode;
+	if (!inode) {
+		fs_path_put(&p);
+		return -ENOENT;
+	}
+	if (!inode->ops || !inode->ops->getattr) {
+		fs_path_put(&p);
+		return -EOPNOTSUPP;
+	}
+
+	ret = inode->ops->getattr(&p, buf, 0, 0);
+	fs_path_put(&p);
+	return ret;
+}
+
 u64 sys_lstat(void)
 {
-	return -ENOSYS;
+	const char *path = syscall_arg_ptr(0);
+	struct stat *buf = syscall_arg_ptr(1);
+
+	return stat_path(path, buf);
 }
 
 u64 sys_stat(void)
 {
-	int ret;
 	const char *path = syscall_arg_ptr(0);
 	struct stat *buf = syscall_arg_ptr(1);
-	struct fs_file *fp = NULL;
 
-	fp = do_openat(AT_FDCWD, path, O_RDONLY, 0);
-	if (IS_ERR(fp))
-		return PTR_ERR(fp);
+	return stat_path(path, buf);
+}
 
-	ret = fs_file_stat(fp, buf);
-	fs_file_put(fp);
+static u64 access_path_at(int dirfd, const char *path, int mode)
+{
+	struct fs_path p;
+	struct fs_inode *inode;
+	int ret;
+
+	if (mode & ~7)
+		return -EINVAL;
+
+	ret = fs_path_lookup_at(dirfd, path, 0, &p);
+	if (ret)
+		return ret;
+
+	inode = p.dentry->inode;
+	if (!inode) {
+		fs_path_put(&p);
+		return -ENOENT;
+	}
+
+	ret = inode_permission(inode, mode & 7);
+	fs_path_put(&p);
 	return ret;
+}
+
+u64 sys_access(void)
+{
+	const char *path = syscall_arg_ptr(0);
+	int mode = syscall_arg_int(1);
+
+	return access_path_at(AT_FDCWD, path, mode);
+}
+
+u64 sys_faccessat(void)
+{
+	int dirfd = syscall_arg_int(0);
+	const char *path = syscall_arg_ptr(1);
+	int mode = syscall_arg_int(2);
+
+	return access_path_at(dirfd, path, mode);
 }
 
 u64 sys_fstatfs(void)
@@ -226,6 +288,11 @@ u64 sys_fallocate(void)
 	fp = fdtable_get_file(task->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
+
+	if (!(fp->mode & FMODE_WRITE)) {
+		fs_file_put(fp);
+		return -EINVAL;
+	}
 
 	ret = fs_file_fallocate(fp, mode, offset, len);
 	fs_file_put(fp);
@@ -351,6 +418,12 @@ u64 sys_chdir(void)
 		return -ENOTDIR;
 	}
 
+	int perm = inode_permission(inode, MAY_EXEC);
+	if (perm) {
+		fs_path_put(&new_path);
+		return perm;
+	}
+
 	fsinfo_update_cwd(task->fsinfo, &new_path);
 	return 0;
 }
@@ -369,6 +442,12 @@ u64 sys_fchdir(void)
 	if (!(fp->mode & FMODE_DIR)) {
 		fs_file_put(fp);
 		return -ENOTDIR;
+	}
+
+	int perm = inode_permission(fp->inode, MAY_EXEC);
+	if (perm) {
+		fs_file_put(fp);
+		return perm;
 	}
 
 	fs_path_get(&fp->path);
@@ -504,6 +583,9 @@ u64 sys_mount(void)
 	const char *type = syscall_arg_ptr(2);
 	unsigned long flags = syscall_arg_raw(3);
 	void *data = syscall_arg_ptr(4);
+
+	if (current_task()->fsuid != 0)
+		return -EPERM;
 	return do_mount(source, target, type, flags, data);
 }
 
@@ -513,6 +595,9 @@ u64 sys_umount2(void)
 	int flags = syscall_arg_int(1);
 	struct fs_path path;
 	int err;
+
+	if (current_task()->fsuid != 0)
+		return -EPERM;
 
 	/*
 	 * Resolve the mountpoint as seen from its parent mount.  With plain
@@ -840,9 +925,35 @@ u64 sys_truncate(void)
 		return -EOPNOTSUPP;
 	}
 
+	int perm = inode_permission(inode, MAY_WRITE);
+	if (perm) {
+		fs_path_put(&path);
+		return perm;
+	}
+
 	err = inode->ops->setattr(path.dentry, &attr);
 	fs_path_put(&path);
 	return err;
+}
+
+static int check_setattr_perm(struct fs_inode *inode, struct fs_iattr *attr)
+{
+	struct task *task = current_task();
+
+	if (!inode)
+		return -ENOENT;
+
+	if (attr->valid & (ATTR_UID | ATTR_GID)) {
+		if (task->fsuid != 0)
+			return -EPERM;
+	}
+
+	if (attr->valid & (ATTR_MODE | ATTR_ATIME | ATTR_MTIME | ATTR_CTIME)) {
+		if (!inode_owner_or_capable(inode))
+			return -EPERM;
+	}
+
+	return 0;
 }
 
 static int setattr_path_at(int dirfd, const char *path, struct fs_iattr *attr)
@@ -859,13 +970,22 @@ static int setattr_path_at(int dirfd, const char *path, struct fs_iattr *attr)
 		return err;
 
 	inode = p.dentry->inode;
-	if (!inode)
+	if (!inode) {
 		err = -ENOENT;
-	else if (!inode->ops || !inode->ops->setattr)
+		goto out;
+	}
+	if (!inode->ops || !inode->ops->setattr) {
 		err = -EOPNOTSUPP;
-	else
-		err = inode->ops->setattr(p.dentry, attr);
+		goto out;
+	}
 
+	err = check_setattr_perm(inode, attr);
+	if (err)
+		goto out;
+
+	err = inode->ops->setattr(p.dentry, attr);
+
+out:
 	fs_path_put(&p);
 	return err;
 }
@@ -879,13 +999,22 @@ static int setattr_fd(int fd, struct fs_iattr *attr)
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
-	if (!fp->inode)
+	if (!fp->inode) {
 		err = -EINVAL;
-	else if (!fp->inode->ops || !fp->inode->ops->setattr)
+		goto out;
+	}
+	if (!fp->inode->ops || !fp->inode->ops->setattr) {
 		err = -EOPNOTSUPP;
-	else
-		err = fp->inode->ops->setattr(fp->path.dentry, attr);
+		goto out;
+	}
 
+	err = check_setattr_perm(fp->inode, attr);
+	if (err)
+		goto out;
+
+	err = fp->inode->ops->setattr(fp->path.dentry, attr);
+
+out:
 	fs_file_put(fp);
 	return err;
 }
@@ -984,6 +1113,63 @@ u64 sys_fchmodat(void)
 		.valid = ATTR_MODE,
 		.mode = mode & 07777,
 	};
+
+	return setattr_path_at(dirfd, path, &attr);
+}
+
+static void chown_attr_init(struct fs_iattr *attr, long uid, long gid)
+{
+	memset(attr, 0, sizeof(*attr));
+
+	if (uid != -1) {
+		attr->valid |= ATTR_UID;
+		attr->uid = (kuid_t)uid;
+	}
+	if (gid != -1) {
+		attr->valid |= ATTR_GID;
+		attr->gid = (kgid_t)gid;
+	}
+}
+
+u64 sys_chown(void)
+{
+	const char *path = syscall_arg_ptr(0);
+	long uid = syscall_arg_int(1);
+	long gid = syscall_arg_int(2);
+	struct fs_iattr attr;
+
+	chown_attr_init(&attr, uid, gid);
+	if (!attr.valid)
+		return 0;
+
+	return setattr_path_at(AT_FDCWD, path, &attr);
+}
+
+u64 sys_fchown(void)
+{
+	int fd = syscall_arg_int(0);
+	long uid = syscall_arg_int(1);
+	long gid = syscall_arg_int(2);
+	struct fs_iattr attr;
+
+	chown_attr_init(&attr, uid, gid);
+	if (!attr.valid)
+		return 0;
+
+	return setattr_fd(fd, &attr);
+}
+
+u64 sys_fchownat(void)
+{
+	int dirfd = syscall_arg_int(0);
+	const char *path = syscall_arg_ptr(1);
+	long uid = syscall_arg_int(2);
+	long gid = syscall_arg_int(3);
+	struct fs_iattr attr;
+
+	chown_attr_init(&attr, uid, gid);
+	if (!attr.valid)
+		return 0;
 
 	return setattr_path_at(dirfd, path, &attr);
 }

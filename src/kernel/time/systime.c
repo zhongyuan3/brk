@@ -26,6 +26,9 @@ u64 sys_settimeofday(void)
 {
 	const struct timeval *tv;
 
+	if (current_task()->fsuid != 0)
+		return -EPERM;
+
 	tv = syscall_arg_ptr(0);
 	ktime_set_real_tv(tv);
 	return 0;

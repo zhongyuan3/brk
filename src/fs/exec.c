@@ -10,6 +10,8 @@
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
+#include <brk/path.h>
+#include <brk/permission.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/rand.h>
@@ -365,6 +367,10 @@ static int __do_execve(const char *path, struct exec_args *args)
 		err = PTR_ERR(f);
 		goto err;
 	}
+
+	err = inode_permission(f->inode, MAY_EXEC);
+	if (err)
+		goto err;
 
 	err = exec_read_elf_header(f, &elf_hdr);
 	if (err)

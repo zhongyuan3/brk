@@ -10,6 +10,7 @@
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
@@ -329,7 +330,9 @@ static int brkfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	err = brkfs_inode_alloc(sbi, &ino);
 	if (err)
 		goto out;
-	err = brkfs_disk_inode_init(sbi, ino, S_IFREG | mode, 1, 0);
+	err = brkfs_disk_inode_init(sbi, ino, S_IFREG | mode, 1, 0,
+				    current_task()->fsuid,
+				    current_task()->fsgid);
 	if (err)
 		goto undo_alloc;
 
@@ -472,7 +475,9 @@ static int brkfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	err = brkfs_inode_alloc(sbi, &ino);
 	if (err)
 		goto out;
-	err = brkfs_disk_inode_init(sbi, ino, S_IFLNK | 0777, 1, 0);
+	err = brkfs_disk_inode_init(sbi, ino, S_IFLNK | 0777, 1, 0,
+				    current_task()->fsuid,
+				    current_task()->fsgid);
 	if (err)
 		goto undo_alloc;
 
@@ -554,7 +559,9 @@ static int brkfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 	err = brkfs_inode_alloc(sbi, &ino);
 	if (err)
 		goto out;
-	err = brkfs_disk_inode_init(sbi, ino, (umode_t)(S_IFDIR | mode), 2, 0);
+	err = brkfs_disk_inode_init(sbi, ino, (umode_t)(S_IFDIR | mode), 2, 0,
+				    current_task()->fsuid,
+				    current_task()->fsgid);
 	if (err)
 		goto undo_alloc;
 
@@ -832,7 +839,9 @@ static int brkfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 	err = brkfs_inode_alloc(sbi, &ino);
 	if (err)
 		goto out;
-	err = brkfs_disk_inode_init(sbi, ino, mode, 1, dev);
+	err = brkfs_disk_inode_init(sbi, ino, mode, 1, dev,
+				    current_task()->fsuid,
+				    current_task()->fsgid);
 	if (err)
 		goto undo_alloc;
 
@@ -884,6 +893,8 @@ static int brkfs_getattr(const struct fs_path *path, struct stat *stat,
 	stat->st_ino = inode->ino;
 	stat->st_mode = inode->mode;
 	stat->st_nlink = inode->nlink;
+	stat->st_uid = inode->uid;
+	stat->st_gid = inode->gid;
 	stat->st_rdev = inode->rdev;
 	stat->st_size = inode->size;
 	stat->st_blksize = (int)inode->sb->block_size;
@@ -912,6 +923,14 @@ static int brkfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 
 	if (attr->valid & ATTR_MODE) {
 		inode->mode = (inode->mode & S_IFMT) | (attr->mode & 07777);
+		inode_touch_ctime(inode);
+	}
+	if (attr->valid & (ATTR_UID | ATTR_GID)) {
+		if (attr->valid & ATTR_UID)
+			inode->uid = attr->uid;
+		if (attr->valid & ATTR_GID)
+			inode->gid = attr->gid;
+		inode->mode &= ~(S_ISUID | S_ISGID);
 		inode_touch_ctime(inode);
 	}
 	if (attr->valid & (ATTR_ATIME | ATTR_MTIME | ATTR_CTIME)) {
@@ -1101,7 +1120,8 @@ int brkfs_inode_free(struct brkfs_sb_info *sbi, u32 ino)
 }
 
 int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, u32 ino, umode_t mode,
-			  unsigned int nlink, dev_t rdev)
+			  unsigned int nlink, dev_t rdev, kuid_t uid,
+			  kgid_t gid)
 {
 	struct fs_inode stub = { 0 };
 	struct brkfs_inode_info info;
@@ -1112,6 +1132,8 @@ int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, u32 ino, umode_t mode,
 	stub.nlink = nlink;
 	stub.size = 0;
 	stub.rdev = rdev;
+	stub.uid = uid;
+	stub.gid = gid;
 	stub.private_data = &info;
 	inode_times_set_all_now(&stub);
 	return brkfs_inode_write(sbi, &stub);

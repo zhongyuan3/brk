@@ -7,6 +7,7 @@
 #include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
+#include <brk/uaccess.h>
 #include <brk/vmalloc.h>
 #include <uapi/errno.h>
 #include <uapi/resource.h>
@@ -76,6 +77,267 @@ u64 sys_getppid(void)
 u64 sys_gettid(void)
 {
 	return current_task()->pid;
+}
+
+u64 sys_getuid(void)
+{
+	return current_task()->uid;
+}
+
+u64 sys_geteuid(void)
+{
+	return current_task()->euid;
+}
+
+u64 sys_getgid(void)
+{
+	return current_task()->gid;
+}
+
+u64 sys_getegid(void)
+{
+	return current_task()->egid;
+}
+
+u64 sys_setuid(void)
+{
+	struct task *task = current_task();
+	int uid = syscall_arg_int(0);
+
+	if (uid < 0)
+		return -EINVAL;
+
+	if (task->euid == 0) {
+		task->uid = task->euid = task->suid = (kuid_t)uid;
+		task->fsuid = (kuid_t)uid;
+	} else if ((kuid_t)uid == task->uid || (kuid_t)uid == task->suid) {
+		task->euid = (kuid_t)uid;
+		task->fsuid = (kuid_t)uid;
+	} else {
+		return -EPERM;
+	}
+	return 0;
+}
+
+u64 sys_setgid(void)
+{
+	struct task *task = current_task();
+	int gid = syscall_arg_int(0);
+
+	if (gid < 0)
+		return -EINVAL;
+
+	if (task->euid == 0) {
+		task->gid = task->egid = task->sgid = (kgid_t)gid;
+		task->fsgid = (kgid_t)gid;
+	} else if ((kgid_t)gid == task->gid || (kgid_t)gid == task->sgid) {
+		task->egid = (kgid_t)gid;
+		task->fsgid = (kgid_t)gid;
+	} else {
+		return -EPERM;
+	}
+	return 0;
+}
+
+u64 sys_setreuid(void)
+{
+	struct task *task = current_task();
+	int ruid = syscall_arg_int(0);
+	int euid = syscall_arg_int(1);
+
+	if (ruid < -1 || euid < -1)
+		return -EINVAL;
+	if (task->euid != 0) {
+		if ((ruid != -1 && (kuid_t)ruid != task->uid) ||
+		    (euid != -1 && (kuid_t)euid != task->uid &&
+		     (kuid_t)euid != task->suid))
+			return -EPERM;
+	}
+
+	if (ruid != -1)
+		task->uid = (kuid_t)ruid;
+	if (euid != -1) {
+		task->euid = (kuid_t)euid;
+		task->fsuid = (kuid_t)euid;
+	}
+	return 0;
+}
+
+u64 sys_setregid(void)
+{
+	struct task *task = current_task();
+	int rgid = syscall_arg_int(0);
+	int egid = syscall_arg_int(1);
+
+	if (rgid < -1 || egid < -1)
+		return -EINVAL;
+	if (task->euid != 0) {
+		if ((rgid != -1 && (kgid_t)rgid != task->gid) ||
+		    (egid != -1 && (kgid_t)egid != task->gid &&
+		     (kgid_t)egid != task->sgid))
+			return -EPERM;
+	}
+
+	if (rgid != -1)
+		task->gid = (kgid_t)rgid;
+	if (egid != -1) {
+		task->egid = (kgid_t)egid;
+		task->fsgid = (kgid_t)egid;
+	}
+	return 0;
+}
+
+static bool resuid_valid(struct task *task, int ruid, int euid, int suid)
+{
+	if (task->euid == 0)
+		return true;
+
+	if (ruid != -1 && (kuid_t)ruid != task->uid &&
+	    (kuid_t)ruid != task->euid && (kuid_t)ruid != task->suid)
+		return false;
+	if (euid != -1 && (kuid_t)euid != task->uid &&
+	    (kuid_t)euid != task->euid && (kuid_t)euid != task->suid)
+		return false;
+	if (suid != -1 && (kuid_t)suid != task->uid &&
+	    (kuid_t)suid != task->euid && (kuid_t)suid != task->suid)
+		return false;
+	return true;
+}
+
+u64 sys_setresuid(void)
+{
+	struct task *task = current_task();
+	int ruid = syscall_arg_int(0);
+	int euid = syscall_arg_int(1);
+	int suid = syscall_arg_int(2);
+
+	if (ruid < -1 || euid < -1 || suid < -1)
+		return -EINVAL;
+	if (!resuid_valid(task, ruid, euid, suid))
+		return -EPERM;
+
+	if (ruid != -1)
+		task->uid = (kuid_t)ruid;
+	if (euid != -1)
+		task->euid = (kuid_t)euid;
+	if (suid != -1)
+		task->suid = (kuid_t)suid;
+	task->fsuid = task->euid;
+	return 0;
+}
+
+u64 sys_getresuid(void)
+{
+	struct task *task = current_task();
+	u32 *ruid = syscall_arg_ptr(0);
+	u32 *euid = syscall_arg_ptr(1);
+	u32 *suid = syscall_arg_ptr(2);
+	u32 id;
+
+	id = task->uid;
+	if (ruid && copy_to_user(ruid, &id, sizeof(id)))
+		return -EFAULT;
+	id = task->euid;
+	if (euid && copy_to_user(euid, &id, sizeof(id)))
+		return -EFAULT;
+	id = task->suid;
+	if (suid && copy_to_user(suid, &id, sizeof(id)))
+		return -EFAULT;
+	return 0;
+}
+
+static bool resgid_valid(struct task *task, int rgid, int egid, int sgid)
+{
+	if (task->euid == 0)
+		return true;
+
+	if (rgid != -1 && (kgid_t)rgid != task->gid &&
+	    (kgid_t)rgid != task->egid && (kgid_t)rgid != task->sgid)
+		return false;
+	if (egid != -1 && (kgid_t)egid != task->gid &&
+	    (kgid_t)egid != task->egid && (kgid_t)egid != task->sgid)
+		return false;
+	if (sgid != -1 && (kgid_t)sgid != task->gid &&
+	    (kgid_t)sgid != task->egid && (kgid_t)sgid != task->sgid)
+		return false;
+	return true;
+}
+
+u64 sys_setresgid(void)
+{
+	struct task *task = current_task();
+	int rgid = syscall_arg_int(0);
+	int egid = syscall_arg_int(1);
+	int sgid = syscall_arg_int(2);
+
+	if (rgid < -1 || egid < -1 || sgid < -1)
+		return -EINVAL;
+	if (!resgid_valid(task, rgid, egid, sgid))
+		return -EPERM;
+
+	if (rgid != -1)
+		task->gid = (kgid_t)rgid;
+	if (egid != -1)
+		task->egid = (kgid_t)egid;
+	if (sgid != -1)
+		task->sgid = (kgid_t)sgid;
+	task->fsgid = task->egid;
+	return 0;
+}
+
+u64 sys_getresgid(void)
+{
+	struct task *task = current_task();
+	u32 *rgid = syscall_arg_ptr(0);
+	u32 *egid = syscall_arg_ptr(1);
+	u32 *sgid = syscall_arg_ptr(2);
+	u32 id;
+
+	id = task->gid;
+	if (rgid && copy_to_user(rgid, &id, sizeof(id)))
+		return -EFAULT;
+	id = task->egid;
+	if (egid && copy_to_user(egid, &id, sizeof(id)))
+		return -EFAULT;
+	id = task->sgid;
+	if (sgid && copy_to_user(sgid, &id, sizeof(id)))
+		return -EFAULT;
+	return 0;
+}
+
+u64 sys_setfsuid(void)
+{
+	struct task *task = current_task();
+	int uid = syscall_arg_int(0);
+	kuid_t old = task->fsuid;
+
+	if (uid >= 0 &&
+	    (task->euid == 0 || (kuid_t)uid == task->uid ||
+	     (kuid_t)uid == task->euid || (kuid_t)uid == task->suid))
+		task->fsuid = (kuid_t)uid;
+	return old;
+}
+
+u64 sys_setfsgid(void)
+{
+	struct task *task = current_task();
+	int gid = syscall_arg_int(0);
+	kgid_t old = task->fsgid;
+
+	if (gid >= 0 &&
+	    (task->euid == 0 || (kgid_t)gid == task->gid ||
+	     (kgid_t)gid == task->egid || (kgid_t)gid == task->sgid))
+		task->fsgid = (kgid_t)gid;
+	return old;
+}
+
+u64 sys_umask(void)
+{
+	struct task *task = current_task();
+	umode_t old = task->umask;
+
+	task->umask = syscall_arg_raw(0) & 0777;
+	return old;
 }
 
 u64 sys_setpgid(void)
