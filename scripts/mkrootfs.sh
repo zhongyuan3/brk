@@ -40,12 +40,13 @@ if [[ -z ${SKIP_USER_BUILD:-} ]]; then
 fi
 
 BLOCK_SIZE=4096
-BLOCK_COUNT=2048
+BLOCK_COUNT=8192
+INODE_COUNT=1024
 
 mkdir -p "$(dirname "$IMG")"
 rm -f "$IMG"
 dd if=/dev/zero of="$IMG" bs=$BLOCK_SIZE count=$BLOCK_COUNT status=none
-"$BRKFS" mkfs -bs $BLOCK_SIZE "$IMG"
+"$BRKFS" mkfs -bs $BLOCK_SIZE -I $INODE_COUNT "$IMG"
 
 # Build a small FHS-style directory skeleton.  Git cannot track empty
 # directories, so create them here and copy them into the image.
@@ -82,7 +83,6 @@ mapfile -t bins < <(
 	for f in *.c; do
 		printf '%s\n' "${f%.c}"
 	done
-	printf 'sh\n'
 )
 for name in "${bins[@]}"; do
 	case " ${SYSTEM_BINS[*]} ${USR_BINS[*]} " in
@@ -95,6 +95,10 @@ done
 
 if [[ -d $USER_ROOT/etc ]]; then
 	"$BRKFS" cp -r --parents "$USER_ROOT/etc" "/etc" "$IMG"
+fi
+
+if [[ -d $USER_ROOT/tests ]]; then
+	"$BRKFS" cp -r "$USER_ROOT/tests" "/home/tests" "$IMG"
 fi
 
 for doc in README.md README.cn.md LICENSE; do

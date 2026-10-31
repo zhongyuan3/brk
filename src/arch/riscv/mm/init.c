@@ -140,6 +140,8 @@ static int phys_mem_init(void)
 		return err;
 
 	phys_offset = memblock_start_of_dram();
+
+	return 0;
 }
 
 struct mapping_region {

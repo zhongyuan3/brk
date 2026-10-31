@@ -1,13 +1,13 @@
 #ifndef UAPI_LIMITS_H
 #define UAPI_LIMITS_H
 
-#define PATH_MAX 256
-#define NAME_MAX 14
+#define PATH_MAX 512
+#define NAME_MAX 255
 
-#define OPEN_MAX 16
+#define OPEN_MAX 64
 
-#define ARG_MAX 4096
+#define ARG_MAX 16384
 
-#define PIPE_BUF 512
+#define PIPE_BUF 4096
 
 #endif

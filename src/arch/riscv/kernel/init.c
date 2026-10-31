@@ -65,6 +65,8 @@ int arch_init(void)
 	err = dt_init_scan_cpu();
 	if (err)
 		return err;
+
+	return 0;
 }
 
 static void smp_wake_secondary_harts(unsigned long boot_hart_id)
