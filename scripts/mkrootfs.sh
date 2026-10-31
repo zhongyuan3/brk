@@ -66,7 +66,8 @@ done
 
 BIN_DIR=$USER_ROOT/build/64/bin
 SYSTEM_BINS=(init)
-USR_BINS=(brktest cap clear df edit fallocate nc netstat stat tput)
+USR_BINS=(brktest cap clear df edit fallocate httpd httpget nc netstat stat
+	  tput)
 
 for name in "${SYSTEM_BINS[@]}"; do
 	"$BRKFS" cp --parents "$BIN_DIR/$name" "/sbin/$name" "$IMG"

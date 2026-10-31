@@ -214,7 +214,10 @@ static int udp_sendmsg(struct socket *sock, const void *buf, size_t len,
 	if (!uh->check)
 		uh->check = htons(0xffff);
 
-	return ip_output(skb, saddr, daddr, IPPROTO_UDP, IP_TTL_DEFAULT);
+	err = ip_output(skb, saddr, daddr, IPPROTO_UDP, IP_TTL_DEFAULT);
+	if (err)
+		return err;
+	return (int)len;
 }
 
 int udp_rcv(struct sk_buff *skb)
