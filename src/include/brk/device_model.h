@@ -21,7 +21,7 @@ struct device_id {
 	/* platform_bus: DT compatible string */
 	const char *compatible;
 	/* virtio_bus: virtio device ID; 0 terminates the table */
-	uint32_t device_id;
+	u32 device_id;
 };
 
 struct device {

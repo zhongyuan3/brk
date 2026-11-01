@@ -44,8 +44,7 @@ static void virtio_bus_init(void)
 }
 core_initcall(virtio_bus_init);
 
-struct virtio_device *virtio_dev_create(uint64_t phys_base, size_t size,
-					uint32_t irq)
+struct virtio_device *virtio_dev_create(u64 phys_base, size_t size, u32 irq)
 {
 	struct virtio_device *dev;
 	int err;
@@ -109,7 +108,7 @@ void virtio_dev_remove(struct virtio_device *dev)
 	spin_unlock(&vdevs_lock);
 }
 
-struct virtio_device *virtio_dev_get(uint32_t id)
+struct virtio_device *virtio_dev_get(u32 id)
 {
 	struct virtio_device *dev;
 

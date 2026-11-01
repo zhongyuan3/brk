@@ -3,7 +3,7 @@
 #include <arch/csr.h>
 #include <arch/mm.h>
 #include <arch/pgtable.h>
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
@@ -12,29 +12,29 @@
 #include <brk/mm_types.h>
 #include <brk/pagecache.h>
 #include <brk/pgalloc.h>
+#include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/types.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/mman.h>
 #include <uapi/stat.h>
 
-static bool ranges_overlap(uint64_t a, size_t alen, uint64_t b, size_t blen)
+static bool ranges_overlap(u64 a, size_t alen, u64 b, size_t blen)
 {
-	uint64_t aend;
-	uint64_t bend;
+	u64 aend;
+	u64 bend;
 
 	if (alen == 0 || blen == 0)
 		return false;
-	if (a > (uint64_t)-1 - alen || b > (uint64_t)-1 - blen)
+	if (a > (u64)-1 - alen || b > (u64)-1 - blen)
 		return true;
 	aend = a + alen;
 	bend = b + blen;
 	return a < bend && b < aend;
 }
 
-static struct uvm_region *find_conflict(struct uvm_space *mm, uint64_t addr,
+static struct uvm_region *find_conflict(struct uvm_space *mm, u64 addr,
 					size_t size)
 {
 	struct uvm_region *r;
@@ -52,7 +52,7 @@ static struct uvm_region *find_conflict(struct uvm_space *mm, uint64_t addr,
 	return NULL;
 }
 
-bool uvm_range_conflicts(struct uvm_space *mm, uint64_t addr, size_t size)
+bool uvm_range_conflicts(struct uvm_space *mm, u64 addr, size_t size)
 {
 	struct uvm_region *r;
 
@@ -72,7 +72,7 @@ bool uvm_range_conflicts(struct uvm_space *mm, uint64_t addr, size_t size)
 	return false;
 }
 
-static uint64_t initial_mmap_top(struct uvm_space *mm)
+static u64 initial_mmap_top(struct uvm_space *mm)
 {
 	if (mm->mmap_top)
 		return mm->mmap_top;
@@ -81,11 +81,11 @@ static uint64_t initial_mmap_top(struct uvm_space *mm)
 	return USER_SPACE_SIZE_MAX - USTACK_SIZE - 33 * PAGE_SIZE;
 }
 
-static int choose_addr(struct uvm_space *mm, uint64_t hint, size_t size,
-		       int flags, uint64_t *addr_out)
+static int choose_addr(struct uvm_space *mm, u64 hint, size_t size, int flags,
+		       u64 *addr_out)
 {
-	uint64_t heap_start = mm->heap->addr;
-	uint64_t top;
+	u64 heap_start = mm->heap->addr;
+	u64 top;
 
 	if (flags & MAP_FIXED) {
 		if (!hint || (hint & (PAGE_SIZE - 1)))
@@ -107,7 +107,7 @@ static int choose_addr(struct uvm_space *mm, uint64_t hint, size_t size,
 	top = initial_mmap_top(mm);
 
 	for (;;) {
-		uint64_t candidate;
+		u64 candidate;
 		struct uvm_region *conflict;
 
 		if (top <= size || top - size < heap_start)
@@ -142,8 +142,7 @@ static unsigned int prot_to_pte(int prot)
 	return flags;
 }
 
-static int map_anon_lazy(struct uvm_space *mm, uint64_t addr, size_t size,
-			 int prot)
+static int map_anon_lazy(struct uvm_space *mm, u64 addr, size_t size, int prot)
 {
 	struct uvm_region *vma = uvm_region_alloc();
 	size_t nr_pages = size / PAGE_SIZE;
@@ -166,8 +165,8 @@ static int map_anon_lazy(struct uvm_space *mm, uint64_t addr, size_t size,
 	return 0;
 }
 
-static int map_region(struct uvm_space *mm, uint64_t addr, size_t size,
-		      int prot, struct fs_file *fp, loff_t file_off)
+static int map_region(struct uvm_space *mm, u64 addr, size_t size, int prot,
+		      struct fs_file *fp, loff_t file_off)
 {
 	size_t nr_pages = size / PAGE_SIZE;
 	struct uvm_region *vma;
@@ -260,11 +259,11 @@ static int map_region(struct uvm_space *mm, uint64_t addr, size_t size,
 	return 0;
 }
 
-int uvm_mmap_anon(struct uvm_space *mm, uint64_t hint, size_t len, int prot,
-		  int flags, int fd, uint64_t offset, uint64_t *addr_out)
+int uvm_mmap_anon(struct uvm_space *mm, u64 hint, size_t len, int prot,
+		  int flags, int fd, u64 offset, u64 *addr_out)
 {
-	uint64_t size;
-	uint64_t addr = 0;
+	u64 size;
+	u64 addr = 0;
 	int err;
 
 	if (!mm || !addr_out || len == 0)
@@ -283,8 +282,8 @@ int uvm_mmap_anon(struct uvm_space *mm, uint64_t hint, size_t len, int prot,
 	if (len > USER_SPACE_SIZE_MAX)
 		return -ENOMEM;
 
-	size = (uint64_t)len;
-	size = (size + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+	size = (u64)len;
+	size = (size + PAGE_SIZE - 1) & ~(u64)(PAGE_SIZE - 1);
 	if (size == 0 || size > USER_SPACE_SIZE_MAX)
 		return -ENOMEM;
 
@@ -300,13 +299,12 @@ int uvm_mmap_anon(struct uvm_space *mm, uint64_t hint, size_t len, int prot,
 	return 0;
 }
 
-int uvm_mmap_file_private(struct uvm_space *mm, uint64_t hint, size_t len,
-			  int prot, int flags, int fd, uint64_t offset,
-			  uint64_t *addr_out)
+int uvm_mmap_file_private(struct uvm_space *mm, u64 hint, size_t len, int prot,
+			  int flags, int fd, u64 offset, u64 *addr_out)
 {
 	struct fs_file *fp;
-	uint64_t size;
-	uint64_t addr = 0;
+	u64 size;
+	u64 addr = 0;
 	loff_t file_off;
 	int err;
 
@@ -331,8 +329,8 @@ int uvm_mmap_file_private(struct uvm_space *mm, uint64_t hint, size_t len,
 	if (len > USER_SPACE_SIZE_MAX)
 		return -ENOMEM;
 
-	size = (uint64_t)len;
-	size = (size + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+	size = (u64)len;
+	size = (size + PAGE_SIZE - 1) & ~(u64)(PAGE_SIZE - 1);
 	if (size == 0 || size > USER_SPACE_SIZE_MAX)
 		return -ENOMEM;
 	if (offset > 0x7fffffffffffffffULL - size)
@@ -369,16 +367,15 @@ out_put:
 	return err;
 }
 
-int uvm_mmap_file_shared(struct uvm_space *mm, uint64_t hint, size_t len,
-			 int prot, int flags, int fd, uint64_t offset,
-			 uint64_t *addr_out)
+int uvm_mmap_file_shared(struct uvm_space *mm, u64 hint, size_t len, int prot,
+			 int flags, int fd, u64 offset, u64 *addr_out)
 {
 	struct fs_file *fp;
 	struct fs_inode *inode;
 	struct uvm_region *vma;
 	struct cached_page **cached;
-	uint64_t size;
-	uint64_t addr = 0;
+	u64 size;
+	u64 addr = 0;
 	unsigned int pte_flags;
 	size_t nr_pages;
 	int err = 0;
@@ -400,8 +397,8 @@ int uvm_mmap_file_shared(struct uvm_space *mm, uint64_t hint, size_t len,
 	if (len > USER_SPACE_SIZE_MAX)
 		return -ENOMEM;
 
-	size = (uint64_t)len;
-	size = (size + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+	size = (u64)len;
+	size = (size + PAGE_SIZE - 1) & ~(u64)(PAGE_SIZE - 1);
 	if (size == 0 || size > USER_SPACE_SIZE_MAX)
 		return -ENOMEM;
 	if (offset > 0x7fffffffffffffffULL - size)
@@ -433,7 +430,7 @@ int uvm_mmap_file_shared(struct uvm_space *mm, uint64_t hint, size_t len,
 	 * Shared writable mappings can extend the file.  Do it up front so
 	 * writeback has a valid inode size for pages past the old EOF.
 	 */
-	if ((prot & PROT_WRITE) && (uint64_t)inode->size < offset + size) {
+	if ((prot & PROT_WRITE) && (u64)inode->size < offset + size) {
 		err = fs_file_truncate(fp, (loff_t)(offset + size));
 		if (err)
 			goto out_put;
@@ -503,7 +500,7 @@ out_put:
 	return err;
 }
 
-static struct uvm_region *find_region_exact(struct uvm_space *mm, uint64_t addr,
+static struct uvm_region *find_region_exact(struct uvm_space *mm, u64 addr,
 					    size_t size)
 {
 	struct uvm_region *r;
@@ -526,8 +523,7 @@ static int region_grow_in_place(struct uvm_space *mm, struct uvm_region *r,
 		struct cached_page **newc;
 
 		if ((r->flags & PTE_W) && r->file &&
-		    (uint64_t)r->inode->size <
-			    (uint64_t)r->file_offset + new_size) {
+		    (u64)r->inode->size < (u64)r->file_offset + new_size) {
 			int err = fs_file_truncate(
 				r->file, (loff_t)(r->file_offset + new_size));
 
@@ -590,7 +586,7 @@ static int region_grow_in_place(struct uvm_space *mm, struct uvm_region *r,
 }
 
 static int region_clone_to(struct uvm_space *mm, struct uvm_region *old,
-			   uint64_t addr, size_t size, struct uvm_region **out)
+			   u64 addr, size_t size, struct uvm_region **out)
 {
 	struct uvm_region *r;
 	size_t nr = size / PAGE_SIZE;
@@ -718,14 +714,14 @@ static int region_clone_to(struct uvm_space *mm, struct uvm_region *old,
 	return 0;
 }
 
-int uvm_mremap(struct uvm_space *mm, uint64_t old_addr, size_t old_len,
-	       size_t new_len, int flags, uint64_t new_addr, uint64_t *addr_out)
+int uvm_mremap(struct uvm_space *mm, u64 old_addr, size_t old_len,
+	       size_t new_len, int flags, u64 new_addr, u64 *addr_out)
 {
 	struct uvm_region *r, *new_r;
-	uint64_t old_size, new_size;
+	u64 old_size, new_size;
 	bool maymove = flags & MREMAP_MAYMOVE;
 	bool fixed = flags & MREMAP_FIXED;
-	uint64_t dst = 0;
+	u64 dst = 0;
 	int err;
 
 	if (!mm || !addr_out || old_len == 0 || new_len == 0)
@@ -737,10 +733,10 @@ int uvm_mremap(struct uvm_space *mm, uint64_t old_addr, size_t old_len,
 	if (old_addr & (PAGE_SIZE - 1))
 		return -EINVAL;
 
-	old_size = (uint64_t)old_len;
-	old_size = (old_size + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
-	new_size = (uint64_t)new_len;
-	new_size = (new_size + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+	old_size = (u64)old_len;
+	old_size = (old_size + PAGE_SIZE - 1) & ~(u64)(PAGE_SIZE - 1);
+	new_size = (u64)new_len;
+	new_size = (new_size + PAGE_SIZE - 1) & ~(u64)(PAGE_SIZE - 1);
 	if (old_size == 0 || new_size == 0 || old_size > USER_SPACE_SIZE_MAX ||
 	    new_size > USER_SPACE_SIZE_MAX)
 		return -EINVAL;
@@ -821,10 +817,10 @@ int uvm_mremap(struct uvm_space *mm, uint64_t old_addr, size_t old_len,
 	return 0;
 }
 
-int uvm_munmap(struct uvm_space *mm, uint64_t addr, size_t len)
+int uvm_munmap(struct uvm_space *mm, u64 addr, size_t len)
 {
-	uint64_t size;
-	uint64_t end;
+	u64 size;
+	u64 end;
 	bool changed = false;
 
 	if (!mm || len == 0)
@@ -832,8 +828,8 @@ int uvm_munmap(struct uvm_space *mm, uint64_t addr, size_t len)
 	if (addr & (PAGE_SIZE - 1))
 		return -EINVAL;
 
-	size = (uint64_t)len;
-	size = (size + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+	size = (u64)len;
+	size = (size + PAGE_SIZE - 1) & ~(u64)(PAGE_SIZE - 1);
 	if (addr > USER_SPACE_SIZE_MAX || size > USER_SPACE_SIZE_MAX - addr)
 		return -EINVAL;
 	end = addr + size;
@@ -841,9 +837,9 @@ int uvm_munmap(struct uvm_space *mm, uint64_t addr, size_t len)
 	struct uvm_region *r, *next;
 
 	list_for_each_entry_safe(r, next, &mm->seg, list) {
-		uint64_t rstart = r->addr;
-		uint64_t rend = rstart + r->size;
-		uint64_t lo, hi;
+		u64 rstart = r->addr;
+		u64 rend = rstart + r->size;
+		u64 lo, hi;
 		size_t off, nr;
 
 		if (rend <= addr || rstart >= end)
@@ -939,8 +935,7 @@ int uvm_munmap(struct uvm_space *mm, uint64_t addr, size_t len)
 	return 0;
 }
 
-static struct uvm_region *find_region_containing(struct uvm_space *mm,
-						 uint64_t addr)
+static struct uvm_region *find_region_containing(struct uvm_space *mm, u64 addr)
 {
 	struct uvm_region *r;
 
@@ -964,7 +959,7 @@ static struct uvm_region *find_region_containing(struct uvm_space *mm,
 	return NULL;
 }
 
-static pte_t *lookup_pte(struct uvm_space *mm, uint64_t addr)
+static pte_t *lookup_pte(struct uvm_space *mm, u64 addr)
 {
 	pgd_t *pgde;
 	pmd_t *pmd, *pmde;
@@ -987,7 +982,7 @@ static pte_t *lookup_pte(struct uvm_space *mm, uint64_t addr)
 	return pte;
 }
 
-static bool update_present_pte(struct uvm_space *mm, uint64_t addr,
+static bool update_present_pte(struct uvm_space *mm, u64 addr,
 			       unsigned int flags)
 {
 	pgd_t *pgde;
@@ -1027,7 +1022,7 @@ static bool update_present_pte(struct uvm_space *mm, uint64_t addr,
  * when it clears the PTE.
  */
 static int cow_replace_page(struct uvm_space *mm, struct uvm_region *r,
-			    size_t idx, uint64_t addr)
+			    size_t idx, u64 addr)
 {
 	pte_t *pte = lookup_pte(mm, addr);
 	struct page *old, *pg;
@@ -1053,7 +1048,7 @@ static int cow_replace_page(struct uvm_space *mm, struct uvm_region *r,
 }
 
 static struct uvm_region *split_region_at(struct uvm_space *mm,
-					  struct uvm_region *r, uint64_t at)
+					  struct uvm_region *r, u64 at)
 {
 	struct uvm_region *right;
 	size_t off, right_nr;
@@ -1105,11 +1100,10 @@ static struct uvm_region *split_region_at(struct uvm_space *mm,
 	return right;
 }
 
-int uvm_handle_fault(struct uvm_space *mm, uint64_t addr, bool write,
-		     bool instr)
+int uvm_handle_fault(struct uvm_space *mm, u64 addr, bool write, bool instr)
 {
 	struct uvm_region *r;
-	uint64_t page = addr & ~(uint64_t)(PAGE_SIZE - 1);
+	u64 page = addr & ~(u64)(PAGE_SIZE - 1);
 	unsigned int need, flags;
 	unsigned long pa;
 	size_t idx;
@@ -1193,10 +1187,10 @@ int uvm_handle_fault(struct uvm_space *mm, uint64_t addr, bool write,
 	return 0;
 }
 
-int uvm_mprotect(struct uvm_space *mm, uint64_t addr, size_t len, int prot)
+int uvm_mprotect(struct uvm_space *mm, u64 addr, size_t len, int prot)
 {
-	uint64_t size;
-	uint64_t end;
+	u64 size;
+	u64 end;
 	unsigned int pte_flags;
 	struct uvm_region *r, *next;
 
@@ -1207,8 +1201,8 @@ int uvm_mprotect(struct uvm_space *mm, uint64_t addr, size_t len, int prot)
 	if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))
 		return -EINVAL;
 
-	size = (uint64_t)len;
-	size = (size + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+	size = (u64)len;
+	size = (size + PAGE_SIZE - 1) & ~(u64)(PAGE_SIZE - 1);
 	if (addr > USER_SPACE_SIZE_MAX || size > USER_SPACE_SIZE_MAX - addr)
 		return -EINVAL;
 	end = addr + size;
@@ -1220,8 +1214,8 @@ int uvm_mprotect(struct uvm_space *mm, uint64_t addr, size_t len, int prot)
 	 * the new flags when they are finally populated.
 	 */
 	list_for_each_entry_safe(r, next, &mm->seg, list) {
-		uint64_t rstart = r->addr;
-		uint64_t rend = rstart + r->size;
+		u64 rstart = r->addr;
+		u64 rend = rstart + r->size;
 
 		if (rend <= addr || rstart >= end)
 			continue;
@@ -1245,7 +1239,7 @@ int uvm_mprotect(struct uvm_space *mm, uint64_t addr, size_t len, int prot)
 		}
 
 		r->flags = pte_flags;
-		for (uint64_t a = rstart; a < rend; a += PAGE_SIZE) {
+		for (u64 a = rstart; a < rend; a += PAGE_SIZE) {
 			if (!pte_flags) {
 				size_t idx =
 					(size_t)((a - rstart) >> PAGE_SHIFT);
@@ -1262,12 +1256,12 @@ int uvm_mprotect(struct uvm_space *mm, uint64_t addr, size_t len, int prot)
 	return 0;
 }
 
-bool uvm_page_is_mapped(struct uvm_space *mm, uint64_t addr)
+bool uvm_page_is_mapped(struct uvm_space *mm, u64 addr)
 {
 	return lookup_pte(mm, addr) != NULL;
 }
 
-int uvm_cow_protect(struct uvm_space *mm, uint64_t addr)
+int uvm_cow_protect(struct uvm_space *mm, u64 addr)
 {
 	pte_t *pte = lookup_pte(mm, addr);
 	unsigned int flags;
@@ -1282,14 +1276,14 @@ int uvm_cow_protect(struct uvm_space *mm, uint64_t addr)
 	return 0;
 }
 
-bool uvm_pte_is_cow(struct uvm_space *mm, uint64_t addr)
+bool uvm_pte_is_cow(struct uvm_space *mm, u64 addr)
 {
 	pte_t *pte = lookup_pte(mm, addr);
 
 	return pte && (pte_flags(*pte) & PTE_COW);
 }
 
-int uvm_pte_flags(struct uvm_space *mm, uint64_t addr, unsigned int *flags)
+int uvm_pte_flags(struct uvm_space *mm, u64 addr, unsigned int *flags)
 {
 	pgd_t *pgde;
 	pmd_t *pmd, *pmde;
@@ -1314,10 +1308,10 @@ int uvm_pte_flags(struct uvm_space *mm, uint64_t addr, unsigned int *flags)
 	return 0;
 }
 
-int uvm_msync(struct uvm_space *mm, uint64_t addr, size_t len, int flags)
+int uvm_msync(struct uvm_space *mm, u64 addr, size_t len, int flags)
 {
-	uint64_t size;
-	uint64_t end;
+	u64 size;
+	u64 end;
 	bool any = false;
 
 	if (!mm || len == 0)
@@ -1329,8 +1323,8 @@ int uvm_msync(struct uvm_space *mm, uint64_t addr, size_t len, int flags)
 	if ((flags & MS_ASYNC) && (flags & MS_SYNC))
 		return -EINVAL;
 
-	size = (uint64_t)len;
-	size = (size + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+	size = (u64)len;
+	size = (size + PAGE_SIZE - 1) & ~(u64)(PAGE_SIZE - 1);
 	if (addr > USER_SPACE_SIZE_MAX || size > USER_SPACE_SIZE_MAX - addr)
 		return -EINVAL;
 	end = addr + size;
@@ -1338,9 +1332,9 @@ int uvm_msync(struct uvm_space *mm, uint64_t addr, size_t len, int flags)
 	struct uvm_region *r;
 
 	list_for_each_entry(r, &mm->seg, list) {
-		uint64_t rstart = r->addr;
-		uint64_t rend = rstart + r->size;
-		uint64_t lo, hi;
+		u64 rstart = r->addr;
+		u64 rend = rstart + r->size;
+		u64 lo, hi;
 		size_t off, nr;
 
 		if (rend <= addr || rstart >= end)
@@ -1358,8 +1352,7 @@ int uvm_msync(struct uvm_space *mm, uint64_t addr, size_t len, int flags)
 			continue;
 
 		if ((r->flags & PTE_W) && r->file &&
-		    (uint64_t)r->inode->size <
-			    (uint64_t)r->file_offset + r->size) {
+		    (u64)r->inode->size < (u64)r->file_offset + r->size) {
 			int err = fs_file_truncate(
 				r->file, (loff_t)(r->file_offset + r->size));
 
@@ -1393,16 +1386,16 @@ int uvm_msync(struct uvm_space *mm, uint64_t addr, size_t len, int flags)
 
 /* ---- syscall entry points ---- */
 
-uint64_t sys_mmap(void)
+u64 sys_mmap(void)
 {
 	struct task *task = current_task();
-	uint64_t hint = syscall_arg_raw(0);
+	u64 hint = syscall_arg_raw(0);
 	size_t len = (size_t)syscall_arg_raw(1);
 	int prot = syscall_arg_int(2);
 	int flags = syscall_arg_int(3);
 	int fd = syscall_arg_int(4);
-	uint64_t offset = syscall_arg_raw(5);
-	uint64_t addr = 0;
+	u64 offset = syscall_arg_raw(5);
+	u64 addr = 0;
 	int err;
 
 	if (!task || !task->mm)
@@ -1421,42 +1414,42 @@ uint64_t sys_mmap(void)
 					    fd, offset, &addr);
 	}
 	if (err)
-		return (uint64_t)(long)err;
+		return (u64)(long)err;
 	return addr;
 }
 
-uint64_t sys_munmap(void)
+u64 sys_munmap(void)
 {
 	struct task *task = current_task();
-	uint64_t addr = syscall_arg_raw(0);
+	u64 addr = syscall_arg_raw(0);
 	size_t len = (size_t)syscall_arg_raw(1);
 
 	if (!task || !task->mm)
 		return -EFAULT;
-	return (uint64_t)(long)uvm_munmap(task->mm, addr, len);
+	return (u64)(long)uvm_munmap(task->mm, addr, len);
 }
 
-uint64_t sys_mprotect(void)
+u64 sys_mprotect(void)
 {
 	struct task *task = current_task();
-	uint64_t addr = syscall_arg_raw(0);
+	u64 addr = syscall_arg_raw(0);
 	size_t len = (size_t)syscall_arg_raw(1);
 	int prot = syscall_arg_int(2);
 
 	if (!task || !task->mm)
 		return -EFAULT;
-	return (uint64_t)(long)uvm_mprotect(task->mm, addr, len, prot);
+	return (u64)(long)uvm_mprotect(task->mm, addr, len, prot);
 }
 
-uint64_t sys_mremap(void)
+u64 sys_mremap(void)
 {
 	struct task *task = current_task();
-	uint64_t old_addr = syscall_arg_raw(0);
+	u64 old_addr = syscall_arg_raw(0);
 	size_t old_len = (size_t)syscall_arg_raw(1);
 	size_t new_len = (size_t)syscall_arg_raw(2);
 	int flags = syscall_arg_int(3);
-	uint64_t new_addr = syscall_arg_raw(4);
-	uint64_t out = 0;
+	u64 new_addr = syscall_arg_raw(4);
+	u64 out = 0;
 	int err;
 
 	if (!task || !task->mm)
@@ -1464,18 +1457,18 @@ uint64_t sys_mremap(void)
 	err = uvm_mremap(task->mm, old_addr, old_len, new_len, flags, new_addr,
 			 &out);
 	if (err)
-		return (uint64_t)(long)err;
+		return (u64)(long)err;
 	return out;
 }
 
-uint64_t sys_msync(void)
+u64 sys_msync(void)
 {
 	struct task *task = current_task();
-	uint64_t addr = syscall_arg_raw(0);
+	u64 addr = syscall_arg_raw(0);
 	size_t len = (size_t)syscall_arg_raw(1);
 	int flags = syscall_arg_int(2);
 
 	if (!task || !task->mm)
 		return -EFAULT;
-	return (uint64_t)(long)uvm_msync(task->mm, addr, len, flags);
+	return (u64)(long)uvm_msync(task->mm, addr, len, flags);
 }

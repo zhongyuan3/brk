@@ -1,17 +1,19 @@
 #ifndef UAPI_CAPABILITY_H
 #define UAPI_CAPABILITY_H
 
+#include <uapi/types.h>
+
 #define _LINUX_CAPABILITY_VERSION_3 0x20080522
 
 struct cap_header {
-	unsigned int version;
-	int pid;
+	__u32 version;
+	__s32 pid;
 };
 
 struct cap_data {
-	unsigned int effective;
-	unsigned int permitted;
-	unsigned int inheritable;
+	__u32 effective;
+	__u32 permitted;
+	__u32 inheritable;
 };
 
 #define CAP_CHOWN 0

@@ -14,18 +14,18 @@
 #define DT_WHT 14
 
 struct dirent {
-	int d_ino;
-	int d_off;
-	unsigned short d_reclen;
-	unsigned char d_type;
+	__s32 d_ino;
+	__s32 d_off;
+	__u16 d_reclen;
+	__u8 d_type;
 	char d_name[256];
 };
 
 struct dirent64 {
-	uint64_t d_ino;
-	off_t d_off;
-	unsigned short d_reclen;
-	unsigned char d_type;
+	__u64 d_ino;
+	__kernel_off_t d_off;
+	__u16 d_reclen;
+	__u8 d_type;
 	char d_name[256];
 };
 

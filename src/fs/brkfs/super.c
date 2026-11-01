@@ -5,10 +5,10 @@
 #include <brk/kmalloc.h>
 #include <brk/pagecache.h>
 #include <brk/spinlock.h>
-#include <string.h>
+#include <brk/string.h>
 #include <uapi/errno.h>
 
-static uint32_t brkfs_feature_with_deps(uint32_t features)
+static u32 brkfs_feature_with_deps(u32 features)
 {
 	/*
 	 * Triple-indirect trees pass through double-indirect levels, so the
@@ -19,17 +19,17 @@ static uint32_t brkfs_feature_with_deps(uint32_t features)
 	return features;
 }
 
-static int brkfs_write_bytes(struct block_dev *bdev, uint64_t off,
-			     const void *buf, size_t len)
+static int brkfs_write_bytes(struct block_dev *bdev, u64 off, const void *buf,
+			     size_t len)
 {
-	const uint8_t *p = buf;
+	const u8 *p = buf;
 
 	while (len > 0) {
 		pgoff_t index = (pgoff_t)(off / PAGE_SIZE);
 		size_t in_page = (size_t)(off % PAGE_SIZE);
 		size_t chunk = PAGE_SIZE - in_page;
 		struct cached_page *cp;
-		uint8_t *data;
+		u8 *data;
 
 		if (chunk > len)
 			chunk = len;
@@ -72,12 +72,12 @@ int brkfs_super_write(struct brkfs_sb_info *sbi)
 	if (sb.s_backup_super == 0)
 		return -EINVAL;
 
-	uint64_t off = (uint64_t)sb.s_backup_super * sb.s_blocksize;
+	u64 off = (u64)sb.s_backup_super * sb.s_blocksize;
 
 	return brkfs_write_bytes(sbi->s_bdev, off, &sb, sizeof(sb));
 }
 
-int brkfs_super_set_features(struct brkfs_sb_info *sbi, uint32_t features)
+int brkfs_super_set_features(struct brkfs_sb_info *sbi, u32 features)
 {
 	features = brkfs_feature_with_deps(features);
 
@@ -170,14 +170,14 @@ static void brkfs_evict_inode(struct fs_inode *inode)
 		struct brkfs_inode_info *info = inode->private_data;
 
 		(void)truncate_inode_pages(inode->mapping, 0);
-		brkfs_orphan_remove(sbi, (uint32_t)inode->ino);
+		brkfs_orphan_remove(sbi, (u32)inode->ino);
 		brkfs_truncate_inode_blocks(inode, 0);
 		inode->size = 0;
 		inode->nlink = 0;
 		if (info)
 			info->i_next_orphan = 0;
 		brkfs_inode_write(sbi, inode);
-		brkfs_inode_free(sbi, (uint32_t)inode->ino);
+		brkfs_inode_free(sbi, (u32)inode->ino);
 	}
 }
 
@@ -236,26 +236,26 @@ static int brkfs_sync_fs(struct fs_super_block *sb)
 	return err;
 }
 
-static int brkfs_statfs(struct fs_super_block *sb, struct statfs *buf)
+static int brkfs_statfs(struct fs_super_block *sb, struct kstatfs *buf)
 {
 	struct brkfs_sb_info *sbi = sb->private_data;
-	uint32_t free_blocks;
-	uint32_t free_inodes;
+	u32 free_blocks;
+	u32 free_inodes;
 
 	spin_lock(&sbi->s_super_lock);
 	free_blocks = sbi->s_sb.s_free_blocks;
 	free_inodes = sbi->s_sb.s_free_inodes;
 	spin_unlock(&sbi->s_super_lock);
 
-	buf->f_type = BRKFS_MAGIC;
-	buf->f_bsize = sbi->s_sb.s_blocksize;
-	buf->f_frsize = sbi->s_sb.s_blocksize;
-	buf->f_blocks = sbi->s_sb.s_data_blocks_count;
-	buf->f_bfree = free_blocks;
-	buf->f_bavail = free_blocks;
-	buf->f_files = sbi->s_sb.s_inodes_count;
-	buf->f_ffree = free_inodes;
-	buf->f_namelen = BRKFS_NAME_LEN;
+	buf->type = BRKFS_MAGIC;
+	buf->bsize = sbi->s_sb.s_blocksize;
+	buf->frsize = sbi->s_sb.s_blocksize;
+	buf->blocks = sbi->s_sb.s_data_blocks_count;
+	buf->bfree = free_blocks;
+	buf->bavail = free_blocks;
+	buf->files = sbi->s_sb.s_inodes_count;
+	buf->ffree = free_inodes;
+	buf->namelen = BRKFS_NAME_LEN;
 	return 0;
 }
 

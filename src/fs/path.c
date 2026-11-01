@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
@@ -8,8 +8,8 @@
 #include <brk/path.h>
 #include <brk/permission.h>
 #include <brk/printk.h>
+#include <brk/string.h>
 #include <brk/task.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/limits.h>
@@ -86,7 +86,7 @@ static const char *skip_component(const char *pathname,
 	while (*p != '\0' && *p != '/')
 		p++;
 
-	uint32_t len = p - start;
+	u32 len = p - start;
 
 	*component_name = QSTR_MAKE(start, len);
 

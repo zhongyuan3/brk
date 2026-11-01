@@ -1,9 +1,9 @@
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/panic.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
-#include <string.h>
+#include <brk/string.h>
 
 #define PANIC_BUF_SIZE 512
 static char panic_buf[PANIC_BUF_SIZE];

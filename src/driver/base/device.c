@@ -7,7 +7,7 @@
 #include <brk/platform.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
-#include <string.h>
+#include <brk/string.h>
 #include <uapi/errno.h>
 
 static LIST_DEFINE(bus_list);
@@ -255,8 +255,8 @@ static void platform_bus_init(void)
 core_initcall(platform_bus_init);
 
 int platform_device_register_simple(const char *name, const char *compatible,
-				    uint64_t phys_base, uint64_t size,
-				    uint32_t irq, void *pdata)
+				    u64 phys_base, u64 size, u32 irq,
+				    void *pdata)
 {
 	struct platform_device *pdev;
 	int err;

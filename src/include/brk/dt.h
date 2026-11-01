@@ -21,6 +21,6 @@ int dt_parse_rtc(struct rtc_device *rtc);
 int dt_setup_timebase_freq(void);
 
 /* Read the index'th "reg" entry of a DT node. */
-int dt_get_reg(int node, int index, uint64_t *addr, uint64_t *size);
+int dt_get_reg(int node, int index, u64 *addr, u64 *size);
 
 #endif

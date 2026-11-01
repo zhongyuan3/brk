@@ -6,8 +6,8 @@
 #include <brk/kmalloc.h>
 #include <brk/printf.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/types.h>
-#include <string.h>
 #include <uapi/errno.h>
 
 static struct irq_desc irq_desc_table[NR_IRQS];

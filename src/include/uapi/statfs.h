@@ -1,19 +1,21 @@
 #ifndef UAPI_STATFS_H
 #define UAPI_STATFS_H
 
+#include <uapi/types.h>
+
 struct statfs {
-	long f_type;
-	long f_bsize;
-	long f_blocks;
-	long f_bfree;
-	long f_bavail;
-	long f_files;
-	long f_ffree;
-	long f_fsid;
-	long f_namelen;
-	long f_frsize;
-	long f_flags;
-	long f_spare[4];
+	__kernel_long_t f_type;
+	__kernel_long_t f_bsize;
+	__kernel_long_t f_blocks;
+	__kernel_long_t f_bfree;
+	__kernel_long_t f_bavail;
+	__kernel_long_t f_files;
+	__kernel_long_t f_ffree;
+	__kernel_long_t f_fsid;
+	__kernel_long_t f_namelen;
+	__kernel_long_t f_frsize;
+	__kernel_long_t f_flags;
+	__kernel_long_t f_spare[4];
 };
 
 #endif

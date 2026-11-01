@@ -50,9 +50,9 @@ bool console_has_active(void)
 	return active;
 }
 
-static uint8_t console_log_level = KERN_DEBUG;
+static u8 console_log_level = KERN_DEBUG;
 
-int console_set_log_level(uint8_t level)
+int console_set_log_level(u8 level)
 {
 	if (level > KERN_MAX)
 		return -EINVAL;
@@ -60,8 +60,8 @@ int console_set_log_level(uint8_t level)
 	return 0;
 }
 
-static void console_write_record_locked(uint8_t level, uint64_t ts_nsec,
-					const char *text, size_t len)
+static void console_write_record_locked(u8 level, u64 ts_nsec, const char *text,
+					size_t len)
 {
 	struct console *con;
 	char prefix[48];
@@ -73,8 +73,8 @@ static void console_write_record_locked(uint8_t level, uint64_t ts_nsec,
 	if (ts_nsec > 0) {
 		pn = snprintf(prefix, sizeof(prefix),
 			      "<%u>[%5" PRIu64 ".%06" PRIu64 "] ", level,
-			      (uint64_t)(ts_nsec / NS_PER_SEC),
-			      (uint64_t)((ts_nsec % NS_PER_SEC) / NS_PER_US));
+			      (u64)(ts_nsec / NS_PER_SEC),
+			      (u64)((ts_nsec % NS_PER_SEC) / NS_PER_US));
 	} else {
 		pn = snprintf(prefix, sizeof(prefix), "<%u>[            ] ",
 			      level);
@@ -94,8 +94,7 @@ static void console_write_record_locked(uint8_t level, uint64_t ts_nsec,
 	}
 }
 
-void console_write_record(uint8_t level, uint64_t ts_nsec, const char *text,
-			  size_t len)
+void console_write_record(u8 level, u64 ts_nsec, const char *text, size_t len)
 {
 	irqstate_t flags = spin_lock_irqsave(&console_lock);
 
@@ -103,8 +102,8 @@ void console_write_record(uint8_t level, uint64_t ts_nsec, const char *text,
 	spin_unlock_irqrestore(&console_lock, flags);
 }
 
-void console_write_record_direct(uint8_t level, uint64_t ts_nsec,
-				 const char *text, size_t len)
+void console_write_record_direct(u8 level, u64 ts_nsec, const char *text,
+				 size_t len)
 {
 	console_write_record_locked(level, ts_nsec, text, len);
 }

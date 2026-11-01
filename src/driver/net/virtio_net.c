@@ -14,12 +14,12 @@
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/types.h>
 #include <brk/virtio.h>
 #include <brk/virtio_mmio.h>
 #include <brk/virtio_net.h>
 #include <brk/virtio_queue.h>
-#include <string.h>
 #include <uapi/errno.h>
 
 #define VIRTIO_NET_MAX_DEVS 4
@@ -29,8 +29,8 @@ static SPINLOCK_DEFINE(vnet_registry_lock);
 static unsigned int vnet_index;
 
 struct vnet_rx_pkt {
-	uint8_t *data;
-	uint32_t len;
+	u8 *data;
+	u32 len;
 };
 
 struct vnet_rx_collect {
@@ -40,9 +40,9 @@ struct vnet_rx_collect {
 	unsigned int max;
 };
 
-static uint32_t vnet_select_features(struct virtio_device *vdev)
+static u32 vnet_select_features(struct virtio_device *vdev)
 {
-	uint32_t features = virtio_mmio_read_features(vdev);
+	u32 features = virtio_mmio_read_features(vdev);
 
 	/* No checksum/TSO/UFO offloads. */
 	features &= ~(1u << VIRTIO_NET_F_CSUM);
@@ -79,7 +79,7 @@ static uint32_t vnet_select_features(struct virtio_device *vdev)
 	return features;
 }
 
-static bool vnet_mac_valid(const uint8_t *mac)
+static bool vnet_mac_valid(const u8 *mac)
 {
 	bool any = false;
 	bool all_ff = true;
@@ -108,9 +108,9 @@ static void vnet_generate_mac(struct virtio_net_dev *vnet)
 	vnet->mac[5] = index & 0xff;
 }
 
-static void vnet_read_config(struct virtio_net_dev *vnet, uint32_t features)
+static void vnet_read_config(struct virtio_net_dev *vnet, u32 features)
 {
-	uint16_t mtu = 1500;
+	u16 mtu = 1500;
 
 	memset(vnet->mac, 0, sizeof(vnet->mac));
 	if (features & (1u << VIRTIO_NET_F_MAC))
@@ -121,8 +121,8 @@ static void vnet_read_config(struct virtio_net_dev *vnet, uint32_t features)
 		vnet_generate_mac(vnet);
 
 	/*
-	 * virtio_net_config: mac[6], status(uint16_t), max_virtqueue_pairs(uint16_t),
-	 * mtu(uint16_t).  mtu is only valid with VIRTIO_NET_F_MTU.
+	 * virtio_net_config: mac[6], status(u16), max_virtqueue_pairs(u16),
+	 * mtu(u16).  mtu is only valid with VIRTIO_NET_F_MTU.
 	 */
 	if (features & (1u << VIRTIO_NET_F_MTU)) {
 		if (!virtio_mmio_read(vnet->vdev, &mtu, sizeof(mtu),
@@ -162,7 +162,7 @@ static int vnet_post_rx(struct virtio_net_dev *vnet)
 	for (unsigned int i = 0; i < VIRTIO_NET_QUEUE_SIZE; i++) {
 		struct virtq_desc *desc;
 		unsigned int idx;
-		uint8_t *buf;
+		u8 *buf;
 		int err;
 
 		err = virtq_alloc_desc(&vnet->rx_vq, &idx);
@@ -188,12 +188,12 @@ static int vnet_post_rx(struct virtio_net_dev *vnet)
 	return 0;
 }
 
-static void vnet_rx_used(struct virtq *vq, uint32_t id, uint32_t len, void *ctx)
+static void vnet_rx_used(struct virtq *vq, u32 id, u32 len, void *ctx)
 {
 	struct vnet_rx_collect *c = ctx;
 	struct virtio_net_dev *vnet = c->vnet;
-	const uint32_t hdr_len = sizeof(struct virtio_net_hdr);
-	uint32_t frame_len;
+	const u32 hdr_len = sizeof(struct virtio_net_hdr);
+	u32 frame_len;
 
 	if (id >= VIRTIO_NET_QUEUE_SIZE || !vnet->rx_buf[id]) {
 		vnet->rx_dropped++;
@@ -210,7 +210,7 @@ static void vnet_rx_used(struct virtq *vq, uint32_t id, uint32_t len, void *ctx)
 	if (c->nr >= c->max)
 		goto drop;
 
-	uint8_t *copy = kmalloc(frame_len);
+	u8 *copy = kmalloc(frame_len);
 	if (!copy)
 		goto drop;
 
@@ -229,7 +229,7 @@ drop:
 	virtq_submit(vq, id);
 }
 
-static void vnet_tx_used(struct virtq *vq, uint32_t id, uint32_t len, void *ctx)
+static void vnet_tx_used(struct virtq *vq, u32 id, u32 len, void *ctx)
 {
 	(void)len;
 	(void)ctx;
@@ -250,7 +250,7 @@ static irqreturn_t vnet_irq(int irq, void *dev_id)
 	};
 	virtio_net_rx_fn cb;
 	void *cb_ctx;
-	uint32_t status;
+	u32 status;
 	irqstate_t flags;
 
 	(void)irq;
@@ -353,7 +353,7 @@ static struct net_device *vnet_netdev_create(struct virtio_net_dev *vnet)
 struct virtio_net_dev *virtio_net_create(struct virtio_device *vdev)
 {
 	struct virtio_net_dev *vnet;
-	uint32_t features;
+	u32 features;
 	int err;
 
 	if (!vdev)
@@ -496,10 +496,10 @@ void virtio_net_set_rx_callback(struct virtio_net_dev *vnet,
 int virtio_net_transmit(struct virtio_net_dev *vnet, const void *frame,
 			size_t len)
 {
-	const uint32_t hdr_len = sizeof(struct virtio_net_hdr);
+	const u32 hdr_len = sizeof(struct virtio_net_hdr);
 	struct virtq_desc *desc;
 	unsigned int idx;
-	uint8_t *buf;
+	u8 *buf;
 	irqstate_t flags;
 	int err;
 
@@ -537,7 +537,7 @@ int virtio_net_transmit(struct virtio_net_dev *vnet, const void *frame,
 	return 0;
 }
 
-const uint8_t *virtio_net_get_mac(struct virtio_net_dev *vnet)
+const u8 *virtio_net_get_mac(struct virtio_net_dev *vnet)
 {
 	return vnet ? vnet->mac : NULL;
 }

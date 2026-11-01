@@ -1,11 +1,13 @@
 #ifndef UAPI_IOCTL_H
 #define UAPI_IOCTL_H
 
+#include <uapi/types.h>
+
 struct winsize {
-	unsigned short ws_row;
-	unsigned short ws_col;
-	unsigned short ws_xpixel;
-	unsigned short ws_ypixel;
+	__u16 ws_row;
+	__u16 ws_col;
+	__u16 ws_xpixel;
+	__u16 ws_ypixel;
 };
 
 #define TIOCGWINSZ 0x5413u

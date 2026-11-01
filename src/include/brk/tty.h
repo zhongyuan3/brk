@@ -33,7 +33,7 @@ struct tty_ldisc_ops {
 	void (*close)(struct tty *tty);
 	ssize_t (*read)(struct tty *tty, char *buf, size_t size);
 	ssize_t (*write)(struct tty *tty, const char *buf, size_t size);
-	void (*receive_buf)(struct tty *tty, const uint8_t *buf, size_t size);
+	void (*receive_buf)(struct tty *tty, const u8 *buf, size_t size);
 	long (*ioctl)(struct tty *tty, unsigned int cmd, unsigned long arg);
 };
 
@@ -79,7 +79,7 @@ void tty_port_free(struct tty_port *port);
 
 struct tty {
 	struct tty_port *port;
-	uint8_t *rx_buf;
+	u8 *rx_buf;
 	size_t rx_size;
 	size_t rx_r;
 	size_t rx_w;

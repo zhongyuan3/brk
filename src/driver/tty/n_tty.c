@@ -2,12 +2,12 @@
 #include <brk/signal.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/timekeeper.h>
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/termios.h>
 
@@ -122,7 +122,7 @@ static void n_tty_signal(struct tty *tty, int sig, int c)
 }
 
 /* Store one byte without interpreting it as an editing character. */
-static void n_tty_store(struct tty *tty, uint8_t c)
+static void n_tty_store(struct tty *tty, u8 c)
 {
 	struct termios *t = &tty->port->termios;
 	bool canonical = (t->c_lflag & ICANON) != 0;
@@ -152,14 +152,14 @@ static void n_tty_werase(struct tty *tty)
 
 	/* Skip trailing blanks, then remove the previous word. */
 	while (end > start) {
-		uint8_t c = tty->rx_buf[(end - 1) % tty->rx_size];
+		u8 c = tty->rx_buf[(end - 1) % tty->rx_size];
 
 		if (c != ' ' && c != '\t')
 			break;
 		end--;
 	}
 	while (end > start) {
-		uint8_t c = tty->rx_buf[(end - 1) % tty->rx_size];
+		u8 c = tty->rx_buf[(end - 1) % tty->rx_size];
 
 		if (c == ' ' || c == '\t')
 			break;
@@ -187,14 +187,14 @@ static void n_tty_reprint(struct tty *tty)
 	n_tty_output(tty, '\n');
 }
 
-static void n_tty_receive_buf(struct tty *tty, const uint8_t *buf, size_t size)
+static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 {
 	struct tty_port *port = tty->port;
 	struct termios *t = &port->termios;
 	irqstate_t flags = spin_lock_irqsave(&port->lock);
 
 	for (size_t i = 0; i < size; ++i) {
-		uint8_t c = buf[i];
+		u8 c = buf[i];
 		bool canonical = (t->c_lflag & ICANON) != 0;
 
 		if ((t->c_iflag & IGNCR) && c == '\r')
@@ -319,7 +319,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 	char tmp[256];
 	size_t total = 0;
 	size_t seen = 0;
-	uint64_t deadline = 0;
+	u64 deadline = 0;
 	bool timed = false;
 
 	if (size == 0)
@@ -396,7 +396,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 				copy = avail >= min ? avail : 0;
 
 			if (copy == 0) {
-				uint64_t now;
+				u64 now;
 
 				if (signal_pending(task)) {
 					spin_unlock_irqrestore(&port->lock,
@@ -420,7 +420,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 						timed = true;
 						deadline =
 							now +
-							(uint64_t)vtime *
+							(u64)vtime *
 								VTIME_UNIT_NS;
 					} else if (min > 0 && avail > 0 &&
 						   avail > seen) {
@@ -428,7 +428,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 						timed = true;
 						deadline =
 							now +
-							(uint64_t)vtime *
+							(u64)vtime *
 								VTIME_UNIT_NS;
 					}
 

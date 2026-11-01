@@ -1,4 +1,5 @@
 obj-y += main.o
+obj-y += abi_check.o
 obj-y += console.o
 obj-y += cpu.o
 obj-y += klog.o

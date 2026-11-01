@@ -20,15 +20,15 @@ struct socket;
 #define TCP_OPT_MSS 2
 
 struct tcphdr {
-	uint16_t source;
-	uint16_t dest;
-	uint32_t seq;
-	uint32_t ack_seq;
-	uint8_t doff_reserved;
-	uint8_t flags;
-	uint16_t window;
-	uint16_t check;
-	uint16_t urg_ptr;
+	u16 source;
+	u16 dest;
+	u32 seq;
+	u32 ack_seq;
+	u8 doff_reserved;
+	u8 flags;
+	u16 window;
+	u16 check;
+	u16 urg_ptr;
 } __attribute__((packed));
 
 int tcp_rcv(struct sk_buff *skb);

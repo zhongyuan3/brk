@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/initcall.h>
@@ -13,8 +13,8 @@
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/types.h>
-#include <string.h>
 #include <uapi/errno.h>
 
 static struct slab_allocator cached_page_cache;
@@ -59,7 +59,7 @@ core_initcall(page_cache_init);
 
 static unsigned int mapping_hash(pgoff_t index)
 {
-	uint64_t h = (uint64_t)index;
+	u64 h = (u64)index;
 	h *= 0x9E3779B97F4A7C15ULL;
 	h ^= h >> 32;
 	return (unsigned int)(h & (PAGE_CACHE_HSIZE - 1));
@@ -581,7 +581,7 @@ int truncate_inode_pages(struct page_cache *m, loff_t new_size)
 			return PTR_ERR(partial);
 
 		cached_page_lock(partial);
-		memset((uint8_t *)cached_page_addr(partial) + partial_off, 0,
+		memset((u8 *)cached_page_addr(partial) + partial_off, 0,
 		       PAGE_SIZE - partial_off);
 		cached_page_unlock(partial);
 		cached_page_mark_dirty(partial);
@@ -631,7 +631,7 @@ ssize_t generic_file_read(struct fs_file *file, char *buf, size_t size,
 		}
 
 		cached_page_lock(cp);
-		memcpy(buf, (uint8_t *)cached_page_addr(cp) + off, nr);
+		memcpy(buf, (u8 *)cached_page_addr(cp) + off, nr);
 		cached_page_unlock(cp);
 		cached_page_put(cp);
 

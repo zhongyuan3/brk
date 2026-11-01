@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/fs.h>
 #include <brk/initcall.h>
 #include <brk/kernel.h>
@@ -9,9 +9,9 @@
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
-#include <string.h>
 #include <uapi/errno.h>
 
 static struct hlist_head inode_hash_table[INODE_HTABLE_SIZE];
@@ -56,10 +56,9 @@ static struct fs_inode *__inode_alloc(struct fs_super_block *sb,
 	inode->nlink = 0;
 	inode->size = 0;
 	inode->rdev = 0;
-	inode->atime.tv_sec = 0;
-	inode->atime.tv_nsec = 0;
-	inode->mtime = inode->atime;
-	inode->ctime = inode->atime;
+	inode->atime = 0;
+	inode->mtime = 0;
+	inode->ctime = 0;
 	inode->mapping = NULL;
 
 	return inode;
@@ -75,15 +74,15 @@ static void __inode_free(struct fs_inode *inode)
 		slab_free(&inode_cache, inode);
 }
 
-static uint32_t __inode_hash(const struct fs_super_block *sb, unsigned long ino)
+static u32 __inode_hash(const struct fs_super_block *sb, unsigned long ino)
 {
-	const uint8_t *k = (uint8_t *)&sb;
-	uint32_t h = 0x811c9dc5;
+	const u8 *k = (u8 *)&sb;
+	u32 h = 0x811c9dc5;
 	for (size_t i = 0; i < sizeof(void *); ++i) {
 		h ^= k[i];
 		h *= 0x01000193;
 	}
-	k = (uint8_t *)&ino;
+	k = (u8 *)&ino;
 	for (size_t i = 0; i < sizeof(ino); ++i) {
 		h ^= k[i];
 		h *= 0x01000193;

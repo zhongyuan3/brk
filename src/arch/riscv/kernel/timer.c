@@ -10,11 +10,11 @@
 #include <brk/timer.h>
 #include <brk/trap.h>
 
-static uint64_t timer_interval;
+static u64 timer_interval;
 
 void timer_init(void)
 {
-	uint32_t timebase_freq = clocksource_get_timebase_freq();
+	u32 timebase_freq = clocksource_get_timebase_freq();
 	timer_interval = timebase_freq / 1000;
 	pr_debug("timer: timer_interval=%lu\n", timer_interval);
 	timer_init_hart();
@@ -25,7 +25,7 @@ void timer_init_hart(void)
 	program_next_tick();
 }
 
-uint64_t timer_read(void)
+u64 timer_read(void)
 {
 	return read_time();
 }

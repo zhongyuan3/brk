@@ -2,7 +2,7 @@
 #include <arch/csr.h>
 #include <arch/pgtable.h>
 #include <arch/pgtable_types.h>
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/initcall.h>
@@ -16,10 +16,10 @@
 #include <brk/refcnt.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
-#include <string.h>
 #include <uapi/errno.h>
 
 static struct slab_allocator uvms_cache;
@@ -188,7 +188,7 @@ void uvm_region_unmap_range(struct uvm_space *mm, struct uvm_region *region,
 
 	for (size_t i = 0; i < nr; i++) {
 		size_t idx = start + i;
-		uint64_t addr = region->addr + idx * PAGE_SIZE;
+		u64 addr = region->addr + idx * PAGE_SIZE;
 
 		if (uvm_page_is_mapped(mm, addr))
 			unmap_user_pages(mm->pgd, addr, PAGE_SIZE);
@@ -201,7 +201,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 {
 	size_t npgs = src->nr_pages;
 	size_t i = 0;
-	uint64_t addr = src->addr;
+	u64 addr = src->addr;
 	size_t size = src->size;
 	int err = 0;
 
@@ -288,7 +288,7 @@ failed_shared:
 	for (i = 0; i < npgs; i++) {
 		struct page *src_pg = src->pages[i];
 		unsigned int flags;
-		uint64_t page_addr = src->addr + i * PAGE_SIZE;
+		u64 page_addr = src->addr + i * PAGE_SIZE;
 
 		if (!src_pg)
 			continue;
@@ -355,7 +355,7 @@ failed_shared:
 
 failed:
 	for (size_t j = 0; j <= i && j < npgs; ++j) {
-		uint64_t page_addr = src->addr + j * PAGE_SIZE;
+		u64 page_addr = src->addr + j * PAGE_SIZE;
 
 		if (!pgs[j])
 			continue;
@@ -421,7 +421,7 @@ static int uvm_space_copy_stack(struct uvm_space *dst, struct uvm_space *src)
 		return -ENOMEM;
 	}
 
-	uint64_t pa = page_to_phys(pg);
+	u64 pa = page_to_phys(pg);
 	unsigned int flags;
 	int err = uvm_pte_flags(src, src->stack->addr, &flags);
 
@@ -544,8 +544,8 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 	pgd_t *pgde;
 	pmd_t *pmd, *pmde;
 	pte_t *pt, *pte;
-	uint64_t pmd_pa, pt_pa;
-	uint64_t start_addr = addr;
+	u64 pmd_pa, pt_pa;
+	u64 start_addr = addr;
 	pgd_t *pgd = ctx->root;
 	unsigned int flags = ctx->flags;
 	unsigned long (*alloc_frame)(void) = ctx->alloc_frame;

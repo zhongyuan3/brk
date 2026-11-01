@@ -5,7 +5,7 @@
 #include <arch/timer.h>
 #include <arch/trap.h>
 #include <arch/trapframe.h>
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/bits.h>
 #include <brk/cpu.h>
 #include <brk/irq.h>
@@ -197,7 +197,7 @@ static void handle_interrupt(unsigned long code, struct riscv_trap_frame *frame,
 	default:
 		if (from_user) {
 			task_set_killed(task);
-			pr_warn("%s: pid=%ld,scause=%#" PRIx64 ",sepc=%#" PRIx64
+			pr_warn("%s: pid=%d,scause=%#" PRIx64 ",sepc=%#" PRIx64
 				",stval=%#" PRIx64 "\n",
 				interrupt_name(code), task->pid, frame->scause,
 				frame->sepc, frame->stval);
@@ -263,7 +263,7 @@ static void handle_exception(unsigned long code, struct riscv_trap_frame *frame,
 		break;
 	default:
 		if (from_user) {
-			pr_warn("%s: pid=%ld,scause=%#" PRIx64 ",sepc=%#" PRIx64
+			pr_warn("%s: pid=%d,scause=%#" PRIx64 ",sepc=%#" PRIx64
 				",stval=%#" PRIx64 "\n",
 				interrupt_name(code), task->pid, frame->scause,
 				frame->sepc, frame->stval);
@@ -284,7 +284,7 @@ void trap_handler(struct riscv_trap_frame *frame)
 
 	bool from_user = (frame->sstatus & SSTATUS_SPP) == 0;
 	struct task *task = current_task();
-	uint64_t jiffies = 0;
+	u64 jiffies = 0;
 
 	if (from_user) {
 		write_sstatus(read_sstatus() | SSTATUS_SUM);

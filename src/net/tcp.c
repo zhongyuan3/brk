@@ -11,10 +11,10 @@
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/poll.h>
 #include <uapi/socket.h>
@@ -59,39 +59,39 @@ struct tcp_sock {
 	struct tcp_sock *listener;
 	enum tcp_state state;
 
-	uint32_t iss;
-	uint32_t irs;
-	uint32_t snd_una;
-	uint32_t snd_nxt;
-	uint32_t snd_wnd;
-	uint32_t rcv_nxt;
-	uint32_t rcv_wnd;
-	uint16_t mss;
+	u32 iss;
+	u32 irs;
+	u32 snd_una;
+	u32 snd_nxt;
+	u32 snd_wnd;
+	u32 rcv_nxt;
+	u32 rcv_wnd;
+	u16 mss;
 
-	uint32_t backlog;
-	uint32_t accept_backlog;
+	u32 backlog;
+	u32 accept_backlog;
 	struct list_head accept_queue;
 
 	/* Retransmission state, protected by tcp_lock. */
 	enum tcp_tx_kind tx_kind;
-	uint8_t *tx_data;
-	uint16_t tx_len;
-	uint32_t tx_seq;
-	uint32_t tx_retries;
-	uint64_t rto_deadline_ns;
+	u8 *tx_data;
+	u16 tx_len;
+	u32 tx_seq;
+	u32 tx_retries;
+	u64 rto_deadline_ns;
 
 	/* Set once the fd is gone; the timer owns the final free. */
 	bool orphan;
-	uint64_t created_ns;
-	uint64_t time_wait_deadline_ns;
-	uint64_t fin_wait2_deadline_ns;
+	u64 created_ns;
+	u64 time_wait_deadline_ns;
+	u64 fin_wait2_deadline_ns;
 
 	int err; /* protected by tcp_lock */
 };
 
 static LIST_DEFINE(tcp_socks);
 static SPINLOCK_DEFINE(tcp_lock);
-static uint16_t tcp_ephemeral = TCP_EPHEMERAL_START;
+static u16 tcp_ephemeral = TCP_EPHEMERAL_START;
 
 static const struct proto_ops tcp_proto_ops;
 
@@ -102,22 +102,22 @@ static struct tcp_sock *tcp_from_sock(struct socket *sock)
 	return container_of(sock->sk, struct tcp_sock, sk);
 }
 
-static inline bool tcp_seq_after(uint32_t a, uint32_t b)
+static inline bool tcp_seq_after(u32 a, u32 b)
 {
-	return (int32_t)(a - b) > 0;
+	return (s32)(a - b) > 0;
 }
 
-static inline bool tcp_seq_geq(uint32_t a, uint32_t b)
+static inline bool tcp_seq_geq(u32 a, u32 b)
 {
-	return (int32_t)(a - b) >= 0;
+	return (s32)(a - b) >= 0;
 }
 
-static uint32_t tcp_isn(void)
+static u32 tcp_isn(void)
 {
-	static uint32_t counter;
+	static u32 counter;
 
 	counter += 0x9e3779b9;
-	return (uint32_t)ktime_get_boot_ns() + counter;
+	return (u32)ktime_get_boot_ns() + counter;
 }
 
 static void tcp_clear_tx_locked(struct tcp_sock *tsk)
@@ -173,8 +173,8 @@ static void tcp_unlink_locked(struct tcp_sock *tsk)
 	list_del_init(&tsk->accept_node);
 }
 
-static struct tcp_sock *tcp_lookup_exact_locked(uint32_t saddr, uint16_t sport,
-						uint32_t daddr, uint16_t dport)
+static struct tcp_sock *tcp_lookup_exact_locked(u32 saddr, u16 sport, u32 daddr,
+						u16 dport)
 {
 	struct tcp_sock *tsk;
 
@@ -190,8 +190,7 @@ static struct tcp_sock *tcp_lookup_exact_locked(uint32_t saddr, uint16_t sport,
 	return NULL;
 }
 
-static struct tcp_sock *tcp_lookup_listener_locked(uint32_t daddr,
-						   uint16_t dport)
+static struct tcp_sock *tcp_lookup_listener_locked(u32 daddr, u16 dport)
 {
 	struct tcp_sock *tsk;
 
@@ -205,7 +204,7 @@ static struct tcp_sock *tcp_lookup_listener_locked(uint32_t daddr,
 	return NULL;
 }
 
-static bool tcp_port_in_use_locked(uint32_t laddr, uint16_t lport)
+static bool tcp_port_in_use_locked(u32 laddr, u16 lport)
 {
 	struct tcp_sock *tsk;
 
@@ -218,11 +217,11 @@ static bool tcp_port_in_use_locked(uint32_t laddr, uint16_t lport)
 	return false;
 }
 
-static uint16_t tcp_alloc_port_locked(uint32_t laddr)
+static u16 tcp_alloc_port_locked(u32 laddr)
 {
 	for (unsigned int i = 0; i <= TCP_EPHEMERAL_END - TCP_EPHEMERAL_START;
 	     i++) {
-		uint16_t port = tcp_ephemeral++;
+		u16 port = tcp_ephemeral++;
 
 		if (tcp_ephemeral < TCP_EPHEMERAL_START)
 			tcp_ephemeral = TCP_EPHEMERAL_START;
@@ -235,7 +234,7 @@ static uint16_t tcp_alloc_port_locked(uint32_t laddr)
 static int tcp_autobind(struct tcp_sock *tsk)
 {
 	irqstate_t flags;
-	uint16_t port;
+	u16 port;
 
 	flags = spin_lock_irqsave(&tcp_lock);
 	if (!tsk->sk.bound) {
@@ -252,16 +251,16 @@ static int tcp_autobind(struct tcp_sock *tsk)
 	return 0;
 }
 
-static uint16_t tcp_checksum(uint32_t saddr, uint32_t daddr,
-			     const struct tcphdr *th, size_t len)
+static u16 tcp_checksum(u32 saddr, u32 daddr, const struct tcphdr *th,
+			size_t len)
 {
-	uint8_t pseudo[4] = {
+	u8 pseudo[4] = {
 		0,
 		IPPROTO_TCP,
-		(uint8_t)(len >> 8),
-		(uint8_t)len,
+		(u8)(len >> 8),
+		(u8)len,
 	};
-	uint32_t sum = 0;
+	u32 sum = 0;
 
 	sum = inet_csum_add(sum, &saddr, sizeof(saddr));
 	sum = inet_csum_add(sum, &daddr, sizeof(daddr));
@@ -270,18 +269,17 @@ static uint16_t tcp_checksum(uint32_t saddr, uint32_t daddr,
 	return inet_csum_fold(sum);
 }
 
-static int tcp_build_segment(struct tcp_sock *tsk, uint32_t seq, uint32_t ack,
-			     uint8_t flags, const void *data, size_t len,
-			     bool with_mss, struct sk_buff **skb_out,
-			     uint32_t *saddr_out)
+static int tcp_build_segment(struct tcp_sock *tsk, u32 seq, u32 ack, u8 flags,
+			     const void *data, size_t len, bool with_mss,
+			     struct sk_buff **skb_out, u32 *saddr_out)
 {
 	struct net_device *dev;
 	struct sk_buff *skb;
 	struct tcphdr *th;
-	uint32_t saddr, daddr, nexthop;
+	u32 saddr, daddr, nexthop;
 	size_t hlen, tlen;
-	uint8_t pseudo[4];
-	uint32_t sum;
+	u8 pseudo[4];
+	u32 sum;
 	int err;
 
 	daddr = tsk->sk.daddr;
@@ -306,17 +304,17 @@ static int tcp_build_segment(struct tcp_sock *tsk, uint32_t seq, uint32_t ack,
 	th->dest = htons(tsk->sk.dport);
 	th->seq = htonl(seq);
 	th->ack_seq = htonl(ack);
-	th->doff_reserved = (uint8_t)((5 + (with_mss ? 1 : 0)) << 4);
+	th->doff_reserved = (u8)((5 + (with_mss ? 1 : 0)) << 4);
 	th->flags = flags;
-	th->window = htons((uint16_t)tsk->rcv_wnd);
+	th->window = htons((u16)tsk->rcv_wnd);
 
 	if (with_mss) {
-		uint8_t *opt = skb_put(skb, 4);
+		u8 *opt = skb_put(skb, 4);
 
 		opt[0] = TCP_OPT_MSS;
 		opt[1] = 4;
-		opt[2] = (uint8_t)(TCP_MSS >> 8);
-		opt[3] = (uint8_t)TCP_MSS;
+		opt[2] = (u8)(TCP_MSS >> 8);
+		opt[3] = (u8)TCP_MSS;
 	}
 
 	if (len && data)
@@ -324,8 +322,8 @@ static int tcp_build_segment(struct tcp_sock *tsk, uint32_t seq, uint32_t ack,
 
 	pseudo[0] = 0;
 	pseudo[1] = IPPROTO_TCP;
-	pseudo[2] = (uint8_t)(tlen >> 8);
-	pseudo[3] = (uint8_t)tlen;
+	pseudo[2] = (u8)(tlen >> 8);
+	pseudo[3] = (u8)tlen;
 
 	sum = inet_csum_add(0, &saddr, sizeof(saddr));
 	sum = inet_csum_add(sum, &daddr, sizeof(daddr));
@@ -340,7 +338,7 @@ static int tcp_build_segment(struct tcp_sock *tsk, uint32_t seq, uint32_t ack,
 	return 0;
 }
 
-static int tcp_xmit_skb(struct sk_buff *skb, uint32_t saddr, uint32_t daddr)
+static int tcp_xmit_skb(struct sk_buff *skb, u32 saddr, u32 daddr)
 {
 	int err;
 
@@ -349,12 +347,11 @@ static int tcp_xmit_skb(struct sk_buff *skb, uint32_t saddr, uint32_t daddr)
 	return err == -EAGAIN ? 0 : err;
 }
 
-static int tcp_send_segment(struct tcp_sock *tsk, uint32_t seq, uint32_t ack,
-			    uint8_t flags, const void *data, size_t len,
-			    bool with_mss)
+static int tcp_send_segment(struct tcp_sock *tsk, u32 seq, u32 ack, u8 flags,
+			    const void *data, size_t len, bool with_mss)
 {
 	struct sk_buff *skb;
-	uint32_t saddr;
+	u32 saddr;
 	int err;
 
 	err = tcp_build_segment(tsk, seq, ack, flags, data, len, with_mss, &skb,
@@ -365,11 +362,9 @@ static int tcp_send_segment(struct tcp_sock *tsk, uint32_t seq, uint32_t ack,
 	return tcp_xmit_skb(skb, saddr, tsk->sk.daddr);
 }
 
-static struct tcp_sock *tcp_create_child(struct tcp_sock *listener,
-					 uint32_t saddr, uint16_t sport,
-					 uint32_t daddr, uint16_t dport,
-					 uint32_t seq, uint16_t window,
-					 uint16_t mss)
+static struct tcp_sock *tcp_create_child(struct tcp_sock *listener, u32 saddr,
+					 u16 sport, u32 daddr, u16 dport,
+					 u32 seq, u16 window, u16 mss)
 {
 	struct tcp_sock *tsk;
 
@@ -392,7 +387,7 @@ static struct tcp_sock *tcp_create_child(struct tcp_sock *listener,
 	tsk->snd_una = tsk->iss;
 	tsk->snd_nxt = tsk->iss + 1;
 	tsk->snd_wnd = window;
-	tsk->mss = mss ? min(mss, (uint16_t)TCP_MSS) : TCP_DEFAULT_MSS;
+	tsk->mss = mss ? min(mss, (u16)TCP_MSS) : TCP_DEFAULT_MSS;
 	tsk->created_ns = ktime_get_boot_ns();
 
 	list_add_tail(&tsk->sk.node, &tcp_socks);
@@ -403,22 +398,22 @@ int tcp_rcv(struct sk_buff *skb)
 {
 	struct tcp_sock *tsk = NULL, *listener = NULL;
 	struct tcphdr *th;
-	uint32_t saddr = skb->cb.ip.saddr;
-	uint32_t daddr = skb->cb.ip.daddr;
-	uint32_t seq, ack, doff, payload_len;
-	uint16_t sport, dport, window, mss = 0;
-	uint8_t tflags;
+	u32 saddr = skb->cb.ip.saddr;
+	u32 daddr = skb->cb.ip.daddr;
+	u32 seq, ack, doff, payload_len;
+	u16 sport, dport, window, mss = 0;
+	u8 tflags;
 	irqstate_t flags;
 	bool wake_child = false, wake_listener = false, need_tx = false;
-	uint32_t tx_seq = 0, tx_ack = 0;
-	uint8_t tx_flags = 0;
+	u32 tx_seq = 0, tx_ack = 0;
+	u8 tx_flags = 0;
 	bool tx_mss = false;
 
 	if (skb->len < sizeof(*th))
 		goto drop;
 
 	th = (struct tcphdr *)skb->data;
-	doff = (uint32_t)(th->doff_reserved >> 4) * 4;
+	doff = (u32)(th->doff_reserved >> 4) * 4;
 	if (doff < sizeof(*th) || doff > skb->len)
 		goto drop;
 	if (tcp_checksum(saddr, daddr, th, skb->len) != 0)
@@ -432,11 +427,11 @@ int tcp_rcv(struct sk_buff *skb)
 	window = ntohs(th->window);
 
 	if (tflags & TCP_SYN) {
-		uint8_t *opt = skb->data + sizeof(*th);
-		uint8_t *end = skb->data + doff;
+		u8 *opt = skb->data + sizeof(*th);
+		u8 *end = skb->data + doff;
 
 		while (opt < end) {
-			uint8_t kind, olen;
+			u8 kind, olen;
 
 			if (opt[0] == TCP_OPT_END)
 				break;
@@ -451,8 +446,7 @@ int tcp_rcv(struct sk_buff *skb)
 			if (olen < 2 || opt + olen > end)
 				break;
 			if (kind == TCP_OPT_MSS && olen == 4)
-				mss = (uint16_t)(((uint16_t)opt[2] << 8) |
-						 opt[3]);
+				mss = (u16)(((u16)opt[2] << 8) | opt[3]);
 			opt += olen;
 		}
 	}
@@ -501,7 +495,7 @@ int tcp_rcv(struct sk_buff *skb)
 			tsk->snd_una = ack;
 			tsk->snd_nxt = ack;
 			tsk->snd_wnd = window;
-			tsk->mss = mss ? min(mss, (uint16_t)TCP_MSS) :
+			tsk->mss = mss ? min(mss, (u16)TCP_MSS) :
 					 TCP_DEFAULT_MSS;
 			tsk->state = TCP_ESTABLISHED;
 			tsk->sk.connected = true;
@@ -666,8 +660,8 @@ static int tcp_bind(struct socket *sock, const struct sockaddr *addr,
 	const struct sockaddr_in *sin = (const struct sockaddr_in *)addr;
 	struct tcp_sock *tsk = tcp_from_sock(sock);
 	irqstate_t flags;
-	uint32_t laddr;
-	uint16_t lport;
+	u32 laddr;
+	u16 lport;
 
 	if (!tsk || addrlen < (int)sizeof(*sin) || sin->sin_family != AF_INET)
 		return -EINVAL;
@@ -790,7 +784,7 @@ static int tcp_listen(struct socket *sock, int backlog)
 		return -EINVAL;
 	}
 	tsk->state = TCP_LISTEN;
-	tsk->backlog = backlog > 0 ? (uint32_t)backlog : 1;
+	tsk->backlog = backlog > 0 ? (u32)backlog : 1;
 	spin_unlock_irqrestore(&tcp_lock, flags);
 	return 0;
 }
@@ -855,8 +849,8 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 
 	while (off < len) {
 		size_t n = min(len - off, (size_t)tsk->mss);
-		uint8_t *copy;
-		uint32_t seq, ack;
+		u8 *copy;
+		u32 seq, ack;
 		irqstate_t flags;
 		int err;
 
@@ -866,7 +860,7 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 		copy = kmalloc(n);
 		if (!copy)
 			return -ENOMEM;
-		if (copy_from_user(copy, (const uint8_t *)buf + off, n)) {
+		if (copy_from_user(copy, (const u8 *)buf + off, n)) {
 			kfree(copy);
 			return -EFAULT;
 		}
@@ -905,7 +899,7 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 		tsk->snd_nxt += n;
 		tsk->tx_kind = TCP_TX_DATA;
 		tsk->tx_data = copy;
-		tsk->tx_len = (uint16_t)n;
+		tsk->tx_len = (u16)n;
 		tsk->tx_seq = seq;
 		tsk->tx_retries = 0;
 		tsk->rto_deadline_ns = ktime_get_boot_ns() + TCP_RTO_NS;
@@ -999,7 +993,7 @@ static int tcp_shutdown(struct socket *sock, int how)
 {
 	struct tcp_sock *tsk = tcp_from_sock(sock);
 	irqstate_t flags;
-	uint32_t seq, ack;
+	u32 seq, ack;
 	bool send_fin = false;
 
 	if (!tsk)
@@ -1099,7 +1093,7 @@ static int tcp_release(struct socket *sock)
 	struct tcp_sock *tsk = tcp_from_sock(sock);
 	struct tcp_sock *child, *tmp;
 	irqstate_t flags;
-	uint32_t seq = 0, ack = 0;
+	u32 seq = 0, ack = 0;
 	bool send_fin = false, free_now = false;
 
 	if (!tsk)
@@ -1221,17 +1215,17 @@ int tcp_proc_show(char *buf, size_t size)
 
 struct tcp_timer_action {
 	struct sk_buff *skb;
-	uint32_t saddr;
-	uint32_t daddr;
+	u32 saddr;
+	u32 daddr;
 };
 
 void tcp_timer_tick(void)
 {
-	static uint64_t next_run;
+	static u64 next_run;
 	struct tcp_timer_action actions[TCP_TIMER_BATCH];
 	unsigned int nr = 0;
 	struct tcp_sock *tsk, *tmp;
-	uint64_t now = ktime_get_boot_ns();
+	u64 now = ktime_get_boot_ns();
 	irqstate_t flags;
 
 	if (now < next_run)
@@ -1300,10 +1294,10 @@ void tcp_timer_tick(void)
 
 		{
 			struct sk_buff *skb = NULL;
-			uint32_t saddr = 0;
-			uint32_t seq = tsk->tx_seq;
-			uint32_t ack = tsk->rcv_nxt;
-			uint8_t tflags;
+			u32 saddr = 0;
+			u32 seq = tsk->tx_seq;
+			u32 ack = tsk->rcv_nxt;
+			u8 tflags;
 			bool mss = false;
 
 			if (tsk->tx_kind == TCP_TX_SYN) {

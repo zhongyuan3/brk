@@ -32,8 +32,7 @@ void printk_flush_pending(void);
  * Return the text length, 0 if the buffer is empty, or -ENOSPC if the
  * record did not fit in @size (the record is consumed either way).
  */
-int printk_read_record(char *buf, size_t size, uint8_t *level,
-		       uint64_t *ts_nsec);
+int printk_read_record(char *buf, size_t size, u8 *level, u64 *ts_nsec);
 
 /*
  * Panic helper: append a pre-formatted message to the log ring buffer and

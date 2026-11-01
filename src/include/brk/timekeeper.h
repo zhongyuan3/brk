@@ -2,20 +2,18 @@
 #define BRK_TIMEKEEPER_H
 
 #include <brk/types.h>
-#include <uapi/time.h>
 
 void timekeeper_init(void);
 void timekeeper_tick(void);
 bool timekeeper_initialized(void);
 
-uint64_t jiffies_get(void);
-uint64_t timekeeper_mono_ns(void);
+u64 jiffies_get(void);
+u64 timekeeper_mono_ns(void);
 void *timekeeper_wait_chan(void);
 
-void timekeeper_get_mono_ts(struct timespec *ts);
-void timekeeper_get_real_ts(struct timespec *ts);
-void timekeeper_set_real_ts(const struct timespec *ts);
+ktime_t timekeeper_real(void);
+void timekeeper_set_real(ktime_t ns);
 
-uint64_t timekeeper_nanosleep(const struct timespec *dur, struct timespec *rem);
+int timekeeper_nanosleep(ktime_t dur, ktime_t *rem);
 
 #endif

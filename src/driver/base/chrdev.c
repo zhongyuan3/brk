@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/chrdev.h>
 #include <brk/device.h>
 #include <brk/devno.h>

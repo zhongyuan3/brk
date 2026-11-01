@@ -14,21 +14,23 @@
 #include <brk/printk.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
+#include <brk/stat.h>
+#include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
-#include <string.h>
 #include <uapi/dirent.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/limits.h>
 #include <uapi/stat.h>
+#include <uapi/statfs.h>
 #include <uapi/time.h>
 #include <uapi/types.h>
 #include <uapi/utsname.h>
 
-uint64_t sys_read(void)
+u64 sys_read(void)
 {
 	int fd;
 	void *buf;
@@ -49,7 +51,7 @@ uint64_t sys_read(void)
 	return ret;
 }
 
-uint64_t sys_write(void)
+u64 sys_write(void)
 {
 	int fd;
 	const void *buf;
@@ -74,7 +76,7 @@ uint64_t sys_write(void)
 	return ret;
 }
 
-uint64_t sys_open(void)
+u64 sys_open(void)
 {
 	int fd;
 	struct fs_file *fp = NULL;
@@ -94,7 +96,7 @@ uint64_t sys_open(void)
 	return fd;
 }
 
-uint64_t sys_openat(void)
+u64 sys_openat(void)
 {
 	int fd;
 	struct fs_file *fp = NULL;
@@ -115,14 +117,14 @@ uint64_t sys_openat(void)
 	return fd;
 }
 
-uint64_t sys_close(void)
+u64 sys_close(void)
 {
 	int fd = syscall_arg_int(0);
 	struct task *task = current_task();
 	return fdtable_close_fd(task->fdtable, fd);
 }
 
-uint64_t sys_execve(void)
+u64 sys_execve(void)
 {
 	char *path = syscall_arg_ptr(0);
 	char **argv = syscall_arg_ptr(1);
@@ -130,10 +132,12 @@ uint64_t sys_execve(void)
 	return do_execve(path, argv, envp);
 }
 
-uint64_t sys_fstat(void)
+u64 sys_fstat(void)
 {
 	struct fs_file *fp = NULL;
-	struct stat *buf;
+	struct stat *ubuf;
+	struct kstat ks;
+	struct stat st;
 	int ret;
 	int fd;
 	struct task *task = current_task();
@@ -142,14 +146,23 @@ uint64_t sys_fstat(void)
 	fp = fdtable_get_file(task->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
-	buf = syscall_arg_ptr(1);
-	ret = fs_file_stat(fp, buf);
+	ubuf = syscall_arg_ptr(1);
+	if (!ubuf) {
+		fs_file_put(fp);
+		return -EFAULT;
+	}
+	ret = fs_file_stat(fp, &ks);
 	fs_file_put(fp);
-	return ret;
+	if (ret)
+		return ret;
+
+	kstat_to_stat(&ks, &st);
+	if (copy_to_user(ubuf, &st, sizeof(st)))
+		return -EFAULT;
+	return 0;
 }
 
-static uint64_t stat_path(const char *path, struct stat *buf,
-			  unsigned int flags)
+static u64 stat_path(const char *path, struct kstat *buf, unsigned int flags)
 {
 	struct fs_path p;
 	struct fs_inode *inode;
@@ -174,24 +187,44 @@ static uint64_t stat_path(const char *path, struct stat *buf,
 	return ret;
 }
 
-uint64_t sys_lstat(void)
+static u64 stat_path_to_user(const char *path, struct stat *ubuf,
+			     unsigned int flags)
+{
+	struct kstat ks;
+	struct stat st;
+	int ret;
+
+	if (!ubuf)
+		return -EFAULT;
+
+	ret = stat_path(path, &ks, flags);
+	if (ret)
+		return ret;
+
+	kstat_to_stat(&ks, &st);
+	if (copy_to_user(ubuf, &st, sizeof(st)))
+		return -EFAULT;
+	return 0;
+}
+
+u64 sys_lstat(void)
 {
 	const char *path = syscall_arg_ptr(0);
 	struct stat *buf = syscall_arg_ptr(1);
 
-	return stat_path(path, buf, 0);
+	return stat_path_to_user(path, buf, 0);
 }
 
-uint64_t sys_stat(void)
+u64 sys_stat(void)
 {
 	const char *path = syscall_arg_ptr(0);
 	struct stat *buf = syscall_arg_ptr(1);
 
-	return stat_path(path, buf, LOOKUP_FOLLOW);
+	return stat_path_to_user(path, buf, LOOKUP_FOLLOW);
 }
 
-static uint64_t access_path_at(int dirfd, const char *path, int mode,
-			       unsigned int lookup_flags)
+static u64 access_path_at(int dirfd, const char *path, int mode,
+			  unsigned int lookup_flags)
 {
 	struct fs_path p;
 	struct fs_inode *inode;
@@ -215,7 +248,7 @@ static uint64_t access_path_at(int dirfd, const char *path, int mode,
 	return ret;
 }
 
-uint64_t sys_access(void)
+u64 sys_access(void)
 {
 	const char *path = syscall_arg_ptr(0);
 	int mode = syscall_arg_int(1);
@@ -223,7 +256,7 @@ uint64_t sys_access(void)
 	return access_path_at(AT_FDCWD, path, mode, LOOKUP_FOLLOW);
 }
 
-uint64_t sys_faccessat(void)
+u64 sys_faccessat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	const char *path = syscall_arg_ptr(1);
@@ -232,7 +265,7 @@ uint64_t sys_faccessat(void)
 	return access_path_at(dirfd, path, mode, LOOKUP_FOLLOW);
 }
 
-uint64_t sys_faccessat2(void)
+u64 sys_faccessat2(void)
 {
 	int dirfd = syscall_arg_int(0);
 	const char *path = syscall_arg_ptr(1);
@@ -247,10 +280,12 @@ uint64_t sys_faccessat2(void)
 	return access_path_at(dirfd, path, mode, lookup_flags);
 }
 
-uint64_t sys_fstatfs(void)
+u64 sys_fstatfs(void)
 {
 	int fd = syscall_arg_int(0);
-	struct statfs *buf = syscall_arg_ptr(1);
+	struct statfs *ubuf = syscall_arg_ptr(1);
+	struct statfs st;
+	struct kstatfs ks;
 	struct task *task = current_task();
 	struct fs_file *fp;
 	int ret;
@@ -258,19 +293,34 @@ uint64_t sys_fstatfs(void)
 	fp = fdtable_get_file(task->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
+	if (!ubuf) {
+		fs_file_put(fp);
+		return -EFAULT;
+	}
 
-	ret = fs_statfs(fp->inode->sb, buf);
+	ret = fs_statfs(fp->inode->sb, &ks);
 	fs_file_put(fp);
-	return ret;
+	if (ret)
+		return ret;
+
+	kstatfs_to_statfs(&ks, &st);
+	if (copy_to_user(ubuf, &st, sizeof(st)))
+		return -EFAULT;
+	return 0;
 }
 
-uint64_t sys_statfs(void)
+u64 sys_statfs(void)
 {
 	const char *path = syscall_arg_ptr(0);
-	struct statfs *buf = syscall_arg_ptr(1);
+	struct statfs *ubuf = syscall_arg_ptr(1);
+	struct statfs st;
+	struct kstatfs ks;
 	struct fs_path p = { 0 };
 	struct fs_inode *inode;
 	int ret;
+
+	if (!ubuf)
+		return -EFAULT;
 
 	ret = fs_path_lookup(path, LOOKUP_FOLLOW, &p);
 	if (ret)
@@ -282,12 +332,18 @@ uint64_t sys_statfs(void)
 		return -ENOENT;
 	}
 
-	ret = fs_statfs(inode->sb, buf);
+	ret = fs_statfs(inode->sb, &ks);
 	fs_path_put(&p);
-	return ret;
+	if (ret)
+		return ret;
+
+	kstatfs_to_statfs(&ks, &st);
+	if (copy_to_user(ubuf, &st, sizeof(st)))
+		return -EFAULT;
+	return 0;
 }
 
-uint64_t sys_fallocate(void)
+u64 sys_fallocate(void)
 {
 	int fd = syscall_arg_int(0);
 	int mode = syscall_arg_int(1);
@@ -311,14 +367,14 @@ uint64_t sys_fallocate(void)
 	return ret;
 }
 
-uint64_t sys_link(void)
+u64 sys_link(void)
 {
 	char *oldpath = syscall_arg_ptr(0);
 	char *newpath = syscall_arg_ptr(1);
 	return do_linkat(AT_FDCWD, oldpath, AT_FDCWD, newpath, 0);
 }
 
-uint64_t sys_linkat(void)
+u64 sys_linkat(void)
 {
 	int olddirfd = syscall_arg_int(0);
 	char *oldpath = syscall_arg_ptr(1);
@@ -328,13 +384,13 @@ uint64_t sys_linkat(void)
 	return do_linkat(olddirfd, oldpath, newdirfd, newpath, flags);
 }
 
-uint64_t sys_unlink(void)
+u64 sys_unlink(void)
 {
 	char *path = syscall_arg_ptr(0);
 	return do_unlinkat(AT_FDCWD, path, 0);
 }
 
-uint64_t sys_unlinkat(void)
+u64 sys_unlinkat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	char *path = syscall_arg_ptr(1);
@@ -342,14 +398,14 @@ uint64_t sys_unlinkat(void)
 	return do_unlinkat(dirfd, path, flags);
 }
 
-uint64_t sys_symlink(void)
+u64 sys_symlink(void)
 {
 	const char *target = syscall_arg_ptr(0);
 	char *linkpath = syscall_arg_ptr(1);
 	return do_symlinkat(AT_FDCWD, linkpath, target);
 }
 
-uint64_t sys_readlink(void)
+u64 sys_readlink(void)
 {
 	const char *pathname = syscall_arg_ptr(0);
 	char *buf = syscall_arg_ptr(1);
@@ -357,27 +413,27 @@ uint64_t sys_readlink(void)
 	return do_readlinkat(AT_FDCWD, pathname, buf, bufsiz);
 }
 
-uint64_t sys_rename(void)
+u64 sys_rename(void)
 {
 	const char *oldpathname = syscall_arg_ptr(0);
 	const char *newpathname = syscall_arg_ptr(1);
 	return do_renameat(AT_FDCWD, oldpathname, AT_FDCWD, newpathname, 0);
 }
 
-uint64_t sys_creat(void)
+u64 sys_creat(void)
 {
 	const char *pathname = syscall_arg_ptr(0);
 	umode_t mode = syscall_arg_raw(1);
 	return do_creat(pathname, mode);
 }
 
-uint64_t sys_rmdir(void)
+u64 sys_rmdir(void)
 {
 	const char *pathname = syscall_arg_ptr(0);
 	return do_rmdir(pathname);
 }
 
-uint64_t sys_uname(void)
+u64 sys_uname(void)
 {
 	struct utsname name = {
 		.sysname = "BRK",
@@ -396,7 +452,7 @@ uint64_t sys_uname(void)
 	return 0;
 }
 
-uint64_t sys_getcwd(void)
+u64 sys_getcwd(void)
 {
 	struct task *task = current_task();
 	char *buf = syscall_arg_ptr(0);
@@ -408,7 +464,7 @@ uint64_t sys_getcwd(void)
 	return ret;
 }
 
-uint64_t sys_chdir(void)
+u64 sys_chdir(void)
 {
 	char *pathname = syscall_arg_ptr(0);
 	struct task *task = current_task();
@@ -440,7 +496,7 @@ uint64_t sys_chdir(void)
 	return 0;
 }
 
-uint64_t sys_fchdir(void)
+u64 sys_fchdir(void)
 {
 	int fd;
 	struct fs_file *fp;
@@ -468,7 +524,7 @@ uint64_t sys_fchdir(void)
 	return 0;
 }
 
-uint64_t sys_renameat(void)
+u64 sys_renameat(void)
 {
 	int olddirfd = syscall_arg_int(0);
 	const char *oldpathname = syscall_arg_ptr(1);
@@ -477,7 +533,7 @@ uint64_t sys_renameat(void)
 	return do_renameat(olddirfd, oldpathname, newdirfd, newpathname, 0);
 }
 
-uint64_t sys_renameat2(void)
+u64 sys_renameat2(void)
 {
 	int olddirfd = syscall_arg_int(0);
 	const char *oldpathname = syscall_arg_ptr(1);
@@ -487,7 +543,7 @@ uint64_t sys_renameat2(void)
 	return do_renameat(olddirfd, oldpathname, newdirfd, newpathname, flags);
 }
 
-uint64_t sys_symlinkat(void)
+u64 sys_symlinkat(void)
 {
 	const char *target;
 	int newdirfd;
@@ -499,7 +555,7 @@ uint64_t sys_symlinkat(void)
 	return do_symlinkat(newdirfd, linkpath, target);
 }
 
-uint64_t sys_readlinkat(void)
+u64 sys_readlinkat(void)
 {
 	int dirfd;
 	const char *pathname;
@@ -513,7 +569,7 @@ uint64_t sys_readlinkat(void)
 	return do_readlinkat(dirfd, pathname, buf, bufsiz);
 }
 
-uint64_t sys_mkdir(void)
+u64 sys_mkdir(void)
 {
 	char *path = syscall_arg_ptr(0);
 	umode_t mode = syscall_arg_raw(1);
@@ -521,7 +577,7 @@ uint64_t sys_mkdir(void)
 	return do_mkdirat(AT_FDCWD, path, mode);
 }
 
-uint64_t sys_mkdirat(void)
+u64 sys_mkdirat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	char *pathname = syscall_arg_ptr(1);
@@ -530,7 +586,7 @@ uint64_t sys_mkdirat(void)
 	return do_mkdirat(dirfd, pathname, mode);
 }
 
-uint64_t sys_mknod(void)
+u64 sys_mknod(void)
 {
 	char *path = syscall_arg_ptr(0);
 	umode_t mode = syscall_arg_raw(1);
@@ -538,7 +594,7 @@ uint64_t sys_mknod(void)
 	return do_mknodat(AT_FDCWD, path, mode, dev);
 }
 
-uint64_t sys_mknodat(void)
+u64 sys_mknodat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	char *path = syscall_arg_ptr(1);
@@ -547,7 +603,7 @@ uint64_t sys_mknodat(void)
 	return do_mknodat(dirfd, path, mode, dev);
 }
 
-uint64_t sys_pipe(void)
+u64 sys_pipe(void)
 {
 	int *pipefd = syscall_arg_ptr(0);
 	int err;
@@ -556,10 +612,10 @@ uint64_t sys_pipe(void)
 		return -EFAULT;
 
 	err = do_pipe2(pipefd, 0);
-	return err < 0 ? (uint64_t)(long)err : 0;
+	return err < 0 ? (u64)(long)err : 0;
 }
 
-uint64_t sys_pipe2(void)
+u64 sys_pipe2(void)
 {
 	int *pipefd = syscall_arg_ptr(0);
 	int flags = syscall_arg_int(1);
@@ -567,17 +623,17 @@ uint64_t sys_pipe2(void)
 	if (!pipefd)
 		return -EFAULT;
 
-	return (uint64_t)(long)do_pipe2(pipefd, flags);
+	return (u64)(long)do_pipe2(pipefd, flags);
 }
 
-uint64_t sys_dup(void)
+u64 sys_dup(void)
 {
 	int oldfd = syscall_arg_int(0);
 	struct task *task = current_task();
 	return fdtable_dup_fd(task->fdtable, oldfd);
 }
 
-uint64_t sys_dup2(void)
+u64 sys_dup2(void)
 {
 	int oldfd = syscall_arg_int(0);
 	int newfd = syscall_arg_int(1);
@@ -588,7 +644,7 @@ uint64_t sys_dup2(void)
 	return newfd;
 }
 
-uint64_t sys_mount(void)
+u64 sys_mount(void)
 {
 	const char *source = syscall_arg_ptr(0);
 	const char *target = syscall_arg_ptr(1);
@@ -601,7 +657,7 @@ uint64_t sys_mount(void)
 	return do_mount(source, target, type, flags, data);
 }
 
-uint64_t sys_umount2(void)
+u64 sys_umount2(void)
 {
 	const char *target = syscall_arg_ptr(0);
 	int flags = syscall_arg_int(1);
@@ -651,7 +707,7 @@ uint64_t sys_umount2(void)
 	return 0;
 }
 
-uint64_t sys_lseek(void)
+u64 sys_lseek(void)
 {
 	int fd = 0;
 	struct fs_file *fp = NULL;
@@ -674,13 +730,13 @@ uint64_t sys_lseek(void)
 
 struct getdents_context {
 	struct fs_dir_iterator ctx;
-	uint8_t *buf;
+	u8 *buf;
 	size_t size;
 	size_t pos;
 };
 
 static bool getdents_filldir(struct fs_dir_iterator *ctx, const char *name,
-			     int namelen, loff_t offset, uint64_t ino,
+			     int namelen, loff_t offset, u64 ino,
 			     unsigned int d_type)
 {
 	struct getdents_context *gctx;
@@ -708,7 +764,7 @@ static bool getdents_filldir(struct fs_dir_iterator *ctx, const char *name,
 	return true;
 }
 
-uint64_t sys_getdents(void)
+u64 sys_getdents(void)
 {
 	int fd = -1;
 	struct fs_file *fp = NULL;
@@ -769,13 +825,13 @@ uint64_t sys_getdents(void)
 
 struct getdents64_context {
 	struct fs_dir_iterator ctx;
-	uint8_t *buf;
+	u8 *buf;
 	size_t size;
 	size_t pos;
 };
 
 static bool getdents64_filldir(struct fs_dir_iterator *ctx, const char *name,
-			       int namelen, loff_t offset, uint64_t ino,
+			       int namelen, loff_t offset, u64 ino,
 			       unsigned int d_type)
 {
 	struct getdents64_context *gctx;
@@ -803,7 +859,7 @@ static bool getdents64_filldir(struct fs_dir_iterator *ctx, const char *name,
 	return true;
 }
 
-uint64_t sys_getdents64(void)
+u64 sys_getdents64(void)
 {
 	int fd = -1;
 	struct fs_file *fp = NULL;
@@ -863,7 +919,7 @@ uint64_t sys_getdents64(void)
 	return ctx.pos;
 }
 
-uint64_t sys_ioctl(void)
+u64 sys_ioctl(void)
 {
 	struct fs_file *fp;
 	int fd;
@@ -877,10 +933,10 @@ uint64_t sys_ioctl(void)
 	unsigned long arg = (unsigned long)syscall_arg_raw(2);
 	long ret = fs_file_ioctl(fp, cmd, arg);
 	fs_file_put(fp);
-	return (uint64_t)(long)ret;
+	return (u64)(long)ret;
 }
 
-uint64_t sys_ftruncate(void)
+u64 sys_ftruncate(void)
 {
 	int fd = syscall_arg_int(0);
 	loff_t length = (loff_t)syscall_arg_raw(1);
@@ -904,7 +960,7 @@ uint64_t sys_ftruncate(void)
 	return ret;
 }
 
-uint64_t sys_truncate(void)
+u64 sys_truncate(void)
 {
 	const char *pathname = syscall_arg_ptr(0);
 	loff_t length = (loff_t)syscall_arg_raw(1);
@@ -1033,11 +1089,9 @@ out:
 static int times_from_user_timespec(struct fs_iattr *attr,
 				    const struct timespec times[2])
 {
-	struct timespec now;
-	struct timespec ts;
-
 	if (!times) {
-		ktime_get_real_ts(&now);
+		ktime_t now = ktime_get_real();
+
 		attr->valid |= ATTR_ATIME | ATTR_MTIME;
 		attr->atime = now;
 		attr->mtime = now;
@@ -1045,21 +1099,24 @@ static int times_from_user_timespec(struct fs_iattr *attr,
 	}
 
 	for (int i = 0; i < 2; i++) {
-		ts = times[i];
-		if (ts.tv_nsec == UTIME_OMIT)
+		const struct timespec *ts = &times[i];
+		ktime_t t;
+
+		if (ts->tv_nsec == UTIME_OMIT)
 			continue;
-		if (ts.tv_nsec == UTIME_NOW) {
-			ktime_get_real_ts(&now);
-			ts = now;
-		} else if (ts.tv_nsec < 0 || ts.tv_nsec >= 1000000000L) {
-			return -EINVAL;
+		if (ts->tv_nsec == UTIME_NOW) {
+			t = ktime_get_real();
+		} else {
+			if (ts->tv_nsec < 0 || ts->tv_nsec >= 1000000000L)
+				return -EINVAL;
+			t = ktime_from_timespec(ts);
 		}
 
 		if (i == 0) {
-			attr->atime = ts;
+			attr->atime = t;
 			attr->valid |= ATTR_ATIME;
 		} else {
-			attr->mtime = ts;
+			attr->mtime = t;
 			attr->valid |= ATTR_MTIME;
 		}
 	}
@@ -1092,7 +1149,7 @@ static int set_times_fd(int fd, const struct timespec times[2])
 	return setattr_fd(fd, &attr);
 }
 
-uint64_t sys_chmod(void)
+u64 sys_chmod(void)
 {
 	const char *path = syscall_arg_ptr(0);
 	umode_t mode = syscall_arg_raw(1);
@@ -1104,7 +1161,7 @@ uint64_t sys_chmod(void)
 	return setattr_path_at(AT_FDCWD, path, &attr, LOOKUP_FOLLOW);
 }
 
-uint64_t sys_fchmod(void)
+u64 sys_fchmod(void)
 {
 	int fd = syscall_arg_int(0);
 	umode_t mode = syscall_arg_raw(1);
@@ -1116,7 +1173,7 @@ uint64_t sys_fchmod(void)
 	return setattr_fd(fd, &attr);
 }
 
-uint64_t sys_fchmodat(void)
+u64 sys_fchmodat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	const char *path = syscall_arg_ptr(1);
@@ -1143,7 +1200,7 @@ static void chown_attr_init(struct fs_iattr *attr, long uid, long gid)
 	}
 }
 
-uint64_t sys_chown(void)
+u64 sys_chown(void)
 {
 	const char *path = syscall_arg_ptr(0);
 	long uid = syscall_arg_int(1);
@@ -1157,7 +1214,7 @@ uint64_t sys_chown(void)
 	return setattr_path_at(AT_FDCWD, path, &attr, LOOKUP_FOLLOW);
 }
 
-uint64_t sys_fchown(void)
+u64 sys_fchown(void)
 {
 	int fd = syscall_arg_int(0);
 	long uid = syscall_arg_int(1);
@@ -1171,7 +1228,7 @@ uint64_t sys_fchown(void)
 	return setattr_fd(fd, &attr);
 }
 
-uint64_t sys_fchownat(void)
+u64 sys_fchownat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	const char *path = syscall_arg_ptr(1);
@@ -1195,7 +1252,7 @@ uint64_t sys_fchownat(void)
 	return setattr_path_at(dirfd, path, &attr, lookup_flags);
 }
 
-uint64_t sys_utime(void)
+u64 sys_utime(void)
 {
 	const char *path = syscall_arg_ptr(0);
 	const struct utimbuf *utimbuf = syscall_arg_ptr(1);
@@ -1228,7 +1285,7 @@ static int timeval_pair_to_timespec(const struct timeval tv[2],
 	return 0;
 }
 
-uint64_t sys_utimes(void)
+u64 sys_utimes(void)
 {
 	const char *path = syscall_arg_ptr(0);
 	const struct timeval *utimes = syscall_arg_ptr(1);
@@ -1248,7 +1305,7 @@ uint64_t sys_utimes(void)
 	return set_times_path_at(AT_FDCWD, path, ts, LOOKUP_FOLLOW);
 }
 
-uint64_t sys_futimesat(void)
+u64 sys_futimesat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	const char *path = syscall_arg_ptr(1);
@@ -1272,7 +1329,7 @@ uint64_t sys_futimesat(void)
 	return set_times_path_at(dirfd, path, ts, LOOKUP_FOLLOW);
 }
 
-uint64_t sys_utimensat(void)
+u64 sys_utimensat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	const char *path = syscall_arg_ptr(1);
@@ -1295,7 +1352,7 @@ uint64_t sys_utimensat(void)
 	return set_times_path_at(dirfd, path, utimes ? ts : NULL, lookup_flags);
 }
 
-static uint64_t do_fsync(int datasync)
+static u64 do_fsync(int datasync)
 {
 	struct fs_file *fp = NULL;
 	int ret;
@@ -1318,23 +1375,23 @@ static uint64_t do_fsync(int datasync)
 	return ret;
 }
 
-uint64_t sys_fsync(void)
+u64 sys_fsync(void)
 {
 	return do_fsync(0);
 }
 
-uint64_t sys_fdatasync(void)
+u64 sys_fdatasync(void)
 {
 	return do_fsync(1);
 }
 
-uint64_t sys_sync(void)
+u64 sys_sync(void)
 {
 	sync_all_filesystems();
 	return 0;
 }
 
-uint64_t sys_syncfs(void)
+u64 sys_syncfs(void)
 {
 	struct fs_file *fp = NULL;
 	int ret;

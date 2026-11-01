@@ -1,3 +1,7 @@
+CompileFlags:
+    Add:
+        - -Isrc/include/freestanding
+
 Style:
     AngledHeaders:
         - "src/include/.*"

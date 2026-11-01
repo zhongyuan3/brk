@@ -5,9 +5,9 @@
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/types.h>
 #include <libfdt.h>
-#include <string.h>
 #include <uapi/errno.h>
 
 static LIST_DEFINE(irq_domains);
@@ -126,18 +126,18 @@ unsigned int irq_of_parse_and_map(int fdt_node, int index)
 {
 	void *fdt = dt_get_fdt();
 	struct irq_domain *d;
-	const uint32_t *ints, *prop;
+	const u32 *ints, *prop;
 	irq_hw_number_t hwirq;
 	unsigned int type, virq;
 	int parent = -1, cells, len;
-	uint32_t spec[4];
+	u32 spec[4];
 
 	if (!fdt || index < 0)
 		return 0;
 
 	for (int n = fdt_node; n >= 0; n = fdt_parent_offset(fdt, n)) {
 		prop = fdt_getprop(fdt, n, "interrupt-parent", &len);
-		if (prop && len == sizeof(uint32_t)) {
+		if (prop && len == sizeof(u32)) {
 			parent = fdt_node_offset_by_phandle(
 				fdt, fdt32_to_cpu(*prop));
 			break;
@@ -151,14 +151,14 @@ unsigned int irq_of_parse_and_map(int fdt_node, int index)
 		return 0;
 
 	prop = fdt_getprop(fdt, parent, "#interrupt-cells", &len);
-	if (!prop || len != sizeof(uint32_t))
+	if (!prop || len != sizeof(u32))
 		return 0;
 	cells = fdt32_to_cpu(*prop);
 	if (cells <= 0 || cells > (int)countof(spec))
 		return 0;
 
 	ints = fdt_getprop(fdt, fdt_node, "interrupts", &len);
-	if (!ints || len < (index + 1) * cells * (int)sizeof(uint32_t))
+	if (!ints || len < (index + 1) * cells * (int)sizeof(u32))
 		return 0;
 
 	for (int i = 0; i < cells; i++)

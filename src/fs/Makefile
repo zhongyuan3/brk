@@ -15,6 +15,7 @@ obj-y += fdtable.o
 obj-y += fsinfo.o
 obj-y += sysfile.o
 obj-y += select.o
+obj-y += stat.o
 obj-y += writeback.o
 
 subdir-y += tmpfs

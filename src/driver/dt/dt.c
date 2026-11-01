@@ -1,6 +1,6 @@
 #include <arch/hart.h>
 #include <arch/mm.h>
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/clocksource.h>
 #include <brk/device.h>
 #include <brk/dt.h>
@@ -14,12 +14,12 @@
 #include <brk/platform.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
+#include <brk/string.h>
 #include <brk/types.h>
 #include <brk/uart.h>
 #include <brk/virtio.h>
 #include <libfdt.h>
 #include <stddef.h>
-#include <string.h>
 #include <uapi/errno.h>
 
 static void *fdt;
@@ -50,14 +50,13 @@ static int get_parent_addr_cells(int node, int *addr_cells, int *size_cells)
 }
 
 static int for_each_node_reg(int node, int addr_cells, int size_cells,
-			     int (*callback)(uint64_t addr, size_t size,
-					     void *arg),
+			     int (*callback)(u64 addr, size_t size, void *arg),
 			     void *arg)
 {
-	const uint32_t *reg;
-	uint64_t addr, size;
+	const u32 *reg;
+	u64 addr, size;
 	int len = 0;
-	int reg_bytes = (addr_cells + size_cells) * sizeof(uint32_t);
+	int reg_bytes = (addr_cells + size_cells) * sizeof(u32);
 	int nr_regs;
 	int err;
 
@@ -93,7 +92,7 @@ void dt_set_fdt(unsigned long addr)
 	fdt = (void *)addr;
 }
 
-static int __memblock_add_or_reserve(uint64_t addr, size_t size, void *add)
+static int __memblock_add_or_reserve(u64 addr, size_t size, void *add)
 {
 	if (add == NULL)
 		return memblock_reserve(addr, size);
@@ -150,8 +149,8 @@ int dt_init_scan_rsvd_mem(void)
 int dt_setup_timebase_freq(void)
 {
 	int node;
-	uint32_t timebase_freq = 0;
-	const uint32_t *freq;
+	u32 timebase_freq = 0;
+	const u32 *freq;
 	int len;
 
 	node = fdt_path_offset(fdt, "/cpus");
@@ -159,7 +158,7 @@ int dt_setup_timebase_freq(void)
 		return -EINVAL;
 
 	freq = fdt_getprop(fdt, node, "timebase-frequency", &len);
-	if (!freq || len != sizeof(uint32_t))
+	if (!freq || len != sizeof(u32))
 		return -EINVAL;
 
 	timebase_freq = fdt32_to_cpu(*freq);
@@ -193,10 +192,10 @@ void *dt_get_fdt(void)
 	return fdt;
 }
 
-int dt_get_reg(int node, int index, uint64_t *addr, uint64_t *size)
+int dt_get_reg(int node, int index, u64 *addr, u64 *size)
 {
 	int len, addr_cells, size_cells, cell_bytes, nr;
-	const uint32_t *reg;
+	const u32 *reg;
 
 	if (!addr || !size || index < 0)
 		return -EINVAL;
@@ -204,7 +203,7 @@ int dt_get_reg(int node, int index, uint64_t *addr, uint64_t *size)
 	if (get_parent_addr_cells(node, &addr_cells, &size_cells))
 		return -EINVAL;
 
-	cell_bytes = (addr_cells + size_cells) * sizeof(uint32_t);
+	cell_bytes = (addr_cells + size_cells) * sizeof(u32);
 	reg = fdt_getprop(fdt, node, "reg", &len);
 	if (!reg || len < cell_bytes || len % cell_bytes != 0)
 		return -EINVAL;
@@ -225,7 +224,7 @@ int dt_get_reg(int node, int index, uint64_t *addr, uint64_t *size)
 	return 0;
 }
 
-static int dtb_get_one_reg(int node, uint64_t *addr, uint64_t *size)
+static int dtb_get_one_reg(int node, u64 *addr, u64 *size)
 {
 	return dt_get_reg(node, 0, addr, size);
 }
@@ -233,8 +232,8 @@ static int dtb_get_one_reg(int node, uint64_t *addr, uint64_t *size)
 int dt_parse_rtc(struct rtc_device *rtc)
 {
 	int node;
-	uint64_t addr = 0;
-	uint64_t size = 0;
+	u64 addr = 0;
+	u64 size = 0;
 
 	node = fdt_node_offset_by_compatible(fdt, -1, "google,goldfish-rtc");
 	if (node < 0)
@@ -256,9 +255,9 @@ int dt_init_scan_virtio_dev(void)
 	int node;
 	int count = 0;
 	int i = 0;
-	uint64_t addr = 0;
-	uint64_t size = 0;
-	uint32_t irq = 0;
+	u64 addr = 0;
+	u64 size = 0;
+	u32 irq = 0;
 
 	/* Several drivers may call this during their initcall. */
 	if (scanned)
@@ -319,11 +318,11 @@ int dt_init_scan_virtio_dev(void)
 void dt_init_scan_serial(void)
 {
 	int parent;
-	const uint32_t *clock_freq;
+	const u32 *clock_freq;
 	int len;
-	uint64_t addr = 0;
-	uint64_t size = 0;
-	uint32_t irq = 0;
+	u64 addr = 0;
+	u64 size = 0;
+	u32 irq = 0;
 
 	int err = 0;
 	int subnode;
@@ -355,7 +354,7 @@ void dt_init_scan_serial(void)
 			}
 			clock_freq = fdt_getprop(fdt, subnode,
 						 "clock-frequency", &len);
-			if (!clock_freq || len != sizeof(uint32_t)) {
+			if (!clock_freq || len != sizeof(u32)) {
 				pr_debug("failed to get clock frequency: %d\n",
 					 (int)(unsigned long)clock_freq);
 				continue;

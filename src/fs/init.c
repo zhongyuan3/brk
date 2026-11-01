@@ -9,8 +9,8 @@
 #include <brk/path.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
+#include <brk/string.h>
 #include <brk/task.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/stat.h>

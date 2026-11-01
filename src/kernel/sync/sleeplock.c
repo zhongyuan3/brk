@@ -14,7 +14,7 @@ void sleeplock_init(sleeplock_t *lock, const char *name)
 void sleeplock_acquire(sleeplock_t *lock)
 {
 	if (sleeplock_holding(lock))
-		panic("sleeplock_acquire: name=%s,pid=%ld\n", lock->name,
+		panic("sleeplock_acquire: name=%s,pid=%d\n", lock->name,
 		      lock->pid);
 	irqstate_t flags = spin_lock_irqsave(&lock->lock);
 
@@ -28,7 +28,7 @@ void sleeplock_acquire(sleeplock_t *lock)
 void sleeplock_release(sleeplock_t *lock)
 {
 	if (!sleeplock_holding(lock))
-		panic("sleeplock_release: name=%s,pid=%ld\n", lock->name,
+		panic("sleeplock_release: name=%s,pid=%d\n", lock->name,
 		      lock->pid);
 	irqstate_t flags = spin_lock_irqsave(&lock->lock);
 

@@ -5,11 +5,11 @@
 #include <brk/ktime.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
+#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/timeconst.h>
 #include <brk/types.h>
 #include <brk/uart.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 
@@ -27,13 +27,9 @@
 
 static void klog_sleep_ms(unsigned long ms)
 {
-	struct timespec dur = {
-		.tv_sec = (time_t)(ms / MS_PER_SEC),
-		.tv_nsec = (long)((ms % MS_PER_SEC) * NS_PER_MS),
-	};
-	struct timespec rem;
+	ktime_t rem;
 
-	(void)ktime_nanosleep(&dur, &rem);
+	(void)ktime_nanosleep((ktime_t)ms * (ktime_t)NS_PER_MS, &rem);
 }
 
 static void klog_write(struct fs_file *file, const char *buf, size_t len)
@@ -66,8 +62,8 @@ static void klog_entry(void *arg)
 	char rec[1024];
 	char out[1536];
 	struct fs_file *file = NULL;
-	uint8_t level;
-	uint64_t ts;
+	u8 level;
+	u64 ts;
 	int n = 0;
 
 	(void)arg;
@@ -108,9 +104,8 @@ static void klog_entry(void *arg)
 
 			m = snprintf(out, sizeof(out),
 				     "<%u>[%5" PRIu64 ".%06" PRIu64 "] %s%s",
-				     level, (uint64_t)(ts / NS_PER_SEC),
-				     (uint64_t)((ts % NS_PER_SEC) / NS_PER_US),
-				     rec,
+				     level, (u64)(ts / NS_PER_SEC),
+				     (u64)((ts % NS_PER_SEC) / NS_PER_US), rec,
 				     (n > 0 && rec[n - 1] == '\n') ? "" : "\n");
 			if (m < 0)
 				continue;

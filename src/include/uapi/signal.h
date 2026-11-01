@@ -1,6 +1,8 @@
 #ifndef UAPI_SIGNAL_H
 #define UAPI_SIGNAL_H
 
+#include <uapi/types.h>
+
 #define SIGHUP 1
 #define SIGINT 2
 #define SIGQUIT 3
@@ -29,6 +31,7 @@
 
 #define SIG_DFL ((void (*)(int))0)
 #define SIG_IGN ((void (*)(int))1)
+#define SIG_ERR ((void (*)(int)) - 1)
 
 #define SIG_BLOCK 0
 #define SIG_UNBLOCK 1
@@ -38,12 +41,12 @@
 #define SA_RESTART 0x10000000
 #define SA_NODEFER 0x40000000
 
-typedef unsigned long sigset_t;
+typedef __kernel_ulong_t sigset_t;
 
 struct sigaction {
-	unsigned long sa_handler;
-	unsigned long sa_mask;
-	unsigned long sa_flags;
+	void (*sa_handler)(int);
+	sigset_t sa_mask;
+	__kernel_ulong_t sa_flags;
 };
 
 #endif

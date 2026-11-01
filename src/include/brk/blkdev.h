@@ -12,8 +12,8 @@ struct request_queue;
 
 struct block_dev {
 	dev_t dev;
-	uint32_t phy_bsize;
-	uint64_t phy_bcnt;
+	u32 phy_bsize;
+	u64 phy_bcnt;
 	struct page_cache *bd_mapping;
 	struct hlist_node hlist;
 	refcnt_t ref;
@@ -25,7 +25,7 @@ struct block_dev {
 	 * into it.  Both use the same phy_bsize.
 	 */
 	struct block_dev *bd_parent;
-	uint64_t bd_start_sect;
+	u64 bd_start_sect;
 
 	/* Request queue, only set on the whole-disk view. */
 	struct request_queue *bd_queue;
@@ -33,14 +33,12 @@ struct block_dev {
 
 void blkdev_registry_init(void);
 
-int blkdev_check_bounds(struct block_dev *bd, uint64_t blk_id,
-			uint32_t blk_cnt);
-int blkdev_read(struct block_dev *bd, uint64_t blk_id, void *buf,
-		uint32_t blk_cnt);
-int blkdev_write(struct block_dev *bd, uint64_t blk_id, const void *buf,
-		 uint32_t blk_cnt);
+int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt);
+int blkdev_read(struct block_dev *bd, u64 blk_id, void *buf, u32 blk_cnt);
+int blkdev_write(struct block_dev *bd, u64 blk_id, const void *buf,
+		 u32 blk_cnt);
 int blkdev_flush(struct block_dev *bd);
-static inline uint64_t blkdev_capacity_bytes(const struct block_dev *bd)
+static inline u64 blkdev_capacity_bytes(const struct block_dev *bd)
 {
 	return bd->phy_bcnt * bd->phy_bsize;
 }

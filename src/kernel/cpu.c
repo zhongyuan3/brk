@@ -1,6 +1,6 @@
 #include <arch/csr.h>
-#include <assert.h>
 #include <brk/asm/cpu.h>
+#include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/initcall.h>
 #include <brk/kernel.h>

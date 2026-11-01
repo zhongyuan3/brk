@@ -4,8 +4,8 @@
 #include <brk/net/socket.h>
 #include <brk/net/tcp.h>
 #include <brk/net/udp.h>
+#include <brk/string.h>
 #include <brk/types.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/poll.h>
 #include <uapi/socket.h>
