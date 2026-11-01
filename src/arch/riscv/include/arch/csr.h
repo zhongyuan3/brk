@@ -41,10 +41,10 @@ static inline unsigned long read_satp(void)
 	return x;
 }
 
-static inline uint64_t make_satp(uint64_t pt)
+static inline u64 make_satp(u64 pt)
 {
 	/* Sv39: mode 8 (bits 63:60), 44-bit PPN (bits 43:0). */
-	return ((uint64_t)8 << 60) | (pt >> 12);
+	return ((u64)8 << 60) | (pt >> 12);
 }
 
 static inline void write_satp(unsigned long x)
@@ -118,9 +118,9 @@ static inline void write_sie(unsigned long x)
 	asm volatile("csrw sie, %0" : : "r"(x));
 }
 
-static inline uint64_t read_time(void)
+static inline u64 read_time(void)
 {
-	uint64_t time;
+	u64 time;
 	asm volatile("csrr %0, time" : "=r"(time));
 	return time;
 }

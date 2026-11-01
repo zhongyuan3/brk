@@ -39,27 +39,27 @@ static inline bool pgd_is_leaf(pgd_t pgd)
 	return pgd_is_valid(pgd) && pgd_flags(pgd) != PTE_V;
 }
 
-static inline size_t pgd_index(uint64_t vaddr)
+static inline size_t pgd_index(u64 vaddr)
 {
 	return (vaddr >> PGD_SHIFT) & (PTRS_PER_PGD - 1);
 }
 
-static inline void pgd_set_next(pgd_t *pgdp, uint64_t pmd_phys)
+static inline void pgd_set_next(pgd_t *pgdp, u64 pmd_phys)
 {
 	pgd_val(*pgdp) = ((pmd_phys >> PAGE_SHIFT) << 10) | PTE_V;
 }
 
-static inline void pgd_set_leaf(pgd_t *pgdp, uint64_t phys, unsigned int flags)
+static inline void pgd_set_leaf(pgd_t *pgdp, u64 phys, unsigned int flags)
 {
 	pgd_val(*pgdp) = ((phys >> PGD_SHIFT) << 28) | PTE_V | flags;
 }
 
-static inline uint64_t pgd_next(pgd_t pgd)
+static inline u64 pgd_next(pgd_t pgd)
 {
 	return (pgd_val(pgd) >> 10) << PAGE_SHIFT;
 }
 
-static inline uint64_t pgd_leaf(pgd_t pgd)
+static inline u64 pgd_leaf(pgd_t pgd)
 {
 	return (pgd_val(pgd) >> 28) << PGD_SHIFT;
 }
@@ -86,27 +86,27 @@ static inline bool pmd_is_leaf(pmd_t pmd)
 	return pmd_is_valid(pmd) && pmd_flags(pmd) != PTE_V;
 }
 
-static inline size_t pmd_index(uint64_t vaddr)
+static inline size_t pmd_index(u64 vaddr)
 {
 	return (vaddr >> PMD_SHIFT) & (PTRS_PER_PMD - 1);
 }
 
-static inline void pmd_set_next(pmd_t *pmdp, uint64_t pt_phys)
+static inline void pmd_set_next(pmd_t *pmdp, u64 pt_phys)
 {
 	pmd_val(*pmdp) = ((pt_phys >> PAGE_SHIFT) << 10) | PTE_V;
 }
 
-static inline void pmd_set_leaf(pmd_t *pmdp, uint64_t phys, unsigned int flags)
+static inline void pmd_set_leaf(pmd_t *pmdp, u64 phys, unsigned int flags)
 {
 	pmd_val(*pmdp) = ((phys >> PMD_SHIFT) << 19) | PTE_V | flags;
 }
 
-static inline uint64_t pmd_next(pmd_t pmd)
+static inline u64 pmd_next(pmd_t pmd)
 {
 	return (pmd_val(pmd) >> 10) << PAGE_SHIFT;
 }
 
-static inline uint64_t pmd_leaf(pmd_t pmd)
+static inline u64 pmd_leaf(pmd_t pmd)
 {
 	return (pmd_val(pmd) >> 19) << PMD_SHIFT;
 }
@@ -131,17 +131,17 @@ static inline bool pte_is_valid(pte_t pte)
 	return pte_flags(pte) & PTE_V;
 }
 
-static inline size_t pte_index(uint64_t vaddr)
+static inline size_t pte_index(u64 vaddr)
 {
 	return (vaddr >> PTE_SHIFT) & (PTRS_PER_PT - 1);
 }
 
-static inline void pte_set_leaf(pte_t *ptep, uint64_t phys, unsigned int flags)
+static inline void pte_set_leaf(pte_t *ptep, u64 phys, unsigned int flags)
 {
 	pte_val(*ptep) = ((phys >> PAGE_SHIFT) << 10) | PTE_V | flags;
 }
 
-static inline uint64_t pte_leaf(pte_t pte)
+static inline u64 pte_leaf(pte_t pte)
 {
 	return (pte_val(pte) >> 10) << PAGE_SHIFT;
 }

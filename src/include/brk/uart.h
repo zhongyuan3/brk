@@ -10,12 +10,12 @@
 struct tty_port;
 
 struct ns16550a_device {
-	uint64_t phys_base;
+	u64 phys_base;
 	size_t size;
-	uint32_t irq;
-	uint32_t clock_freq;
+	u32 irq;
+	u32 clock_freq;
 	struct hlist_node node;
-	volatile uint8_t *mem_base;
+	volatile u8 *mem_base;
 	spinlock_t lock;
 	struct tty_port *port;
 };
@@ -30,7 +30,7 @@ struct ns16550a_driver_data {
 };
 
 struct ns16550a_platform_data {
-	uint32_t clock_freq;
+	u32 clock_freq;
 };
 
 void ns16550a_driver_init(void);

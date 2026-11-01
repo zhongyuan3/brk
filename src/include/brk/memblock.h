@@ -7,7 +7,7 @@
 #define INIT_MEMBLOCK_RESERVED_REGIONS 32
 
 struct memblock_region {
-	uint64_t base;
+	u64 base;
 	size_t size;
 };
 
@@ -23,17 +23,17 @@ struct memblock {
 	struct memblock_region_set reserved;
 };
 
-int memblock_add(uint64_t base, size_t size);
-int memblock_reserve(uint64_t base, size_t size);
-uint64_t memblock_alloc(size_t size, uint64_t min_addr, size_t align);
-void memblock_free(uint64_t base, size_t size);
-uint64_t memblock_start_of_dram(void);
+int memblock_add(u64 base, size_t size);
+int memblock_reserve(u64 base, size_t size);
+u64 memblock_alloc(size_t size, u64 min_addr, size_t align);
+void memblock_free(u64 base, size_t size);
+u64 memblock_start_of_dram(void);
 void memblock_free_all(void);
 void memblock_dump(struct memblock_region_set *set);
 void memblock_dump_all(void);
 
-void __next_mem_range(uint64_t *pidx, uint64_t *pstart, uint64_t *pend);
-void __next_mem_pfn_range(uint32_t *pidx, uint64_t *pstart, uint64_t *pend);
+void __next_mem_range(u64 *pidx, u64 *pstart, u64 *pend);
+void __next_mem_pfn_range(u32 *pidx, u64 *pstart, u64 *pend);
 
 #define for_each_mem_range(idx, start, end)                                    \
 	for (idx = 0, __next_mem_range(&idx, &start, &end); idx != UINT64_MAX; \

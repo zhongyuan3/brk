@@ -5,10 +5,8 @@
 #include <brk/path.h>
 #include <brk/refcnt_types.h>
 #include <brk/sleeplock_types.h>
+#include <brk/stat_types.h>
 #include <brk/types.h>
-#include <uapi/stat.h>
-#include <uapi/statfs.h>
-#include <uapi/time.h>
 
 #define SEEK_SET 0
 #define SEEK_CUR 1
@@ -90,7 +88,7 @@ struct fs_super_block_ops {
 	 * sync_filesystem() after all dirty inode writebacks have completed.
 	 */
 	int (*sync_fs)(struct fs_super_block *);
-	int (*statfs)(struct fs_super_block *, struct statfs *);
+	int (*statfs)(struct fs_super_block *, struct kstatfs *);
 };
 
 struct fs_inode {
@@ -110,9 +108,9 @@ struct fs_inode {
 	unsigned int nlink;
 	loff_t size;
 	dev_t rdev;
-	struct timespec atime;
-	struct timespec mtime;
-	struct timespec ctime;
+	ktime_t atime;
+	ktime_t mtime;
+	ktime_t ctime;
 	kgid_t gid;
 	kuid_t uid;
 	struct page_cache *mapping;
@@ -132,7 +130,7 @@ struct fs_inode_ops {
 	int (*rename)(struct fs_inode *, struct fs_dentry *, struct fs_inode *,
 		      struct fs_dentry *, unsigned int);
 	int (*mknod)(struct fs_inode *, struct fs_dentry *, umode_t, dev_t);
-	int (*getattr)(const struct fs_path *, struct stat *, uint32_t,
+	int (*getattr)(const struct fs_path *, struct kstat *, u32,
 		       unsigned int);
 	int (*setattr)(struct fs_dentry *, struct fs_iattr *);
 };
@@ -211,10 +209,10 @@ ssize_t fs_file_read(struct fs_file *file, void *buf, size_t size);
 ssize_t fs_file_write(struct fs_file *file, const void *buf, size_t size);
 long fs_file_ioctl(struct fs_file *file, unsigned int cmd, unsigned long arg);
 unsigned int fs_file_poll(struct fs_file *file, unsigned int events);
-int fs_file_stat(struct fs_file *file, struct stat *buf);
+int fs_file_stat(struct fs_file *file, struct kstat *buf);
 void fs_remove_inode_privs(struct fs_inode *inode, struct fs_dentry *dentry);
 void fs_file_remove_privs(struct fs_file *file);
-int fs_statfs(struct fs_super_block *sb, struct statfs *buf);
+int fs_statfs(struct fs_super_block *sb, struct kstatfs *buf);
 int fs_file_truncate(struct fs_file *file, loff_t size);
 int fs_file_fallocate(struct fs_file *file, int mode, loff_t offset,
 		      loff_t len);

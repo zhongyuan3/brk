@@ -14,14 +14,14 @@
 static LIST_DEFINE(irqchip_drivers);
 static LIST_DEFINE(irq_controllers);
 static SPINLOCK_DEFINE(irqchip_lock);
-static uint64_t irq_spurious;
+static u64 irq_spurious;
 
 void irq_note_spurious(void)
 {
 	__atomic_add_fetch(&irq_spurious, 1, __ATOMIC_RELAXED);
 }
 
-uint64_t irq_spurious_count(void)
+u64 irq_spurious_count(void)
 {
 	return __atomic_load_n(&irq_spurious, __ATOMIC_RELAXED);
 }

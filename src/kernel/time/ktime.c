@@ -3,80 +3,46 @@
 #include <brk/spinlock.h>
 #include <brk/timekeeper.h>
 #include <brk/types.h>
-#include <uapi/stat.h>
 
-void ktime_get_mono_ts(struct timespec *ts)
+ktime_t ktime_get_real(void)
 {
-	timekeeper_get_mono_ts(ts);
+	return timekeeper_real();
 }
 
-void ktime_get_real_ts(struct timespec *ts)
+void ktime_set_real(ktime_t t)
 {
-	timekeeper_get_real_ts(ts);
-}
-
-void ktime_set_real_ts(const struct timespec *ts)
-{
-	timekeeper_set_real_ts(ts);
-}
-
-void ktime_get_real_tv(struct timeval *tv)
-{
-	struct timespec ts;
-
-	ktime_get_real_ts(&ts);
-	tv->tv_sec = ts.tv_sec;
-	tv->tv_usec = (suseconds_t)(ts.tv_nsec / (long)NS_PER_US);
-}
-
-void ktime_set_real_tv(const struct timeval *tv)
-{
-	struct timespec ts;
-
-	ts.tv_sec = tv->tv_sec;
-	ts.tv_nsec = (long)tv->tv_usec * (long)NS_PER_US;
-	ktime_set_real_ts(&ts);
+	timekeeper_set_real(t);
 }
 
 time_t ktime_get_real_sec(void)
 {
-	struct timespec ts;
-
-	ktime_get_real_ts(&ts);
-	return ts.tv_sec;
+	return (time_t)(ktime_get_real() / (ktime_t)NS_PER_SEC);
 }
 
-void ktime_get_boot_ts(struct timespec *ts)
-{
-	timekeeper_get_mono_ts(ts);
-}
-
-uint64_t ktime_get_boot_ns(void)
+u64 ktime_get_boot_ns(void)
 {
 	return timekeeper_mono_ns();
 }
 
-uint64_t ktime_nanosleep(const struct timespec *dur, struct timespec *rem)
+int ktime_nanosleep(ktime_t dur, ktime_t *rem)
 {
 	return timekeeper_nanosleep(dur, rem);
 }
 
 void inode_times_set_all_now(struct fs_inode *inode)
 {
-	struct timespec ts;
+	ktime_t now = ktime_get_real();
 	irqstate_t flags;
 
-	ktime_get_real_ts(&ts);
-
 	flags = spin_lock_irqsave(&inode->lock);
-	inode->atime = ts;
-	inode->mtime = ts;
-	inode->ctime = ts;
+	inode->atime = now;
+	inode->mtime = now;
+	inode->ctime = now;
 	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
-void inode_times_set(struct fs_inode *inode, const struct timespec *atime,
-		     const struct timespec *mtime)
+void inode_times_set(struct fs_inode *inode, const ktime_t *atime,
+		     const ktime_t *mtime)
 {
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
@@ -90,51 +56,42 @@ void inode_times_set(struct fs_inode *inode, const struct timespec *atime,
 
 void inode_touch_mtime(struct fs_inode *inode)
 {
-	struct timespec ts;
+	ktime_t now = ktime_get_real();
 	irqstate_t flags;
 
-	ktime_get_real_ts(&ts);
-
 	flags = spin_lock_irqsave(&inode->lock);
-	inode->mtime = ts;
+	inode->mtime = now;
 	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
 void inode_touch_ctime(struct fs_inode *inode)
 {
-	struct timespec ts;
+	ktime_t now = ktime_get_real();
 	irqstate_t flags;
 
-	ktime_get_real_ts(&ts);
-
 	flags = spin_lock_irqsave(&inode->lock);
-	inode->ctime = ts;
+	inode->ctime = now;
 	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
 void inode_touch_mtime_ctime(struct fs_inode *inode)
 {
-	struct timespec ts;
+	ktime_t now = ktime_get_real();
 	irqstate_t flags;
 
-	ktime_get_real_ts(&ts);
-
 	flags = spin_lock_irqsave(&inode->lock);
-	inode->mtime = ts;
-	inode->ctime = ts;
+	inode->mtime = now;
+	inode->ctime = now;
 	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
-void inode_times_to_stat(struct fs_inode *inode, struct stat *st)
+void inode_times_to_kstat(struct fs_inode *inode, struct kstat *ks)
 {
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
-	st->st_atime = inode->atime.tv_sec;
-	st->st_atime_nsec = (unsigned long)inode->atime.tv_nsec;
-	st->st_mtime = inode->mtime.tv_sec;
-	st->st_mtime_nsec = (unsigned long)inode->mtime.tv_nsec;
-	st->st_ctime = inode->ctime.tv_sec;
-	st->st_ctime_nsec = (unsigned long)inode->ctime.tv_nsec;
+	ks->atime = inode->atime;
+	ks->mtime = inode->mtime;
+	ks->ctime = inode->ctime;
 
 	spin_unlock_irqrestore(&inode->lock, flags);
 }

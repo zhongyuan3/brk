@@ -34,7 +34,7 @@ struct irq_desc {
 	spinlock_t lock;
 	void (*handle_irq)(struct irq_desc *desc);
 	unsigned int depth;
-	uint64_t count;
+	u64 count;
 };
 
 struct irq_desc *irq_to_desc(unsigned int irq);

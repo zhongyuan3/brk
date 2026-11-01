@@ -42,9 +42,9 @@ struct bio_vec {
 struct bio {
 	struct block_dev *bi_bdev;
 	/* Sector within bi_bdev, in 512-byte units. */
-	uint64_t bi_sector;
+	u64 bi_sector;
 	/* Translated sector within the whole disk (filled by submit_bio). */
-	uint64_t bi_disk_sector;
+	u64 bi_disk_sector;
 	unsigned int bi_size;
 	unsigned int bi_nr_vecs;
 	enum req_op bi_op;
@@ -59,7 +59,7 @@ struct request {
 	struct request_queue *rq_queue;
 	struct bio *rq_bio;
 	struct bio *rq_bio_tail;
-	uint64_t rq_start;
+	u64 rq_start;
 	unsigned int rq_nr_sectors;
 	enum req_op rq_op;
 	int rq_status;

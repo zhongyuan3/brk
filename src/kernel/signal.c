@@ -7,10 +7,10 @@
 #include <brk/refcnt.h>
 #include <brk/signal.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/types.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/signal.h>
 
@@ -41,7 +41,7 @@ static bool sig_default_terminate(int sig)
 	}
 }
 
-static bool user_access_ok(uint64_t addr, size_t len)
+static bool user_access_ok(u64 addr, size_t len)
 {
 	return addr + len <= USER_SPACE_SIZE_MAX;
 }
@@ -49,7 +49,7 @@ static bool user_access_ok(uint64_t addr, size_t len)
 static void sigaction_table_reset_locked(struct sigaction_table *table)
 {
 	for (int i = 0; i < NSIG; ++i) {
-		table->actions[i].sa_handler = (unsigned long)SIG_DFL;
+		table->actions[i].sa_handler = SIG_DFL;
 		table->actions[i].sa_mask = 0;
 		table->actions[i].sa_flags = 0;
 	}
@@ -65,10 +65,10 @@ void sigaction_table_reset(struct sigaction_table *table)
 
 static int get_next_signal_locked(struct task *task)
 {
-	uint64_t deliver = task->pending & ~task->blocked;
+	u64 deliver = task->pending & ~task->blocked;
 
 	if (task->in_handler) {
-		uint64_t nodfer = 0;
+		u64 nodfer = 0;
 		int sig;
 
 		deliver &= (1ULL << SIGKILL);
@@ -266,7 +266,7 @@ void signal_send(struct task *task, int sig)
 }
 
 int signal_init(struct task *task, struct sigaction_table *sigactions,
-		uint64_t blocked)
+		u64 blocked)
 {
 	if (!sigactions) {
 		task->sigactions = sigaction_table_alloc();
@@ -292,10 +292,9 @@ void signal_deinit(struct task *task)
 	sigaction_table_put(task->sigactions);
 }
 
-static bool setup_signal_frame_locked(struct task *task, int sig,
-				      uint64_t handler)
+static bool setup_signal_frame_locked(struct task *task, int sig, u64 handler)
 {
-	uint64_t sp;
+	u64 sp;
 	struct user_sigframe *frame;
 
 	sp = task->frame->sp;
@@ -324,32 +323,32 @@ static bool setup_signal_frame_locked(struct task *task, int sig,
 
 static void signal_deliver_one(struct task *task, int sig)
 {
-	unsigned long handler;
-	uint64_t user_handler;
+	void (*handler)(int);
+	u64 user_handler;
 	irqstate_t flags = spin_lock_irqsave(&task->sigactions->lock);
 
 	handler = task->sigactions->actions[sig].sa_handler;
 
 	if (sig == SIGKILL ||
-	    (handler == (unsigned long)SIG_DFL && sig_default_terminate(sig))) {
+	    (handler == SIG_DFL && sig_default_terminate(sig))) {
 		spin_unlock_irqrestore(&task->sigactions->lock, flags);
 		task_exit_signal(sig);
 		return;
 	}
 
-	if (handler == (unsigned long)SIG_IGN) {
+	if (handler == SIG_IGN) {
 		clear_pending_locked(task, sig);
 		spin_unlock_irqrestore(&task->sigactions->lock, flags);
 		return;
 	}
 
-	if (handler == (unsigned long)SIG_DFL) {
+	if (handler == SIG_DFL) {
 		clear_pending_locked(task, sig);
 		spin_unlock_irqrestore(&task->sigactions->lock, flags);
 		return;
 	}
 
-	user_handler = handler;
+	user_handler = (u64)(uintptr_t)handler;
 	if (!setup_signal_frame_locked(task, sig, user_handler)) {
 		spin_unlock_irqrestore(&task->sigactions->lock, flags);
 		task_exit_signal(sig);
@@ -399,10 +398,10 @@ void signal_copy(struct task *dst, struct task *src)
 	spin_unlock_irqrestore(&src->sigactions->lock, sflags);
 }
 
-uint64_t signal_do_sigreturn(struct task *task)
+u64 signal_do_sigreturn(struct task *task)
 {
 	struct user_sigframe *frame;
-	uint64_t ret = 0;
+	u64 ret = 0;
 	irqstate_t flags = spin_lock_irqsave(&task->sigactions->lock);
 
 	if (!task->sigframe_sp) {
@@ -519,7 +518,7 @@ void sigaction_table_copy(struct sigaction_table *dst,
 	spin_unlock_irqrestore(&src->lock, sflags);
 }
 
-uint64_t sys_rt_sigaction(void)
+u64 sys_rt_sigaction(void)
 {
 	int sig = syscall_arg_int(0);
 	const struct sigaction *act = syscall_arg_ptr(1);
@@ -532,7 +531,7 @@ uint64_t sys_rt_sigaction(void)
 	return signal_do_sigaction(current_task(), sig, act, oact);
 }
 
-uint64_t sys_rt_sigprocmask(void)
+u64 sys_rt_sigprocmask(void)
 {
 	int how = syscall_arg_int(0);
 	const sigset_t *set = syscall_arg_ptr(1);
@@ -545,7 +544,7 @@ uint64_t sys_rt_sigprocmask(void)
 	return signal_do_sigprocmask(current_task(), how, set, oldset);
 }
 
-uint64_t sys_rt_sigreturn(void)
+u64 sys_rt_sigreturn(void)
 {
 	return signal_do_sigreturn(current_task());
 }

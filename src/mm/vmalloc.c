@@ -1,6 +1,6 @@
 #include <arch/asm/large_page.h>
 #include <arch/pgtable.h>
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -11,13 +11,13 @@
 #include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/vmalloc.h>
-#include <string.h>
 #include <uapi/errno.h>
 
 struct vmalloc_region {
 	struct list_head list;
-	uint64_t addr;
+	u64 addr;
 	size_t size;
 	struct page **pages;
 	size_t nr_pages;
@@ -43,7 +43,7 @@ static void vmalloc_region_free(struct vmalloc_region *area)
 	slab_free(&vma_cache, area);
 }
 
-static struct vmalloc_region *find_vm_area(uint64_t addr)
+static struct vmalloc_region *find_vm_area(u64 addr)
 {
 	struct vmalloc_region *area;
 
@@ -143,7 +143,7 @@ void *vmalloc(size_t size)
 	area->nr_pages = npgs;
 
 	size_t i = 0;
-	uint64_t vaddr = area->addr;
+	u64 vaddr = area->addr;
 	for (; i < npgs; ++i) {
 		struct page *pg = page_alloc(0);
 		if (!pg)

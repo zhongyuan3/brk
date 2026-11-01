@@ -7,8 +7,8 @@
 #include <brk/printk.h>
 #include <brk/refcnt.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/types.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/stat.h>
 
@@ -19,18 +19,18 @@
 #define MBR_TYPE_GPT_PROTECTIVE 0xEE
 
 struct mbr_partition {
-	uint8_t status;
-	uint8_t chs_first[3];
-	uint8_t type;
-	uint8_t chs_last[3];
-	uint32_t start_lba;
-	uint32_t nr_sectors;
+	u8 status;
+	u8 chs_first[3];
+	u8 type;
+	u8 chs_last[3];
+	u32 start_lba;
+	u32 nr_sectors;
 } __attribute__((packed));
 
 struct mbr_sector {
-	uint8_t bootstrap[446];
+	u8 bootstrap[446];
 	struct mbr_partition parts[MBR_PART_COUNT];
-	uint16_t signature;
+	u16 signature;
 } __attribute__((packed));
 
 static LIST_DEFINE(disk_list);
@@ -47,15 +47,14 @@ void gendisk_name(const struct gendisk *disk, unsigned int partno, char *buf,
 
 struct gendisk *gendisk_alloc(unsigned int major, unsigned int first_minor,
 			      unsigned int minors, const char *name,
-			      uint64_t nr_sects, struct device *parent,
-			      void *priv)
+			      u64 nr_sects, struct device *parent, void *priv)
 {
 	struct gendisk *disk;
 	struct block_dev *bdev;
 
 	if (!name || !minors || nr_sects == 0)
 		return NULL;
-	if ((uint64_t)first_minor + minors > MINOR_MAX)
+	if ((u64)first_minor + minors > MINOR_MAX)
 		return NULL;
 
 	disk = kzalloc(sizeof(*disk));
@@ -103,8 +102,8 @@ void gendisk_free(struct gendisk *disk)
 	kfree(disk);
 }
 
-static int add_partition(struct gendisk *disk, unsigned int partno,
-			 uint64_t start, uint64_t nr_sects)
+static int add_partition(struct gendisk *disk, unsigned int partno, u64 start,
+			 u64 nr_sects)
 {
 	struct block_dev *bdev;
 	struct hd_struct *part;
@@ -162,7 +161,7 @@ static int add_partition(struct gendisk *disk, unsigned int partno,
 static void scan_partitions(struct gendisk *disk)
 {
 	struct mbr_sector *mbr;
-	uint8_t *buf;
+	u8 *buf;
 
 	if (disk->minors <= 1)
 		return;
@@ -187,8 +186,8 @@ static void scan_partitions(struct gendisk *disk)
 
 	for (unsigned int i = 0; i < MBR_PART_COUNT; ++i) {
 		struct mbr_partition *p = &mbr->parts[i];
-		uint64_t start = p->start_lba;
-		uint64_t nr_sects = p->nr_sectors;
+		u64 start = p->start_lba;
+		u64 nr_sects = p->nr_sectors;
 		int err;
 
 		if (!p->type || !nr_sects)

@@ -4,12 +4,12 @@
 #include <brk/net/net.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
+#include <brk/string.h>
 #include <brk/types.h>
 #include <brk/virtio_net.h>
-#include <string.h>
 #include <uapi/errno.h>
 
-static uint64_t shared_net_calls;
+static u64 shared_net_calls;
 static unsigned int shared_net_irq;
 static char result[160] = "commands: shared-net | spurious | status\n";
 
@@ -23,8 +23,7 @@ static irqreturn_t shared_net_handler(int irq, void *dev_id)
 
 static int run_shared_net(void)
 {
-	struct timespec delay = { .tv_sec = 0, .tv_nsec = 1000000000 };
-	struct timespec rem;
+	ktime_t delay = (ktime_t)NS_PER_SEC;
 	unsigned int irq = virtio_net_first_irq();
 	int err;
 
@@ -57,10 +56,10 @@ static int run_shared_net(void)
 		return err;
 	}
 
-	ktime_nanosleep(&delay, &rem);
+	ktime_nanosleep(delay, NULL);
 	free_irq(irq, NULL);
 
-	uint64_t calls = __atomic_load_n(&shared_net_calls, __ATOMIC_RELAXED);
+	u64 calls = __atomic_load_n(&shared_net_calls, __ATOMIC_RELAXED);
 
 	if (calls) {
 		snprintf(result, sizeof(result),
@@ -82,7 +81,7 @@ static int run_shared_net(void)
 static int run_spurious(void)
 {
 	irq_note_spurious();
-	uint64_t count = irq_spurious_count();
+	u64 count = irq_spurious_count();
 
 	snprintf(result, sizeof(result), "spurious: %" PRIu64 "\n", count);
 	pr_info("irqtest: spurious counter=%" PRIu64 "\n", count);
@@ -91,7 +90,7 @@ static int run_spurious(void)
 
 static int run_status(void)
 {
-	uint64_t calls = __atomic_load_n(&shared_net_calls, __ATOMIC_RELAXED);
+	u64 calls = __atomic_load_n(&shared_net_calls, __ATOMIC_RELAXED);
 
 	snprintf(result, sizeof(result),
 		 "spurious=%" PRIu64 " shared_net_calls=%" PRIu64 " virq=%u\n",

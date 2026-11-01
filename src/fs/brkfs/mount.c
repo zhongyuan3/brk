@@ -12,15 +12,15 @@
 #include <brk/printk.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/types.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/stat.h>
 
-static int brkfs_read_raw(struct block_dev *bdev, uint64_t off, void *buf,
+static int brkfs_read_raw(struct block_dev *bdev, u64 off, void *buf,
 			  size_t len)
 {
-	uint8_t *p = buf;
+	u8 *p = buf;
 
 	while (len > 0) {
 		pgoff_t index = (pgoff_t)(off / PAGE_SIZE);
@@ -68,9 +68,9 @@ static int brkfs_read_super(struct brkfs_super_block *sb,
 	if (brkfs_super_quick_ok(sb))
 		return 0;
 
-	uint64_t capacity = blkdev_capacity_bytes(bdev);
+	u64 capacity = blkdev_capacity_bytes(bdev);
 
-	for (uint32_t bs = BRKFS_MIN_BLOCK_SIZE; bs <= BRKFS_MAX_BLOCK_SIZE;
+	for (u32 bs = BRKFS_MIN_BLOCK_SIZE; bs <= BRKFS_MAX_BLOCK_SIZE;
 	     bs *= 2) {
 		struct brkfs_super_block backup;
 
@@ -124,24 +124,24 @@ static struct block_dev *brkfs_get_bdev(const char *dev_name)
 	return bdev;
 }
 
-static uint64_t brkfs_div_round_up(uint64_t num, uint64_t div)
+static u64 brkfs_div_round_up(u64 num, u64 div)
 {
 	return (num + div - 1) / div;
 }
 
-static bool brkfs_is_pow_of_two(uint32_t value)
+static bool brkfs_is_pow_of_two(u32 value)
 {
 	return value != 0 && (value & (value - 1)) == 0;
 }
 
-static int brkfs_validate_super(struct brkfs_super_block *sb, uint64_t capacity)
+static int brkfs_validate_super(struct brkfs_super_block *sb, u64 capacity)
 {
-	uint64_t bits_per_block;
-	uint64_t inodes_per_block;
-	uint64_t inode_bitmap_blocks;
-	uint64_t data_bitmap_blocks;
-	uint64_t inode_table_blocks;
-	uint64_t volume_size;
+	u64 bits_per_block;
+	u64 inodes_per_block;
+	u64 inode_bitmap_blocks;
+	u64 data_bitmap_blocks;
+	u64 inode_table_blocks;
+	u64 volume_size;
 
 	if (sb->s_magic != BRKFS_MAGIC)
 		return -EINVAL;
@@ -176,11 +176,11 @@ static int brkfs_validate_super(struct brkfs_super_block *sb, uint64_t capacity)
 	    sb->s_backup_super != sb->s_blocks_count - 1)
 		return -EINVAL;
 
-	volume_size = (uint64_t)sb->s_blocks_count * sb->s_blocksize;
+	volume_size = (u64)sb->s_blocks_count * sb->s_blocksize;
 	if (capacity != 0 && volume_size > capacity)
 		return -EINVAL;
 
-	bits_per_block = (uint64_t)sb->s_blocksize * 8;
+	bits_per_block = (u64)sb->s_blocksize * 8;
 	inodes_per_block = sb->s_blocksize / sb->s_inode_size;
 	inode_bitmap_blocks =
 		brkfs_div_round_up(sb->s_inodes_count, bits_per_block);
@@ -192,16 +192,16 @@ static int brkfs_validate_super(struct brkfs_super_block *sb, uint64_t capacity)
 	if (sb->s_inode_bitmap <
 	    brkfs_div_round_up(BRKFS_SUPER_END_OFFSET, sb->s_blocksize))
 		return -EINVAL;
-	if ((uint64_t)sb->s_inode_bitmap + inode_bitmap_blocks >
+	if ((u64)sb->s_inode_bitmap + inode_bitmap_blocks >
 	    sb->s_data_block_bitmap)
 		return -EINVAL;
-	if ((uint64_t)sb->s_data_block_bitmap + data_bitmap_blocks >
+	if ((u64)sb->s_data_block_bitmap + data_bitmap_blocks >
 	    sb->s_inode_table)
 		return -EINVAL;
-	if ((uint64_t)sb->s_inode_table + inode_table_blocks >
+	if ((u64)sb->s_inode_table + inode_table_blocks >
 	    sb->s_first_data_block)
 		return -EINVAL;
-	if ((uint64_t)sb->s_first_data_block + sb->s_data_blocks_count >
+	if ((u64)sb->s_first_data_block + sb->s_data_blocks_count >
 	    sb->s_backup_super)
 		return -EINVAL;
 
@@ -256,7 +256,7 @@ int brkfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 
 	sb_info->s_sb.s_state = BRKFS_STATE_DIRTY;
 	sb_info->s_sb.s_mnt_count++;
-	sb_info->s_sb.s_mtime = (uint32_t)ktime_get_real_sec();
+	sb_info->s_sb.s_mtime = (u32)ktime_get_real_sec();
 	sb_info->s_super_dirty = true;
 	err = brkfs_super_write(sb_info);
 	if (err) {

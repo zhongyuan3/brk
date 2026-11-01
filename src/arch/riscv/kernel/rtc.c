@@ -8,46 +8,27 @@
 #include <brk/rtc.h>
 #include <brk/spinlock.h>
 #include <brk/spinlock_types.h>
-#include <brk/timeconst.h>
-#include <uapi/time.h>
 
-/* Android Goldfish RTC (QEMU virt), see QEMU hw/rtc/goldfish_rtc.c */
-#define RTC_TIME_LOW 0x00u
-#define RTC_TIME_HIGH 0x04u
+/* Android Goldfish RTC lives behind a two-register MMIO interface. */
 
 static bool rtc_ok;
 static struct goldfish_rtc rtc = {
 	.lock = SPINLOCK_INITIALIZER("goldfish_rtc"),
 };
 
-uint64_t rtc_read_ns(void)
+u64 rtc_read_ns(void)
 {
 	return goldfish_rtc_read_ns(&rtc);
+}
+
+void rtc_set_ns(u64 ns)
+{
+	goldfish_rtc_set_ns(&rtc, ns);
 }
 
 bool rtc_is_available(void)
 {
 	return rtc_ok;
-}
-
-void rtc_read_timeval(struct timeval *tv)
-{
-	goldfish_rtc_read_timeval(&rtc, tv);
-}
-
-void rtc_set_timeval(const struct timeval *tv)
-{
-	goldfish_rtc_set_timeval(&rtc, tv);
-}
-
-void rtc_read_timespec(struct timespec *ts)
-{
-	goldfish_rtc_read_timespec(&rtc, ts);
-}
-
-void rtc_set_timespec(const struct timespec *ts)
-{
-	goldfish_rtc_set_timespec(&rtc, ts);
 }
 
 void rtc_init(void)
@@ -61,8 +42,8 @@ void rtc_init(void)
 		return;
 	}
 
-	rtc.mmio = (uint8_t volatile *)ioremap(dev.phys_base, dev.size,
-					       PTE_R | PTE_W);
+	rtc.mmio =
+		(u8 volatile *)ioremap(dev.phys_base, dev.size, PTE_R | PTE_W);
 	if (!rtc.mmio) {
 		pr_warn("rtc: ioremap failed for phys %#" PRIx64 "\n",
 			dev.phys_base);

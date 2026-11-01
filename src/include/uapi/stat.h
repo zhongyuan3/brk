@@ -43,26 +43,26 @@
 #define UTIME_OMIT ((1l << 30) - 2l)
 
 struct stat {
-	unsigned long st_dev; /* Device.  */
-	unsigned long st_ino; /* File serial number.  */
-	unsigned int st_mode; /* File mode.  */
-	unsigned int st_nlink; /* Link count.  */
-	unsigned int st_uid; /* User ID of the file's owner.  */
-	unsigned int st_gid; /* Group ID of the file's group. */
-	unsigned long st_rdev; /* Device number, if device.  */
-	unsigned long __pad1;
-	long st_size; /* Size of file, in bytes.  */
-	int st_blksize; /* Optimal block size for I/O.  */
-	int __pad2;
-	long st_blocks; /* Number 512-byte blocks allocated. */
-	long st_atime; /* Time of last access.  */
-	unsigned long st_atime_nsec;
-	long st_mtime; /* Time of last modification.  */
-	unsigned long st_mtime_nsec;
-	long st_ctime; /* Time of last status change.  */
-	unsigned long st_ctime_nsec;
-	unsigned int __unused4;
-	unsigned int __unused5;
+	__u64 st_dev; /* Device.  */
+	__u64 st_ino; /* File serial number.  */
+	__u32 st_mode; /* File mode.  */
+	__u32 st_nlink; /* Link count.  */
+	__u32 st_uid; /* User ID of the file's owner.  */
+	__u32 st_gid; /* Group ID of the file's group. */
+	__u64 st_rdev; /* Device number, if device.  */
+	__u64 __pad1;
+	__s64 st_size; /* Size of file, in bytes.  */
+	__s32 st_blksize; /* Optimal block size for I/O.  */
+	__s32 __pad2;
+	__s64 st_blocks; /* Number 512-byte blocks allocated. */
+	__s64 st_atime; /* Time of last access.  */
+	__u64 st_atime_nsec;
+	__s64 st_mtime; /* Time of last modification.  */
+	__u64 st_mtime_nsec;
+	__s64 st_ctime; /* Time of last status change.  */
+	__u64 st_ctime_nsec;
+	__u32 __unused4;
+	__u32 __unused5;
 };
 
 #endif

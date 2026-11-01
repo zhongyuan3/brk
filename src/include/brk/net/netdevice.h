@@ -16,14 +16,14 @@
 #define ARPHRD_LOOPBACK 772
 
 struct net_device_stats {
-	uint64_t rx_packets;
-	uint64_t tx_packets;
-	uint64_t rx_bytes;
-	uint64_t tx_bytes;
-	uint64_t rx_dropped;
-	uint64_t tx_dropped;
-	uint64_t rx_errors;
-	uint64_t tx_errors;
+	u64 rx_packets;
+	u64 tx_packets;
+	u64 rx_bytes;
+	u64 tx_bytes;
+	u64 rx_dropped;
+	u64 tx_dropped;
+	u64 rx_errors;
+	u64 tx_errors;
 };
 
 struct net_device_ops {
@@ -38,16 +38,16 @@ struct net_device_ops {
 
 struct net_device {
 	char name[IFNAMSIZ];
-	uint8_t dev_addr[6];
+	u8 dev_addr[6];
 	unsigned int mtu;
 	unsigned int flags;
 	unsigned short type;
 	unsigned int ifindex;
 
 	/* IPv4 configuration; host byte order. */
-	uint32_t ip_addr;
-	uint32_t netmask;
-	uint32_t broadcast;
+	u32 ip_addr;
+	u32 netmask;
+	u32 broadcast;
 
 	const struct net_device_ops *netdev_ops;
 	struct net_device_stats stats;
@@ -57,7 +57,7 @@ struct net_device {
 };
 
 struct packet_type {
-	uint16_t type; /* host byte order ETH_P_*; ETH_P_ALL matches everything */
+	u16 type; /* host byte order ETH_P_*; ETH_P_ALL matches everything */
 	struct net_device *dev; /* NULL: any device */
 	int (*func)(struct sk_buff *skb, struct net_device *dev,
 		    struct packet_type *pt);

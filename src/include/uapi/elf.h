@@ -21,31 +21,31 @@
 #define EI_CLASS 4
 
 struct elf_hdr {
-	uint8_t e_ident[EI_NIDENT];
-	uint16_t e_type; /* Object file type */
-	uint16_t e_machine; /* Architecture */
-	uint32_t e_version; /* Object file version */
-	uint64_t e_entry; /* Enter point virtual address */
-	uint64_t e_phoff; /* Program header table file offset */
-	uint64_t e_shoff; /* Section header table file offset */
-	uint32_t e_flags; /* Processor-specific flags */
-	uint16_t e_ehsize; /* ELF header size in bytes */
-	uint16_t e_phentsize; /* Program header table entry size */
-	uint16_t e_phnum; /* Program header table entry count */
-	uint16_t e_shentsize; /* Section header table entry size */
-	uint16_t e_shnum; /* Section header table entry count */
-	uint16_t e_shstrndx; /* Section header string table index */
+	__u8 e_ident[EI_NIDENT];
+	__u16 e_type; /* Object file type */
+	__u16 e_machine; /* Architecture */
+	__u32 e_version; /* Object file version */
+	__u64 e_entry; /* Enter point virtual address */
+	__u64 e_phoff; /* Program header table file offset */
+	__u64 e_shoff; /* Section header table file offset */
+	__u32 e_flags; /* Processor-specific flags */
+	__u16 e_ehsize; /* ELF header size in bytes */
+	__u16 e_phentsize; /* Program header table entry size */
+	__u16 e_phnum; /* Program header table entry count */
+	__u16 e_shentsize; /* Section header table entry size */
+	__u16 e_shnum; /* Section header table entry count */
+	__u16 e_shstrndx; /* Section header string table index */
 };
 
 struct elf_phdr {
-	uint32_t p_type;
-	uint32_t p_flags;
-	uint64_t p_offset; /* Segment file offset */
-	uint64_t p_vaddr; /* Segment virtual address */
-	uint64_t p_paddr; /* Segment physical address */
-	uint64_t p_filesz; /* Segment size in file */
-	uint64_t p_memsz; /* Segment size int memory */
-	uint64_t p_align; /* Segment alignment */
+	__u32 p_type;
+	__u32 p_flags;
+	__u64 p_offset; /* Segment file offset */
+	__u64 p_vaddr; /* Segment virtual address */
+	__u64 p_paddr; /* Segment physical address */
+	__u64 p_filesz; /* Segment size in file */
+	__u64 p_memsz; /* Segment size int memory */
+	__u64 p_align; /* Segment alignment */
 };
 
 /* These constants are for the segment types stored in the image headers */

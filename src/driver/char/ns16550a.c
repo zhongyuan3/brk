@@ -55,20 +55,20 @@ void ns16550a_device_free(struct ns16550a_device *dev)
 	kfree(dev);
 }
 
-static volatile uint8_t *ns16550a_device_reg(struct ns16550a_device *dev,
-					     unsigned int reg)
+static volatile u8 *ns16550a_device_reg(struct ns16550a_device *dev,
+					unsigned int reg)
 {
 	return dev->mem_base + reg;
 }
 
 static void ns16550a_device_write_reg(struct ns16550a_device *dev,
-				      unsigned int reg, uint8_t val)
+				      unsigned int reg, u8 val)
 {
 	writeb(val, ns16550a_device_reg(dev, reg));
 }
 
-static uint8_t ns16550a_device_read_reg(struct ns16550a_device *dev,
-					unsigned int reg)
+static u8 ns16550a_device_read_reg(struct ns16550a_device *dev,
+				   unsigned int reg)
 {
 	return readb(ns16550a_device_reg(dev, reg));
 }

@@ -23,7 +23,7 @@ extern unsigned long early_pgdir_rsvd_page_next;
 extern char early_pgdir_rsvd_pages[];
 extern char init_stack_rsvd_pages[];
 
-static inline uint64_t symbol_phys(void *vaddr)
+static inline u64 symbol_phys(void *vaddr)
 {
 	return (uintptr_t)vaddr - boot_info.kernel_image_offset;
 }
@@ -62,12 +62,12 @@ static inline uint64_t symbol_phys(void *vaddr)
 #define _EBSS_PHYS symbol_phys(_ebss)
 #define _EBSS_ALIGNED_PHYS round_up(_EBSS_PHYS, PAGE_SIZE)
 
-static inline uintptr_t phys_to_virt(uint64_t paddr)
+static inline uintptr_t phys_to_virt(u64 paddr)
 {
 	return (paddr - phys_offset) + PAGE_OFFSET;
 }
 
-static inline uint64_t virt_to_phys(uintptr_t vaddr)
+static inline u64 virt_to_phys(uintptr_t vaddr)
 {
 	return (vaddr - PAGE_OFFSET) + phys_offset;
 }

@@ -2,7 +2,6 @@
 #define BRK_FS_TYPES_H
 
 #include <brk/types.h>
-#include <uapi/time.h>
 
 struct fs_driver;
 struct fs_super_block;
@@ -31,15 +30,15 @@ struct fs_iattr {
 	kuid_t uid;
 	kgid_t gid;
 	loff_t size;
-	struct timespec atime;
-	struct timespec mtime;
-	struct timespec ctime;
+	ktime_t atime;
+	ktime_t mtime;
+	ktime_t ctime;
 	struct fs_file *file;
 };
 
 struct fs_dir_iterator {
-	bool (*actor)(struct fs_dir_iterator *, const char *, int, loff_t,
-		      uint64_t, unsigned int);
+	bool (*actor)(struct fs_dir_iterator *, const char *, int, loff_t, u64,
+		      unsigned int);
 	loff_t pos;
 };
 

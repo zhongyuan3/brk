@@ -62,9 +62,9 @@
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
-#include <string.h>
 #include <uapi/dirent.h>
 #include <uapi/errno.h>
 #include <uapi/stat.h>
@@ -97,9 +97,9 @@ typedef ssize_t (*procfs_write_fn)(const struct procfs_entry *entry,
 
 struct procfs_entry {
 	const char *name;
-	uint8_t name_len;
-	uint8_t idx; /* index used in the inode encoding (>= 1) */
-	uint8_t d_type;
+	u8 name_len;
+	u8 idx; /* index used in the inode encoding (>= 1) */
+	u8 d_type;
 	umode_t mode;
 	procfs_show_fn show;
 	procfs_write_fn write;
@@ -333,17 +333,16 @@ static int procfs_show_uptime(const struct procfs_entry *e, pid_t pid,
 {
 	(void)e;
 	(void)pid;
-	struct timespec ts;
-
-	ktime_get_boot_ts(&ts);
+	u64 boot_ns = ktime_get_boot_ns();
 
 	/*
 	 * Two fields, mirroring Linux's /proc/uptime: total wall time and
 	 * cumulative idle time. We do not yet track idle time, so the
 	 * second field is reported as 0.00.
 	 */
-	return snprintf(buf, size, "%lu.%02lu 0.00\n", (unsigned long)ts.tv_sec,
-			(unsigned long)(ts.tv_nsec / 10000000UL));
+	return snprintf(buf, size, "%lu.%02lu 0.00\n",
+			(unsigned long)(boot_ns / NS_PER_SEC),
+			(unsigned long)((boot_ns % NS_PER_SEC) / 10000000ULL));
 }
 
 struct procfs_meminfo_acc {
@@ -489,7 +488,7 @@ static int procfs_show_ping(const struct procfs_entry *e, pid_t pid, char *buf,
 static ssize_t procfs_write_ping(const struct procfs_entry *e, const char *buf,
 				 size_t size, loff_t *pos)
 {
-	uint32_t addr;
+	u32 addr;
 	int err;
 
 	(void)e;
@@ -792,24 +791,24 @@ static struct fs_dentry *procfs_pid_dir_lookup(struct fs_inode *dir,
 	return NULL;
 }
 
-static int procfs_getattr(const struct fs_path *path, struct stat *stat,
-			  uint32_t mask, unsigned int flags)
+static int procfs_getattr(const struct fs_path *path, struct kstat *stat,
+			  u32 mask, unsigned int flags)
 {
 	(void)mask;
 	(void)flags;
 	struct fs_inode *inode = path->dentry->inode;
 
 	memset(stat, 0, sizeof(*stat));
-	stat->st_ino = inode->ino;
-	stat->st_mode = inode->mode;
-	stat->st_nlink = inode->nlink;
-	stat->st_uid = inode->uid;
-	stat->st_gid = inode->gid;
-	stat->st_rdev = inode->rdev;
-	stat->st_size = inode->size;
-	stat->st_blksize = PAGE_SIZE;
-	stat->st_blocks = 0;
-	inode_times_to_stat(inode, stat);
+	stat->ino = inode->ino;
+	stat->mode = inode->mode;
+	stat->nlink = inode->nlink;
+	stat->uid = inode->uid;
+	stat->gid = inode->gid;
+	stat->rdev = inode->rdev;
+	stat->size = inode->size;
+	stat->blksize = PAGE_SIZE;
+	stat->blocks = 0;
+	inode_times_to_kstat(inode, stat);
 	return 0;
 }
 

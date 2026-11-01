@@ -1,41 +1,50 @@
 #include <arch/pgtable.h>
-#include <brk/kernel.h>
-#include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/permission.h>
-#include <brk/pgalloc.h>
-#include <brk/printk.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
+#include <brk/timeconst.h>
 #include <brk/timekeeper.h>
-#include <brk/vmalloc.h>
-#include <string.h>
+#include <brk/types.h>
+#include <brk/uaccess.h>
 #include <uapi/errno.h>
 #include <uapi/resource.h>
 #include <uapi/time.h>
 
-uint64_t sys_gettimeofday(void)
+u64 sys_gettimeofday(void)
 {
-	struct timeval *tv;
+	struct timeval *utv = syscall_arg_ptr(0);
+	struct timeval tv;
 
-	tv = syscall_arg_ptr(0);
-	ktime_get_real_tv(tv);
+	if (!utv)
+		return 0;
+
+	ktime_to_timeval(ktime_get_real(), &tv);
+	if (copy_to_user(utv, &tv, sizeof(tv)))
+		return -EFAULT;
 	return 0;
 }
 
-uint64_t sys_settimeofday(void)
+u64 sys_settimeofday(void)
 {
-	const struct timeval *tv;
+	const struct timeval *utv = syscall_arg_ptr(0);
+	struct timeval tv;
 
 	if (!capable(CAP_SYS_TIME))
 		return -EPERM;
 
-	tv = syscall_arg_ptr(0);
-	ktime_set_real_tv(tv);
+	if (!utv)
+		return 0;
+	if (copy_from_user(&tv, utv, sizeof(tv)))
+		return -EFAULT;
+	if (tv.tv_usec < 0 || tv.tv_usec >= (__kernel_suseconds_t)US_PER_SEC)
+		return -EINVAL;
+
+	ktime_set_real(ktime_from_timeval(&tv));
 	return 0;
 }
 
-uint64_t sys_times(void)
+u64 sys_times(void)
 {
 	struct tms *buf;
 	int err;
@@ -47,14 +56,28 @@ uint64_t sys_times(void)
 	return jiffies_get();
 }
 
-uint64_t sys_nanosleep(void)
+u64 sys_nanosleep(void)
 {
-	struct timespec *dur, *rem;
+	const struct timespec *udur = syscall_arg_ptr(0);
+	struct timespec *urem = syscall_arg_ptr(1);
+	struct timespec ts;
+	ktime_t rem;
+	int ret;
 
-	dur = syscall_arg_ptr(0);
-	rem = syscall_arg_ptr(1);
-	if (!dur || !rem)
+	if (!udur)
+		return -EFAULT;
+	if (copy_from_user(&ts, udur, sizeof(ts)))
+		return -EFAULT;
+	if (ts.tv_sec < 0 || ts.tv_nsec < 0 ||
+	    ts.tv_nsec >= (__kernel_long_t)NS_PER_SEC)
 		return -EINVAL;
 
-	return ktime_nanosleep(dur, rem);
+	ret = ktime_nanosleep(ktime_from_timespec(&ts), &rem);
+	if (ret == -EINTR && urem) {
+		ktime_to_timespec(rem, &ts);
+		if (copy_to_user(urem, &ts, sizeof(ts)))
+			return -EFAULT;
+	}
+
+	return (u64)(long)ret;
 }

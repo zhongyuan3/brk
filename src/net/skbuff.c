@@ -1,9 +1,9 @@
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/net/skbuff.h>
+#include <brk/string.h>
 #include <brk/types.h>
-#include <string.h>
 
 struct sk_buff *skb_alloc(size_t payload)
 {
@@ -14,7 +14,7 @@ struct sk_buff *skb_alloc(size_t payload)
 	if (!skb)
 		return NULL;
 
-	skb->head = (uint8_t *)(skb + 1);
+	skb->head = (u8 *)(skb + 1);
 	skb->data = skb->head + SKB_HEADROOM;
 	skb->tail = skb->data;
 	skb->end = skb->head + SKB_HEADROOM + payload;
@@ -26,9 +26,9 @@ void skb_free(struct sk_buff *skb)
 	kfree(skb);
 }
 
-uint8_t *skb_put(struct sk_buff *skb, size_t len)
+u8 *skb_put(struct sk_buff *skb, size_t len)
 {
-	uint8_t *old = skb->tail;
+	u8 *old = skb->tail;
 
 	assert(skb->tail + len <= skb->end);
 	skb->tail += len;
@@ -36,7 +36,7 @@ uint8_t *skb_put(struct sk_buff *skb, size_t len)
 	return old;
 }
 
-uint8_t *skb_push(struct sk_buff *skb, size_t len)
+u8 *skb_push(struct sk_buff *skb, size_t len)
 {
 	assert(skb->data - skb->head >= (ptrdiff_t)len);
 	skb->data -= len;

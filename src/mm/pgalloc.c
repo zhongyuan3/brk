@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/list.h>
 #include <brk/mm_types.h>
@@ -6,7 +6,7 @@
 #include <brk/pgalloc.h>
 #include <brk/refcnt.h>
 #include <brk/spinlock.h>
-#include <string.h>
+#include <brk/string.h>
 
 #define PCP_MAX_ORDER0 64
 
@@ -183,7 +183,7 @@ found:
 struct page *page_zalloc(unsigned int order)
 {
 	struct page *pg;
-	uint64_t virt;
+	u64 virt;
 
 	pg = page_alloc(order);
 	if (!pg)

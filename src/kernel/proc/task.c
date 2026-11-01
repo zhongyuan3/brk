@@ -2,8 +2,8 @@
 #include <arch/csr.h>
 #include <arch/pgtable.h>
 #include <arch/trapframe.h>
-#include <assert.h>
 #include <brk/asm/cpu.h>
+#include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
@@ -24,6 +24,7 @@
 #include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
 #include <brk/trap.h>
@@ -31,7 +32,6 @@
 #include <brk/vmalloc.h>
 #include <brk/writeback.h>
 #include <stddef.h>
-#include <string.h>
 #include <uapi/capability.h>
 #include <uapi/errno.h>
 #include <uapi/limits.h>
@@ -68,7 +68,7 @@ void task_cache_init(void)
 }
 core_initcall(task_cache_init);
 
-static uint64_t kstack_alloc(void)
+static u64 kstack_alloc(void)
 {
 	struct page *pg = page_alloc(KSTACK_PAGE_ORDER);
 	if (!pg)
@@ -76,7 +76,7 @@ static uint64_t kstack_alloc(void)
 	return page_to_virt(pg);
 }
 
-static void kstack_free(uint64_t stack)
+static void kstack_free(u64 stack)
 {
 	struct page *pg = virt_to_page((uintptr_t)stack);
 	assert(pg);
@@ -389,15 +389,15 @@ bool task_is_killed(struct task *task)
 	return signal_pending(task);
 }
 
-int task_set_brk(uint64_t addr)
+int task_set_brk(u64 addr)
 {
 	struct task *task = current_task();
 	struct uvm_space *mm = task->mm;
 	struct uvm_region *heap = mm->heap;
-	uint64_t heap_start = heap->addr;
-	uint64_t curr_heap_end = heap_start + heap->size;
+	u64 heap_start = heap->addr;
+	u64 curr_heap_end = heap_start + heap->size;
 	int err = 0;
-	uint64_t new_heap_end;
+	u64 new_heap_end;
 	size_t incr;
 
 	if (addr < heap_start)
@@ -430,7 +430,7 @@ int task_set_brk(uint64_t addr)
 			err = -ENOMEM;
 			goto failed;
 		}
-		uint64_t pa = page_to_phys(pg);
+		u64 pa = page_to_phys(pg);
 		err = map_user_pages(mm->pgd, addr, PAGE_SIZE, pa,
 				     PTE_R | PTE_W);
 		if (err) {
@@ -454,7 +454,7 @@ int task_set_brk(uint64_t addr)
 	return 0;
 
 failed:
-	for (uint64_t a = curr_heap_end; a < addr; a += PAGE_SIZE)
+	for (u64 a = curr_heap_end; a < addr; a += PAGE_SIZE)
 		unmap_user_pages(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = old_npgs; j < i; ++j) {
 		assert(new_pgs[j]);
@@ -638,7 +638,7 @@ void task_dump(void)
 			state = state_strs[task->state];
 		else
 			state = "???    ";
-		printk("%ld %s %s\n", task->pid, state, task->name);
+		printk("%d %s %s\n", task->pid, state, task->name);
 	}
 	spin_unlock_irqrestore(&tasks_lock, flags);
 }
@@ -719,7 +719,7 @@ int task_get_times(struct task *task, struct tms *times)
 	return 0;
 }
 
-void task_add_system_time(struct task *task, uint64_t time)
+void task_add_system_time(struct task *task, u64 time)
 {
 	if (!task || !task->rsrc_usage)
 		return;
@@ -729,7 +729,7 @@ void task_add_system_time(struct task *task, uint64_t time)
 	spin_unlock(&task->rsrc_usage->lock);
 }
 
-void task_add_user_time(struct task *task, uint64_t time)
+void task_add_user_time(struct task *task, u64 time)
 {
 	if (!task || !task->rsrc_usage)
 		return;
@@ -739,7 +739,7 @@ void task_add_user_time(struct task *task, uint64_t time)
 	spin_unlock(&task->rsrc_usage->lock);
 }
 
-void task_add_child_system_time(struct task *task, uint64_t time)
+void task_add_child_system_time(struct task *task, u64 time)
 {
 	if (!task || !task->rsrc_usage)
 		return;
@@ -749,7 +749,7 @@ void task_add_child_system_time(struct task *task, uint64_t time)
 	spin_unlock(&task->rsrc_usage->lock);
 }
 
-void task_add_child_user_time(struct task *task, uint64_t time)
+void task_add_child_user_time(struct task *task, u64 time)
 {
 	if (!task || !task->rsrc_usage)
 		return;
@@ -759,9 +759,9 @@ void task_add_child_user_time(struct task *task, uint64_t time)
 	spin_unlock(&task->rsrc_usage->lock);
 }
 
-uint64_t task_get_system_time(struct task *task)
+u64 task_get_system_time(struct task *task)
 {
-	uint64_t time;
+	u64 time;
 
 	if (!task || !task->rsrc_usage)
 		return 0;
@@ -773,9 +773,9 @@ uint64_t task_get_system_time(struct task *task)
 	return time;
 }
 
-uint64_t task_get_user_time(struct task *task)
+u64 task_get_user_time(struct task *task)
 {
-	uint64_t time;
+	u64 time;
 
 	if (!task || !task->rsrc_usage)
 		return 0;
@@ -787,9 +787,9 @@ uint64_t task_get_user_time(struct task *task)
 	return time;
 }
 
-uint64_t task_get_child_system_time(struct task *task)
+u64 task_get_child_system_time(struct task *task)
 {
-	uint64_t time;
+	u64 time;
 
 	if (!task || !task->rsrc_usage)
 		return 0;
@@ -801,9 +801,9 @@ uint64_t task_get_child_system_time(struct task *task)
 	return time;
 }
 
-uint64_t task_get_child_user_time(struct task *task)
+u64 task_get_child_user_time(struct task *task)
 {
-	uint64_t time;
+	u64 time;
 
 	if (!task || !task->rsrc_usage)
 		return 0;

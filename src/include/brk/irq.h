@@ -52,7 +52,7 @@ int irq_handle_external(unsigned int hart);
 
 /* Spurious interrupt accounting (claim 0 or unmapped hwirq). */
 void irq_note_spurious(void);
-uint64_t irq_spurious_count(void);
+u64 irq_spurious_count(void);
 
 /* Render the IRQ descriptor table for /proc/interrupts. */
 int irq_proc_show(char *buf, size_t size);

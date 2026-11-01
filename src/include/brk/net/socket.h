@@ -16,14 +16,14 @@ struct socket;
  */
 struct sock {
 	spinlock_t lock;
-	uint16_t family;
-	uint16_t type;
-	uint16_t protocol;
+	u16 family;
+	u16 type;
+	u16 protocol;
 
-	uint32_t saddr;
-	uint32_t daddr;
-	uint16_t sport;
-	uint16_t dport;
+	u32 saddr;
+	u32 daddr;
+	u16 sport;
+	u16 dport;
 
 	bool bound;
 	bool connected;

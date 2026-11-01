@@ -5,7 +5,7 @@
 #include <brk/refcnt.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
-#include <string.h>
+#include <brk/string.h>
 #include <uapi/errno.h>
 
 static LIST_DEFINE(super_blocks);
@@ -204,7 +204,7 @@ int sync_all_filesystems(void)
 	return ret;
 }
 
-int fs_statfs(struct fs_super_block *sb, struct statfs *buf)
+int fs_statfs(struct fs_super_block *sb, struct kstatfs *buf)
 {
 	if (!sb || !buf)
 		return -EINVAL;

@@ -1,7 +1,7 @@
 #include <brk/printf.h>
+#include <brk/string.h>
 #include <brk/types.h>
 #include <limits.h>
-#include <string.h>
 #include <uapi/errno.h>
 
 #define FMT_F_ZERO_PAD (1U << 0)

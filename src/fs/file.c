@@ -9,10 +9,11 @@
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/types.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/poll.h>
+#include <uapi/stat.h>
 
 static struct slab_allocator file_cache;
 
@@ -185,14 +186,14 @@ unsigned int fs_file_poll(struct fs_file *file, unsigned int events)
 	return (POLLIN | POLLOUT) & (events | POLLERR | POLLHUP);
 }
 
-int fs_file_stat(struct fs_file *file, struct stat *buf)
+int fs_file_stat(struct fs_file *file, struct kstat *buf)
 {
 	const struct fs_inode_ops *i_op;
 
 	if (file->anon) {
 		memset(buf, 0, sizeof(*buf));
-		buf->st_mode = S_IFSOCK | 0777;
-		buf->st_nlink = 1;
+		buf->mode = S_IFSOCK | 0777;
+		buf->nlink = 1;
 		return 0;
 	}
 

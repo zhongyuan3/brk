@@ -5,29 +5,29 @@
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/signal.h>
+#include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/uaccess.h>
 #include <brk/vmalloc.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/resource.h>
 #include <uapi/time.h>
 
-uint64_t sys_brk(void)
+u64 sys_brk(void)
 {
-	uint64_t addr = syscall_arg_raw(0);
+	u64 addr = syscall_arg_raw(0);
 	if (addr == 0)
 		return current_task()->mm->brk;
 	return task_set_brk(addr);
 }
 
-uint64_t sys_clone(void)
+u64 sys_clone(void)
 {
 	return -ENOSYS;
 }
 
-uint64_t sys_wait4(void)
+u64 sys_wait4(void)
 {
 	pid_t pid = syscall_arg_raw(0);
 	int *wstatus = (int *)(uintptr_t)syscall_arg_raw(1);
@@ -36,12 +36,12 @@ uint64_t sys_wait4(void)
 	return task_wait(pid, wstatus, opts, rus);
 }
 
-uint64_t sys_fork(void)
+u64 sys_fork(void)
 {
 	return task_fork();
 }
 
-uint64_t sys_exit(void)
+u64 sys_exit(void)
 {
 	int status = syscall_arg_raw(0);
 
@@ -49,7 +49,7 @@ uint64_t sys_exit(void)
 	return 0;
 }
 
-uint64_t sys_kill(void)
+u64 sys_kill(void)
 {
 	pid_t pid = syscall_arg_int(0);
 	int sig = syscall_arg_int(1);
@@ -57,45 +57,45 @@ uint64_t sys_kill(void)
 	return signal_do_kill(pid, sig);
 }
 
-uint64_t sys_sched_yield(void)
+u64 sys_sched_yield(void)
 {
 	task_yield();
 	return 0;
 }
 
-uint64_t sys_getpid(void)
+u64 sys_getpid(void)
 {
 	return current_task()->tgid;
 }
 
-uint64_t sys_getppid(void)
+u64 sys_getppid(void)
 {
 	struct task *par = current_task()->parent;
 
 	return par ? par->tgid : 0;
 }
 
-uint64_t sys_gettid(void)
+u64 sys_gettid(void)
 {
 	return current_task()->pid;
 }
 
-uint64_t sys_getuid(void)
+u64 sys_getuid(void)
 {
 	return current_task()->uid;
 }
 
-uint64_t sys_geteuid(void)
+u64 sys_geteuid(void)
 {
 	return current_task()->euid;
 }
 
-uint64_t sys_getgid(void)
+u64 sys_getgid(void)
 {
 	return current_task()->gid;
 }
 
-uint64_t sys_getegid(void)
+u64 sys_getegid(void)
 {
 	return current_task()->egid;
 }
@@ -111,7 +111,7 @@ static void update_caps_after_setuid(struct task *task, kuid_t old_euid)
 	}
 }
 
-uint64_t sys_setuid(void)
+u64 sys_setuid(void)
 {
 	struct task *task = current_task();
 	int uid = syscall_arg_int(0);
@@ -133,7 +133,7 @@ uint64_t sys_setuid(void)
 	return 0;
 }
 
-uint64_t sys_setgid(void)
+u64 sys_setgid(void)
 {
 	struct task *task = current_task();
 	int gid = syscall_arg_int(0);
@@ -153,7 +153,7 @@ uint64_t sys_setgid(void)
 	return 0;
 }
 
-uint64_t sys_setreuid(void)
+u64 sys_setreuid(void)
 {
 	struct task *task = current_task();
 	int ruid = syscall_arg_int(0);
@@ -179,7 +179,7 @@ uint64_t sys_setreuid(void)
 	return 0;
 }
 
-uint64_t sys_setregid(void)
+u64 sys_setregid(void)
 {
 	struct task *task = current_task();
 	int rgid = syscall_arg_int(0);
@@ -220,7 +220,7 @@ static bool resuid_valid(struct task *task, int ruid, int euid, int suid)
 	return true;
 }
 
-uint64_t sys_setresuid(void)
+u64 sys_setresuid(void)
 {
 	struct task *task = current_task();
 	int ruid = syscall_arg_int(0);
@@ -244,13 +244,13 @@ uint64_t sys_setresuid(void)
 	return 0;
 }
 
-uint64_t sys_getresuid(void)
+u64 sys_getresuid(void)
 {
 	struct task *task = current_task();
-	uint32_t *ruid = syscall_arg_ptr(0);
-	uint32_t *euid = syscall_arg_ptr(1);
-	uint32_t *suid = syscall_arg_ptr(2);
-	uint32_t id;
+	u32 *ruid = syscall_arg_ptr(0);
+	u32 *euid = syscall_arg_ptr(1);
+	u32 *suid = syscall_arg_ptr(2);
+	u32 id;
 
 	id = task->uid;
 	if (ruid && copy_to_user(ruid, &id, sizeof(id)))
@@ -281,7 +281,7 @@ static bool resgid_valid(struct task *task, int rgid, int egid, int sgid)
 	return true;
 }
 
-uint64_t sys_setresgid(void)
+u64 sys_setresgid(void)
 {
 	struct task *task = current_task();
 	int rgid = syscall_arg_int(0);
@@ -303,13 +303,13 @@ uint64_t sys_setresgid(void)
 	return 0;
 }
 
-uint64_t sys_getresgid(void)
+u64 sys_getresgid(void)
 {
 	struct task *task = current_task();
-	uint32_t *rgid = syscall_arg_ptr(0);
-	uint32_t *egid = syscall_arg_ptr(1);
-	uint32_t *sgid = syscall_arg_ptr(2);
-	uint32_t id;
+	u32 *rgid = syscall_arg_ptr(0);
+	u32 *egid = syscall_arg_ptr(1);
+	u32 *sgid = syscall_arg_ptr(2);
+	u32 id;
 
 	id = task->gid;
 	if (rgid && copy_to_user(rgid, &id, sizeof(id)))
@@ -323,7 +323,7 @@ uint64_t sys_getresgid(void)
 	return 0;
 }
 
-uint64_t sys_setfsuid(void)
+u64 sys_setfsuid(void)
 {
 	struct task *task = current_task();
 	int uid = syscall_arg_int(0);
@@ -336,7 +336,7 @@ uint64_t sys_setfsuid(void)
 	return old;
 }
 
-uint64_t sys_setfsgid(void)
+u64 sys_setfsgid(void)
 {
 	struct task *task = current_task();
 	int gid = syscall_arg_int(0);
@@ -349,11 +349,11 @@ uint64_t sys_setfsgid(void)
 	return old;
 }
 
-uint64_t sys_getgroups(void)
+u64 sys_getgroups(void)
 {
 	struct task *task = current_task();
 	int size = syscall_arg_int(0);
-	uint32_t *list = syscall_arg_ptr(1);
+	u32 *list = syscall_arg_ptr(1);
 
 	if (size < 0)
 		return -EINVAL;
@@ -365,7 +365,7 @@ uint64_t sys_getgroups(void)
 		return -EFAULT;
 
 	for (int i = 0; i < task->ngroups; i++) {
-		uint32_t gid = task->groups[i];
+		u32 gid = task->groups[i];
 
 		if (copy_to_user(&list[i], &gid, sizeof(gid)))
 			return -EFAULT;
@@ -373,11 +373,11 @@ uint64_t sys_getgroups(void)
 	return task->ngroups;
 }
 
-uint64_t sys_setgroups(void)
+u64 sys_setgroups(void)
 {
 	struct task *task = current_task();
 	int size = syscall_arg_int(0);
-	const uint32_t *list = syscall_arg_ptr(1);
+	const u32 *list = syscall_arg_ptr(1);
 	kgid_t groups[NGROUPS_MAX];
 
 	if (size < 0 || size > NGROUPS_MAX)
@@ -397,7 +397,7 @@ uint64_t sys_setgroups(void)
 	return 0;
 }
 
-uint64_t sys_capget(void)
+u64 sys_capget(void)
 {
 	struct task *task = current_task();
 	struct cap_header hdr;
@@ -427,14 +427,14 @@ uint64_t sys_capget(void)
 	return 0;
 }
 
-uint64_t sys_capset(void)
+u64 sys_capset(void)
 {
 	struct task *task = current_task();
 	struct cap_header hdr;
 	struct cap_data data[2];
 	struct cap_header *uhdr = syscall_arg_ptr(0);
 	struct cap_data *udata = syscall_arg_ptr(1);
-	uint64_t effective, permitted, inheritable;
+	u64 effective, permitted, inheritable;
 
 	if (!uhdr || !udata)
 		return -EFAULT;
@@ -447,12 +447,10 @@ uint64_t sys_capset(void)
 	if (copy_from_user(data, udata, sizeof(data)))
 		return -EFAULT;
 
-	effective = (uint64_t)data[0].effective |
-		    ((uint64_t)data[1].effective << 32);
-	permitted = (uint64_t)data[0].permitted |
-		    ((uint64_t)data[1].permitted << 32);
-	inheritable = (uint64_t)data[0].inheritable |
-		      ((uint64_t)data[1].inheritable << 32);
+	effective = (u64)data[0].effective | ((u64)data[1].effective << 32);
+	permitted = (u64)data[0].permitted | ((u64)data[1].permitted << 32);
+	inheritable = (u64)data[0].inheritable |
+		      ((u64)data[1].inheritable << 32);
 
 	if (permitted & ~task->cap_permitted)
 		return -EPERM;
@@ -467,7 +465,7 @@ uint64_t sys_capset(void)
 	return 0;
 }
 
-uint64_t sys_umask(void)
+u64 sys_umask(void)
 {
 	struct task *task = current_task();
 	umode_t old = task->umask;
@@ -476,7 +474,7 @@ uint64_t sys_umask(void)
 	return old;
 }
 
-uint64_t sys_setpgid(void)
+u64 sys_setpgid(void)
 {
 	pid_t pid = syscall_arg_int(0);
 	pid_t pgid = syscall_arg_int(1);
@@ -499,12 +497,12 @@ uint64_t sys_setpgid(void)
 	return 0;
 }
 
-uint64_t sys_getpgrp(void)
+u64 sys_getpgrp(void)
 {
 	return current_task()->pgid;
 }
 
-uint64_t sys_setsid(void)
+u64 sys_setsid(void)
 {
 	struct task *task = current_task();
 
@@ -516,7 +514,7 @@ uint64_t sys_setsid(void)
 	return task->sid;
 }
 
-uint64_t sys_getpgid(void)
+u64 sys_getpgid(void)
 {
 	pid_t pid = syscall_arg_int(0);
 
@@ -525,7 +523,7 @@ uint64_t sys_getpgid(void)
 	return task_get_pgid(pid);
 }
 
-uint64_t sys_getsid(void)
+u64 sys_getsid(void)
 {
 	pid_t pid = syscall_arg_int(0);
 

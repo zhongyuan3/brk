@@ -1,8 +1,10 @@
 #ifndef UAPI_SOCKET_H
 #define UAPI_SOCKET_H
 
-typedef unsigned short sa_family_t;
-typedef unsigned int socklen_t;
+#include <uapi/types.h>
+
+typedef __u16 sa_family_t;
+typedef __u32 socklen_t;
 
 #define AF_UNSPEC 0
 #define AF_INET 2
@@ -30,14 +32,14 @@ struct sockaddr {
 };
 
 struct in_addr {
-	unsigned int s_addr;
+	__u32 s_addr;
 };
 
 struct sockaddr_in {
 	sa_family_t sin_family;
-	unsigned short sin_port;
+	__u16 sin_port;
 	struct in_addr sin_addr;
-	unsigned char sin_zero[8];
+	__u8 sin_zero[8];
 };
 
 #endif

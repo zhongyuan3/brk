@@ -1,5 +1,5 @@
 #define pr_fmt(fmt) "%s:%d " fmt, __func__, __LINE__
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fs.h>
@@ -12,8 +12,8 @@
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/types.h>
-#include <string.h>
 #include <uapi/errno.h>
 
 static struct hlist_head dentry_htable[DENTRY_HTABLE_SIZE];
@@ -287,7 +287,7 @@ static struct fs_dentry *__dentry_lookup(struct hlist_head *head,
 	return NULL;
 }
 
-static void fs_dentry_hash(struct fs_dentry *dentry, uint32_t idx)
+static void fs_dentry_hash(struct fs_dentry *dentry, u32 idx)
 {
 	spin_lock(&dentry->lock);
 	if (dentry->parent != dentry && (dentry->flags & DCACHE_UNHASHED)) {
@@ -308,7 +308,7 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 	struct fs_dentry *dentry, *tmp;
 	struct hlist_head *head;
 
-	uint32_t idx = name->hash & (DENTRY_HTABLE_SIZE - 1);
+	u32 idx = name->hash & (DENTRY_HTABLE_SIZE - 1);
 	head = &dentry_htable[idx];
 
 	pr_debug("looking up %.*s in %.*s\n", (int)name->len, name->name,

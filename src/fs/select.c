@@ -4,11 +4,11 @@
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
+#include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/limits.h>
 #include <uapi/poll.h>
@@ -20,11 +20,10 @@
 static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 {
 	bool infinite = timeout_ms < 0;
-	uint64_t deadline = 0;
+	u64 deadline = 0;
 
 	if (!infinite)
-		deadline =
-			ktime_get_boot_ns() + (uint64_t)timeout_ms * 1000000ULL;
+		deadline = ktime_get_boot_ns() + (u64)timeout_ms * 1000000ULL;
 
 	for (;;) {
 		unsigned int ready = 0;
@@ -62,14 +61,11 @@ static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 		if (task_is_killed(current_task()))
 			return -EINTR;
 
-		struct timespec ts = { .tv_sec = 0, .tv_nsec = POLL_SLEEP_NS };
-		struct timespec rem;
-
-		ktime_nanosleep(&ts, &rem);
+		ktime_nanosleep((ktime_t)POLL_SLEEP_NS, NULL);
 	}
 }
 
-uint64_t sys_poll(void)
+u64 sys_poll(void)
 {
 	struct pollfd *ufds = syscall_arg_ptr(0);
 	nfds_t nfds = (nfds_t)syscall_arg_raw(1);
@@ -105,18 +101,18 @@ uint64_t sys_poll(void)
 
 static int timeval_to_ms(const struct timeval *tv)
 {
-	uint64_t ms;
+	u64 ms;
 
 	if (tv->tv_sec < 0 || tv->tv_usec < 0)
 		return -EINVAL;
 
-	ms = (uint64_t)tv->tv_sec * 1000 + ((uint64_t)tv->tv_usec + 999) / 1000;
+	ms = (u64)tv->tv_sec * 1000 + ((u64)tv->tv_usec + 999) / 1000;
 	if (ms > 0x7fffffffULL)
 		return 0x7fffffff;
 	return (int)ms;
 }
 
-uint64_t sys_select(void)
+u64 sys_select(void)
 {
 	int nfds = syscall_arg_int(0);
 	fd_set *uread = syscall_arg_ptr(1);

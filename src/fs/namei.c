@@ -7,6 +7,7 @@
 #include <brk/task.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
+#include <uapi/stat.h>
 
 static umode_t apply_umask(umode_t mode)
 {

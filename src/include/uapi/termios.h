@@ -1,11 +1,13 @@
 #ifndef UAPI_TERMIOS_H
 #define UAPI_TERMIOS_H
 
+#include <uapi/types.h>
+
 #define NCCS 32
 
-typedef unsigned char cc_t;
-typedef unsigned int speed_t;
-typedef unsigned int tcflag_t;
+typedef __u8 cc_t;
+typedef __u32 speed_t;
+typedef __u32 tcflag_t;
 
 struct termios {
 	tcflag_t c_iflag;

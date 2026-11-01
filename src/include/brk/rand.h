@@ -3,7 +3,7 @@
 
 #include <brk/types.h>
 
-void rand_seed(uint64_t seed);
-uint32_t rand_u32(void);
+void rand_seed(u64 seed);
+u32 rand_u32(void);
 
 #endif

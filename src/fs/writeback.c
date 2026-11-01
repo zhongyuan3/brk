@@ -1,24 +1,20 @@
 #include <brk/fs.h>
 #include <brk/ktime.h>
 #include <brk/printk.h>
+#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/timeconst.h>
 #include <brk/types.h>
 #include <brk/writeback.h>
-#include <string.h>
 #include <uapi/errno.h>
 
 #define WRITEBACK_INTERVAL_MS 5000
 
 static void writeback_sleep_ms(unsigned long ms)
 {
-	struct timespec dur = {
-		.tv_sec = (time_t)(ms / MS_PER_SEC),
-		.tv_nsec = (long)((ms % MS_PER_SEC) * NS_PER_MS),
-	};
-	struct timespec rem;
+	ktime_t rem;
 
-	(void)ktime_nanosleep(&dur, &rem);
+	(void)ktime_nanosleep((ktime_t)ms * (ktime_t)NS_PER_MS, &rem);
 }
 
 static void writeback_thread(void *arg)

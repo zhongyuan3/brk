@@ -44,12 +44,12 @@
 
 /* The legacy/no-MRG_RXBUF header is 10 bytes. */
 struct virtio_net_hdr {
-	uint8_t flags;
-	uint8_t gso_type;
-	uint16_t hdr_len;
-	uint16_t gso_size;
-	uint16_t csum_start;
-	uint16_t csum_offset;
+	u8 flags;
+	u8 gso_type;
+	u16 hdr_len;
+	u16 gso_size;
+	u16 csum_start;
+	u16 csum_offset;
 } __attribute__((packed));
 
 struct virtio_net_dev;
@@ -70,22 +70,22 @@ struct virtio_net_dev {
 	struct virtq tx_vq;
 
 	/* Indexed by virtqueue descriptor id. */
-	uint8_t *rx_buf[VIRTIO_NET_QUEUE_SIZE];
-	uint8_t *tx_buf[VIRTIO_NET_QUEUE_SIZE];
+	u8 *rx_buf[VIRTIO_NET_QUEUE_SIZE];
+	u8 *tx_buf[VIRTIO_NET_QUEUE_SIZE];
 
-	uint8_t mac[6];
+	u8 mac[6];
 	unsigned int mtu;
 
 	spinlock_t lock;
 	virtio_net_rx_fn rx_cb;
 	void *rx_ctx;
 
-	uint64_t rx_packets;
-	uint64_t tx_packets;
-	uint64_t rx_bytes;
-	uint64_t tx_bytes;
-	uint64_t rx_dropped;
-	uint64_t tx_dropped;
+	u64 rx_packets;
+	u64 tx_packets;
+	u64 rx_bytes;
+	u64 tx_bytes;
+	u64 rx_dropped;
+	u64 tx_dropped;
 };
 
 /*
@@ -111,7 +111,7 @@ void virtio_net_set_rx_callback(struct virtio_net_dev *vnet,
 int virtio_net_transmit(struct virtio_net_dev *vnet, const void *frame,
 			size_t len);
 
-const uint8_t *virtio_net_get_mac(struct virtio_net_dev *vnet);
+const u8 *virtio_net_get_mac(struct virtio_net_dev *vnet);
 
 /* Return the virq of the first probed virtio-net device (0 if none). */
 unsigned int virtio_net_first_irq(void);

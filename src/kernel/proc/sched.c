@@ -1,6 +1,6 @@
 #include <arch/irqflags.h>
 #include <arch/mm.h>
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
@@ -93,7 +93,7 @@ void task_join(struct task *task)
 	}
 
 	if (target < 0 || target >= MAX_CPUS)
-		panic("task_join: pid=%ld invalid cpu %d\n", task->pid, target);
+		panic("task_join: pid=%d invalid cpu %d\n", task->pid, target);
 
 	cpu = &cpus[target];
 	flags = spin_lock_irqsave(&cpu->run_queue_lock);
@@ -201,7 +201,7 @@ static void task_sched(void)
 		/* task_sleep() already linked us into the sleep queue. */
 		break;
 	default:
-		panic("unexpected state: pid=%ld, state=%d\n", curr->pid,
+		panic("unexpected state: pid=%d, state=%d\n", curr->pid,
 		      curr->state);
 	}
 

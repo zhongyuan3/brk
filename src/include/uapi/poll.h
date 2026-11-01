@@ -1,12 +1,14 @@
 #ifndef UAPI_POLL_H
 #define UAPI_POLL_H
 
-typedef unsigned long nfds_t;
+#include <uapi/types.h>
+
+typedef __kernel_ulong_t nfds_t;
 
 struct pollfd {
-	int fd;
-	short events;
-	short revents;
+	__s32 fd;
+	__s16 events;
+	__s16 revents;
 };
 
 #define POLLIN 0x0001

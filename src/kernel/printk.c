@@ -5,8 +5,8 @@
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/timekeeper.h>
-#include <string.h>
 #include <uapi/errno.h>
 
 #define LOG_BUF_LEN (64 * 1024)
@@ -15,32 +15,32 @@
 
 /* One record in the log ring buffer. 8-byte aligned in the buffer. */
 struct log_record {
-	uint32_t len; /* Text length; LOG_RECORD_MARK marks a wrap point */
-	uint8_t level;
-	uint8_t flags;
-	uint16_t pad;
-	uint64_t ts_nsec;
+	u32 len; /* Text length; LOG_RECORD_MARK marks a wrap point */
+	u8 level;
+	u8 flags;
+	u16 pad;
+	u64 ts_nsec;
 };
 
 static char log_buf[LOG_BUF_LEN] __attribute__((aligned(8)));
-static uint32_t log_next_off;
+static u32 log_next_off;
 /* Next record for the console flush. */
-static uint32_t log_first_off;
+static u32 log_first_off;
 /* Next record for the persistent disk log (klogd). */
-static uint32_t log_disk_off;
+static u32 log_disk_off;
 
 static SPINLOCK_DEFINE(printk_lock);
 static char printk_buf[1024];
 
-static uint32_t log_record_used(uint32_t len)
+static u32 log_record_used(u32 len)
 {
 	return sizeof(struct log_record) + round_up(len, 8);
 }
 
-static void log_store(uint8_t level, const char *text, uint32_t len)
+static void log_store(u8 level, const char *text, u32 len)
 {
 	struct log_record *rec;
-	uint32_t total;
+	u32 total;
 
 	if (len > LOG_BUF_LEN - sizeof(struct log_record))
 		len = LOG_BUF_LEN - sizeof(struct log_record);
@@ -68,11 +68,11 @@ static void log_store(uint8_t level, const char *text, uint32_t len)
 
 static void log_flush(void)
 {
-	uint32_t off = log_first_off;
+	u32 off = log_first_off;
 
 	while (off != log_next_off) {
 		struct log_record *rec;
-		uint32_t used;
+		u32 used;
 
 		if (off + sizeof(struct log_record) > LOG_BUF_LEN)
 			break;
@@ -144,16 +144,15 @@ void printk_flush_pending(void)
 	spin_unlock_irqrestore(&printk_lock, flags);
 }
 
-int printk_read_record(char *buf, size_t size, uint8_t *level,
-		       uint64_t *ts_nsec)
+int printk_read_record(char *buf, size_t size, u8 *level, u64 *ts_nsec)
 {
 	irqstate_t flags = spin_lock_irqsave(&printk_lock);
 	int ret = 0;
 
 	while (log_disk_off != log_next_off) {
-		uint32_t off = log_disk_off;
+		u32 off = log_disk_off;
 		struct log_record *rec;
-		uint32_t used;
+		u32 used;
 
 		if (off + sizeof(*rec) > LOG_BUF_LEN) {
 			/* Corrupt/partial tail: restart from the beginning. */

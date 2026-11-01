@@ -10,9 +10,9 @@
 #include <brk/panic.h>
 #include <brk/path.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/poll.h>
@@ -52,19 +52,19 @@ static struct fs_dentry *pipefs_lookup(struct fs_inode *dir,
 	return NULL;
 }
 
-static int pipefs_dir_getattr(const struct fs_path *path, struct stat *st,
-			      uint32_t mask, unsigned int flags)
+static int pipefs_dir_getattr(const struct fs_path *path, struct kstat *st,
+			      u32 mask, unsigned int flags)
 {
 	struct fs_inode *inode = path->dentry->inode;
 
 	(void)mask;
 	(void)flags;
 	memset(st, 0, sizeof(*st));
-	st->st_ino = inode->ino;
-	st->st_mode = inode->mode;
-	st->st_nlink = inode->nlink;
-	st->st_blksize = PIPE_BUF;
-	inode_times_to_stat(inode, st);
+	st->ino = inode->ino;
+	st->mode = inode->mode;
+	st->nlink = inode->nlink;
+	st->blksize = PIPE_BUF;
+	inode_times_to_kstat(inode, st);
 	return 0;
 }
 
@@ -217,20 +217,20 @@ int pipefs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 	return 0;
 }
 
-static int pipe_getattr(const struct fs_path *path, struct stat *st,
-			uint32_t mask, unsigned int flags)
+static int pipe_getattr(const struct fs_path *path, struct kstat *st, u32 mask,
+			unsigned int flags)
 {
 	struct fs_inode *inode = path->dentry->inode;
 
 	(void)mask;
 	(void)flags;
 	memset(st, 0, sizeof(*st));
-	st->st_ino = inode->ino;
-	st->st_mode = inode->mode;
-	st->st_nlink = inode->nlink;
-	st->st_size = 0;
-	st->st_blksize = PIPE_BUF;
-	inode_times_to_stat(inode, st);
+	st->ino = inode->ino;
+	st->mode = inode->mode;
+	st->nlink = inode->nlink;
+	st->size = 0;
+	st->blksize = PIPE_BUF;
+	inode_times_to_kstat(inode, st);
 	return 0;
 }
 

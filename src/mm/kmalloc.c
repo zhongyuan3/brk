@@ -1,9 +1,9 @@
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/kmalloc.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
-#include <string.h>
+#include <brk/string.h>
 
 #define NR_KMALLOC_ALLOCATORS 10
 

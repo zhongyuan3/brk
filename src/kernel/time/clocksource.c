@@ -3,7 +3,7 @@
 #include <brk/printk.h>
 #include <brk/types.h>
 
-static uint32_t timebase_freq = 0x989680;
+static u32 timebase_freq = 0x989680;
 
 int clocksource_init(void)
 {
@@ -15,12 +15,12 @@ int clocksource_init(void)
 	return ret;
 }
 
-void clocksource_set_timebase_freq(uint32_t freq)
+void clocksource_set_timebase_freq(u32 freq)
 {
 	timebase_freq = freq;
 }
 
-uint32_t clocksource_get_timebase_freq(void)
+u32 clocksource_get_timebase_freq(void)
 {
 	return timebase_freq;
 }

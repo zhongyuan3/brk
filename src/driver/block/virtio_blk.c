@@ -1,5 +1,5 @@
 #include <arch/mm.h>
-#include <assert.h>
+#include <brk/assert.h>
 #include <brk/bio.h>
 #include <brk/blkdev.h>
 #include <brk/device_model.h>
@@ -16,13 +16,13 @@
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
 #include <brk/virtio_mmio.h>
 #include <brk/virtio_queue.h>
-#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/stat.h>
@@ -52,9 +52,9 @@ static int virtio_blk_validate_dev(struct virtio_device *vdev)
 	return 0;
 }
 
-static uint32_t virtio_blk_select_features(struct virtio_device *vdev)
+static u32 virtio_blk_select_features(struct virtio_device *vdev)
 {
-	uint32_t features = virtio_mmio_read_features(vdev);
+	u32 features = virtio_mmio_read_features(vdev);
 
 	features &= ~(1u << VIRTIO_BLK_F_RO);
 	features &= ~(1u << VIRTIO_BLK_F_SCSI);
@@ -102,8 +102,7 @@ static void virtio_blk_free_vq(struct virtio_blk_dev *vblk)
 	virtq_free(&vblk->vq);
 }
 
-static void virtio_blk_vq_used(struct virtq *vq, uint32_t id, uint32_t len,
-			       void *ctx)
+static void virtio_blk_vq_used(struct virtq *vq, u32 id, u32 len, void *ctx)
 {
 	struct virtio_blk_dev *vblk = ctx;
 	struct virtio_blk_io_desc *io;
@@ -138,7 +137,7 @@ static irqreturn_t virtio_blk_irq_handler(int irq, void *dev_id)
 
 #define VIRTIO_BLK_MAX_SEGS 16
 
-static int virtio_blk_submit_vec(struct virtio_blk_dev *vblk, uint64_t sector,
+static int virtio_blk_submit_vec(struct virtio_blk_dev *vblk, u64 sector,
 				 const struct bio_vec *vecs,
 				 unsigned int nr_vecs, bool write)
 {
@@ -254,8 +253,8 @@ static int virtio_blk_queue_rq(struct request_queue *q, struct request *rq)
 	struct virtio_blk_dev *vblk = disk->priv;
 	struct bio_vec segs[VIRTIO_BLK_MAX_SEGS];
 	unsigned int nr = 0;
-	uint64_t sector = rq->rq_start;
-	uint64_t seg_sector = rq->rq_start;
+	u64 sector = rq->rq_start;
+	u64 seg_sector = rq->rq_start;
 	bool write = rq->rq_op == REQ_OP_WRITE;
 	int err;
 
@@ -321,7 +320,7 @@ static void virtio_blk_free(struct virtio_blk_dev *vblk)
 static int virtio_blk_setup(struct virtio_blk_dev *vblk,
 			    struct virtio_device *vdev)
 {
-	uint32_t features;
+	u32 features;
 	int err;
 
 	if (!vblk || !vdev)

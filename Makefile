@@ -66,6 +66,7 @@ CFLAGS += -MMD
 CFLAGS += -MP
 CFLAGS += -Isrc/arch/$(ARCH)/include
 CFLAGS += -Isrc/include
+CFLAGS += -Isrc/include/freestanding
 CFLAGS += -Ivendor/libfdt
 
 LDFLAGS += -z max-page-size=4096
@@ -107,15 +108,19 @@ ifneq ($(QEMU_NET_DUMP),)
 QEMU_OPTS += -object filter-dump,id=netdump,netdev=net0,file=$(QEMU_NET_DUMP)
 endif
 
-.PHONY: all brk run gdb-server gdb-client rootfs clean clean-kernel help FORCE
+.PHONY: all brk run gdb-server gdb-client rootfs clean clean-kernel headers-check help FORCE
 
 all: brk
 
 brk: $(KERNEL_ELF)
 
+headers-check:
+	@CC="$(CC)" ARCH="$(ARCH)" ./scripts/check-headers.sh
+
 help:
 	@echo "Targets:"
 	@echo "  all / brk              Build uniprocessor kernel"
+	@echo "  headers-check          Verify UAPI/kernel header layering and ABI"
 	@echo "  run                    Boot uniprocessor kernel in QEMU"
 	@echo "  gdb-server             QEMU + GDB stub (uniprocessor)"
 	@echo "  gdb-client             Connect GDB to :1234"
