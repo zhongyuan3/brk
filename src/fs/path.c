@@ -1,4 +1,4 @@
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
@@ -8,8 +8,8 @@
 #include <brk/path.h>
 #include <brk/permission.h>
 #include <brk/printk.h>
-#include <brk/string.h>
 #include <brk/task.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/limits.h>
@@ -86,7 +86,7 @@ static const char *skip_component(const char *pathname,
 	while (*p != '\0' && *p != '/')
 		p++;
 
-	u32 len = p - start;
+	uint32_t len = p - start;
 
 	*component_name = QSTR_MAKE(start, len);
 
@@ -142,8 +142,8 @@ int fs_path_dot_dot(struct fs_path *path, struct fs_path *dotdot)
 
 #define MAXSYMLINKS 40
 
-static int path_walk(struct fs_path *path, const char *name,
-		     unsigned int flags, struct qstr *component_name)
+static int path_walk(struct fs_path *path, const char *name, unsigned int flags,
+		     struct qstr *component_name)
 {
 	int err;
 	int depth = 0;
@@ -219,10 +219,9 @@ static int path_walk(struct fs_path *path, const char *name,
 					err = -EINVAL;
 					goto lookup_error;
 				}
-				len = inode->ops->readlink(component_path.dentry,
-							   target,
-							   (int)sizeof(target) -
-								   1);
+				len = inode->ops->readlink(
+					component_path.dentry, target,
+					(int)sizeof(target) - 1);
 				if (len < 0) {
 					fs_path_put(&component_path);
 					err = len;

@@ -8,17 +8,17 @@
 #include <brk/net/skbuff.h>
 #include <brk/net/tcp.h>
 #include <brk/net/udp.h>
-#include <brk/string.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 
-static u16 ip_id;
+static uint16_t ip_id;
 
 int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt)
 {
 	struct iphdr *iph;
-	u32 ihl, tot_len, saddr, daddr;
-	u8 protocol;
+	uint32_t ihl, tot_len, saddr, daddr;
+	uint8_t protocol;
 
 	(void)dev;
 	(void)pt;
@@ -30,7 +30,7 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt)
 	if (IP_VERSION(iph) != 4)
 		goto drop;
 
-	ihl = (u32)IP_IHL(iph) * 4;
+	ihl = (uint32_t)IP_IHL(iph) * 4;
 	if (ihl < sizeof(*iph) || skb->len < ihl)
 		goto drop;
 
@@ -73,11 +73,12 @@ drop:
 	return -EINVAL;
 }
 
-int ip_output(struct sk_buff *skb, u32 saddr, u32 daddr, u8 protocol, u8 ttl)
+int ip_output(struct sk_buff *skb, uint32_t saddr, uint32_t daddr,
+	      uint8_t protocol, uint8_t ttl)
 {
 	struct iphdr *iph;
 	struct net_device *dev;
-	u32 next_hop;
+	uint32_t next_hop;
 	int err;
 
 	err = ip_route_output(daddr, &next_hop, &dev);
@@ -115,9 +116,9 @@ int ip_output(struct sk_buff *skb, u32 saddr, u32 daddr, u8 protocol, u8 ttl)
 	return arp_output(skb, dev, next_hop);
 }
 
-int net_parse_ipv4(const char *buf, size_t len, u32 *addr)
+int net_parse_ipv4(const char *buf, size_t len, uint32_t *addr)
 {
-	u32 parts[4] = { 0, 0, 0, 0 };
+	uint32_t parts[4] = { 0, 0, 0, 0 };
 	int part = 0;
 	bool digit = false;
 
@@ -125,7 +126,7 @@ int net_parse_ipv4(const char *buf, size_t len, u32 *addr)
 		char c = buf[i];
 
 		if (c >= '0' && c <= '9') {
-			parts[part] = parts[part] * 10 + (u32)(c - '0');
+			parts[part] = parts[part] * 10 + (uint32_t)(c - '0');
 			if (parts[part] > 255)
 				return -EINVAL;
 			digit = true;

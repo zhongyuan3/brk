@@ -3,12 +3,12 @@
 #include <brk/genhd.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
-#include <brk/spinlock.h>
-#include <brk/printk.h>
 #include <brk/printf.h>
+#include <brk/printk.h>
 #include <brk/refcnt.h>
-#include <brk/string.h>
+#include <brk/spinlock.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/stat.h>
 
@@ -19,18 +19,18 @@
 #define MBR_TYPE_GPT_PROTECTIVE 0xEE
 
 struct mbr_partition {
-	u8 status;
-	u8 chs_first[3];
-	u8 type;
-	u8 chs_last[3];
-	u32 start_lba;
-	u32 nr_sectors;
+	uint8_t status;
+	uint8_t chs_first[3];
+	uint8_t type;
+	uint8_t chs_last[3];
+	uint32_t start_lba;
+	uint32_t nr_sectors;
 } __attribute__((packed));
 
 struct mbr_sector {
-	u8 bootstrap[446];
+	uint8_t bootstrap[446];
 	struct mbr_partition parts[MBR_PART_COUNT];
-	u16 signature;
+	uint16_t signature;
 } __attribute__((packed));
 
 static LIST_DEFINE(disk_list);
@@ -47,14 +47,15 @@ void gendisk_name(const struct gendisk *disk, unsigned int partno, char *buf,
 
 struct gendisk *gendisk_alloc(unsigned int major, unsigned int first_minor,
 			      unsigned int minors, const char *name,
-			      u64 nr_sects, struct device *parent, void *priv)
+			      uint64_t nr_sects, struct device *parent,
+			      void *priv)
 {
 	struct gendisk *disk;
 	struct block_dev *bdev;
 
 	if (!name || !minors || nr_sects == 0)
 		return NULL;
-	if ((u64)first_minor + minors > MINOR_MAX)
+	if ((uint64_t)first_minor + minors > MINOR_MAX)
 		return NULL;
 
 	disk = kzalloc(sizeof(*disk));
@@ -102,8 +103,8 @@ void gendisk_free(struct gendisk *disk)
 	kfree(disk);
 }
 
-static int add_partition(struct gendisk *disk, unsigned int partno, u64 start,
-			 u64 nr_sects)
+static int add_partition(struct gendisk *disk, unsigned int partno,
+			 uint64_t start, uint64_t nr_sects)
 {
 	struct block_dev *bdev;
 	struct hd_struct *part;
@@ -152,8 +153,8 @@ static int add_partition(struct gendisk *disk, unsigned int partno, u64 start,
 	if (err)
 		pr_warn("genhd: cannot register %s: %d\n", name, err);
 
-	pr_info("genhd: %s: partition %u, start %" PRIu64
-		", sectors %" PRIu64 "\n",
+	pr_info("genhd: %s: partition %u, start %" PRIu64 ", sectors %" PRIu64
+		"\n",
 		name, partno, start, nr_sects);
 	return 0;
 }
@@ -161,7 +162,7 @@ static int add_partition(struct gendisk *disk, unsigned int partno, u64 start,
 static void scan_partitions(struct gendisk *disk)
 {
 	struct mbr_sector *mbr;
-	u8 *buf;
+	uint8_t *buf;
 
 	if (disk->minors <= 1)
 		return;
@@ -186,8 +187,8 @@ static void scan_partitions(struct gendisk *disk)
 
 	for (unsigned int i = 0; i < MBR_PART_COUNT; ++i) {
 		struct mbr_partition *p = &mbr->parts[i];
-		u64 start = p->start_lba;
-		u64 nr_sects = p->nr_sectors;
+		uint64_t start = p->start_lba;
+		uint64_t nr_sects = p->nr_sectors;
 		int err;
 
 		if (!p->type || !nr_sects)
@@ -226,11 +227,11 @@ int add_disk(struct gendisk *disk)
 	disk->dev.mode = S_IFBLK | 0666;
 	err = device_register(&disk->dev);
 	if (err)
-		pr_warn("genhd: cannot register %s: %d\n",
-			disk->disk_name, err);
+		pr_warn("genhd: cannot register %s: %d\n", disk->disk_name,
+			err);
 
-	pr_info("genhd: %s: %u minors, %" PRIu64 " sectors\n",
-		disk->disk_name, disk->minors, disk->nr_sects);
+	pr_info("genhd: %s: %u minors, %" PRIu64 " sectors\n", disk->disk_name,
+		disk->minors, disk->nr_sects);
 
 	spin_lock(&disk_list_lock);
 	list_add_tail(&disk->list, &disk_list);

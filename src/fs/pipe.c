@@ -10,9 +10,9 @@
 #include <brk/panic.h>
 #include <brk/path.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/poll.h>
@@ -53,7 +53,7 @@ static struct fs_dentry *pipefs_lookup(struct fs_inode *dir,
 }
 
 static int pipefs_dir_getattr(const struct fs_path *path, struct stat *st,
-			      u32 mask, unsigned int flags)
+			      uint32_t mask, unsigned int flags)
 {
 	struct fs_inode *inode = path->dentry->inode;
 
@@ -217,8 +217,8 @@ int pipefs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 	return 0;
 }
 
-static int pipe_getattr(const struct fs_path *path, struct stat *st, u32 mask,
-			unsigned int flags)
+static int pipe_getattr(const struct fs_path *path, struct stat *st,
+			uint32_t mask, unsigned int flags)
 {
 	struct fs_inode *inode = path->dentry->inode;
 

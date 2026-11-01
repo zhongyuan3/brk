@@ -1,4 +1,4 @@
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/fs.h>
 #include <brk/initcall.h>
 #include <brk/kernel.h>
@@ -9,9 +9,9 @@
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 static struct hlist_head inode_hash_table[INODE_HTABLE_SIZE];
@@ -75,15 +75,15 @@ static void __inode_free(struct fs_inode *inode)
 		slab_free(&inode_cache, inode);
 }
 
-static u32 __inode_hash(const struct fs_super_block *sb, unsigned long ino)
+static uint32_t __inode_hash(const struct fs_super_block *sb, unsigned long ino)
 {
-	const u8 *k = (u8 *)&sb;
-	u32 h = 0x811c9dc5;
+	const uint8_t *k = (uint8_t *)&sb;
+	uint32_t h = 0x811c9dc5;
 	for (size_t i = 0; i < sizeof(void *); ++i) {
 		h ^= k[i];
 		h *= 0x01000193;
 	}
-	k = (u8 *)&ino;
+	k = (uint8_t *)&ino;
 	for (size_t i = 0; i < sizeof(ino); ++i) {
 		h ^= k[i];
 		h *= 0x01000193;
@@ -97,7 +97,7 @@ static struct fs_inode *__inode_lookup(struct hlist_head *bucket,
 {
 	struct fs_inode *inode;
 
-	ASSERT(spin_is_locked_by_me(&inode_hash_lock));
+	assert(spin_is_locked_by_me(&inode_hash_lock));
 
 retry:
 	/* Look up in hash table */
@@ -114,7 +114,8 @@ retry:
 			 * if it fails, wait for the eviction to finish and
 			 * retry the hash lookup.
 			 */
-			if ((inode->state & (I_FREEING | I_WILL_FREE | I_BAD)) ||
+			if ((inode->state &
+			     (I_FREEING | I_WILL_FREE | I_BAD)) ||
 			    !refcnt_inc_unless_zero(&inode->count)) {
 				spin_unlock_irqrestore(&inode->lock, flags);
 				task_sleep(&inode->state, &inode_hash_lock);

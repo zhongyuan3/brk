@@ -1,5 +1,5 @@
 #include <brk/kernel.h>
-#include <brk/string.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 void *memcpy(void *dst, const void *src, size_t n)

@@ -2,12 +2,12 @@
 #include <brk/signal.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/timekeeper.h>
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/termios.h>
 
@@ -122,7 +122,7 @@ static void n_tty_signal(struct tty *tty, int sig, int c)
 }
 
 /* Store one byte without interpreting it as an editing character. */
-static void n_tty_store(struct tty *tty, u8 c)
+static void n_tty_store(struct tty *tty, uint8_t c)
 {
 	struct termios *t = &tty->port->termios;
 	bool canonical = (t->c_lflag & ICANON) != 0;
@@ -152,14 +152,14 @@ static void n_tty_werase(struct tty *tty)
 
 	/* Skip trailing blanks, then remove the previous word. */
 	while (end > start) {
-		u8 c = tty->rx_buf[(end - 1) % tty->rx_size];
+		uint8_t c = tty->rx_buf[(end - 1) % tty->rx_size];
 
 		if (c != ' ' && c != '\t')
 			break;
 		end--;
 	}
 	while (end > start) {
-		u8 c = tty->rx_buf[(end - 1) % tty->rx_size];
+		uint8_t c = tty->rx_buf[(end - 1) % tty->rx_size];
 
 		if (c == ' ' || c == '\t')
 			break;
@@ -183,19 +183,18 @@ static void n_tty_reprint(struct tty *tty)
 	n_tty_output(tty, '\n');
 
 	for (size_t i = tty->rx_w; i < tty->rx_e; ++i)
-		n_tty_echo_char(tty,
-				tty->rx_buf[i % tty->rx_size]);
+		n_tty_echo_char(tty, tty->rx_buf[i % tty->rx_size]);
 	n_tty_output(tty, '\n');
 }
 
-static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
+static void n_tty_receive_buf(struct tty *tty, const uint8_t *buf, size_t size)
 {
 	struct tty_port *port = tty->port;
 	struct termios *t = &port->termios;
 	irqstate_t flags = spin_lock_irqsave(&port->lock);
 
 	for (size_t i = 0; i < size; ++i) {
-		u8 c = buf[i];
+		uint8_t c = buf[i];
 		bool canonical = (t->c_lflag & ICANON) != 0;
 
 		if ((t->c_iflag & IGNCR) && c == '\r')
@@ -303,8 +302,7 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 
 		n_tty_store(tty, c);
 
-		if (c == '\n' || c == t->c_cc[VEOL] ||
-		    c == t->c_cc[VEOL2] ||
+		if (c == '\n' || c == t->c_cc[VEOL] || c == t->c_cc[VEOL2] ||
 		    tty->rx_e - tty->rx_r == tty->rx_size) {
 			tty->rx_w = tty->rx_e;
 			task_wake_all(&tty->rx_r);
@@ -321,7 +319,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 	char tmp[256];
 	size_t total = 0;
 	size_t seen = 0;
-	u64 deadline = 0;
+	uint64_t deadline = 0;
 	bool timed = false;
 
 	if (size == 0)
@@ -360,8 +358,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 
 				for (i = 0; i < avail; ++i) {
 					if (tty->rx_buf[(tty->rx_r + i) %
-							tty->rx_size] ==
-					    '\n') {
+							tty->rx_size] == '\n') {
 						line = i + 1;
 						found = true;
 						break;
@@ -399,7 +396,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 				copy = avail >= min ? avail : 0;
 
 			if (copy == 0) {
-				u64 now;
+				uint64_t now;
 
 				if (signal_pending(task)) {
 					spin_unlock_irqrestore(&port->lock,
@@ -421,16 +418,18 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 				if (vtime > 0) {
 					if (min == 0 && !timed) {
 						timed = true;
-						deadline = now +
-							(u64)vtime *
-							VTIME_UNIT_NS;
+						deadline =
+							now +
+							(uint64_t)vtime *
+								VTIME_UNIT_NS;
 					} else if (min > 0 && avail > 0 &&
 						   avail > seen) {
 						seen = avail;
 						timed = true;
-						deadline = now +
-							(u64)vtime *
-							VTIME_UNIT_NS;
+						deadline =
+							now +
+							(uint64_t)vtime *
+								VTIME_UNIT_NS;
 					}
 
 					if (timed && now >= deadline) {
@@ -474,8 +473,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 			chunk = sizeof(tmp);
 
 		for (i = 0; i < chunk; ++i)
-			tmp[i] = tty->rx_buf[(tty->rx_r + i) %
-					     tty->rx_size];
+			tmp[i] = tty->rx_buf[(tty->rx_r + i) % tty->rx_size];
 		tty->rx_r += chunk;
 
 		spin_unlock_irqrestore(&port->lock, flags);
@@ -553,8 +551,8 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 			if (t->c_lflag & FLUSHO)
 				continue;
 
-			if ((t->c_oflag & OPOST) &&
-			    (t->c_oflag & ONLCR) && c == '\n') {
+			if ((t->c_oflag & OPOST) && (t->c_oflag & ONLCR) &&
+			    c == '\n') {
 				err = port->driver->ops->put_char(tty, '\r');
 				if (!err)
 					err = port->driver->ops->put_char(tty,

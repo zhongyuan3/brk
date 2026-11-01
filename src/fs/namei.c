@@ -62,8 +62,7 @@ retry:
 	if (err)
 		return ERR_PTR(err);
 
-	if ((flags & O_NOFOLLOW) &&
-	    !((flags & O_CREAT) && (flags & O_EXCL))) {
+	if ((flags & O_NOFOLLOW) && !((flags & O_CREAT) && (flags & O_EXCL))) {
 		struct fs_inode *link_inode = fs_dentry_inode(path.dentry);
 
 		if (link_inode && S_ISLNK(link_inode->mode)) {
@@ -565,8 +564,8 @@ int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 	new_dir = new_parent.dentry->inode;
 	new_exists = new_inode != NULL;
 
-	if (!old_inode || !old_dir || !new_dir ||
-	    !S_ISDIR(old_dir->mode) || !S_ISDIR(new_dir->mode)) {
+	if (!old_inode || !old_dir || !new_dir || !S_ISDIR(old_dir->mode) ||
+	    !S_ISDIR(new_dir->mode)) {
 		err = -ENOTDIR;
 		goto out;
 	}

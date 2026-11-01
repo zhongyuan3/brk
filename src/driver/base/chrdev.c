@@ -1,7 +1,7 @@
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/chrdev.h>
-#include <brk/devno.h>
 #include <brk/device.h>
+#include <brk/devno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/initcall.h>
@@ -44,7 +44,7 @@ void chrdev_put(struct char_dev *cd)
 	if (refcnt_dec_fetch(&cd->ref) > 0)
 		return;
 
-	ASSERT(hlist_unhashed(&cd->hlist));
+	assert(hlist_unhashed(&cd->hlist));
 	kfree(cd);
 }
 
@@ -132,8 +132,7 @@ void chrdev_free_minor(unsigned major, unsigned minor)
 int chrdev_alloc_region(unsigned major, unsigned base_minor, unsigned count,
 			dev_t *dev_out)
 {
-	return devno_alloc_region(&cd_devno, major, base_minor, count,
-				  dev_out);
+	return devno_alloc_region(&cd_devno, major, base_minor, count, dev_out);
 }
 
 void chrdev_free_region(unsigned major, unsigned minor, unsigned count)
@@ -195,8 +194,8 @@ static ssize_t chrdev_read(struct fs_file *file, char *buf, size_t size,
 	return cd->fops->read(file, buf, size, pos);
 }
 
-static ssize_t chrdev_write(struct fs_file *file, const char *buf,
-			    size_t size, loff_t *pos)
+static ssize_t chrdev_write(struct fs_file *file, const char *buf, size_t size,
+			    loff_t *pos)
 {
 	struct char_dev *cd = chrdev_file_dev(file);
 

@@ -7,10 +7,10 @@
 #include <brk/genhd.h>
 #include <brk/mount.h>
 #include <brk/path.h>
-#include <brk/printk.h>
 #include <brk/printf.h>
-#include <brk/string.h>
+#include <brk/printk.h>
 #include <brk/task.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/stat.h>
@@ -75,8 +75,7 @@ int fs_init(void)
 			break;
 	}
 	if (mount_err)
-		mount_err = do_mount("/dev/virtio_blk0", "/", "brkfs", 0,
-				     NULL);
+		mount_err = do_mount("/dev/virtio_blk0", "/", "brkfs", 0, NULL);
 	err = mount_err;
 	if (err)
 		return err;

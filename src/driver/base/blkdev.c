@@ -1,5 +1,5 @@
 #include <arch/asm/page.h>
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/bio.h>
 #include <brk/blkdev.h>
 #include <brk/device.h>
@@ -14,9 +14,9 @@
 #include <brk/printk.h>
 #include <brk/refcnt.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/ioctl.h>
 #include <uapi/types.h>
@@ -44,7 +44,7 @@ int blkdev_register(struct block_dev *bd)
 		return -EINVAL;
 
 	pr_debug("%s: devtype=%" PRIu32 ", major=%u, minor=%u\n", __func__,
-		   DEVTYPE(dev), MAJOR(dev), MINOR(dev));
+		 DEVTYPE(dev), MAJOR(dev), MINOR(dev));
 
 	spin_lock(&bd_htable_lock);
 	if (!hlist_unhashed(&bd->hlist)) {
@@ -87,7 +87,7 @@ struct block_dev *blkdev_get(dev_t dev)
 	struct block_dev *bd;
 
 	pr_debug("%s: devtype=%" PRIu32 ", major=%u, minor=%u\n", __func__,
-		   DEVTYPE(dev), MAJOR(dev), MINOR(dev));
+		 DEVTYPE(dev), MAJOR(dev), MINOR(dev));
 
 	spin_lock(&bd_htable_lock);
 	bd = blkdev_get_no_lock(dev);
@@ -106,7 +106,7 @@ void blkdev_put(struct block_dev *bd)
 	if (refcnt_dec_fetch(&bd->ref) > 0)
 		return;
 
-	ASSERT(hlist_unhashed(&bd->hlist));
+	assert(hlist_unhashed(&bd->hlist));
 	parent = bd->bd_parent;
 	page_cache_destroy(bd->bd_mapping);
 	bd->bd_mapping = NULL;
@@ -139,8 +139,7 @@ void blkdev_free_minor(unsigned major, unsigned minor)
 int blkdev_alloc_region(unsigned major, unsigned base_minor, unsigned count,
 			dev_t *dev_out)
 {
-	return devno_alloc_region(&bd_devno, major, base_minor, count,
-				  dev_out);
+	return devno_alloc_region(&bd_devno, major, base_minor, count, dev_out);
 }
 
 void blkdev_free_region(unsigned major, unsigned minor, unsigned count)
@@ -148,26 +147,26 @@ void blkdev_free_region(unsigned major, unsigned minor, unsigned count)
 	devno_free_region(&bd_devno, major, minor, count);
 }
 
-int blkdev_check_bounds(struct block_dev *bd, u64 blk_id, u32 blk_cnt)
+int blkdev_check_bounds(struct block_dev *bd, uint64_t blk_id, uint32_t blk_cnt)
 {
 	if (blk_cnt == 0)
 		return 0;
 	if (blk_id >= bd->phy_bcnt) {
 		pr_warn("%s(): invalid blk_id %" PRIu64 ", phy_bcnt %" PRIu64
-			  "\n",
-			  __func__, blk_id, bd->phy_bcnt);
+			"\n",
+			__func__, blk_id, bd->phy_bcnt);
 		return -ENXIO;
 	}
 	if (bd->phy_bcnt - blk_id < blk_cnt) {
 		pr_warn("%s(): invalid blk_cnt %" PRIu32 ", phy_bcnt %" PRIu64
-			  "\n",
-			  __func__, blk_cnt, bd->phy_bcnt);
+			"\n",
+			__func__, blk_cnt, bd->phy_bcnt);
 		return -ENXIO;
 	}
 	return 0;
 }
 
-static int blkdev_submit_buf(struct block_dev *bd, u64 blk_id, void *buf,
+static int blkdev_submit_buf(struct block_dev *bd, uint64_t blk_id, void *buf,
 			     size_t len, enum req_op op)
 {
 	size_t done = 0;
@@ -178,7 +177,7 @@ static int blkdev_submit_buf(struct block_dev *bd, u64 blk_id, void *buf,
 	if (bd->phy_bsize != 512 || (len & 511))
 		return -EINVAL;
 
-	err = blkdev_check_bounds(bd, blk_id, (u32)(len >> 9));
+	err = blkdev_check_bounds(bd, blk_id, (uint32_t)(len >> 9));
 	if (err)
 		return err;
 
@@ -195,7 +194,7 @@ static int blkdev_submit_buf(struct block_dev *bd, u64 blk_id, void *buf,
 			if (chunk > PAGE_SIZE)
 				chunk = PAGE_SIZE;
 
-			err = bio_add_buf(&bio, (u8 *)buf + done, chunk);
+			err = bio_add_buf(&bio, (uint8_t *)buf + done, chunk);
 			if (err)
 				return err;
 			done += chunk;
@@ -209,22 +208,22 @@ static int blkdev_submit_buf(struct block_dev *bd, u64 blk_id, void *buf,
 	return 0;
 }
 
-int blkdev_read(struct block_dev *bd, u64 blk_id, void *buf, u32 blk_cnt)
+int blkdev_read(struct block_dev *bd, uint64_t blk_id, void *buf,
+		uint32_t blk_cnt)
 {
 	if (!bd)
 		return -EINVAL;
 	return blkdev_submit_buf(bd, blk_id, buf,
-				 (size_t)blk_cnt * bd->phy_bsize,
-				 REQ_OP_READ);
+				 (size_t)blk_cnt * bd->phy_bsize, REQ_OP_READ);
 }
 
-int blkdev_write(struct block_dev *bd, u64 blk_id, const void *buf, u32 blk_cnt)
+int blkdev_write(struct block_dev *bd, uint64_t blk_id, const void *buf,
+		 uint32_t blk_cnt)
 {
 	if (!bd)
 		return -EINVAL;
 	return blkdev_submit_buf(bd, blk_id, (void *)buf,
-				 (size_t)blk_cnt * bd->phy_bsize,
-				 REQ_OP_WRITE);
+				 (size_t)blk_cnt * bd->phy_bsize, REQ_OP_WRITE);
 }
 
 int blkdev_flush(struct block_dev *bd)
@@ -241,10 +240,10 @@ int blkdev_flush(struct block_dev *bd)
 static int blkdev_read_page(struct page_cache *m, struct cached_page *cp)
 {
 	struct block_dev *bd;
-	u32 bs;
-	u32 nsec;
-	u32 valid;
-	u64 sector;
+	uint32_t bs;
+	uint32_t nsec;
+	uint32_t valid;
+	uint64_t sector;
 	int err;
 	void *buf;
 
@@ -268,7 +267,7 @@ static int blkdev_read_page(struct page_cache *m, struct cached_page *cp)
 
 	valid = nsec;
 	if (bd->phy_bcnt - sector < valid)
-		valid = (u32)(bd->phy_bcnt - sector);
+		valid = (uint32_t)(bd->phy_bcnt - sector);
 
 	err = blkdev_check_bounds(bd, sector, valid);
 	if (err)
@@ -279,7 +278,7 @@ static int blkdev_read_page(struct page_cache *m, struct cached_page *cp)
 		return err;
 
 	if (valid < nsec)
-		memset((u8 *)buf + valid * bs, 0, PAGE_SIZE - valid * bs);
+		memset((uint8_t *)buf + valid * bs, 0, PAGE_SIZE - valid * bs);
 
 	return 0;
 }
@@ -287,10 +286,10 @@ static int blkdev_read_page(struct page_cache *m, struct cached_page *cp)
 static int blkdev_write_page(struct page_cache *m, struct cached_page *cp)
 {
 	struct block_dev *bd;
-	u32 bs;
-	u32 nsec;
-	u32 valid;
-	u64 sector;
+	uint32_t bs;
+	uint32_t nsec;
+	uint32_t valid;
+	uint64_t sector;
 	int err;
 	void *buf;
 
@@ -309,7 +308,7 @@ static int blkdev_write_page(struct page_cache *m, struct cached_page *cp)
 
 	valid = nsec;
 	if (bd->phy_bcnt - sector < valid)
-		valid = (u32)(bd->phy_bcnt - sector);
+		valid = (uint32_t)(bd->phy_bcnt - sector);
 
 	err = blkdev_check_bounds(bd, sector, valid);
 	if (err)
@@ -379,7 +378,7 @@ static ssize_t blkdev_file_read(struct fs_file *file, char *buf, size_t size,
 				loff_t *pos)
 {
 	struct block_dev *bd = file->private_data;
-	u64 capacity;
+	uint64_t capacity;
 	size_t total = 0;
 
 	if (!bd || bd->dead)
@@ -390,10 +389,10 @@ static ssize_t blkdev_file_read(struct fs_file *file, char *buf, size_t size,
 		return -EINVAL;
 
 	capacity = blkdev_capacity_bytes(bd);
-	if ((u64)*pos >= capacity)
+	if ((uint64_t)*pos >= capacity)
 		return 0;
-	if (size > capacity - (u64)*pos)
-		size = (size_t)(capacity - (u64)*pos);
+	if (size > capacity - (uint64_t)*pos)
+		size = (size_t)(capacity - (uint64_t)*pos);
 
 	while (size > 0) {
 		pgoff_t index = (pgoff_t)(*pos >> PAGE_SHIFT);
@@ -414,7 +413,7 @@ static ssize_t blkdev_file_read(struct fs_file *file, char *buf, size_t size,
 
 		cached_page_lock(cp);
 		err = copy_to_user(buf + total,
-				   (u8 *)cached_page_addr(cp) + off, n);
+				   (uint8_t *)cached_page_addr(cp) + off, n);
 		cached_page_unlock(cp);
 		cached_page_put(cp);
 
@@ -433,7 +432,7 @@ static ssize_t blkdev_file_write(struct fs_file *file, const char *buf,
 				 size_t size, loff_t *pos)
 {
 	struct block_dev *bd = file->private_data;
-	u64 capacity;
+	uint64_t capacity;
 	size_t total = 0;
 
 	if (!bd || bd->dead)
@@ -444,10 +443,10 @@ static ssize_t blkdev_file_write(struct fs_file *file, const char *buf,
 		return -EINVAL;
 
 	capacity = blkdev_capacity_bytes(bd);
-	if ((u64)*pos >= capacity)
+	if ((uint64_t)*pos >= capacity)
 		return -ENOSPC;
-	if (size > capacity - (u64)*pos)
-		size = (size_t)(capacity - (u64)*pos);
+	if (size > capacity - (uint64_t)*pos)
+		size = (size_t)(capacity - (uint64_t)*pos);
 
 	while (size > 0) {
 		pgoff_t index = (pgoff_t)(*pos >> PAGE_SHIFT);
@@ -468,7 +467,7 @@ static ssize_t blkdev_file_write(struct fs_file *file, const char *buf,
 		}
 
 		cached_page_lock(cp);
-		err = copy_from_user((u8 *)cached_page_addr(cp) + off,
+		err = copy_from_user((uint8_t *)cached_page_addr(cp) + off,
 				     buf + total, n);
 		cached_page_unlock(cp);
 		if (!err)
@@ -548,7 +547,7 @@ static long blkdev_file_ioctl(struct fs_file *file, unsigned int cmd,
 			      unsigned long arg)
 {
 	struct block_dev *bd = file->private_data;
-	u64 bytes;
+	uint64_t bytes;
 
 	if (!bd || bd->dead)
 		return -ENODEV;

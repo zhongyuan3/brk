@@ -8,10 +8,10 @@
 #include <brk/printk.h>
 #include <brk/refcnt.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/tty.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/poll.h>

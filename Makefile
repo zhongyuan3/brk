@@ -79,7 +79,7 @@ export CROSS_COMPILE CC LD AS AR CFLAGS LDFLAGS
 
 LINKER_SCRIPT_SRC := src/arch/$(ARCH)/kernel/brk.ld.S
 LINKER_SCRIPT := $(KERNEL_BUILD_ROOT)/brk.ld
-KERNEL_ELF := $(KERNEL_BUILD_ROOT)/brk.elf
+KERNEL_ELF := $(KERNEL_BUILD_ROOT)/brk
 ROOTFS_IMG := $(ROOTFS_BUILD_ROOT)/rootfs.img
 
 core-y := src

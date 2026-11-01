@@ -53,8 +53,8 @@
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
-#include <brk/net/net.h>
 #include <brk/net/irqtest.h>
+#include <brk/net/net.h>
 #include <brk/net/tcp.h>
 #include <brk/pagecache.h>
 #include <brk/path.h>
@@ -62,9 +62,9 @@
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/dirent.h>
 #include <uapi/errno.h>
 #include <uapi/stat.h>
@@ -97,9 +97,9 @@ typedef ssize_t (*procfs_write_fn)(const struct procfs_entry *entry,
 
 struct procfs_entry {
 	const char *name;
-	u8 name_len;
-	u8 idx; /* index used in the inode encoding (>= 1) */
-	u8 d_type;
+	uint8_t name_len;
+	uint8_t idx; /* index used in the inode encoding (>= 1) */
+	uint8_t d_type;
 	umode_t mode;
 	procfs_show_fn show;
 	procfs_write_fn write;
@@ -120,8 +120,8 @@ static int procfs_show_pagecache_shrink(const struct procfs_entry *e, pid_t pid,
 static ssize_t procfs_write_pagecache_shrink(const struct procfs_entry *e,
 					     const char *buf, size_t size,
 					     loff_t *pos);
-static int procfs_show_ping(const struct procfs_entry *e, pid_t pid,
-			    char *buf, size_t size);
+static int procfs_show_ping(const struct procfs_entry *e, pid_t pid, char *buf,
+			    size_t size);
 static ssize_t procfs_write_ping(const struct procfs_entry *e, const char *buf,
 				 size_t size, loff_t *pos);
 static int procfs_show_tcp(const struct procfs_entry *e, pid_t pid, char *buf,
@@ -469,7 +469,7 @@ static ssize_t procfs_write_pagecache_shrink(const struct procfs_entry *e,
 
 	freed = page_cache_shrink(nr);
 	pr_info("pagecache: shrink(%lu) freed %lu pages (%lu remain)\n", nr,
-		  freed, page_cache_nr_pages());
+		freed, page_cache_nr_pages());
 	*pos = (loff_t)size;
 	return (ssize_t)size;
 }
@@ -480,15 +480,16 @@ static int procfs_show_ping(const struct procfs_entry *e, pid_t pid, char *buf,
 	(void)e;
 	(void)pid;
 
-	return snprintf(buf, size,
-			"# write an IPv4 address to send one ICMP echo request\n"
-			"# example: echo 10.0.2.2 > /proc/ping\n");
+	return snprintf(
+		buf, size,
+		"# write an IPv4 address to send one ICMP echo request\n"
+		"# example: echo 10.0.2.2 > /proc/ping\n");
 }
 
 static ssize_t procfs_write_ping(const struct procfs_entry *e, const char *buf,
 				 size_t size, loff_t *pos)
 {
-	u32 addr;
+	uint32_t addr;
 	int err;
 
 	(void)e;
@@ -792,7 +793,7 @@ static struct fs_dentry *procfs_pid_dir_lookup(struct fs_inode *dir,
 }
 
 static int procfs_getattr(const struct fs_path *path, struct stat *stat,
-			  u32 mask, unsigned int flags)
+			  uint32_t mask, unsigned int flags)
 {
 	(void)mask;
 	(void)flags;

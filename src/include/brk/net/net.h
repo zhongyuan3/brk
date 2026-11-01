@@ -9,8 +9,9 @@
  * so addresses are stored into headers and compared without byte swapping.
  * Ports, lengths and protocol fields still go through htons()/ntohs().
  */
-#define NET_IP4(a, b, c, d) \
-	((u32)(a) | ((u32)(b) << 8) | ((u32)(c) << 16) | ((u32)(d) << 24))
+#define NET_IP4(a, b, c, d)                                             \
+	((uint32_t)(a) | ((uint32_t)(b) << 8) | ((uint32_t)(c) << 16) | \
+	 ((uint32_t)(d) << 24))
 
 #define NET_IP4_FMT "%u.%u.%u.%u"
 #define NET_IP4_ARG(a)                                                     \
@@ -23,22 +24,22 @@
 #define NET_DEFAULT_NETMASK NET_IP4(255, 255, 255, 0)
 #define NET_DEFAULT_GW NET_IP4(10, 0, 2, 2)
 
-static inline u16 htons(u16 x)
+static inline uint16_t htons(uint16_t x)
 {
 	return __builtin_bswap16(x);
 }
 
-static inline u16 ntohs(u16 x)
+static inline uint16_t ntohs(uint16_t x)
 {
 	return __builtin_bswap16(x);
 }
 
-static inline u32 htonl(u32 x)
+static inline uint32_t htonl(uint32_t x)
 {
 	return __builtin_bswap32(x);
 }
 
-static inline u32 ntohl(u32 x)
+static inline uint32_t ntohl(uint32_t x)
 {
 	return __builtin_bswap32(x);
 }
@@ -49,14 +50,14 @@ static inline u32 ntohl(u32 x)
  * stored directly into a header field.  Verifying a header that already
  * contains its checksum therefore reduces to inet_csum(hdr, len) == 0.
  */
-u32 inet_csum_add(u32 sum, const void *data, size_t len);
-u16 inet_csum_fold(u32 sum);
-u16 inet_csum(const void *data, size_t len);
+uint32_t inet_csum_add(uint32_t sum, const void *data, size_t len);
+uint16_t inet_csum_fold(uint32_t sum);
+uint16_t inet_csum(const void *data, size_t len);
 
 /* Parse a dotted-quad string; returns 0 on success. */
-int net_parse_ipv4(const char *buf, size_t len, u32 *addr);
+int net_parse_ipv4(const char *buf, size_t len, uint32_t *addr);
 
 /* Send one ICMP echo request to @daddr (host byte order). */
-int net_ping(u32 daddr);
+int net_ping(uint32_t daddr);
 
 #endif

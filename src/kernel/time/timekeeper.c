@@ -9,9 +9,9 @@
 #include <brk/types.h>
 #include <uapi/errno.h>
 
-static u64 mono_base_cycles;
-static i64 wall_to_mono_ns;
-static u64 jiffies;
+static uint64_t mono_base_cycles;
+static int64_t wall_to_mono_ns;
+static uint64_t jiffies;
 static SPINLOCK_DEFINE(tk_lock);
 static bool initialized;
 
@@ -20,48 +20,49 @@ bool timekeeper_initialized(void)
 	return initialized;
 }
 
-static u64 cycles_to_ns(u64 cycles)
+static uint64_t cycles_to_ns(uint64_t cycles)
 {
-	u32 freq = clocksource_get_timebase_freq();
-	u64 sec = cycles / freq;
-	u64 rem = cycles % freq;
+	uint32_t freq = clocksource_get_timebase_freq();
+	uint64_t sec = cycles / freq;
+	uint64_t rem = cycles % freq;
 
 	return sec * NS_PER_SEC + rem * NS_PER_SEC / freq;
 }
 
-u64 timekeeper_mono_ns(void)
+uint64_t timekeeper_mono_ns(void)
 {
 	return cycles_to_ns(timer_read() - mono_base_cycles);
 }
 
-static void ns_to_ts(i64 ns, struct timespec *ts)
+static void ns_to_ts(int64_t ns, struct timespec *ts)
 {
-	ts->tv_sec = ns / (i64)NS_PER_SEC;
-	ts->tv_nsec = ns % (i64)NS_PER_SEC;
+	ts->tv_sec = ns / (int64_t)NS_PER_SEC;
+	ts->tv_nsec = ns % (int64_t)NS_PER_SEC;
 }
 
-static i64 timespec_to_ns(const struct timespec *ts)
+static int64_t timespec_to_ns(const struct timespec *ts)
 {
-	return (i64)ts->tv_sec * (i64)NS_PER_SEC + ts->tv_nsec;
+	return (int64_t)ts->tv_sec * (int64_t)NS_PER_SEC + ts->tv_nsec;
 }
 
 void timekeeper_init(void)
 {
 	struct timespec rtc_ts;
-	u64 wall_ns;
+	uint64_t wall_ns;
 
 	mono_base_cycles = timer_read();
 
 	if (rtc_is_available()) {
 		rtc_read_timespec(&rtc_ts);
-		wall_ns = (u64)rtc_ts.tv_sec * NS_PER_SEC + (u64)rtc_ts.tv_nsec;
+		wall_ns = (uint64_t)rtc_ts.tv_sec * NS_PER_SEC +
+			  (uint64_t)rtc_ts.tv_nsec;
 	} else {
 		wall_ns = 0;
 	}
 
 	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 
-	wall_to_mono_ns = (i64)wall_ns;
+	wall_to_mono_ns = (int64_t)wall_ns;
 	jiffies = 0;
 	spin_unlock_irqrestore(&tk_lock, flags);
 
@@ -78,9 +79,9 @@ void timekeeper_tick(void)
 	spin_unlock_irqrestore(&tk_lock, flags);
 }
 
-u64 jiffies_get(void)
+uint64_t jiffies_get(void)
 {
-	u64 j;
+	uint64_t j;
 	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 
 	j = jiffies;
@@ -95,55 +96,56 @@ void *timekeeper_wait_chan(void)
 
 void timekeeper_get_mono_ts(struct timespec *ts)
 {
-	ns_to_ts((i64)timekeeper_mono_ns(), ts);
+	ns_to_ts((int64_t)timekeeper_mono_ns(), ts);
 }
 
 void timekeeper_get_real_ts(struct timespec *ts)
 {
-	i64 wtm;
-	i64 real_ns;
+	int64_t wtm;
+	int64_t real_ns;
 	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 
 	wtm = wall_to_mono_ns;
 	spin_unlock_irqrestore(&tk_lock, flags);
 
-	real_ns = (i64)timekeeper_mono_ns() + wtm;
+	real_ns = (int64_t)timekeeper_mono_ns() + wtm;
 	ns_to_ts(real_ns, ts);
 }
 
 void timekeeper_set_real_ts(const struct timespec *ts)
 {
-	u64 new_wall_ns = (u64)ts->tv_sec * NS_PER_SEC + (u64)ts->tv_nsec;
-	u64 mono_ns = timekeeper_mono_ns();
+	uint64_t new_wall_ns =
+		(uint64_t)ts->tv_sec * NS_PER_SEC + (uint64_t)ts->tv_nsec;
+	uint64_t mono_ns = timekeeper_mono_ns();
 	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 
-	wall_to_mono_ns = (i64)new_wall_ns - (i64)mono_ns;
+	wall_to_mono_ns = (int64_t)new_wall_ns - (int64_t)mono_ns;
 	spin_unlock_irqrestore(&tk_lock, flags);
 
 	if (rtc_is_available())
 		rtc_set_timespec(ts);
 }
 
-u64 timekeeper_nanosleep(const struct timespec *dur, struct timespec *rem)
+uint64_t timekeeper_nanosleep(const struct timespec *dur, struct timespec *rem)
 {
-	i64 start_ns = (i64)timekeeper_mono_ns();
-	i64 deadline_ns = start_ns + timespec_to_ns(dur);
-	i64 now_ns;
+	int64_t start_ns = (int64_t)timekeeper_mono_ns();
+	int64_t deadline_ns = start_ns + timespec_to_ns(dur);
+	int64_t now_ns;
 	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 
 	for (;;) {
 		if (task_is_killed(current_task())) {
-			i64 left_ns;
+			int64_t left_ns;
 
 			spin_unlock_irqrestore(&tk_lock, flags);
-			now_ns = (i64)timekeeper_mono_ns();
+			now_ns = (int64_t)timekeeper_mono_ns();
 			left_ns = deadline_ns - now_ns;
 			if (left_ns < 0)
 				left_ns = 0;
 			ns_to_ts(left_ns, rem);
 			return -EINTR;
 		}
-		now_ns = (i64)timekeeper_mono_ns();
+		now_ns = (int64_t)timekeeper_mono_ns();
 		if (now_ns >= deadline_ns)
 			break;
 		task_sleep(&jiffies, &tk_lock);

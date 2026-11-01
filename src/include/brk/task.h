@@ -40,7 +40,7 @@ struct task_create_args {
 	struct file_system_info *fsinfo;
 	struct task_resource_usage *rsrc_usage;
 	struct sigaction_table *sigactions;
-	u64 blocked; /* if @sigactions is not NULL, @blocked must be valid */
+	uint64_t blocked; /* if @sigactions is not NULL, @blocked must be valid */
 	void (*fn)(void); /* function to run after the task is created */
 };
 
@@ -59,7 +59,7 @@ void task_exit(int status);
 void task_exit_normal(int code);
 void task_exit_signal(int sig);
 int task_fork(void);
-int task_set_brk(u64 addr);
+int task_set_brk(uint64_t addr);
 void task_dump(void);
 
 void task_yield(void);
@@ -72,14 +72,14 @@ void task_scheduler(void);
 void task_join(struct task *task);
 
 int task_get_times(struct task *task, struct tms *times);
-void task_add_system_time(struct task *task, u64 time);
-void task_add_user_time(struct task *task, u64 time);
-void task_add_child_system_time(struct task *task, u64 time);
-void task_add_child_user_time(struct task *task, u64 time);
-u64 task_get_system_time(struct task *task);
-u64 task_get_user_time(struct task *task);
-u64 task_get_child_system_time(struct task *task);
-u64 task_get_child_user_time(struct task *task);
+void task_add_system_time(struct task *task, uint64_t time);
+void task_add_user_time(struct task *task, uint64_t time);
+void task_add_child_system_time(struct task *task, uint64_t time);
+void task_add_child_user_time(struct task *task, uint64_t time);
+uint64_t task_get_system_time(struct task *task);
+uint64_t task_get_user_time(struct task *task);
+uint64_t task_get_child_system_time(struct task *task);
+uint64_t task_get_child_user_time(struct task *task);
 
 static inline bool task_is_leader(struct task *task)
 {

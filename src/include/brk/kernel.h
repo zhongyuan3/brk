@@ -1,8 +1,6 @@
 #ifndef BRK_KERNEL_H
 #define BRK_KERNEL_H
 
-#define alignof _Alignof
-
 #define BRK_VERSION "0.0.1"
 
 #define max(x, y)                      \

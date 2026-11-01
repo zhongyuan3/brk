@@ -24,7 +24,8 @@ struct devno_allocator {
 	spinlock_t lock;
 };
 
-void devno_allocator_init(struct devno_allocator *a, unsigned int first_dynamic);
+void devno_allocator_init(struct devno_allocator *a,
+			  unsigned int first_dynamic);
 
 int devno_alloc_major(struct devno_allocator *a, unsigned int *major_out);
 void devno_free_major(struct devno_allocator *a, unsigned int major);

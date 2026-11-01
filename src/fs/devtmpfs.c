@@ -3,12 +3,12 @@
 #include <brk/fsinfo.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
-#include <brk/printk.h>
 #include <brk/printf.h>
+#include <brk/printk.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/stat.h>
@@ -60,16 +60,14 @@ static void devtmpfs_worker(void *arg)
 		while (list_empty(&work_list))
 			task_sleep(&work_list, &work_lock);
 
-		work = list_first_entry(&work_list, struct devtmpfs_work,
-					list);
+		work = list_first_entry(&work_list, struct devtmpfs_work, list);
 		list_del_init(&work->list);
 		spin_unlock_irqrestore(&work_lock, flags);
 
 		if (work->remove)
 			devtmpfs_remove_node(work->name);
 		else
-			devtmpfs_create_node(work->name, work->dev,
-					     work->mode);
+			devtmpfs_create_node(work->name, work->dev, work->mode);
 
 		kfree(work);
 	}

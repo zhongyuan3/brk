@@ -1,11 +1,7 @@
-#ifndef BRK_STDDEF_H
-#define BRK_STDDEF_H
+#ifndef STDDEF_H
+#define STDDEF_H
 
-/*
- * Minimal freestanding replacement for the parts of <stddef.h> that the
- * kernel uses.  size_t and the fixed-width integer types live in
- * <brk/types.h>.
- */
+typedef __SIZE_TYPE__ size_t;
 
 #define NULL ((void *)0)
 

@@ -8,8 +8,8 @@
 #include <arch/pgtable.h>
 #include <arch/pgtable_types.h>
 #include <arch/sbi.h>
+#include <assert.h>
 #include <brk/asm/cpu.h>
-#include <brk/assert.h>
 #include <brk/dt.h>
 #include <brk/kernel.h>
 #include <brk/memblock.h>
@@ -18,9 +18,9 @@
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
-#include <brk/stddef.h>
 #include <brk/types.h>
 #include <libfdt.h>
+#include <stddef.h>
 
 unsigned long phys_offset;
 
@@ -167,7 +167,7 @@ static void *phys_to_virt_before_final(unsigned long paddr)
 
 static void final_pgtable_init(void)
 {
-	u64 idx = 0;
+	uint64_t idx = 0;
 	struct mapping_region *rngs;
 	size_t rngs_cnt = 0;
 	size_t rngs_size;
@@ -280,7 +280,7 @@ static void *phys_to_virt_after_final(unsigned long paddr)
 
 static void vmemmap_init(void)
 {
-	u32 idx;
+	uint32_t idx;
 	unsigned long start, end;
 	size_t sz;
 	unsigned long paddr;
@@ -291,7 +291,7 @@ static void vmemmap_init(void)
 	for_each_mem_pfn_range(idx, start, end) {
 		sz = round_up((end - start) * sizeof(struct page), PAGE_SIZE);
 		paddr = memblock_alloc(sz, 0, PAGE_SIZE);
-		ASSERT(paddr);
+		assert(paddr);
 		memset((void *)phys_to_virt(paddr), 0, sz);
 		vaddr = (unsigned long)pfn_to_page(start);
 		pr_debug("mm: vmemmap: va=%#lx,pa=%#lx,sz=%lu\n", vaddr, paddr,
@@ -312,7 +312,7 @@ static void vmemmap_init(void)
 
 void load_final_page_table(void)
 {
-	u64 satp = make_satp(symbol_phys(kernel_pgdir));
+	uint64_t satp = make_satp(symbol_phys(kernel_pgdir));
 	write_satp(satp);
 	sfence_vma();
 }
@@ -335,8 +335,8 @@ int paging_init(void)
 
 void switch_pgtable(pgd_t *pgd)
 {
-	u64 paddr = virt_to_phys((uintptr_t)pgd);
-	u64 satp = make_satp(paddr);
+	uint64_t paddr = virt_to_phys((uintptr_t)pgd);
+	uint64_t satp = make_satp(paddr);
 	write_satp(satp);
 	sfence_vma();
 }

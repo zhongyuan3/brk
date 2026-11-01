@@ -5,7 +5,7 @@
 #include <brk/refcnt.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 static LIST_DEFINE(super_blocks);

@@ -1,13 +1,13 @@
 #include <brk/device_model.h>
-#include <brk/initcall.h>
 #include <brk/devtmpfs.h>
+#include <brk/initcall.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/platform.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 static LIST_DEFINE(bus_list);
@@ -255,8 +255,8 @@ static void platform_bus_init(void)
 core_initcall(platform_bus_init);
 
 int platform_device_register_simple(const char *name, const char *compatible,
-				    u64 phys_base, u64 size, u32 irq,
-				    void *pdata)
+				    uint64_t phys_base, uint64_t size,
+				    uint32_t irq, void *pdata)
 {
 	struct platform_device *pdev;
 	int err;

@@ -3,13 +3,13 @@
 #include <brk/fsinfo.h>
 #include <brk/klog.h>
 #include <brk/ktime.h>
-#include <brk/printk.h>
 #include <brk/printf.h>
-#include <brk/string.h>
+#include <brk/printk.h>
 #include <brk/task.h>
 #include <brk/timeconst.h>
 #include <brk/types.h>
 #include <brk/uart.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 
@@ -66,18 +66,17 @@ static void klog_entry(void *arg)
 	char rec[1024];
 	char out[1536];
 	struct fs_file *file = NULL;
-	u8 level;
-	u64 ts;
+	uint8_t level;
+	uint64_t ts;
 	int n = 0;
 
 	(void)arg;
 
 	for (;;) {
 		if (!file) {
-			struct fs_file *f = do_openat(AT_FDCWD, KLOG_PATH,
-						      O_WRONLY | O_CREAT |
-							      O_APPEND,
-						      0644);
+			struct fs_file *f =
+				do_openat(AT_FDCWD, KLOG_PATH,
+					  O_WRONLY | O_CREAT | O_APPEND, 0644);
 
 			if (IS_ERR(f)) {
 				pr_warn("klogd: open %s failed: %ld, retrying\n",
@@ -93,8 +92,7 @@ static void klog_entry(void *arg)
 			 * unaffected.
 			 */
 			ns16550a_console_disable();
-			pr_info("klogd: writing kernel log to %s\n",
-				KLOG_PATH);
+			pr_info("klogd: writing kernel log to %s\n", KLOG_PATH);
 		}
 
 		bool wrote = false;
@@ -110,8 +108,9 @@ static void klog_entry(void *arg)
 
 			m = snprintf(out, sizeof(out),
 				     "<%u>[%5" PRIu64 ".%06" PRIu64 "] %s%s",
-				     level, (u64)(ts / NS_PER_SEC),
-				     (u64)((ts % NS_PER_SEC) / NS_PER_US), rec,
+				     level, (uint64_t)(ts / NS_PER_SEC),
+				     (uint64_t)((ts % NS_PER_SEC) / NS_PER_US),
+				     rec,
 				     (n > 0 && rec[n - 1] == '\n') ? "" : "\n");
 			if (m < 0)
 				continue;

@@ -8,9 +8,9 @@
 struct irq_domain;
 
 struct irq_domain_ops {
-	int (*xlate)(struct irq_domain *d, int fdt_node, const u32 *intspec,
-		     unsigned int intsize, irq_hw_number_t *out_hwirq,
-		     unsigned int *out_type);
+	int (*xlate)(struct irq_domain *d, int fdt_node,
+		     const uint32_t *intspec, unsigned int intsize,
+		     irq_hw_number_t *out_hwirq, unsigned int *out_type);
 	int (*map)(struct irq_domain *d, unsigned int virq,
 		   irq_hw_number_t hwirq, unsigned int type);
 	void (*unmap)(struct irq_domain *d, unsigned int virq);

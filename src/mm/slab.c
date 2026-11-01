@@ -1,4 +1,4 @@
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/kernel.h>
 #include <brk/list.h>
 #include <brk/mm.h>
@@ -6,8 +6,8 @@
 #include <brk/pgalloc.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 static void slab_mark_page_range(struct page *head, unsigned int order,
@@ -43,8 +43,8 @@ static int slab_add_page(struct slab_allocator *allocator)
 
 	slab_mark_page_range(pg, allocator->page_order, allocator);
 
-	u64 addr = page_to_virt(pg);
-	u64 end_addr = addr + (1 << (PAGE_SHIFT + allocator->page_order));
+	uint64_t addr = page_to_virt(pg);
+	uint64_t end_addr = addr + (1 << (PAGE_SHIFT + allocator->page_order));
 
 	if (!is_aligned(addr, align))
 		addr = round_up(addr, align);
@@ -118,9 +118,9 @@ void slab_deinit(struct slab_allocator *allocator)
 		first = list->next;
 		list_del(first);
 		pg = list_entry(first, struct page, slab_list);
-		ASSERT(pg->slab_free_count == pg->slab_objs_count);
+		assert(pg->slab_free_count == pg->slab_objs_count);
 		slab_unmark_page_range(pg, allocator->page_order);
-		ASSERT(pg);
+		assert(pg);
 		page_free(pg, allocator->page_order);
 	}
 	spin_unlock(&allocator->lock);
@@ -173,7 +173,7 @@ void *slab_alloc_zero(struct slab_allocator *allocator)
 void slab_free(struct slab_allocator *allocator, void *obj)
 {
 	struct page *curr;
-	u64 start, end;
+	uint64_t start, end;
 	struct list_head *list;
 
 	if (!obj)
@@ -181,7 +181,7 @@ void slab_free(struct slab_allocator *allocator, void *obj)
 
 	spin_lock(&allocator->lock);
 
-	ASSERT(is_aligned((uintptr_t)obj, allocator->align));
+	assert(is_aligned((uintptr_t)obj, allocator->align));
 
 	list = &allocator->slab_list;
 	list_for_each_entry(curr, list, slab_list) {

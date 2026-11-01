@@ -21,8 +21,8 @@
 #define GENHD_MINORS (GENHD_MAX_PARTITIONS + 1)
 
 struct hd_struct {
-	u64 start_sect;
-	u64 nr_sects;
+	uint64_t start_sect;
+	uint64_t nr_sects;
 	unsigned int partno;
 	struct block_dev *bdev;
 	struct device dev;
@@ -33,7 +33,7 @@ struct gendisk {
 	unsigned int first_minor;
 	unsigned int minors;
 	char disk_name[GENHD_NAME_LEN];
-	u64 nr_sects;
+	uint64_t nr_sects;
 	void *priv;
 	struct block_dev *bdev;
 	struct request_queue *queue;
@@ -45,7 +45,8 @@ struct gendisk {
 
 struct gendisk *gendisk_alloc(unsigned int major, unsigned int first_minor,
 			      unsigned int minors, const char *name,
-			      u64 nr_sects, struct device *parent, void *priv);
+			      uint64_t nr_sects, struct device *parent,
+			      void *priv);
 void gendisk_free(struct gendisk *disk);
 
 int add_disk(struct gendisk *disk);

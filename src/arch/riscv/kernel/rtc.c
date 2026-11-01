@@ -20,7 +20,7 @@ static struct goldfish_rtc rtc = {
 	.lock = SPINLOCK_INITIALIZER("goldfish_rtc"),
 };
 
-u64 rtc_read_ns(void)
+uint64_t rtc_read_ns(void)
 {
 	return goldfish_rtc_read_ns(&rtc);
 }
@@ -61,16 +61,16 @@ void rtc_init(void)
 		return;
 	}
 
-	rtc.mmio =
-		(u8 volatile *)ioremap(dev.phys_base, dev.size, PTE_R | PTE_W);
+	rtc.mmio = (uint8_t volatile *)ioremap(dev.phys_base, dev.size,
+					       PTE_R | PTE_W);
 	if (!rtc.mmio) {
 		pr_warn("rtc: ioremap failed for phys %#" PRIx64 "\n",
-			  dev.phys_base);
+			dev.phys_base);
 		return;
 	}
 
 	rtc_ok = true;
 
 	pr_info("rtc: goldfish RTC initialized: mmio=%#lx, ioremap=%p\n",
-		  dev.phys_base, rtc.mmio);
+		dev.phys_base, rtc.mmio);
 }

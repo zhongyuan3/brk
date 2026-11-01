@@ -5,12 +5,12 @@
 #include <uapi/time.h>
 
 struct rtc_device {
-	u64 phys_base;
+	uint64_t phys_base;
 	size_t size;
 };
 
 void rtc_init(void);
-u64 rtc_read_ns(void);
+uint64_t rtc_read_ns(void);
 void rtc_read_timeval(struct timeval *tv);
 void rtc_set_timeval(const struct timeval *tv);
 void rtc_read_timespec(struct timespec *ts);

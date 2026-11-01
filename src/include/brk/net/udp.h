@@ -7,10 +7,10 @@
 struct socket;
 
 struct udphdr {
-	u16 source;
-	u16 dest;
-	u16 len;
-	u16 check;
+	uint16_t source;
+	uint16_t dest;
+	uint16_t len;
+	uint16_t check;
 } __attribute__((packed));
 
 int udp_rcv(struct sk_buff *skb);

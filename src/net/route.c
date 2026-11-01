@@ -10,7 +10,7 @@
 static struct rt_entry rt_table[RT_TABLE_SIZE];
 static SPINLOCK_DEFINE(rt_lock);
 
-int route_add(u32 dst, u32 mask, u32 gw, struct net_device *dev)
+int route_add(uint32_t dst, uint32_t mask, uint32_t gw, struct net_device *dev)
 {
 	irqstate_t flags;
 	int ret = -ENOSPC;
@@ -34,7 +34,7 @@ int route_add(u32 dst, u32 mask, u32 gw, struct net_device *dev)
 	return ret;
 }
 
-int ip_route_output(u32 daddr, u32 *nexthop, struct net_device **dev)
+int ip_route_output(uint32_t daddr, uint32_t *nexthop, struct net_device **dev)
 {
 	struct rt_entry *best = NULL;
 	irqstate_t flags;

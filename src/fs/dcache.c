@@ -1,5 +1,5 @@
-#define pr_fmt(fmt) "%s():%d " fmt, __func__, __LINE__
-#include <brk/assert.h>
+#define pr_fmt(fmt) "%s:%d " fmt, __func__, __LINE__
+#include <assert.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fs.h>
@@ -12,8 +12,8 @@
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 static struct hlist_head dentry_htable[DENTRY_HTABLE_SIZE];
@@ -128,8 +128,8 @@ void fs_dentry_instantiate(struct fs_dentry *dentry, struct fs_inode *inode)
 	 * silently overwrite an existing inode (or add a second alias link):
 	 * either would leak a reference and corrupt inode->dentries.
 	 */
-	ASSERT(dentry->inode == NULL);
-	ASSERT(list_empty(&dentry->alias));
+	assert(dentry->inode == NULL);
+	assert(list_empty(&dentry->alias));
 
 	spin_lock(&inode->lock);
 	list_add(&dentry->alias, &inode->dentries);
@@ -230,7 +230,7 @@ void fs_dentry_put(struct fs_dentry *dentry)
 		pr_debug("removing dentry from hash table: name=%.*s\n",
 			 (int)dentry->name.len, dentry->name.name);
 		spin_lock(&dentry_htable_lock);
-		ASSERT(!hlist_unhashed(&dentry->hash));
+		assert(!hlist_unhashed(&dentry->hash));
 		hlist_del_init(&dentry->hash);
 		spin_unlock(&dentry_htable_lock);
 	}
@@ -261,7 +261,7 @@ static struct fs_dentry *__dentry_lookup(struct hlist_head *head,
 {
 	struct fs_dentry *dentry;
 
-	ASSERT(spin_is_locked_by_me(&dentry_htable_lock));
+	assert(spin_is_locked_by_me(&dentry_htable_lock));
 
 	hlist_for_each_entry(dentry, head, hash) {
 		if (dentry->parent == parent &&
@@ -287,7 +287,7 @@ static struct fs_dentry *__dentry_lookup(struct hlist_head *head,
 	return NULL;
 }
 
-static void fs_dentry_hash(struct fs_dentry *dentry, u32 idx)
+static void fs_dentry_hash(struct fs_dentry *dentry, uint32_t idx)
 {
 	spin_lock(&dentry->lock);
 	if (dentry->parent != dentry && (dentry->flags & DCACHE_UNHASHED)) {
@@ -308,7 +308,7 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 	struct fs_dentry *dentry, *tmp;
 	struct hlist_head *head;
 
-	u32 idx = name->hash & (DENTRY_HTABLE_SIZE - 1);
+	uint32_t idx = name->hash & (DENTRY_HTABLE_SIZE - 1);
 	head = &dentry_htable[idx];
 
 	pr_debug("looking up %.*s in %.*s\n", (int)name->len, name->name,

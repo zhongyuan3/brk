@@ -1,13 +1,13 @@
 #include <arch/csr.h>
+#include <assert.h>
 #include <brk/asm/cpu.h>
-#include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/initcall.h>
 #include <brk/kernel.h>
 #include <brk/panic.h>
 #include <brk/spinlock.h>
-#include <brk/stddef.h>
 #include <brk/types.h>
+#include <stddef.h>
 #include <uapi/errno.h>
 
 struct cpu cpus[MAX_CPUS];
@@ -52,7 +52,7 @@ void preempt_enable(void)
 {
 	struct cpu *cpu = this_cpu();
 
-	ASSERT(cpu->preempt_count > 0);
+	assert(cpu->preempt_count > 0);
 	cpu->preempt_count--;
 	__asm__ volatile("" ::: "memory");
 }
@@ -93,13 +93,13 @@ void set_this_cpuid(cpuid_t cpuid)
 struct task *current_task(void)
 {
 	struct cpu *c = this_cpu();
-	ASSERT(c != NULL);
+	assert(c != NULL);
 	return c->current;
 }
 
 void set_current_task(struct task *task)
 {
 	struct cpu *c = this_cpu();
-	ASSERT(c != NULL);
+	assert(c != NULL);
 	c->current = task;
 }

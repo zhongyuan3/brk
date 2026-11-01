@@ -1,6 +1,6 @@
 {
     "terminal.integrated.env.linux": {
-        "CROSS_COMPILE": "riscv64-unknown-elf-",
+        "CROSS_COMPILE": "riscv64-linux-gnu-",
         "GDB": "gdb-multiarch"
     },
     "files.associations": {

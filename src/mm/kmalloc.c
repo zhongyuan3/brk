@@ -1,9 +1,9 @@
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/kmalloc.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
-#include <brk/string.h>
+#include <string.h>
 
 #define NR_KMALLOC_ALLOCATORS 10
 
@@ -129,11 +129,11 @@ void kfree(void *ptr)
 		struct page *head =
 			kmalloc_block_head(pg, pg->buddy_page_order);
 
-		ASSERT(head->flags & PAGE_FLAGS_HEAD);
+		assert(head->flags & PAGE_FLAGS_HEAD);
 		kmalloc_unmark_block(head, head->buddy_page_order);
 		page_free(head, head->buddy_page_order);
 	} else {
-		ASSERT(pg);
+		assert(pg);
 		page_free(pg, pg->buddy_page_order);
 	}
 }

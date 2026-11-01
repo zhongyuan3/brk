@@ -1,5 +1,5 @@
-#ifndef BRK_STRING_H
-#define BRK_STRING_H
+#ifndef STRING_H
+#define STRING_H
 
 #include <brk/types.h>
 
