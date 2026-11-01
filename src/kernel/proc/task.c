@@ -2,8 +2,8 @@
 #include <arch/csr.h>
 #include <arch/pgtable.h>
 #include <arch/trapframe.h>
+#include <assert.h>
 #include <brk/asm/cpu.h>
-#include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
@@ -24,14 +24,14 @@
 #include <brk/signal.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
-#include <brk/stddef.h>
-#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
 #include <brk/writeback.h>
+#include <stddef.h>
+#include <string.h>
 #include <uapi/capability.h>
 #include <uapi/errno.h>
 #include <uapi/limits.h>
@@ -68,7 +68,7 @@ void task_cache_init(void)
 }
 core_initcall(task_cache_init);
 
-static u64 kstack_alloc(void)
+static uint64_t kstack_alloc(void)
 {
 	struct page *pg = page_alloc(KSTACK_PAGE_ORDER);
 	if (!pg)
@@ -76,10 +76,10 @@ static u64 kstack_alloc(void)
 	return page_to_virt(pg);
 }
 
-static void kstack_free(u64 stack)
+static void kstack_free(uint64_t stack)
 {
 	struct page *pg = virt_to_page((uintptr_t)stack);
-	ASSERT(pg);
+	assert(pg);
 	page_free(pg, KSTACK_PAGE_ORDER);
 }
 
@@ -140,11 +140,11 @@ struct task *task_create(struct task_create_args *args)
 	task->kstack_top = task->kstack_base + KSTACK_SIZE;
 	unsigned long kernel_sp = task->kstack_top;
 	kernel_sp -= TRAP_FRAME_SIZE;
-	ASSERT(is_aligned(kernel_sp, 16));
+	assert(is_aligned(kernel_sp, 16));
 	task->frame = (struct riscv_trap_frame *)kernel_sp;
 	memset(task->frame, 0, TRAP_FRAME_SIZE);
 	kernel_sp -= CONTEXT_SIZE;
-	ASSERT(is_aligned(kernel_sp, 16));
+	assert(is_aligned(kernel_sp, 16));
 	struct riscv_context *ctx = (struct riscv_context *)kernel_sp;
 	if (args && args->fn)
 		ctx->ra = (unsigned long)args->fn;
@@ -266,11 +266,11 @@ struct task *task_create_idle(cpuid_t cpuid)
 
 	task->kstack_top = task->kstack_base + KSTACK_SIZE;
 	kernel_sp = task->kstack_top - TRAP_FRAME_SIZE;
-	ASSERT(is_aligned(kernel_sp, 16));
+	assert(is_aligned(kernel_sp, 16));
 	task->frame = (struct riscv_trap_frame *)kernel_sp;
 	memset(task->frame, 0, TRAP_FRAME_SIZE);
 	kernel_sp -= CONTEXT_SIZE;
-	ASSERT(is_aligned(kernel_sp, 16));
+	assert(is_aligned(kernel_sp, 16));
 	ctx = (struct riscv_context *)kernel_sp;
 	ctx->ra = (unsigned long)idle_entry;
 	task->kernel_sp = kernel_sp;
@@ -389,15 +389,15 @@ bool task_is_killed(struct task *task)
 	return signal_pending(task);
 }
 
-int task_set_brk(u64 addr)
+int task_set_brk(uint64_t addr)
 {
 	struct task *task = current_task();
 	struct uvm_space *mm = task->mm;
 	struct uvm_region *heap = mm->heap;
-	u64 heap_start = heap->addr;
-	u64 curr_heap_end = heap_start + heap->size;
+	uint64_t heap_start = heap->addr;
+	uint64_t curr_heap_end = heap_start + heap->size;
 	int err = 0;
-	u64 new_heap_end;
+	uint64_t new_heap_end;
 	size_t incr;
 
 	if (addr < heap_start)
@@ -430,11 +430,11 @@ int task_set_brk(u64 addr)
 			err = -ENOMEM;
 			goto failed;
 		}
-		u64 pa = page_to_phys(pg);
+		uint64_t pa = page_to_phys(pg);
 		err = map_user_pages(mm->pgd, addr, PAGE_SIZE, pa,
 				     PTE_R | PTE_W);
 		if (err) {
-			ASSERT(pg);
+			assert(pg);
 			page_free(pg, 0);
 			goto failed;
 		}
@@ -454,10 +454,10 @@ int task_set_brk(u64 addr)
 	return 0;
 
 failed:
-	for (u64 a = curr_heap_end; a < addr; a += PAGE_SIZE)
+	for (uint64_t a = curr_heap_end; a < addr; a += PAGE_SIZE)
 		unmap_user_pages(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = old_npgs; j < i; ++j) {
-		ASSERT(new_pgs[j]);
+		assert(new_pgs[j]);
 		page_free(new_pgs[j], 0);
 	}
 	kfree(new_pgs);
@@ -719,7 +719,7 @@ int task_get_times(struct task *task, struct tms *times)
 	return 0;
 }
 
-void task_add_system_time(struct task *task, u64 time)
+void task_add_system_time(struct task *task, uint64_t time)
 {
 	if (!task || !task->rsrc_usage)
 		return;
@@ -729,7 +729,7 @@ void task_add_system_time(struct task *task, u64 time)
 	spin_unlock(&task->rsrc_usage->lock);
 }
 
-void task_add_user_time(struct task *task, u64 time)
+void task_add_user_time(struct task *task, uint64_t time)
 {
 	if (!task || !task->rsrc_usage)
 		return;
@@ -739,7 +739,7 @@ void task_add_user_time(struct task *task, u64 time)
 	spin_unlock(&task->rsrc_usage->lock);
 }
 
-void task_add_child_system_time(struct task *task, u64 time)
+void task_add_child_system_time(struct task *task, uint64_t time)
 {
 	if (!task || !task->rsrc_usage)
 		return;
@@ -749,7 +749,7 @@ void task_add_child_system_time(struct task *task, u64 time)
 	spin_unlock(&task->rsrc_usage->lock);
 }
 
-void task_add_child_user_time(struct task *task, u64 time)
+void task_add_child_user_time(struct task *task, uint64_t time)
 {
 	if (!task || !task->rsrc_usage)
 		return;
@@ -759,9 +759,9 @@ void task_add_child_user_time(struct task *task, u64 time)
 	spin_unlock(&task->rsrc_usage->lock);
 }
 
-u64 task_get_system_time(struct task *task)
+uint64_t task_get_system_time(struct task *task)
 {
-	u64 time;
+	uint64_t time;
 
 	if (!task || !task->rsrc_usage)
 		return 0;
@@ -773,9 +773,9 @@ u64 task_get_system_time(struct task *task)
 	return time;
 }
 
-u64 task_get_user_time(struct task *task)
+uint64_t task_get_user_time(struct task *task)
 {
-	u64 time;
+	uint64_t time;
 
 	if (!task || !task->rsrc_usage)
 		return 0;
@@ -787,9 +787,9 @@ u64 task_get_user_time(struct task *task)
 	return time;
 }
 
-u64 task_get_child_system_time(struct task *task)
+uint64_t task_get_child_system_time(struct task *task)
 {
-	u64 time;
+	uint64_t time;
 
 	if (!task || !task->rsrc_usage)
 		return 0;
@@ -801,9 +801,9 @@ u64 task_get_child_system_time(struct task *task)
 	return time;
 }
 
-u64 task_get_child_user_time(struct task *task)
+uint64_t task_get_child_user_time(struct task *task)
 {
-	u64 time;
+	uint64_t time;
 
 	if (!task || !task->rsrc_usage)
 		return 0;
@@ -870,8 +870,8 @@ void kthread_join(struct task *kthread)
 void task_schedlue_tail(void)
 {
 	struct task *task = current_task();
-	ASSERT(task != NULL);
-	ASSERT(task->newly_forked);
+	assert(task != NULL);
+	assert(task->newly_forked);
 	task->newly_forked = false;
 	complete_task_switch();
 }

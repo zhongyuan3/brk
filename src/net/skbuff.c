@@ -1,9 +1,9 @@
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/net/skbuff.h>
-#include <brk/string.h>
 #include <brk/types.h>
+#include <string.h>
 
 struct sk_buff *skb_alloc(size_t payload)
 {
@@ -14,7 +14,7 @@ struct sk_buff *skb_alloc(size_t payload)
 	if (!skb)
 		return NULL;
 
-	skb->head = (u8 *)(skb + 1);
+	skb->head = (uint8_t *)(skb + 1);
 	skb->data = skb->head + SKB_HEADROOM;
 	skb->tail = skb->data;
 	skb->end = skb->head + SKB_HEADROOM + payload;
@@ -26,19 +26,19 @@ void skb_free(struct sk_buff *skb)
 	kfree(skb);
 }
 
-u8 *skb_put(struct sk_buff *skb, size_t len)
+uint8_t *skb_put(struct sk_buff *skb, size_t len)
 {
-	u8 *old = skb->tail;
+	uint8_t *old = skb->tail;
 
-	ASSERT(skb->tail + len <= skb->end);
+	assert(skb->tail + len <= skb->end);
 	skb->tail += len;
 	skb->len += len;
 	return old;
 }
 
-u8 *skb_push(struct sk_buff *skb, size_t len)
+uint8_t *skb_push(struct sk_buff *skb, size_t len)
 {
-	ASSERT(skb->data - skb->head >= (ptrdiff_t)len);
+	assert(skb->data - skb->head >= (ptrdiff_t)len);
 	skb->data -= len;
 	skb->len += len;
 	return skb->data;
@@ -46,14 +46,14 @@ u8 *skb_push(struct sk_buff *skb, size_t len)
 
 void skb_pull(struct sk_buff *skb, size_t len)
 {
-	ASSERT(len <= skb->len);
+	assert(len <= skb->len);
 	skb->data += len;
 	skb->len -= len;
 }
 
 void skb_reserve(struct sk_buff *skb, size_t len)
 {
-	ASSERT(len <= skb_tailroom(skb));
+	assert(len <= skb_tailroom(skb));
 	skb->data += len;
 	skb->tail += len;
 }

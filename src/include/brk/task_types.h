@@ -91,17 +91,17 @@ struct task {
 	kgid_t groups[NGROUPS_MAX];
 	int ngroups;
 	umode_t umask;
-	u64 cap_effective;
-	u64 cap_permitted;
-	u64 cap_inheritable;
+	uint64_t cap_effective;
+	uint64_t cap_permitted;
+	uint64_t cap_inheritable;
 
 	struct sigaction_table *sigactions;
 	/* protected by @sigactions->lock */
-	u64 pending;
+	uint64_t pending;
 	/* protected by @sigactions->lock */
-	u64 blocked;
+	uint64_t blocked;
 	/* protected by @sigactions->lock */
-	u64 sigframe_sp;
+	uint64_t sigframe_sp;
 	/* protected by @sigactions->lock */
 	bool in_handler;
 
@@ -116,12 +116,12 @@ struct task {
 
 	/* the following fields are private, not protected by any locks */
 	struct riscv_trap_frame *frame; /* no lock protection */
-	u64 kstack_base; /* no lock protection */
-	u64 kstack_top; /* no lock protection */
+	uint64_t kstack_base; /* no lock protection */
+	uint64_t kstack_top; /* no lock protection */
 	int oncpu; /* CPU currently running this task, -1 if not running */
 	int cpu; /* CPU affinity; the task is only dispatched on this CPU */
-	u64 ktime; /* no lock protection */
-	u64 utime; /* no lock protection */
+	uint64_t ktime; /* no lock protection */
+	uint64_t utime; /* no lock protection */
 	int time_slice; /* no lock protection */
 	char name[TASK_NAME_MAX]; /* no lock protection */
 	bool newly_forked; /* no lock protection */
@@ -139,9 +139,9 @@ struct task_info {
 	enum task_state state;
 	int exit_status;
 	bool killed;
-	u64 utime;
-	u64 ktime;
-	u64 brk;
+	uint64_t utime;
+	uint64_t ktime;
+	uint64_t brk;
 	char name[TASK_NAME_MAX];
 };
 

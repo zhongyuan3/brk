@@ -8,9 +8,9 @@
 /* Simple platform device: one MMIO window, one IRQ, optional platform data. */
 struct platform_device {
 	struct device dev;
-	u64 phys_base;
-	u64 size;
-	u32 irq;
+	uint64_t phys_base;
+	uint64_t size;
+	uint32_t irq;
 	const char *compatible;
 	void *pdata;
 };
@@ -27,8 +27,8 @@ static inline struct platform_device *to_platform_device(struct device *dev)
 }
 
 int platform_device_register_simple(const char *name, const char *compatible,
-				    u64 phys_base, u64 size, u32 irq,
-				    void *pdata);
+				    uint64_t phys_base, uint64_t size,
+				    uint32_t irq, void *pdata);
 void platform_device_unregister(struct platform_device *pdev);
 
 int platform_driver_register(struct platform_driver *pdrv);

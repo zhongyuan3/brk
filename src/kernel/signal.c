@@ -7,10 +7,10 @@
 #include <brk/refcnt.h>
 #include <brk/signal.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/signal.h>
 
@@ -41,7 +41,7 @@ static bool sig_default_terminate(int sig)
 	}
 }
 
-static bool user_access_ok(u64 addr, size_t len)
+static bool user_access_ok(uint64_t addr, size_t len)
 {
 	return addr + len <= USER_SPACE_SIZE_MAX;
 }
@@ -65,10 +65,10 @@ void sigaction_table_reset(struct sigaction_table *table)
 
 static int get_next_signal_locked(struct task *task)
 {
-	u64 deliver = task->pending & ~task->blocked;
+	uint64_t deliver = task->pending & ~task->blocked;
 
 	if (task->in_handler) {
-		u64 nodfer = 0;
+		uint64_t nodfer = 0;
 		int sig;
 
 		deliver &= (1ULL << SIGKILL);
@@ -194,8 +194,7 @@ int signal_do_kill(pid_t pid, int sig)
 			return found ? -EPERM : -ESRCH;
 		}
 
-		return signal_kill_pgrp(pid == 0 ? current_task()->pgid :
-						      -pid,
+		return signal_kill_pgrp(pid == 0 ? current_task()->pgid : -pid,
 					sig);
 	}
 
@@ -267,7 +266,7 @@ void signal_send(struct task *task, int sig)
 }
 
 int signal_init(struct task *task, struct sigaction_table *sigactions,
-		u64 blocked)
+		uint64_t blocked)
 {
 	if (!sigactions) {
 		task->sigactions = sigaction_table_alloc();
@@ -293,9 +292,10 @@ void signal_deinit(struct task *task)
 	sigaction_table_put(task->sigactions);
 }
 
-static bool setup_signal_frame_locked(struct task *task, int sig, u64 handler)
+static bool setup_signal_frame_locked(struct task *task, int sig,
+				      uint64_t handler)
 {
-	u64 sp;
+	uint64_t sp;
 	struct user_sigframe *frame;
 
 	sp = task->frame->sp;
@@ -325,7 +325,7 @@ static bool setup_signal_frame_locked(struct task *task, int sig, u64 handler)
 static void signal_deliver_one(struct task *task, int sig)
 {
 	unsigned long handler;
-	u64 user_handler;
+	uint64_t user_handler;
 	irqstate_t flags = spin_lock_irqsave(&task->sigactions->lock);
 
 	handler = task->sigactions->actions[sig].sa_handler;
@@ -399,10 +399,10 @@ void signal_copy(struct task *dst, struct task *src)
 	spin_unlock_irqrestore(&src->sigactions->lock, sflags);
 }
 
-u64 signal_do_sigreturn(struct task *task)
+uint64_t signal_do_sigreturn(struct task *task)
 {
 	struct user_sigframe *frame;
-	u64 ret = 0;
+	uint64_t ret = 0;
 	irqstate_t flags = spin_lock_irqsave(&task->sigactions->lock);
 
 	if (!task->sigframe_sp) {
@@ -519,7 +519,7 @@ void sigaction_table_copy(struct sigaction_table *dst,
 	spin_unlock_irqrestore(&src->lock, sflags);
 }
 
-u64 sys_rt_sigaction(void)
+uint64_t sys_rt_sigaction(void)
 {
 	int sig = syscall_arg_int(0);
 	const struct sigaction *act = syscall_arg_ptr(1);
@@ -532,7 +532,7 @@ u64 sys_rt_sigaction(void)
 	return signal_do_sigaction(current_task(), sig, act, oact);
 }
 
-u64 sys_rt_sigprocmask(void)
+uint64_t sys_rt_sigprocmask(void)
 {
 	int how = syscall_arg_int(0);
 	const sigset_t *set = syscall_arg_ptr(1);
@@ -545,7 +545,7 @@ u64 sys_rt_sigprocmask(void)
 	return signal_do_sigprocmask(current_task(), how, set, oldset);
 }
 
-u64 sys_rt_sigreturn(void)
+uint64_t sys_rt_sigreturn(void)
 {
 	return signal_do_sigreturn(current_task());
 }

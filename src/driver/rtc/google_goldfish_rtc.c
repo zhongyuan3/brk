@@ -14,19 +14,19 @@
 #define GOLDFISH_RTC_TIME_LOW 0x00u
 #define GOLDFISH_RTC_TIME_HIGH 0x04u
 
-static u64 goldfish_rtc_read_time_locked(struct goldfish_rtc *rtc)
+static uint64_t goldfish_rtc_read_time_locked(struct goldfish_rtc *rtc)
 {
-	u32 lo;
-	u32 hi;
+	uint32_t lo;
+	uint32_t hi;
 
 	lo = readl(rtc->mmio + GOLDFISH_RTC_TIME_LOW);
 	hi = readl(rtc->mmio + GOLDFISH_RTC_TIME_HIGH);
-	return ((u64)hi << 32) | (u64)lo;
+	return ((uint64_t)hi << 32) | (uint64_t)lo;
 }
 
-u64 goldfish_rtc_read_ns(struct goldfish_rtc *rtc)
+uint64_t goldfish_rtc_read_ns(struct goldfish_rtc *rtc)
 {
-	u64 ns = 0;
+	uint64_t ns = 0;
 	spin_lock(&rtc->lock);
 	ns = goldfish_rtc_read_time_locked(rtc);
 	spin_unlock(&rtc->lock);
@@ -35,7 +35,7 @@ u64 goldfish_rtc_read_ns(struct goldfish_rtc *rtc)
 
 void goldfish_rtc_read_timeval(struct goldfish_rtc *rtc, struct timeval *tv)
 {
-	u64 ns;
+	uint64_t ns;
 
 	spin_lock(&rtc->lock);
 
@@ -49,22 +49,23 @@ void goldfish_rtc_read_timeval(struct goldfish_rtc *rtc, struct timeval *tv)
 void goldfish_rtc_set_timeval(struct goldfish_rtc *rtc,
 			      const struct timeval *tv)
 {
-	u64 ns;
+	uint64_t ns;
 
 	spin_lock(&rtc->lock);
 
-	ns = (u64)tv->tv_sec * NS_PER_SEC + (u64)tv->tv_usec * NS_PER_US;
+	ns = (uint64_t)tv->tv_sec * NS_PER_SEC +
+	     (uint64_t)tv->tv_usec * NS_PER_US;
 
 	/* Same order as Linux drivers/rtc/rtc-goldfish.c */
-	writel((u32)(ns >> 32), rtc->mmio + GOLDFISH_RTC_TIME_HIGH);
-	writel((u32)ns, rtc->mmio + GOLDFISH_RTC_TIME_LOW);
+	writel((uint32_t)(ns >> 32), rtc->mmio + GOLDFISH_RTC_TIME_HIGH);
+	writel((uint32_t)ns, rtc->mmio + GOLDFISH_RTC_TIME_LOW);
 
 	spin_unlock(&rtc->lock);
 }
 
 void goldfish_rtc_read_timespec(struct goldfish_rtc *rtc, struct timespec *ts)
 {
-	u64 ns;
+	uint64_t ns;
 
 	spin_lock(&rtc->lock);
 
@@ -78,15 +79,15 @@ void goldfish_rtc_read_timespec(struct goldfish_rtc *rtc, struct timespec *ts)
 void goldfish_rtc_set_timespec(struct goldfish_rtc *rtc,
 			       const struct timespec *ts)
 {
-	u64 ns;
+	uint64_t ns;
 
 	spin_lock(&rtc->lock);
 
-	ns = (u64)ts->tv_sec * NS_PER_SEC + (u64)ts->tv_nsec;
+	ns = (uint64_t)ts->tv_sec * NS_PER_SEC + (uint64_t)ts->tv_nsec;
 
 	/* Same order as Linux drivers/rtc/rtc-goldfish.c */
-	writel((u32)(ns >> 32), rtc->mmio + GOLDFISH_RTC_TIME_HIGH);
-	writel((u32)ns, rtc->mmio + GOLDFISH_RTC_TIME_LOW);
+	writel((uint32_t)(ns >> 32), rtc->mmio + GOLDFISH_RTC_TIME_HIGH);
+	writel((uint32_t)ns, rtc->mmio + GOLDFISH_RTC_TIME_LOW);
 
 	spin_unlock(&rtc->lock);
 }

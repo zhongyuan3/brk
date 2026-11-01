@@ -2,8 +2,8 @@
 #define BRK_UACCESS_H
 
 #include <arch/asm/vmlayout.h>
-#include <brk/string.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 /*
@@ -11,7 +11,7 @@
  * helpers at least validate that the range is inside the user address space
  * and keep user copies out of spinlock-protected critical sections.
  */
-static inline bool user_range_ok(u64 addr, size_t len)
+static inline bool user_range_ok(uint64_t addr, size_t len)
 {
 	if (addr > USER_SPACE_SIZE_MAX)
 		return false;
@@ -20,7 +20,7 @@ static inline bool user_range_ok(u64 addr, size_t len)
 
 static inline int copy_from_user(void *dst, const void *src, size_t len)
 {
-	if (len && !user_range_ok((u64)(uintptr_t)src, len))
+	if (len && !user_range_ok((uint64_t)(uintptr_t)src, len))
 		return -EFAULT;
 	memcpy(dst, src, len);
 	return 0;
@@ -28,7 +28,7 @@ static inline int copy_from_user(void *dst, const void *src, size_t len)
 
 static inline int copy_to_user(void *dst, const void *src, size_t len)
 {
-	if (len && !user_range_ok((u64)(uintptr_t)dst, len))
+	if (len && !user_range_ok((uint64_t)(uintptr_t)dst, len))
 		return -EFAULT;
 	memcpy(dst, src, len);
 	return 0;

@@ -169,8 +169,7 @@ int devno_alloc_region(struct devno_allocator *a, unsigned int major,
 		return -EINVAL;
 
 	spin_lock(&a->lock);
-	ret = devno_alloc_region_no_lock(a, major, base_minor, count,
-					 dev_out);
+	ret = devno_alloc_region_no_lock(a, major, base_minor, count, dev_out);
 	spin_unlock(&a->lock);
 	return ret;
 }
@@ -202,8 +201,7 @@ void devno_free_region(struct devno_allocator *a, unsigned int major,
 		return;
 	}
 	spin_unlock(&a->lock);
-	pr_err("%s: no region at minor %u count %u\n", __func__, minor,
-	       count);
+	pr_err("%s: no region at minor %u count %u\n", __func__, minor, count);
 }
 
 bool devno_minor_is_allocated(struct devno_allocator *a, unsigned int major,

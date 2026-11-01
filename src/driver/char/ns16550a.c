@@ -10,8 +10,8 @@
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mmio.h>
-#include <brk/platform.h>
 #include <brk/panic.h>
+#include <brk/platform.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
 #include <brk/tty.h>
@@ -55,20 +55,20 @@ void ns16550a_device_free(struct ns16550a_device *dev)
 	kfree(dev);
 }
 
-static volatile u8 *ns16550a_device_reg(struct ns16550a_device *dev,
-					unsigned int reg)
+static volatile uint8_t *ns16550a_device_reg(struct ns16550a_device *dev,
+					     unsigned int reg)
 {
 	return dev->mem_base + reg;
 }
 
 static void ns16550a_device_write_reg(struct ns16550a_device *dev,
-				      unsigned int reg, u8 val)
+				      unsigned int reg, uint8_t val)
 {
 	writeb(val, ns16550a_device_reg(dev, reg));
 }
 
-static u8 ns16550a_device_read_reg(struct ns16550a_device *dev,
-				   unsigned int reg)
+static uint8_t ns16550a_device_read_reg(struct ns16550a_device *dev,
+					unsigned int reg)
 {
 	return readb(ns16550a_device_reg(dev, reg));
 }
@@ -135,8 +135,8 @@ int ns16550a_device_init(struct ns16550a_device *dev)
 	/* Enable receive interrupts */
 	ns16550a_device_write_reg(dev, IER, IER_RX_ENABLE);
 
-	err = request_irq(dev->irq, ns16550a_device_handle_irq, 0,
-			  "ns16550a", dev);
+	err = request_irq(dev->irq, ns16550a_device_handle_irq, 0, "ns16550a",
+			  dev);
 	if (err) {
 		iounmap((void *)dev->mem_base, dev->size);
 		return err;
@@ -212,7 +212,7 @@ static void ns16550a_remove(struct device *dev)
 
 static const struct device_id ns16550a_ids[] = {
 	{ .compatible = "ns16550a" },
-	{ },
+	{},
 };
 
 static struct platform_driver ns16550a_platform_driver = {
@@ -275,7 +275,6 @@ static int ns16550a_tty_put_char(struct tty *tty, int c)
 static const struct tty_ops ns16550a_ops = {
 	.put_char = ns16550a_tty_put_char,
 };
-
 
 void ns16550a_driver_init(void)
 {

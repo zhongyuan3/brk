@@ -12,9 +12,9 @@
 #include <brk/mmio.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/types.h>
 #include <libfdt.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 #define PLIC_PRIORITY_OFFSET 0x000000
@@ -23,47 +23,49 @@
 #define PLIC_CLAIM_COMPLETE_OFFSET 0x200004
 
 struct sifive_plic {
-	u8 *base;
-	u32 ndev;
+	uint8_t *base;
+	uint32_t ndev;
 	struct irq_domain *domain;
 	struct irq_controller controller;
 };
 
-static inline u32 plic_ctx(unsigned int hart)
+static inline uint32_t plic_ctx(unsigned int hart)
 {
 	return 2 * hart + 1;
 }
 
-static inline volatile u32 *plic_enable_reg(struct sifive_plic *p,
-					    unsigned int hart)
+static inline volatile uint32_t *plic_enable_reg(struct sifive_plic *p,
+						 unsigned int hart)
 {
-	return (volatile u32 *)(p->base + PLIC_ENABLE_OFFSET +
-				plic_ctx(hart) * 0x80);
+	return (volatile uint32_t *)(p->base + PLIC_ENABLE_OFFSET +
+				     plic_ctx(hart) * 0x80);
 }
 
-static inline volatile u32 *plic_threshold_reg(struct sifive_plic *p,
-					       unsigned int hart)
+static inline volatile uint32_t *plic_threshold_reg(struct sifive_plic *p,
+						    unsigned int hart)
 {
-	return (volatile u32 *)(p->base + PLIC_THRESHOLD_OFFSET +
-				plic_ctx(hart) * 0x1000);
+	return (volatile uint32_t *)(p->base + PLIC_THRESHOLD_OFFSET +
+				     plic_ctx(hart) * 0x1000);
 }
 
-static inline volatile u32 *plic_claim_reg(struct sifive_plic *p,
-					   unsigned int hart)
+static inline volatile uint32_t *plic_claim_reg(struct sifive_plic *p,
+						unsigned int hart)
 {
-	return (volatile u32 *)(p->base + PLIC_CLAIM_COMPLETE_OFFSET +
-				plic_ctx(hart) * 0x1000);
+	return (volatile uint32_t *)(p->base + PLIC_CLAIM_COMPLETE_OFFSET +
+				     plic_ctx(hart) * 0x1000);
 }
 
-static void plic_set_priority(struct sifive_plic *p, u32 hwirq, u32 priority)
+static void plic_set_priority(struct sifive_plic *p, uint32_t hwirq,
+			      uint32_t priority)
 {
-	((volatile u32 *)(p->base + PLIC_PRIORITY_OFFSET))[hwirq] = priority;
+	((volatile uint32_t *)(p->base + PLIC_PRIORITY_OFFSET))[hwirq] =
+		priority;
 }
 
 static void plic_irq_mask(struct irq_data *d)
 {
 	struct sifive_plic *p = d->chip_data;
-	volatile u32 *en;
+	volatile uint32_t *en;
 
 	if (!p || d->hwirq >= p->ndev)
 		return;
@@ -75,7 +77,7 @@ static void plic_irq_mask(struct irq_data *d)
 static void plic_irq_unmask(struct irq_data *d)
 {
 	struct sifive_plic *p = d->chip_data;
-	volatile u32 *en;
+	volatile uint32_t *en;
 
 	if (!p || d->hwirq >= p->ndev)
 		return;
@@ -100,7 +102,7 @@ static struct irq_chip plic_chip = {
 };
 
 static int plic_domain_xlate(struct irq_domain *d, int fdt_node,
-			     const u32 *intspec, unsigned int intsize,
+			     const uint32_t *intspec, unsigned int intsize,
 			     irq_hw_number_t *out_hwirq, unsigned int *out_type)
 {
 	(void)d;
@@ -147,8 +149,8 @@ static int plic_init_hart(struct irq_controller *ctrl, unsigned int hart)
 static int plic_handle_irq(struct irq_controller *ctrl, unsigned int hart)
 {
 	struct sifive_plic *p = ctrl->priv;
-	volatile u32 *claim = plic_claim_reg(p, hart);
-	u32 hwirq = *claim;
+	volatile uint32_t *claim = plic_claim_reg(p, hart);
+	uint32_t hwirq = *claim;
 	unsigned int virq;
 
 	if (!hwirq) {
@@ -169,17 +171,17 @@ static int plic_handle_irq(struct irq_controller *ctrl, unsigned int hart)
 }
 
 static bool plic_hwirq_enabled(struct sifive_plic *p, unsigned int hart,
-			       u32 hwirq)
+			       uint32_t hwirq)
 {
-	volatile u32 *en = plic_enable_reg(p, hart);
+	volatile uint32_t *en = plic_enable_reg(p, hart);
 
 	return (en[hwirq / 32] & (1u << (hwirq % 32))) != 0;
 }
 
 static void plic_hwirq_clear_enable(struct sifive_plic *p, unsigned int hart,
-				    u32 hwirq)
+				    uint32_t hwirq)
 {
-	volatile u32 *en = plic_enable_reg(p, hart);
+	volatile uint32_t *en = plic_enable_reg(p, hart);
 
 	en[hwirq / 32] &= ~(1u << (hwirq % 32));
 }
@@ -187,7 +189,7 @@ static void plic_hwirq_clear_enable(struct sifive_plic *p, unsigned int hart,
 static void plic_selftest(struct sifive_plic *p)
 {
 	bool h0, h1, h0_after, h1_after;
-	u32 test_hwirq = p->ndev - 1;
+	uint32_t test_hwirq = p->ndev - 1;
 	unsigned int virq;
 
 	if (p->ndev <= 1)
@@ -237,9 +239,9 @@ static void plic_selftest(struct sifive_plic *p)
 
 static int plic_probe(int fdt_node)
 {
-	const u32 *ndev;
+	const uint32_t *ndev;
 	struct sifive_plic *p;
-	u64 addr = 0, size = 0;
+	uint64_t addr = 0, size = 0;
 	int len;
 
 	if (dt_get_reg(fdt_node, 0, &addr, &size))
@@ -256,7 +258,7 @@ static int plic_probe(int fdt_node)
 	}
 
 	ndev = fdt_getprop(dt_get_fdt(), fdt_node, "riscv,ndev", &len);
-	p->ndev = ndev && len == sizeof(u32) ? fdt32_to_cpu(*ndev) : 1024;
+	p->ndev = ndev && len == sizeof(uint32_t) ? fdt32_to_cpu(*ndev) : 1024;
 	if (p->ndev < 2)
 		p->ndev = 2;
 

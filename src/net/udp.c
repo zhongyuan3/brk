@@ -8,10 +8,10 @@
 #include <brk/net/socket.h>
 #include <brk/net/udp.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/poll.h>
 #include <uapi/socket.h>
@@ -22,9 +22,9 @@
 
 static LIST_DEFINE(udp_socks);
 static SPINLOCK_DEFINE(udp_lock);
-static u16 udp_ephemeral = UDP_EPHEMERAL_START;
+static uint16_t udp_ephemeral = UDP_EPHEMERAL_START;
 
-static bool udp_port_in_use_locked(u32 laddr, u16 lport)
+static bool udp_port_in_use_locked(uint32_t laddr, uint16_t lport)
 {
 	struct sock *sk;
 
@@ -37,11 +37,11 @@ static bool udp_port_in_use_locked(u32 laddr, u16 lport)
 	return false;
 }
 
-static u16 udp_alloc_port_locked(u32 laddr)
+static uint16_t udp_alloc_port_locked(uint32_t laddr)
 {
 	for (unsigned int i = 0; i <= UDP_EPHEMERAL_END - UDP_EPHEMERAL_START;
 	     i++) {
-		u16 port = udp_ephemeral++;
+		uint16_t port = udp_ephemeral++;
 
 		if (udp_ephemeral < UDP_EPHEMERAL_START)
 			udp_ephemeral = UDP_EPHEMERAL_START;
@@ -54,7 +54,7 @@ static u16 udp_alloc_port_locked(u32 laddr)
 static int udp_autobind(struct sock *sk)
 {
 	irqstate_t flags;
-	u16 port;
+	uint16_t port;
 
 	flags = spin_lock_irqsave(&udp_lock);
 	if (!sk->bound) {
@@ -77,8 +77,8 @@ static int udp_bind(struct socket *sock, const struct sockaddr *addr,
 	const struct sockaddr_in *sin = (const struct sockaddr_in *)addr;
 	struct sock *sk = sock->sk;
 	irqstate_t flags;
-	u32 laddr;
-	u16 lport;
+	uint32_t laddr;
+	uint16_t lport;
 
 	if (!sk || addrlen < (int)sizeof(*sin) || sin->sin_family != AF_INET)
 		return -EINVAL;
@@ -142,11 +142,11 @@ static int udp_sendmsg(struct socket *sock, const void *buf, size_t len,
 	struct net_device *dev;
 	struct sk_buff *skb;
 	struct udphdr *uh;
-	u32 daddr, saddr, nexthop;
-	u16 dport;
+	uint32_t daddr, saddr, nexthop;
+	uint16_t dport;
 	size_t ulen;
-	u32 sum;
-	u8 pseudo[4];
+	uint32_t sum;
+	uint8_t pseudo[4];
 	int err;
 
 	if (!sk)
@@ -192,7 +192,7 @@ static int udp_sendmsg(struct socket *sock, const void *buf, size_t len,
 	uh = (struct udphdr *)skb_put(skb, sizeof(*uh));
 	uh->source = htons(sk->sport);
 	uh->dest = htons(dport);
-	uh->len = htons((u16)ulen);
+	uh->len = htons((uint16_t)ulen);
 	uh->check = 0;
 
 	if (len && copy_from_user(skb_put(skb, len), buf, len)) {
@@ -203,8 +203,8 @@ static int udp_sendmsg(struct socket *sock, const void *buf, size_t len,
 	/* UDP pseudo-header: src, dst, zero, protocol, UDP length. */
 	pseudo[0] = 0;
 	pseudo[1] = IPPROTO_UDP;
-	pseudo[2] = (u8)(ulen >> 8);
-	pseudo[3] = (u8)ulen;
+	pseudo[2] = (uint8_t)(ulen >> 8);
+	pseudo[3] = (uint8_t)ulen;
 
 	sum = inet_csum_add(0, &saddr, sizeof(saddr));
 	sum = inet_csum_add(sum, &daddr, sizeof(daddr));
@@ -224,10 +224,10 @@ int udp_rcv(struct sk_buff *skb)
 {
 	struct sock *sk, *match = NULL;
 	struct udphdr *uh;
-	u32 saddr, daddr, ulen;
-	u16 sport, dport;
-	u8 pseudo[4];
-	u32 sum;
+	uint32_t saddr, daddr, ulen;
+	uint16_t sport, dport;
+	uint8_t pseudo[4];
+	uint32_t sum;
 	irqstate_t flags;
 	bool wake = false;
 
@@ -250,8 +250,8 @@ int udp_rcv(struct sk_buff *skb)
 	if (uh->check) {
 		pseudo[0] = 0;
 		pseudo[1] = IPPROTO_UDP;
-		pseudo[2] = (u8)(ulen >> 8);
-		pseudo[3] = (u8)ulen;
+		pseudo[2] = (uint8_t)(ulen >> 8);
+		pseudo[3] = (uint8_t)ulen;
 
 		sum = inet_csum_add(0, &saddr, sizeof(saddr));
 		sum = inet_csum_add(sum, &daddr, sizeof(daddr));

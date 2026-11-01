@@ -9,9 +9,9 @@
 #include <brk/printk.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/stat.h>
@@ -33,19 +33,19 @@ static void brkfs_inode_attach_ops(struct fs_inode *inode)
 		inode->fops = &brkfs_file_fops;
 }
 
-static bool brkfs_valid_data_bno(struct brkfs_sb_info *sbi, u32 bno)
+static bool brkfs_valid_data_bno(struct brkfs_sb_info *sbi, uint32_t bno)
 {
-	u64 first = sbi->s_sb.s_first_data_block;
-	u64 end = first + sbi->s_sb.s_data_blocks_count;
+	uint64_t first = sbi->s_sb.s_first_data_block;
+	uint64_t end = first + sbi->s_sb.s_data_blocks_count;
 
 	return bno >= first && bno < end;
 }
 
-static void brkfs_count_tree(struct brkfs_sb_info *sbi, u32 bno,
-			     unsigned int level, u64 *blocks)
+static void brkfs_count_tree(struct brkfs_sb_info *sbi, uint32_t bno,
+			     unsigned int level, uint64_t *blocks)
 {
-	u32 ptrs = sbi->s_sb.s_blocksize / sizeof(u32);
-	u8 *buf;
+	uint32_t ptrs = sbi->s_sb.s_blocksize / sizeof(uint32_t);
+	uint8_t *buf;
 
 	if (bno == 0 || !brkfs_valid_data_bno(sbi, bno))
 		return;
@@ -59,8 +59,8 @@ static void brkfs_count_tree(struct brkfs_sb_info *sbi, u32 bno,
 		return;
 
 	if (brkfs_block_read(sbi, bno, buf) == 0) {
-		for (u32 i = 0; i < ptrs; i++) {
-			u32 child = ((u32 *)buf)[i];
+		for (uint32_t i = 0; i < ptrs; i++) {
+			uint32_t child = ((uint32_t *)buf)[i];
 
 			if (child)
 				brkfs_count_tree(sbi, child, level - 1, blocks);
@@ -70,11 +70,11 @@ static void brkfs_count_tree(struct brkfs_sb_info *sbi, u32 bno,
 	kfree(buf);
 }
 
-static u64 brkfs_inode_allocated_blocks(struct brkfs_sb_info *sbi,
-					struct fs_inode *inode)
+static uint64_t brkfs_inode_allocated_blocks(struct brkfs_sb_info *sbi,
+					     struct fs_inode *inode)
 {
 	struct brkfs_inode_info *info = inode->private_data;
-	u64 blocks = 0;
+	uint64_t blocks = 0;
 
 	if (!info)
 		return 0;
@@ -86,7 +86,7 @@ static u64 brkfs_inode_allocated_blocks(struct brkfs_sb_info *sbi,
 	}
 
 	for (unsigned int i = 0; i < 3; i++) {
-		u32 root = info->i_block[BRKFS_INDIRECT_BLOCK + i];
+		uint32_t root = info->i_block[BRKFS_INDIRECT_BLOCK + i];
 
 		if (root != 0)
 			brkfs_count_tree(sbi, root, i + 1, &blocks);
@@ -124,21 +124,21 @@ static void brkfs_orphan_add(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 	sleeplock_acquire(&sbi->s_orphan_lock);
 	spin_lock(&sbi->s_super_lock);
 	info->i_next_orphan = sbi->s_sb.s_orphan;
-	sbi->s_sb.s_orphan = (u32)inode->ino;
+	sbi->s_sb.s_orphan = (uint32_t)inode->ino;
 	sbi->s_super_dirty = true;
 	spin_unlock(&sbi->s_super_lock);
 	sleeplock_release(&sbi->s_orphan_lock);
 }
 
-void brkfs_orphan_remove(struct brkfs_sb_info *sbi, u32 ino)
+void brkfs_orphan_remove(struct brkfs_sb_info *sbi, uint32_t ino)
 {
-	u32 prev = 0;
-	u32 cur;
+	uint32_t prev = 0;
+	uint32_t cur;
 
 	sleeplock_acquire(&sbi->s_orphan_lock);
 
 	cur = sbi->s_sb.s_orphan;
-	u32 guard = sbi->s_sb.s_inodes_count;
+	uint32_t guard = sbi->s_sb.s_inodes_count;
 
 	while (cur && guard--) {
 		struct brkfs_inode_info info;
@@ -146,7 +146,7 @@ void brkfs_orphan_remove(struct brkfs_sb_info *sbi, u32 ino)
 			.ino = cur,
 			.private_data = &info,
 		};
-		u32 next;
+		uint32_t next;
 
 		if (brkfs_inode_read(sbi, &inode))
 			break;
@@ -187,10 +187,10 @@ void brkfs_orphan_cleanup(struct brkfs_sb_info *sbi)
 		.private_data = sbi,
 		.block_size = sbi->s_sb.s_blocksize,
 	};
-	u32 ino;
+	uint32_t ino;
 
 	ino = sbi->s_sb.s_orphan;
-	u32 guard = sbi->s_sb.s_inodes_count;
+	uint32_t guard = sbi->s_sb.s_inodes_count;
 
 	while (ino && guard--) {
 		struct brkfs_inode_info info;
@@ -199,7 +199,7 @@ void brkfs_orphan_cleanup(struct brkfs_sb_info *sbi)
 			.sb = &fake_sb,
 			.private_data = &info,
 		};
-		u32 next;
+		uint32_t next;
 
 		if (brkfs_inode_read(sbi, &inode)) {
 			sbi->s_sb.s_orphan = ino;
@@ -263,8 +263,8 @@ brkfs_lookup(struct fs_inode *dir, struct fs_dentry *dentry, unsigned int flags)
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct fs_super_block *sb = dir->sb;
 	struct fs_inode *inode;
-	u32 ino;
-	u8 type;
+	uint32_t ino;
+	uint8_t type;
 	int err;
 
 	(void)flags;
@@ -303,7 +303,7 @@ static int brkfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct fs_super_block *sb = dir->sb;
 	struct fs_inode *inode = NULL;
-	u32 ino = 0;
+	uint32_t ino = 0;
 	int err;
 
 	(void)excl;
@@ -373,7 +373,7 @@ static int brkfs_link(struct fs_dentry *old_dentry, struct fs_inode *dir,
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct fs_inode *old_inode = old_dentry->inode;
-	u32 ino;
+	uint32_t ino;
 	int err;
 
 	if (S_ISDIR(old_inode->mode))
@@ -381,15 +381,16 @@ static int brkfs_link(struct fs_dentry *old_dentry, struct fs_inode *dir,
 	if (new_dentry->inode)
 		return -EEXIST;
 
-	err = brkfs_dir_lookup(dir, new_dentry->name.name,
-			       new_dentry->name.len, &ino, NULL);
+	err = brkfs_dir_lookup(dir, new_dentry->name.name, new_dentry->name.len,
+			       &ino, NULL);
 	if (err == 0)
 		return -EEXIST;
 	if (err != -ENOENT)
 		return err;
 
-	err = brkfs_dir_add(dir, (u32)old_inode->ino, new_dentry->name.name,
-			    new_dentry->name.len, old_inode->mode);
+	err = brkfs_dir_add(dir, (uint32_t)old_inode->ino,
+			    new_dentry->name.name, new_dentry->name.len,
+			    old_inode->mode);
 	if (err)
 		goto out;
 	fs_inode_get(old_inode);
@@ -457,7 +458,7 @@ static int brkfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct fs_super_block *sb = dir->sb;
 	struct fs_inode *inode = NULL;
-	u32 ino = 0;
+	uint32_t ino = 0;
 	size_t len = strlen(symname);
 	loff_t pos = 0;
 	size_t w = 0;
@@ -544,7 +545,7 @@ static int brkfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct fs_super_block *sb = dir->sb;
 	struct fs_inode *inode = NULL;
-	u32 ino = 0;
+	uint32_t ino = 0;
 	int err;
 
 	if (dentry->inode)
@@ -576,7 +577,7 @@ static int brkfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 		goto out;
 	}
 
-	err = brkfs_new_dir_body(inode, (u32)dir->ino);
+	err = brkfs_new_dir_body(inode, (uint32_t)dir->ino);
 	if (err) {
 		brkfs_discard_new_inode(inode);
 		goto out;
@@ -671,8 +672,8 @@ static int brkfs_rename(struct fs_inode *old_dir, struct fs_dentry *old_dentry,
 	struct fs_inode *second;
 	bool is_dir;
 	bool replace = target != NULL;
-	u32 ino;
-	u32 tino = 0;
+	uint32_t ino;
+	uint32_t tino = 0;
 	int err;
 
 	if (!inode || !S_ISDIR(old_dir->mode) || !S_ISDIR(new_dir->mode))
@@ -739,7 +740,7 @@ static int brkfs_rename(struct fs_inode *old_dir, struct fs_dentry *old_dentry,
 			goto out_unlock;
 	}
 
-	err = brkfs_dir_add(new_dir, (u32)inode->ino,
+	err = brkfs_dir_add(new_dir, (uint32_t)inode->ino,
 			    new_dentry->name.name, new_dentry->name.len,
 			    inode->mode);
 	if (err)
@@ -800,14 +801,12 @@ static int brkfs_rename(struct fs_inode *old_dir, struct fs_dentry *old_dentry,
 
 rollback_target:
 	if (replace) {
-		int rerr = brkfs_dir_add(new_dir, tino,
-					 new_dentry->name.name,
-					 new_dentry->name.len,
-					 target->mode);
+		int rerr = brkfs_dir_add(new_dir, tino, new_dentry->name.name,
+					 new_dentry->name.len, target->mode);
 
 		if (rerr)
-			pr_warn("%s(): rollback of %.*s failed: %d\n",
-				__func__, (int)new_dentry->name.len,
+			pr_warn("%s(): rollback of %.*s failed: %d\n", __func__,
+				(int)new_dentry->name.len,
 				new_dentry->name.name, rerr);
 	}
 
@@ -824,7 +823,7 @@ static int brkfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct fs_super_block *sb = dir->sb;
 	struct fs_inode *inode;
-	u32 ino;
+	uint32_t ino;
 	int err;
 
 	if (dentry->inode)
@@ -878,11 +877,11 @@ out:
 }
 
 static int brkfs_getattr(const struct fs_path *path, struct stat *stat,
-			 u32 mask, unsigned int flags)
+			 uint32_t mask, unsigned int flags)
 {
 	struct fs_inode *inode = path->dentry->inode;
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
-	u64 blocks;
+	uint64_t blocks;
 
 	(void)mask;
 	(void)flags;
@@ -934,9 +933,9 @@ static int brkfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 		inode_touch_ctime(inode);
 	}
 	if (attr->valid & (ATTR_ATIME | ATTR_MTIME | ATTR_CTIME)) {
-		inode_times_set(inode,
-				(attr->valid & ATTR_ATIME) ? &attr->atime : NULL,
-				(attr->valid & ATTR_MTIME) ? &attr->mtime : NULL);
+		inode_times_set(
+			inode, (attr->valid & ATTR_ATIME) ? &attr->atime : NULL,
+			(attr->valid & ATTR_MTIME) ? &attr->mtime : NULL);
 		inode_touch_ctime(inode);
 	}
 	if (attr->valid & ATTR_SIZE) {
@@ -970,10 +969,10 @@ int brkfs_inode_read(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 {
 	struct brkfs_inode *disk_i;
 	struct brkfs_inode_info *info;
-	u32 bno;
+	uint32_t bno;
 	int err;
-	u32 ino = inode->ino;
-	u32 isize = sbi->s_sb.s_inode_size;
+	uint32_t ino = inode->ino;
+	uint32_t isize = sbi->s_sb.s_inode_size;
 	struct brkfs_block bb;
 
 	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
@@ -989,14 +988,15 @@ int brkfs_inode_read(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 
 	cached_page_lock(bb.cp);
 
-	u32 idx = (ino - 1) % sbi->s_inodes_per_block;
-	disk_i = (struct brkfs_inode *)((u8 *)bb.data + idx * isize);
+	uint32_t idx = (ino - 1) % sbi->s_inodes_per_block;
+	disk_i = (struct brkfs_inode *)((uint8_t *)bb.data + idx * isize);
 
 	if (disk_i->i_ino != ino) {
 		cached_page_unlock(bb.cp);
 		brkfs_put_block(&bb);
 		pr_warn("%s(): inode %" PRIu32 " has on-disk i_ino %" PRIu32
-			"\n", __func__, ino, disk_i->i_ino);
+			"\n",
+			__func__, ino, disk_i->i_ino);
 		return -EIO;
 	}
 
@@ -1032,12 +1032,12 @@ int brkfs_inode_read(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 
 int brkfs_inode_write(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 {
-	u32 bno;
-	u32 ino = inode->ino;
+	uint32_t bno;
+	uint32_t ino = inode->ino;
 	int err;
 	struct brkfs_inode *disk_i;
 	struct brkfs_inode_info *info;
-	u32 isize = sbi->s_sb.s_inode_size;
+	uint32_t isize = sbi->s_sb.s_inode_size;
 	struct brkfs_block bb;
 
 	if (ino < 1 || ino > sbi->s_sb.s_inodes_count) {
@@ -1053,8 +1053,8 @@ int brkfs_inode_write(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 
 	cached_page_lock(bb.cp);
 
-	u32 idx = (ino - 1) % sbi->s_inodes_per_block;
-	disk_i = (struct brkfs_inode *)((u8 *)bb.data + idx * isize);
+	uint32_t idx = (ino - 1) % sbi->s_inodes_per_block;
+	disk_i = (struct brkfs_inode *)((uint8_t *)bb.data + idx * isize);
 
 	info = inode->private_data;
 
@@ -1081,9 +1081,9 @@ int brkfs_inode_write(struct brkfs_sb_info *sbi, struct fs_inode *inode)
 	return 0;
 }
 
-int brkfs_inode_alloc(struct brkfs_sb_info *sbi, u32 *ino)
+int brkfs_inode_alloc(struct brkfs_sb_info *sbi, uint32_t *ino)
 {
-	u32 bit = 0;
+	uint32_t bit = 0;
 	int err;
 
 	err = brkfs_bitmap_alloc(sbi, sbi->s_sb.s_inode_bitmap,
@@ -1099,7 +1099,7 @@ int brkfs_inode_alloc(struct brkfs_sb_info *sbi, u32 *ino)
 	return 0;
 }
 
-int brkfs_inode_free(struct brkfs_sb_info *sbi, u32 ino)
+int brkfs_inode_free(struct brkfs_sb_info *sbi, uint32_t ino)
 {
 	int err;
 
@@ -1119,7 +1119,7 @@ int brkfs_inode_free(struct brkfs_sb_info *sbi, u32 ino)
 	return err;
 }
 
-int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, u32 ino, umode_t mode,
+int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, uint32_t ino, umode_t mode,
 			  unsigned int nlink, dev_t rdev, kuid_t uid,
 			  kgid_t gid)
 {
@@ -1139,10 +1139,10 @@ int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, u32 ino, umode_t mode,
 	return brkfs_inode_write(sbi, &stub);
 }
 
-static int brkfs_alloc_zeroed_block(struct brkfs_sb_info *sbi, u32 *out)
+static int brkfs_alloc_zeroed_block(struct brkfs_sb_info *sbi, uint32_t *out)
 {
-	u32 bno;
-	u8 *buf;
+	uint32_t bno;
+	uint8_t *buf;
 	int err;
 
 	err = brkfs_data_alloc(sbi, &bno);
@@ -1167,25 +1167,26 @@ static int brkfs_alloc_zeroed_block(struct brkfs_sb_info *sbi, u32 *out)
 	return 0;
 }
 
-static int brkfs_read_ptr(struct brkfs_sb_info *sbi, u32 bno, u32 index,
-			  u32 *out)
+static int brkfs_read_ptr(struct brkfs_sb_info *sbi, uint32_t bno,
+			  uint32_t index, uint32_t *out)
 {
-	u8 *buf = kmalloc(sbi->s_sb.s_blocksize);
+	uint8_t *buf = kmalloc(sbi->s_sb.s_blocksize);
 	int err;
 
 	if (!buf)
 		return -ENOMEM;
 	err = brkfs_block_read(sbi, bno, buf);
 	if (!err)
-		*out = ((u32 *)buf)[index];
+		*out = ((uint32_t *)buf)[index];
 	kfree(buf);
 	return err;
 }
 
-static int brkfs_set_ptr_if_zero(struct brkfs_sb_info *sbi, u32 bno,
-				 u32 index, u32 new_bno, u32 *out)
+static int brkfs_set_ptr_if_zero(struct brkfs_sb_info *sbi, uint32_t bno,
+				 uint32_t index, uint32_t new_bno,
+				 uint32_t *out)
 {
-	u8 *buf = kmalloc(sbi->s_sb.s_blocksize);
+	uint8_t *buf = kmalloc(sbi->s_sb.s_blocksize);
 	int err;
 
 	if (!buf)
@@ -1197,7 +1198,7 @@ static int brkfs_set_ptr_if_zero(struct brkfs_sb_info *sbi, u32 bno,
 		return err;
 	}
 
-	u32 *ptrs = (u32 *)buf;
+	uint32_t *ptrs = (uint32_t *)buf;
 
 	if (ptrs[index] == 0) {
 		ptrs[index] = new_bno;
@@ -1211,10 +1212,10 @@ static int brkfs_set_ptr_if_zero(struct brkfs_sb_info *sbi, u32 bno,
 	return err;
 }
 
-static int brkfs_get_leaf(struct brkfs_sb_info *sbi, u32 parent, u32 index,
-			  bool create, u32 *out)
+static int brkfs_get_leaf(struct brkfs_sb_info *sbi, uint32_t parent,
+			  uint32_t index, bool create, uint32_t *out)
 {
-	u32 bno;
+	uint32_t bno;
 	int err;
 
 	err = brkfs_read_ptr(sbi, parent, index, &bno);
@@ -1233,7 +1234,7 @@ static int brkfs_get_leaf(struct brkfs_sb_info *sbi, u32 parent, u32 index,
 		return 0;
 	}
 
-	u32 new_bno = 0;
+	uint32_t new_bno = 0;
 
 	err = brkfs_data_alloc(sbi, &new_bno);
 	if (err)
@@ -1249,15 +1250,15 @@ static int brkfs_get_leaf(struct brkfs_sb_info *sbi, u32 parent, u32 index,
 	return 0;
 }
 
-static int brkfs_indirect_lookup(struct brkfs_sb_info *sbi, u32 *root,
-				 unsigned int level, u64 idx, bool create,
-				 u32 *out)
+static int brkfs_indirect_lookup(struct brkfs_sb_info *sbi, uint32_t *root,
+				 unsigned int level, uint64_t idx, bool create,
+				 uint32_t *out)
 {
-	u32 ptrs = sbi->s_sb.s_blocksize / sizeof(u32);
-	u64 shift = 1;
-	u32 top;
-	u64 next;
-	u32 child;
+	uint32_t ptrs = sbi->s_sb.s_blocksize / sizeof(uint32_t);
+	uint64_t shift = 1;
+	uint32_t top;
+	uint64_t next;
+	uint32_t child;
 	int err;
 
 	if (*root == 0) {
@@ -1274,12 +1275,12 @@ static int brkfs_indirect_lookup(struct brkfs_sb_info *sbi, u32 *root,
 		return -EIO;
 
 	if (level == 1)
-		return brkfs_get_leaf(sbi, *root, (u32)idx, create, out);
+		return brkfs_get_leaf(sbi, *root, (uint32_t)idx, create, out);
 
 	for (unsigned int i = 0; i < level - 1; i++)
 		shift *= ptrs;
 
-	top = (u32)(idx / shift);
+	top = (uint32_t)(idx / shift);
 	next = idx % shift;
 	if (top >= ptrs)
 		return -ENOSPC;
@@ -1294,7 +1295,7 @@ static int brkfs_indirect_lookup(struct brkfs_sb_info *sbi, u32 *root,
 			return 0;
 		}
 
-		u32 new_bno = 0;
+		uint32_t new_bno = 0;
 
 		err = brkfs_alloc_zeroed_block(sbi, &new_bno);
 		if (err)
@@ -1307,22 +1308,21 @@ static int brkfs_indirect_lookup(struct brkfs_sb_info *sbi, u32 *root,
 	if (!brkfs_valid_data_bno(sbi, child))
 		return -EIO;
 
-	return brkfs_indirect_lookup(sbi, &child, level - 1, next, create,
-				     out);
+	return brkfs_indirect_lookup(sbi, &child, level - 1, next, create, out);
 }
 
-int brkfs_inode_getblk(struct fs_inode *inode, loff_t off, u32 *bno,
+int brkfs_inode_getblk(struct fs_inode *inode, loff_t off, uint32_t *bno,
 		       unsigned flags, struct brkfs_sb_info *sbi)
 {
 	struct brkfs_inode_info *inf = inode->private_data;
-	u32 *blk_ptrs = inf->i_block;
+	uint32_t *blk_ptrs = inf->i_block;
 	bool create = (flags & BRKFS_GETBLK_CREATE) != 0;
-	u32 bs = sbi->s_sb.s_blocksize;
-	u32 ptrs = bs / sizeof(u32);
-	u64 blk_idx = (u64)off / bs;
+	uint32_t bs = sbi->s_sb.s_blocksize;
+	uint32_t ptrs = bs / sizeof(uint32_t);
+	uint64_t blk_idx = (uint64_t)off / bs;
 
 	if (blk_idx < BRKFS_DIRECT_BLOCKS) {
-		u32 idx = (u32)blk_idx;
+		uint32_t idx = (uint32_t)blk_idx;
 
 		if (blk_ptrs[idx] == 0) {
 			if (!create) { /* read of a hole or sparse region */
@@ -1330,7 +1330,7 @@ int brkfs_inode_getblk(struct fs_inode *inode, loff_t off, u32 *bno,
 				return 0;
 			}
 
-			u32 new_bno = 0;
+			uint32_t new_bno = 0;
 			int err = brkfs_data_alloc(sbi, &new_bno);
 
 			if (err)
@@ -1346,13 +1346,13 @@ int brkfs_inode_getblk(struct fs_inode *inode, loff_t off, u32 *bno,
 		return 0;
 	}
 
-	u64 adj = blk_idx - BRKFS_DIRECT_BLOCKS;
-	u64 span1 = ptrs;
-	u64 span2 = (u64)ptrs * ptrs;
-	u64 span3 = span2 * ptrs;
-	u64 capacity = span1 + span2 + span3;
+	uint64_t adj = blk_idx - BRKFS_DIRECT_BLOCKS;
+	uint64_t span1 = ptrs;
+	uint64_t span2 = (uint64_t)ptrs * ptrs;
+	uint64_t span3 = span2 * ptrs;
+	uint64_t capacity = span1 + span2 + span3;
 	unsigned int level;
-	u64 idx;
+	uint64_t idx;
 
 	if (adj >= capacity)
 		return -ENOSPC;
@@ -1369,7 +1369,7 @@ int brkfs_inode_getblk(struct fs_inode *inode, loff_t off, u32 *bno,
 	}
 
 	if (create) {
-		u32 features = 0;
+		uint32_t features = 0;
 
 		if (S_ISDIR(inode->mode))
 			features |= BRKFS_FEATURE_DIR_INDIRECT;
@@ -1386,25 +1386,25 @@ int brkfs_inode_getblk(struct fs_inode *inode, loff_t off, u32 *bno,
 		}
 	}
 
-	return brkfs_indirect_lookup(sbi,
-				     &blk_ptrs[BRKFS_INDIRECT_BLOCK + level - 1],
-				     level, idx, create, bno);
+	return brkfs_indirect_lookup(
+		sbi, &blk_ptrs[BRKFS_INDIRECT_BLOCK + level - 1], level, idx,
+		create, bno);
 }
 
-static u64 brkfs_indirect_span(u32 ptrs, unsigned int level)
+static uint64_t brkfs_indirect_span(uint32_t ptrs, unsigned int level)
 {
-	u64 span = 1;
+	uint64_t span = 1;
 
 	for (unsigned int i = 0; i < level; i++)
 		span *= ptrs;
 	return span;
 }
 
-static void brkfs_free_tree(struct brkfs_sb_info *sbi, u32 bno,
+static void brkfs_free_tree(struct brkfs_sb_info *sbi, uint32_t bno,
 			    unsigned int level)
 {
-	u32 ptrs = sbi->s_sb.s_blocksize / sizeof(u32);
-	u8 *buf;
+	uint32_t ptrs = sbi->s_sb.s_blocksize / sizeof(uint32_t);
+	uint8_t *buf;
 
 	if (bno == 0 || !brkfs_valid_data_bno(sbi, bno))
 		return;
@@ -1412,9 +1412,9 @@ static void brkfs_free_tree(struct brkfs_sb_info *sbi, u32 bno,
 	if (level > 0) {
 		buf = kmalloc(sbi->s_sb.s_blocksize);
 		if (buf && brkfs_block_read(sbi, bno, buf) == 0) {
-			u32 *children = (u32 *)buf;
+			uint32_t *children = (uint32_t *)buf;
 
-			for (u32 i = 0; i < ptrs; i++)
+			for (uint32_t i = 0; i < ptrs; i++)
 				if (children[i])
 					brkfs_free_tree(sbi, children[i],
 							level - 1);
@@ -1430,13 +1430,14 @@ static void brkfs_free_tree(struct brkfs_sb_info *sbi, u32 bno,
  * the first indirect block) are >= @free_from.  The subtree covers
  * [@base, @end).  *@keep is set when any part of the subtree must stay.
  */
-static void brkfs_free_indirect_range(struct brkfs_sb_info *sbi, u32 *root,
-				      unsigned int level, u64 base, u64 end,
-				      u64 free_from, bool *keep)
+static void brkfs_free_indirect_range(struct brkfs_sb_info *sbi, uint32_t *root,
+				      unsigned int level, uint64_t base,
+				      uint64_t end, uint64_t free_from,
+				      bool *keep)
 {
-	u32 ptrs = sbi->s_sb.s_blocksize / sizeof(u32);
-	u64 child_span = brkfs_indirect_span(ptrs, level - 1);
-	u8 *buf;
+	uint32_t ptrs = sbi->s_sb.s_blocksize / sizeof(uint32_t);
+	uint64_t child_span = brkfs_indirect_span(ptrs, level - 1);
+	uint8_t *buf;
 	bool any_keep = false;
 	bool changed = false;
 
@@ -1472,11 +1473,11 @@ static void brkfs_free_indirect_range(struct brkfs_sb_info *sbi, u32 *root,
 		return;
 	}
 
-	u32 *children = (u32 *)buf;
+	uint32_t *children = (uint32_t *)buf;
 
-	for (u32 i = 0; i < ptrs; i++) {
-		u64 child_base = base + (u64)i * child_span;
-		u64 child_end = child_base + child_span;
+	for (uint32_t i = 0; i < ptrs; i++) {
+		uint64_t child_base = base + (uint64_t)i * child_span;
+		uint64_t child_end = child_base + child_span;
 
 		if (children[i] == 0)
 			continue;
@@ -1513,10 +1514,10 @@ int brkfs_truncate_inode_blocks(struct fs_inode *inode, loff_t new_size)
 {
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	struct brkfs_inode_info *inf = inode->private_data;
-	u32 bs = sbi->s_sb.s_blocksize;
+	uint32_t bs = sbi->s_sb.s_blocksize;
 	loff_t old_size = inode->size;
-	u64 new_n;
-	u32 ptrs;
+	uint64_t new_n;
+	uint32_t ptrs;
 
 	if (!inf)
 		return -EINVAL;
@@ -1527,12 +1528,12 @@ int brkfs_truncate_inode_blocks(struct fs_inode *inode, loff_t new_size)
 		return 0;
 	}
 
-	new_n = ((u64)new_size + bs - 1) / bs;
+	new_n = ((uint64_t)new_size + bs - 1) / bs;
 
-	for (u32 bi = 0; bi < BRKFS_DIRECT_BLOCKS; bi++) {
-		u32 bno;
+	for (uint32_t bi = 0; bi < BRKFS_DIRECT_BLOCKS; bi++) {
+		uint32_t bno;
 
-		if ((u64)bi < new_n)
+		if ((uint64_t)bi < new_n)
 			continue;
 		bno = inf->i_block[bi];
 		if (bno) {
@@ -1542,16 +1543,16 @@ int brkfs_truncate_inode_blocks(struct fs_inode *inode, loff_t new_size)
 		}
 	}
 
-	u64 free_from = new_n > BRKFS_DIRECT_BLOCKS ?
-				new_n - BRKFS_DIRECT_BLOCKS :
-				0;
-	u64 base = 0;
+	uint64_t free_from =
+		new_n > BRKFS_DIRECT_BLOCKS ? new_n - BRKFS_DIRECT_BLOCKS : 0;
+	uint64_t base = 0;
 
-	ptrs = bs / sizeof(u32);
+	ptrs = bs / sizeof(uint32_t);
 	for (unsigned int level = 1; level <= 3; level++) {
-		u64 span = brkfs_indirect_span(ptrs, level);
-		u64 end = base + span;
-		u32 *root = &inf->i_block[BRKFS_INDIRECT_BLOCK + level - 1];
+		uint64_t span = brkfs_indirect_span(ptrs, level);
+		uint64_t end = base + span;
+		uint32_t *root =
+			&inf->i_block[BRKFS_INDIRECT_BLOCK + level - 1];
 
 		if (*root != 0) {
 			bool keep = false;

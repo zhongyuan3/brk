@@ -6,8 +6,8 @@
 #include <brk/net/netdevice.h>
 #include <brk/net/skbuff.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 #define ARP_TABLE_SIZE 16
@@ -21,19 +21,19 @@ enum arp_state {
 
 struct arp_entry {
 	bool in_use;
-	u32 ip;
-	u8 mac[ETH_ALEN];
+	uint32_t ip;
+	uint8_t mac[ETH_ALEN];
 	enum arp_state state;
-	u64 last_request_ns;
-	u64 last_used;
+	uint64_t last_request_ns;
+	uint64_t last_used;
 	struct sk_buff_head pending;
 };
 
 static struct arp_entry arp_table[ARP_TABLE_SIZE];
 static SPINLOCK_DEFINE(arp_lock);
-static u64 arp_generation;
+static uint64_t arp_generation;
 
-static struct arp_entry *arp_lookup_locked(u32 ip)
+static struct arp_entry *arp_lookup_locked(uint32_t ip)
 {
 	for (unsigned int i = 0; i < ARP_TABLE_SIZE; i++) {
 		if (arp_table[i].in_use && arp_table[i].ip == ip)
@@ -42,7 +42,7 @@ static struct arp_entry *arp_lookup_locked(u32 ip)
 	return NULL;
 }
 
-static struct arp_entry *arp_alloc_locked(u32 ip)
+static struct arp_entry *arp_alloc_locked(uint32_t ip)
 {
 	struct arp_entry *victim = NULL;
 
@@ -80,7 +80,8 @@ void arp_init(void)
 	}
 }
 
-static int arp_send(struct net_device *dev, u16 op, const u8 *tha, u32 tpa)
+static int arp_send(struct net_device *dev, uint16_t op, const uint8_t *tha,
+		    uint32_t tpa)
 {
 	struct sk_buff *skb;
 	struct arphdr *arp;
@@ -114,7 +115,7 @@ static int arp_send(struct net_device *dev, u16 op, const u8 *tha, u32 tpa)
 	return netdev_start_xmit(skb);
 }
 
-static void arp_flush_pending(const u8 *mac, struct sk_buff_head *queue)
+static void arp_flush_pending(const uint8_t *mac, struct sk_buff_head *queue)
 {
 	struct sk_buff *skb;
 
@@ -129,12 +130,12 @@ static void arp_flush_pending(const u8 *mac, struct sk_buff_head *queue)
 	}
 }
 
-static void arp_update(u32 ip, const u8 *mac, bool flush)
+static void arp_update(uint32_t ip, const uint8_t *mac, bool flush)
 {
 	struct sk_buff_head pending;
 	struct arp_entry *e;
 	irqstate_t flags;
-	u8 hw[ETH_ALEN];
+	uint8_t hw[ETH_ALEN];
 	bool do_flush = false;
 
 	skb_queue_init(&pending);
@@ -166,9 +167,9 @@ static void arp_update(u32 ip, const u8 *mac, bool flush)
 int arp_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt)
 {
 	struct arphdr *arp;
-	u32 spa, tpa;
-	u16 op;
-	u8 sha[ETH_ALEN];
+	uint32_t spa, tpa;
+	uint16_t op;
+	uint8_t sha[ETH_ALEN];
 
 	(void)pt;
 
@@ -200,13 +201,13 @@ drop:
 	return -EINVAL;
 }
 
-int arp_output(struct sk_buff *skb, struct net_device *dev, u32 next_hop)
+int arp_output(struct sk_buff *skb, struct net_device *dev, uint32_t next_hop)
 {
 	struct arp_entry *e;
 	irqstate_t flags;
-	u64 now;
+	uint64_t now;
 	bool send_request = false;
-	u8 mac[ETH_ALEN];
+	uint8_t mac[ETH_ALEN];
 
 	flags = spin_lock_irqsave(&arp_lock);
 

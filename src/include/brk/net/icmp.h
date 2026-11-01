@@ -9,16 +9,16 @@
 #define ICMP_ECHO 8
 
 struct icmphdr {
-	u8 type;
-	u8 code;
-	u16 checksum;
-	u16 id;
-	u16 sequence;
+	uint8_t type;
+	uint8_t code;
+	uint16_t checksum;
+	uint16_t id;
+	uint16_t sequence;
 } __attribute__((packed));
 
 int icmp_rcv(struct sk_buff *skb);
 
-int icmp_send_echo(u32 saddr, u32 daddr, u16 id, u16 seq, const void *data,
-		   size_t len);
+int icmp_send_echo(uint32_t saddr, uint32_t daddr, uint16_t id, uint16_t seq,
+		   const void *data, size_t len);
 
 #endif

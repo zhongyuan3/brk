@@ -1,4 +1,4 @@
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/net/eth.h>
@@ -6,8 +6,8 @@
 #include <brk/net/skbuff.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 static LIST_DEFINE(netdev_list);

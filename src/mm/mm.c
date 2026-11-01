@@ -2,24 +2,24 @@
 #include <arch/csr.h>
 #include <arch/pgtable.h>
 #include <arch/pgtable_types.h>
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/error.h>
+#include <brk/fs.h>
 #include <brk/initcall.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/memblock.h>
-#include <brk/fs.h>
 #include <brk/mm.h>
-#include <brk/pagecache.h>
 #include <brk/mm_types.h>
+#include <brk/pagecache.h>
 #include <brk/pgalloc.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 static struct slab_allocator uvms_cache;
@@ -87,7 +87,7 @@ static void uvm_space_free_stack(struct uvm_space *mm)
 {
 	if (mm->stack->size > 0) {
 		unmap_user_pages(mm->pgd, mm->stack->addr, mm->stack->size);
-		ASSERT(mm->stack->pages[0]);
+		assert(mm->stack->pages[0]);
 		page_free(mm->stack->pages[0], USTACK_PAGE_ORDER);
 	}
 	uvm_region_free(mm->stack);
@@ -98,7 +98,7 @@ static void uvm_space_free_heap(struct uvm_space *mm)
 	if (mm->heap->size > 0) {
 		unmap_user_pages(mm->pgd, mm->heap->addr, mm->heap->size);
 		for (size_t i = 0; i < mm->heap->nr_pages; ++i) {
-			ASSERT(mm->heap->pages[i]);
+			assert(mm->heap->pages[i]);
 			page_put(mm->heap->pages[i]);
 		}
 		kfree(mm->heap->pages);
@@ -188,7 +188,7 @@ void uvm_region_unmap_range(struct uvm_space *mm, struct uvm_region *region,
 
 	for (size_t i = 0; i < nr; i++) {
 		size_t idx = start + i;
-		u64 addr = region->addr + idx * PAGE_SIZE;
+		uint64_t addr = region->addr + idx * PAGE_SIZE;
 
 		if (uvm_page_is_mapped(mm, addr))
 			unmap_user_pages(mm->pgd, addr, PAGE_SIZE);
@@ -201,7 +201,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 {
 	size_t npgs = src->nr_pages;
 	size_t i = 0;
-	u64 addr = src->addr;
+	uint64_t addr = src->addr;
 	size_t size = src->size;
 	int err = 0;
 
@@ -260,7 +260,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 		dst->flags = src->flags;
 		return 0;
 
-	failed_shared:
+failed_shared:
 		uvm_region_unmap_range(dst_mm, dst, 0, dst->nr_pages);
 		uvm_region_free_range(dst, 0, dst->nr_pages);
 		kfree(dst->cached);
@@ -288,7 +288,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 	for (i = 0; i < npgs; i++) {
 		struct page *src_pg = src->pages[i];
 		unsigned int flags;
-		u64 page_addr = src->addr + i * PAGE_SIZE;
+		uint64_t page_addr = src->addr + i * PAGE_SIZE;
 
 		if (!src_pg)
 			continue;
@@ -319,10 +319,9 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 			 * Share the page read-only with a COW marker in both
 			 * address spaces; the first store takes a private copy.
 			 */
-			err = map_user_pages(
-				dst_mm->pgd, page_addr, PAGE_SIZE,
-				page_to_phys(src_pg),
-				(flags & ~PTE_W) | PTE_COW);
+			err = map_user_pages(dst_mm->pgd, page_addr, PAGE_SIZE,
+					     page_to_phys(src_pg),
+					     (flags & ~PTE_W) | PTE_COW);
 			if (err)
 				goto failed;
 			err = uvm_cow_protect(src_mm, page_addr);
@@ -336,8 +335,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 			 */
 			if (uvm_pte_is_cow(src_mm, page_addr))
 				flags |= PTE_COW;
-			err = map_user_pages(dst_mm->pgd, page_addr,
-					     PAGE_SIZE,
+			err = map_user_pages(dst_mm->pgd, page_addr, PAGE_SIZE,
 					     page_to_phys(src_pg), flags);
 			if (err)
 				goto failed;
@@ -357,7 +355,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 
 failed:
 	for (size_t j = 0; j <= i && j < npgs; ++j) {
-		u64 page_addr = src->addr + j * PAGE_SIZE;
+		uint64_t page_addr = src->addr + j * PAGE_SIZE;
 
 		if (!pgs[j])
 			continue;
@@ -418,12 +416,12 @@ static int uvm_space_copy_stack(struct uvm_space *dst, struct uvm_space *src)
 
 	struct page **pgs = kcalloc(1, sizeof(struct page *));
 	if (!pgs) {
-		ASSERT(pg);
+		assert(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
 		return -ENOMEM;
 	}
 
-	u64 pa = page_to_phys(pg);
+	uint64_t pa = page_to_phys(pg);
 	unsigned int flags;
 	int err = uvm_pte_flags(src, src->stack->addr, &flags);
 
@@ -432,10 +430,10 @@ static int uvm_space_copy_stack(struct uvm_space *dst, struct uvm_space *src)
 		kfree(pgs);
 		return err;
 	}
-	err = map_user_pages(dst->pgd, src->stack->addr, src->stack->size,
-			     pa, flags);
+	err = map_user_pages(dst->pgd, src->stack->addr, src->stack->size, pa,
+			     flags);
 	if (err) {
-		ASSERT(pg);
+		assert(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
 		kfree(pgs);
 		return err;
@@ -516,24 +514,24 @@ static void __unmap_range(unsigned long addr, unsigned long end_addr,
 	while (addr < end_addr) {
 		pgde = pgd + pgd_index(addr);
 		if (pgd_is_leaf(*pgde)) {
-			ASSERT(end_addr - addr >= PAGE_SIZE_1G);
+			assert(end_addr - addr >= PAGE_SIZE_1G);
 			pgd_clear(pgde);
 			addr += PAGE_SIZE_1G;
 			continue;
 		}
-		ASSERT(pgd_is_valid(*pgde));
+		assert(pgd_is_valid(*pgde));
 		pmd = phys_to_virt(pgd_next(*pgde));
 		pmde = pmd + pmd_index(addr);
 		if (pmd_is_leaf(*pmde)) {
-			ASSERT(end_addr - addr >= PAGE_SIZE_2M);
+			assert(end_addr - addr >= PAGE_SIZE_2M);
 			pmd_clear(pmde);
 			addr += PAGE_SIZE_2M;
 			continue;
 		}
-		ASSERT(pmd_is_valid(*pmde));
+		assert(pmd_is_valid(*pmde));
 		pt = phys_to_virt(pmd_next(*pmde));
 		pte = pt + pte_index(addr);
-		ASSERT(pte_is_valid(*pte));
+		assert(pte_is_valid(*pte));
 		pte_clear(pte);
 		addr += PAGE_SIZE;
 	}
@@ -546,8 +544,8 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 	pgd_t *pgde;
 	pmd_t *pmd, *pmde;
 	pte_t *pt, *pte;
-	u64 pmd_pa, pt_pa;
-	u64 start_addr = addr;
+	uint64_t pmd_pa, pt_pa;
+	uint64_t start_addr = addr;
 	pgd_t *pgd = ctx->root;
 	unsigned int flags = ctx->flags;
 	unsigned long (*alloc_frame)(void) = ctx->alloc_frame;
@@ -557,7 +555,7 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 	for (; addr < end_addr; addr += page_size, paddr += page_size) {
 		pgde = pgd + pgd_index(addr);
 		if (page_size == PAGE_SIZE_1G) {
-			ASSERT(!pgd_is_valid(*pgde));
+			assert(!pgd_is_valid(*pgde));
 			pgd_set_leaf(pgde, paddr, flags);
 			continue;
 		}
@@ -575,7 +573,7 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 		}
 		pmde = pmd + pmd_index(addr);
 		if (page_size == PAGE_SIZE_2M) {
-			ASSERT(!pmd_is_valid(*pmde));
+			assert(!pmd_is_valid(*pmde));
 			pmd_set_leaf(pmde, paddr, flags);
 			continue;
 		}
@@ -592,7 +590,7 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 			pt = phys_to_virt(pmd_next(*pmde));
 		}
 		pte = pt + pte_index(addr);
-		ASSERT(!pte_is_valid(*pte));
+		assert(!pte_is_valid(*pte));
 		pte_set_leaf(pte, paddr, flags);
 	}
 
@@ -609,12 +607,12 @@ int map_pages(const struct map_pages_context *ctx)
 	unsigned long size = ctx->size;
 	unsigned long paddr = ctx->paddr;
 
-	ASSERT(ctx->root);
-	ASSERT(ctx->alloc_frame);
-	ASSERT(ctx->phys_to_virt);
-	ASSERT(is_aligned(addr, PAGE_SIZE));
-	ASSERT(is_aligned(size, PAGE_SIZE));
-	ASSERT(is_aligned(paddr, PAGE_SIZE));
+	assert(ctx->root);
+	assert(ctx->alloc_frame);
+	assert(ctx->phys_to_virt);
+	assert(is_aligned(addr, PAGE_SIZE));
+	assert(is_aligned(size, PAGE_SIZE));
+	assert(is_aligned(paddr, PAGE_SIZE));
 
 	end_addr = addr + size;
 	while (addr < end_addr) {
@@ -662,9 +660,8 @@ static void *pgtable_phys_to_virt(unsigned long paddr)
 	return (void *)phys_to_virt(paddr);
 }
 
-static int map_pages_final(pgd_t *root, unsigned long addr,
-			   unsigned long size, unsigned long paddr,
-			   unsigned int flags)
+static int map_pages_final(pgd_t *root, unsigned long addr, unsigned long size,
+			   unsigned long paddr, unsigned int flags)
 {
 	struct map_pages_context ctx = {
 		.root = root,
@@ -687,8 +684,8 @@ void unmap_pages(pgd_t *root, void *addr, unsigned long size)
 	};
 	unsigned long start = (unsigned long)addr;
 
-	ASSERT(is_aligned(start, PAGE_SIZE));
-	ASSERT(is_aligned(size, PAGE_SIZE));
+	assert(is_aligned(start, PAGE_SIZE));
+	assert(is_aligned(size, PAGE_SIZE));
 	__unmap_range(start, start + size, &ctx);
 }
 

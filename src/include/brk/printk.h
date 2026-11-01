@@ -1,9 +1,8 @@
 #ifndef BRK_PRINTK_H
 #define BRK_PRINTK_H
 
-#include <brk/compiler.h>
-#include <brk/stdargs.h>
 #include <brk/types.h>
+#include <stdarg.h>
 
 #define KERN_EMERG 0
 #define KERN_ALERT 1
@@ -18,9 +17,10 @@
 
 #define KERN_DEFAULT KERN_WARN
 
-void printk(char const *fmt, ...) __printf_format(1, 2);
+void printk(char const *fmt, ...) __attribute__((format(printf, 1, 2)));
 void vprintk(char const *fmt, va_list ap);
-void _printk(int level, const char *fmt, ...) __printf_format(2, 3);
+void _printk(int level, const char *fmt, ...)
+	__attribute__((format(printf, 2, 3)));
 
 /* Drain the accumulated log ring buffer to the consoles. */
 void printk_flush_pending(void);
@@ -32,7 +32,8 @@ void printk_flush_pending(void);
  * Return the text length, 0 if the buffer is empty, or -ENOSPC if the
  * record did not fit in @size (the record is consumed either way).
  */
-int printk_read_record(char *buf, size_t size, u8 *level, u64 *ts_nsec);
+int printk_read_record(char *buf, size_t size, uint8_t *level,
+		       uint64_t *ts_nsec);
 
 /*
  * Panic helper: append a pre-formatted message to the log ring buffer and

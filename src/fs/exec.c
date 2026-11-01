@@ -2,7 +2,7 @@
 #include <arch/asm/vmlayout.h>
 #include <arch/pgtable.h>
 #include <arch/trapframe.h>
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
@@ -16,13 +16,13 @@
 #include <brk/printk.h>
 #include <brk/rand.h>
 #include <brk/signal.h>
-#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/timer.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
-#include <uapi/elf.h>
+#include <string.h>
 #include <uapi/capability.h>
+#include <uapi/elf.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/limits.h>
@@ -41,13 +41,14 @@ struct exec_strings_acc {
 	size_t bytes;
 };
 
-static int exec_read_exact(struct fs_file *fp, u64 off, void *buf, size_t n)
+static int exec_read_exact(struct fs_file *fp, uint64_t off, void *buf,
+			   size_t n)
 {
 	loff_t ret = fs_file_lseek(fp, off, SEEK_SET);
 
 	if (ret < 0) {
 		pr_err("%s(): Failed to lseek file: %s\n", __func__,
-			 strerror(ret));
+		       strerror(ret));
 		return -EIO;
 	}
 
@@ -55,7 +56,7 @@ static int exec_read_exact(struct fs_file *fp, u64 off, void *buf, size_t n)
 
 	if (rcnt < 0) {
 		pr_err("%s(): Failed to read file: %s\n", __func__,
-			 strerror(rcnt));
+		       strerror(rcnt));
 		return -EIO;
 	}
 	if ((size_t)rcnt != n) {
@@ -76,7 +77,7 @@ static int elf_validate_exec_hdr(const struct elf_hdr *h)
 	return 0;
 }
 
-static int elf_read_phdr(struct fs_file *f, u64 off, struct elf_phdr *phdr)
+static int elf_read_phdr(struct fs_file *f, uint64_t off, struct elf_phdr *phdr)
 {
 	ssize_t r;
 	loff_t ret = fs_file_lseek(f, off, SEEK_SET);
@@ -118,7 +119,7 @@ static int exec_accum_strings(char **arr, size_t *total_size,
 	return 0;
 }
 
-static u64 random_ustack(void)
+static uint64_t random_ustack(void)
 {
 	uintptr_t ustack_top = USER_SPACE_SIZE_MAX;
 
@@ -212,10 +213,10 @@ static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 	size_t npgs = vma->size >> PAGE_SHIFT;
 	struct page **pgs = kcalloc(npgs, sizeof(struct page *));
 	size_t i = 0;
-	u64 addr = vma->addr;
+	uint64_t addr = vma->addr;
 	unsigned int flags = vma->flags;
-	u64 seg_vstart = ph->p_vaddr;
-	u64 seg_fend = ph->p_vaddr + ph->p_filesz;
+	uint64_t seg_vstart = ph->p_vaddr;
+	uint64_t seg_fend = ph->p_vaddr + ph->p_filesz;
 
 	if (!pgs)
 		return -ENOMEM;
@@ -227,29 +228,29 @@ static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 			err = -ENOMEM;
 			goto failed;
 		}
-		u64 pa = page_to_phys(pg);
+		uint64_t pa = page_to_phys(pg);
 		void *va = (void *)phys_to_virt(pa);
-		u64 page_lo = addr;
-		u64 page_hi = addr + PAGE_SIZE;
-		u64 file_lo = page_lo > seg_vstart ? page_lo : seg_vstart;
-		u64 file_hi = page_hi < seg_fend ? page_hi : seg_fend;
+		uint64_t page_lo = addr;
+		uint64_t page_hi = addr + PAGE_SIZE;
+		uint64_t file_lo = page_lo > seg_vstart ? page_lo : seg_vstart;
+		uint64_t file_hi = page_hi < seg_fend ? page_hi : seg_fend;
 
 		memset(va, 0, PAGE_SIZE);
 		if (file_lo < file_hi) {
 			size_t n = (size_t)(file_hi - file_lo);
-			u64 fo = ph->p_offset + (file_lo - seg_vstart);
+			uint64_t fo = ph->p_offset + (file_lo - seg_vstart);
 			size_t dst_off = (size_t)(file_lo - page_lo);
 
 			err = exec_read_exact(fp, fo, (char *)va + dst_off, n);
 			if (err) {
-				ASSERT(pg);
+				assert(pg);
 				page_free(pg, 0);
 				goto failed;
 			}
 		}
 		err = map_user_pages(mm->pgd, addr, PAGE_SIZE, pa, flags);
 		if (err) {
-			ASSERT(pg);
+			assert(pg);
 			page_free(pg, 0);
 			goto failed;
 		}
@@ -263,10 +264,10 @@ static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 	return 0;
 
 failed:
-	for (u64 a = vma->addr; a < addr; a += PAGE_SIZE)
+	for (uint64_t a = vma->addr; a < addr; a += PAGE_SIZE)
 		unmap_user_pages(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = 0; j < i; ++j) {
-		ASSERT(pgs[j]);
+		assert(pgs[j]);
 		page_free(pgs[j], 0);
 	}
 	kfree(pgs);
@@ -276,7 +277,7 @@ failed:
 static int load_seg(struct uvm_space *mm, struct elf_phdr *ph,
 		    struct fs_file *fp)
 {
-	u64 start, end;
+	uint64_t start, end;
 	struct uvm_region *vma;
 	int err;
 
@@ -302,13 +303,13 @@ static int load_seg(struct uvm_space *mm, struct elf_phdr *ph,
 	return 0;
 }
 
-static u64 find_brk(struct uvm_space *mm)
+static uint64_t find_brk(struct uvm_space *mm)
 {
 	struct uvm_region *vma = NULL;
-	u64 brk = 0;
+	uint64_t brk = 0;
 
 	list_for_each_entry(vma, &mm->seg, list) {
-		u64 end = vma->addr + vma->size;
+		uint64_t end = vma->addr + vma->size;
 
 		if (end >= brk)
 			brk = end;
@@ -320,8 +321,8 @@ static int map_stack(struct uvm_space *mm)
 {
 	struct page *pg = page_alloc(USTACK_PAGE_ORDER);
 	struct page **pgs;
-	u64 pa;
-	u64 base;
+	uint64_t pa;
+	uint64_t base;
 	int err;
 
 	if (!pg)
@@ -329,7 +330,7 @@ static int map_stack(struct uvm_space *mm)
 
 	pgs = kcalloc(1, sizeof(struct page *));
 	if (!pgs) {
-		ASSERT(pg);
+		assert(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
 		return -ENOMEM;
 	}
@@ -339,7 +340,7 @@ static int map_stack(struct uvm_space *mm)
 	err = map_user_pages(mm->pgd, base, USTACK_SIZE, pa, PTE_R | PTE_W);
 	if (err) {
 		kfree(pgs);
-		ASSERT(pg);
+		assert(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
 		return err;
 	}
@@ -391,9 +392,9 @@ static int __do_execve(const char *path, struct exec_args *args)
 	}
 
 	{
-		u64 phoff = elf_hdr.e_phoff;
+		uint64_t phoff = elf_hdr.e_phoff;
 
-		for (u16 i = 0; i < elf_hdr.e_phnum;
+		for (uint16_t i = 0; i < elf_hdr.e_phnum;
 		     ++i, phoff += sizeof(phdr)) {
 			err = elf_read_phdr(f, phoff, &phdr);
 			if (err)
@@ -421,7 +422,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 	{
 		uintptr_t sp = new_mm->stack->addr + new_mm->stack->size;
 		struct page *stack_pg = new_mm->stack->pages[0];
-		u64 stack_phys = page_to_phys(stack_pg);
+		uint64_t stack_phys = page_to_phys(stack_pg);
 		uintptr_t stack_virt = phys_to_virt(stack_phys);
 
 		push_args(args, &sp, stack_virt, task);

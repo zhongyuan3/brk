@@ -1,12 +1,12 @@
 #include <arch/pgtable.h>
 #include <brk/device_model.h>
 #include <brk/initcall.h>
-#include <brk/kernel.h>
-#include <brk/printf.h>
 #include <brk/ioremap.h>
+#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/mmio.h>
+#include <brk/printf.h>
 #include <brk/spinlock.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
@@ -23,8 +23,8 @@ struct bus_type virtio_bus = {
 
 static int virtio_match(struct device *dev, struct device_driver *drv)
 {
-	struct virtio_device *vdev = container_of(dev, struct virtio_device,
-						  dev);
+	struct virtio_device *vdev =
+		container_of(dev, struct virtio_device, dev);
 	const struct device_id *id;
 
 	if (!drv->id_table)
@@ -44,7 +44,8 @@ static void virtio_bus_init(void)
 }
 core_initcall(virtio_bus_init);
 
-struct virtio_device *virtio_dev_create(u64 phys_base, size_t size, u32 irq)
+struct virtio_device *virtio_dev_create(uint64_t phys_base, size_t size,
+					uint32_t irq)
 {
 	struct virtio_device *dev;
 	int err;
@@ -108,7 +109,7 @@ void virtio_dev_remove(struct virtio_device *dev)
 	spin_unlock(&vdevs_lock);
 }
 
-struct virtio_device *virtio_dev_get(u32 id)
+struct virtio_device *virtio_dev_get(uint32_t id)
 {
 	struct virtio_device *dev;
 

@@ -1,4 +1,4 @@
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/cpu.h>
 #include <brk/list.h>
 #include <brk/mm_types.h>
@@ -6,7 +6,7 @@
 #include <brk/pgalloc.h>
 #include <brk/refcnt.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
+#include <string.h>
 
 #define PCP_MAX_ORDER0 64
 
@@ -40,7 +40,7 @@ static struct page *pcp_alloc(void)
 		list_del(&pg->buddy_lru);
 		pcp->count -= 1;
 
-		ASSERT(pg->flags & PAGE_FLAGS_PCP);
+		assert(pg->flags & PAGE_FLAGS_PCP);
 		pg->flags &= ~(PAGE_FLAGS_FREE | PAGE_FLAGS_PCP);
 		pg->buddy_page_order = 0;
 	}
@@ -73,11 +73,11 @@ static void __page_free_to_buddy(struct page *pg, unsigned int order)
 
 	spin_lock(&areas_lock);
 
-	ASSERT((pg->flags & PAGE_FLAGS_BUDDY));
-	ASSERT(!(pg->flags & PAGE_FLAGS_FREE));
-	ASSERT(!(pg->flags & PAGE_FLAGS_PCP));
-	ASSERT((pg->flags & PAGE_FLAGS_HEAD));
-	ASSERT(is_aligned(page_to_phys(pg), (1ULL << (PAGE_SHIFT + order))));
+	assert((pg->flags & PAGE_FLAGS_BUDDY));
+	assert(!(pg->flags & PAGE_FLAGS_FREE));
+	assert(!(pg->flags & PAGE_FLAGS_PCP));
+	assert((pg->flags & PAGE_FLAGS_HEAD));
+	assert(is_aligned(page_to_phys(pg), (1ULL << (PAGE_SHIFT + order))));
 
 	pg->flags = 0;
 
@@ -115,7 +115,7 @@ static void pcp_drain_all(void)
 			list_del(&pg->buddy_lru);
 			pcp->count -= 1;
 
-			ASSERT(pg->flags & PAGE_FLAGS_PCP);
+			assert(pg->flags & PAGE_FLAGS_PCP);
 			pg->flags = PAGE_FLAGS_NEW_PAGE;
 			pg->buddy_page_order = 0;
 			__page_free_to_buddy(pg, 0);
@@ -183,7 +183,7 @@ found:
 struct page *page_zalloc(unsigned int order)
 {
 	struct page *pg;
-	u64 virt;
+	uint64_t virt;
 
 	pg = page_alloc(order);
 	if (!pg)
@@ -220,10 +220,10 @@ static bool page_is_buddy(struct page *pg, struct page *buddy,
 
 void page_free(struct page *pg, unsigned int order)
 {
-	ASSERT((pg->flags & PAGE_FLAGS_BUDDY));
-	ASSERT(!(pg->flags & PAGE_FLAGS_FREE));
-	ASSERT((pg->flags & PAGE_FLAGS_HEAD));
-	ASSERT(is_aligned(page_to_phys(pg), (1ULL << (PAGE_SHIFT + order))));
+	assert((pg->flags & PAGE_FLAGS_BUDDY));
+	assert(!(pg->flags & PAGE_FLAGS_FREE));
+	assert((pg->flags & PAGE_FLAGS_HEAD));
+	assert(is_aligned(page_to_phys(pg), (1ULL << (PAGE_SHIFT + order))));
 
 	if (order == 0 && pcp_free(pg))
 		return;

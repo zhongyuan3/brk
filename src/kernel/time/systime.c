@@ -2,19 +2,19 @@
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
-#include <brk/pgalloc.h>
 #include <brk/permission.h>
+#include <brk/pgalloc.h>
 #include <brk/printk.h>
-#include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/timekeeper.h>
 #include <brk/vmalloc.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/resource.h>
 #include <uapi/time.h>
 
-u64 sys_gettimeofday(void)
+uint64_t sys_gettimeofday(void)
 {
 	struct timeval *tv;
 
@@ -23,7 +23,7 @@ u64 sys_gettimeofday(void)
 	return 0;
 }
 
-u64 sys_settimeofday(void)
+uint64_t sys_settimeofday(void)
 {
 	const struct timeval *tv;
 
@@ -35,7 +35,7 @@ u64 sys_settimeofday(void)
 	return 0;
 }
 
-u64 sys_times(void)
+uint64_t sys_times(void)
 {
 	struct tms *buf;
 	int err;
@@ -47,7 +47,7 @@ u64 sys_times(void)
 	return jiffies_get();
 }
 
-u64 sys_nanosleep(void)
+uint64_t sys_nanosleep(void)
 {
 	struct timespec *dur, *rem;
 

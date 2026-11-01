@@ -31,7 +31,7 @@ static int socket_from_fd(int fd, struct fs_file **filep, struct socket **sockp)
 	return 0;
 }
 
-u64 sys_socket(void)
+uint64_t sys_socket(void)
 {
 	int family = syscall_arg_int(0);
 	int type = syscall_arg_int(1);
@@ -64,7 +64,7 @@ u64 sys_socket(void)
 	return fd;
 }
 
-u64 sys_bind(void)
+uint64_t sys_bind(void)
 {
 	int fd = syscall_arg_int(0);
 	const void *uaddr = syscall_arg_ptr(1);
@@ -90,7 +90,7 @@ u64 sys_bind(void)
 	return err;
 }
 
-u64 sys_connect(void)
+uint64_t sys_connect(void)
 {
 	int fd = syscall_arg_int(0);
 	const void *uaddr = syscall_arg_ptr(1);
@@ -116,7 +116,7 @@ u64 sys_connect(void)
 	return err;
 }
 
-u64 sys_sendto(void)
+uint64_t sys_sendto(void)
 {
 	int fd = syscall_arg_int(0);
 	const void *buf = syscall_arg_ptr(1);
@@ -151,7 +151,7 @@ u64 sys_sendto(void)
 	return err;
 }
 
-u64 sys_recvfrom(void)
+uint64_t sys_recvfrom(void)
 {
 	int fd = syscall_arg_int(0);
 	void *buf = syscall_arg_ptr(1);
@@ -193,7 +193,7 @@ u64 sys_recvfrom(void)
 	return err;
 }
 
-u64 sys_shutdown(void)
+uint64_t sys_shutdown(void)
 {
 	int fd = syscall_arg_int(0);
 	int how = syscall_arg_int(1);
@@ -214,7 +214,7 @@ u64 sys_shutdown(void)
 	return err;
 }
 
-u64 sys_listen(void)
+uint64_t sys_listen(void)
 {
 	int fd = syscall_arg_int(0);
 	int backlog = syscall_arg_int(1);
@@ -235,7 +235,7 @@ u64 sys_listen(void)
 	return err;
 }
 
-static u64 sys_accept_common(unsigned int flags)
+static uint64_t sys_accept_common(unsigned int flags)
 {
 	int fd = syscall_arg_int(0);
 	void *uaddr = syscall_arg_ptr(1);
@@ -297,17 +297,17 @@ static u64 sys_accept_common(unsigned int flags)
 	return nfd;
 }
 
-u64 sys_accept(void)
+uint64_t sys_accept(void)
 {
 	return sys_accept_common(0);
 }
 
-u64 sys_accept4(void)
+uint64_t sys_accept4(void)
 {
 	return sys_accept_common((unsigned int)syscall_arg_int(3));
 }
 
-static u64 sys_getname(bool peer)
+static uint64_t sys_getname(bool peer)
 {
 	int fd = syscall_arg_int(0);
 	void *uaddr = syscall_arg_ptr(1);
@@ -348,17 +348,17 @@ static u64 sys_getname(bool peer)
 	return err;
 }
 
-u64 sys_getsockname(void)
+uint64_t sys_getsockname(void)
 {
 	return sys_getname(false);
 }
 
-u64 sys_getpeername(void)
+uint64_t sys_getpeername(void)
 {
 	return sys_getname(true);
 }
 
-u64 sys_setsockopt(void)
+uint64_t sys_setsockopt(void)
 {
 	int fd = syscall_arg_int(0);
 	int level = syscall_arg_int(1);
@@ -381,7 +381,7 @@ u64 sys_setsockopt(void)
 	return -ENOPROTOOPT;
 }
 
-u64 sys_getsockopt(void)
+uint64_t sys_getsockopt(void)
 {
 	int fd = syscall_arg_int(0);
 	struct fs_file *file;

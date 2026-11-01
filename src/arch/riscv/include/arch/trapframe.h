@@ -2,11 +2,11 @@
 #define ARCH_TRAPFRAME_H
 
 #include <arch/asm/trap.h>
+#include <assert.h>
 #include <brk/panic.h>
-#include <brk/stddef.h>
-#include <brk/static_assert.h>
-#include <brk/string.h>
 #include <brk/types.h>
+#include <stddef.h>
+#include <string.h>
 
 struct task;
 

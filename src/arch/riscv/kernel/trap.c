@@ -1,11 +1,11 @@
+#include <arch/asm/vmlayout.h>
 #include <arch/csr.h>
 #include <arch/irqflags.h>
 #include <arch/sbi.h>
 #include <arch/timer.h>
-#include <arch/asm/vmlayout.h>
 #include <arch/trap.h>
 #include <arch/trapframe.h>
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/bits.h>
 #include <brk/cpu.h>
 #include <brk/irq.h>
@@ -14,7 +14,6 @@
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/signal.h>
-#include <brk/stdnoreturn.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/timekeeper.h>
@@ -106,8 +105,9 @@ static void print_hex(unsigned long num)
 static bool in_early = true;
 static bool in_early_trap = false;
 
-static void noreturn early_trap_handler(struct riscv_trap_frame *frame,
-					bool is_interrupt, unsigned long code)
+static void __attribute__((noreturn))
+early_trap_handler(struct riscv_trap_frame *frame, bool is_interrupt,
+		   unsigned long code)
 {
 	if (in_early_trap) {
 		sbi_console_putstr("EARLY NESTED TRAP");
@@ -146,8 +146,8 @@ static void noreturn early_trap_handler(struct riscv_trap_frame *frame,
 	}
 }
 
-static void noreturn trap_panic(const char *name, unsigned long code,
-				struct riscv_trap_frame *frame)
+static void __attribute__((noreturn))
+trap_panic(const char *name, unsigned long code, struct riscv_trap_frame *frame)
 {
 	pr_emerg("trap: unhandled %s (code %lu)\n", name, code);
 	pr_emerg("trap: sepc=%#018lx stval=%#018lx\n", frame->sepc,
@@ -284,7 +284,7 @@ void trap_handler(struct riscv_trap_frame *frame)
 
 	bool from_user = (frame->sstatus & SSTATUS_SPP) == 0;
 	struct task *task = current_task();
-	u64 jiffies = 0;
+	uint64_t jiffies = 0;
 
 	if (from_user) {
 		write_sstatus(read_sstatus() | SSTATUS_SUM);

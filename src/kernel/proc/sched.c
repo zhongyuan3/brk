@@ -1,6 +1,6 @@
 #include <arch/irqflags.h>
 #include <arch/mm.h>
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/cpu.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
@@ -88,19 +88,18 @@ void task_join(struct task *task)
 		if (target < 0)
 			target = task->cpu;
 	} else {
-		ASSERT(task->cpu == (int)this_cpuid());
+		assert(task->cpu == (int)this_cpuid());
 		target = task->cpu;
 	}
 
 	if (target < 0 || target >= MAX_CPUS)
-		panic("task_join: pid=%ld invalid cpu %d\n", task->pid,
-		      target);
+		panic("task_join: pid=%ld invalid cpu %d\n", task->pid, target);
 
 	cpu = &cpus[target];
 	flags = spin_lock_irqsave(&cpu->run_queue_lock);
 
-	ASSERT(list_empty(&task->queue));
-	ASSERT(task->state == TASK_STATE_RUNNING);
+	assert(list_empty(&task->queue));
+	assert(task->state == TASK_STATE_RUNNING);
 	task->cpu = target;
 	list_add_tail(&task->queue, &cpu->run_queue);
 	cpu->nr_running++;
@@ -126,9 +125,9 @@ static struct task *task_pick_next(struct cpu *cpu)
 	spin_lock(&cpu->run_queue_lock);
 	if (!list_empty(&cpu->run_queue)) {
 		task = list_first_entry(&cpu->run_queue, struct task, queue);
-		ASSERT(task->cpu == (int)cpu->id);
+		assert(task->cpu == (int)cpu->id);
 		list_del_init(&task->queue);
-		ASSERT(cpu->nr_running > 0);
+		assert(cpu->nr_running > 0);
 		cpu->nr_running--;
 	}
 	spin_unlock(&cpu->run_queue_lock);
@@ -156,7 +155,7 @@ void task_scheduler(void)
 	cpu->handoff = NULL;
 	local_irq_disable();
 
-	ASSERT(idle->oncpu == -1);
+	assert(idle->oncpu == -1);
 	idle->oncpu = cpu->id;
 	idle->frame->kernel_tp = (unsigned long)cpu;
 	set_current_task(idle);
@@ -184,10 +183,10 @@ static void task_sched(void)
 	struct task *curr = current_task();
 	struct cpu *cpu = this_cpu();
 
-	ASSERT(!local_irq_enabled());
-	ASSERT(curr->lock.locked);
-	ASSERT(cpu->preempt_count == 0);
-	ASSERT(curr->oncpu == (int)cpu->id);
+	assert(!local_irq_enabled());
+	assert(curr->lock.locked);
+	assert(cpu->preempt_count == 0);
+	assert(curr->oncpu == (int)cpu->id);
 
 	set_current_task(NULL);
 
@@ -223,7 +222,7 @@ static void task_sched(void)
 	cpu->handoff = curr;
 
 	raw_spin_lock(&next->lock);
-	ASSERT(next->oncpu == -1);
+	assert(next->oncpu == -1);
 	next->oncpu = cpu->id;
 	set_current_task(next);
 	next->frame->kernel_tp = (unsigned long)cpu;
@@ -251,7 +250,7 @@ void task_yield(void)
 	irqstate_t flags = local_irq_save();
 	struct task *task = current_task();
 
-	ASSERT(preempt_count() == 0);
+	assert(preempt_count() == 0);
 
 	raw_spin_lock(&task->lock);
 	task_sched();
@@ -269,9 +268,9 @@ void task_sleep(void *chan, spinlock_t *lock)
 {
 	struct task *task = current_task();
 
-	ASSERT(!local_irq_enabled());
-	ASSERT(lock->locked);
-	ASSERT(preempt_count() == 0);
+	assert(!local_irq_enabled());
+	assert(lock->locked);
+	assert(preempt_count() == 0);
 
 	raw_spin_lock(&task->lock);
 	task->state = TASK_STATE_SLEEPING;
@@ -311,8 +310,7 @@ void task_wake_all(void *chan)
 		list_for_each_entry(p, &sleep_queue, queue) {
 			irqstate_t pflags;
 
-			if (p->state != TASK_STATE_SLEEPING ||
-			    p->chan != chan)
+			if (p->state != TASK_STATE_SLEEPING || p->chan != chan)
 				continue;
 
 			if (!spin_trylock_irqsave(&p->lock, &pflags)) {
@@ -425,7 +423,7 @@ void task_exit(int status)
 	if (reparented)
 		task_wake_spec(initial_task);
 
-	ASSERT(preempt_count() == 0);
+	assert(preempt_count() == 0);
 
 	/* task_sched() never returns for a zombie, so no irqrestore here. */
 	local_irq_disable();

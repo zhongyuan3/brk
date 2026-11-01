@@ -22,7 +22,7 @@ struct dirent {
 };
 
 struct dirent64 {
-	u64 d_ino;
+	uint64_t d_ino;
 	off_t d_off;
 	unsigned short d_reclen;
 	unsigned char d_type;

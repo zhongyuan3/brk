@@ -9,8 +9,8 @@
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/poll.h>
 
@@ -224,8 +224,7 @@ int fs_file_truncate(struct fs_file *file, loff_t size)
 	return file->inode->ops->setattr(file->path.dentry, &attr);
 }
 
-int fs_file_fallocate(struct fs_file *file, int mode, loff_t offset,
-		      loff_t len)
+int fs_file_fallocate(struct fs_file *file, int mode, loff_t offset, loff_t len)
 {
 	if (!file || !file->inode)
 		return -EINVAL;

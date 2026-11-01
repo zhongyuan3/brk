@@ -14,21 +14,22 @@
 #define ETH_P_ALL 0x0003
 
 struct ethhdr {
-	u8 h_dest[ETH_ALEN];
-	u8 h_source[ETH_ALEN];
-	u16 h_proto;
+	uint8_t h_dest[ETH_ALEN];
+	uint8_t h_source[ETH_ALEN];
+	uint16_t h_proto;
 } __attribute__((packed));
 
 /* Pull the Ethernet header and return the protocol in host byte order. */
-u16 eth_type_trans(struct sk_buff *skb, struct net_device *dev);
+uint16_t eth_type_trans(struct sk_buff *skb, struct net_device *dev);
 
 /* Push an Ethernet header; @daddr may be NULL for broadcast. */
-int eth_header(struct sk_buff *skb, struct net_device *dev, u16 type,
-	       const u8 *daddr);
+int eth_header(struct sk_buff *skb, struct net_device *dev, uint16_t type,
+	       const uint8_t *daddr);
 
-static inline const u8 *eth_broadcast_addr(void)
+static inline const uint8_t *eth_broadcast_addr(void)
 {
-	static const u8 addr[ETH_ALEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+	static const uint8_t addr[ETH_ALEN] = { 0xff, 0xff, 0xff,
+						0xff, 0xff, 0xff };
 	return addr;
 }
 

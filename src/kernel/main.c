@@ -12,7 +12,6 @@
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/rtc.h>
-#include <brk/stddef.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
 #include <brk/timekeeper.h>
@@ -20,6 +19,7 @@
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
+#include <stddef.h>
 
 extern initcall_t __initcall_start[];
 extern initcall_t __initcall_end[];

@@ -3,12 +3,12 @@
 #include <brk/genhd.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
-#include <brk/printk.h>
 #include <brk/printf.h>
+#include <brk/printk.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/task.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 void bio_init(struct bio *bio, struct block_dev *bd, enum req_op op)
@@ -33,10 +33,10 @@ int bio_add_buf(struct bio *bio, void *buf, size_t len)
 }
 
 static struct request_queue *bio_lookup_queue(struct bio *bio,
-					      u64 *disk_sector)
+					      uint64_t *disk_sector)
 {
 	struct block_dev *bd = bio->bi_bdev;
-	u64 sector = bio->bi_sector;
+	uint64_t sector = bio->bi_sector;
 
 	while (bd && bd->bd_parent) {
 		sector += bd->bd_start_sect;
@@ -180,7 +180,7 @@ int submit_bio_wait(struct bio *bio)
 	struct request_queue *q;
 	struct request *rq;
 	struct request *last;
-	u64 disk_sector;
+	uint64_t disk_sector;
 	irqstate_t flags;
 	int err;
 
@@ -199,8 +199,7 @@ int submit_bio_wait(struct bio *bio)
 
 	if (bio->bi_op != REQ_OP_FLUSH) {
 		if (bio->bi_sector >= bio->bi_bdev->phy_bcnt ||
-		    bio_sectors(bio) >
-			    bio->bi_bdev->phy_bcnt - bio->bi_sector)
+		    bio_sectors(bio) > bio->bi_bdev->phy_bcnt - bio->bi_sector)
 			return -ENXIO;
 	}
 
@@ -263,4 +262,3 @@ int submit_bio_wait(struct bio *bio)
 
 	return bio->bi_status;
 }
-

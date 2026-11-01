@@ -56,7 +56,7 @@ static inline struct sbiret sbi_ecall(unsigned long eid, unsigned long fid,
 	return ret;
 }
 
-static inline long sbi_set_timer(u64 stime_value)
+static inline long sbi_set_timer(uint64_t stime_value)
 {
 	register unsigned long a0 asm("a0") = (unsigned long)stime_value;
 	register unsigned long a7 asm("a7") = SBI_LEGACY_SET_TIMER;

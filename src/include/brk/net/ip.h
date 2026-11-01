@@ -16,16 +16,16 @@
 #define IP_TTL_DEFAULT 64
 
 struct iphdr {
-	u8 version_ihl;
-	u8 tos;
-	u16 tot_len;
-	u16 id;
-	u16 frag_off;
-	u8 ttl;
-	u8 protocol;
-	u16 check;
-	u32 saddr;
-	u32 daddr;
+	uint8_t version_ihl;
+	uint8_t tos;
+	uint16_t tot_len;
+	uint16_t id;
+	uint16_t frag_off;
+	uint8_t ttl;
+	uint8_t protocol;
+	uint16_t check;
+	uint32_t saddr;
+	uint32_t daddr;
 } __attribute__((packed));
 
 #define IP_VERSION(h) ((h)->version_ihl >> 4)
@@ -37,6 +37,7 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt);
  * Build and transmit an IPv4 packet.  @skb->data points at the transport
  * header and is consumed.  A zero @saddr selects the output device address.
  */
-int ip_output(struct sk_buff *skb, u32 saddr, u32 daddr, u8 protocol, u8 ttl);
+int ip_output(struct sk_buff *skb, uint32_t saddr, uint32_t daddr,
+	      uint8_t protocol, uint8_t ttl);
 
 #endif

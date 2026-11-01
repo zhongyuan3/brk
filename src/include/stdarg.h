@@ -1,11 +1,5 @@
-#ifndef BRK_STDARGS_H
-#define BRK_STDARGS_H
-
-/*
- * Freestanding replacement for <stdarg.h>.  GCC exposes the va_list type
- * and the va_* operations as builtins, so no compiler-provided header is
- * needed.
- */
+#ifndef STDARG_H
+#define STDARG_H
 
 typedef __builtin_va_list va_list;
 

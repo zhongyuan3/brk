@@ -41,7 +41,7 @@ struct page {
 
 struct uvm_region {
 	struct list_head list;
-	u64 addr;
+	uint64_t addr;
 	size_t size;
 	/* Demand-paged anonymous pages; entries are NULL until faulted. */
 	struct page **pages;
@@ -61,9 +61,9 @@ struct uvm_space {
 	struct list_head seg;
 	struct uvm_region *stack;
 	struct uvm_region *heap;
-	u64 brk;
+	uint64_t brk;
 	/* Top-down mmap allocation cursor, below the user stack. */
-	u64 mmap_top;
+	uint64_t mmap_top;
 	refcnt_t refcnt;
 };
 

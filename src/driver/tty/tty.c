@@ -3,11 +3,11 @@
 #include <brk/signal.h>
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/ioctl.h>
 #include <uapi/signal.h>
@@ -83,7 +83,7 @@ ssize_t tty_write(struct tty *tty, const void *buf, size_t n)
 
 void tty_receive(struct tty *tty, int c)
 {
-	u8 ch = (u8)c;
+	uint8_t ch = (uint8_t)c;
 
 	if (!tty || tty->dead || !tty->ldisc || !tty->ldisc->receive_buf)
 		return;
@@ -141,8 +141,8 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 			       0;
 
 	case TIOCSPGRP:
-		if (!arg || copy_from_user(&pgrp, (const void *)arg,
-					   sizeof(pgrp)))
+		if (!arg ||
+		    copy_from_user(&pgrp, (const void *)arg, sizeof(pgrp)))
 			return -EFAULT;
 		if (pgrp <= 0)
 			return -EINVAL;

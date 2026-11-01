@@ -1,6 +1,6 @@
 #include <arch/asm/large_page.h>
 #include <arch/pgtable.h>
-#include <brk/assert.h>
+#include <assert.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -11,13 +11,13 @@
 #include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
-#include <brk/string.h>
 #include <brk/vmalloc.h>
+#include <string.h>
 #include <uapi/errno.h>
 
 struct vmalloc_region {
 	struct list_head list;
-	u64 addr;
+	uint64_t addr;
 	size_t size;
 	struct page **pages;
 	size_t nr_pages;
@@ -43,7 +43,7 @@ static void vmalloc_region_free(struct vmalloc_region *area)
 	slab_free(&vma_cache, area);
 }
 
-static struct vmalloc_region *find_vm_area(u64 addr)
+static struct vmalloc_region *find_vm_area(uint64_t addr)
 {
 	struct vmalloc_region *area;
 
@@ -143,7 +143,7 @@ void *vmalloc(size_t size)
 	area->nr_pages = npgs;
 
 	size_t i = 0;
-	u64 vaddr = area->addr;
+	uint64_t vaddr = area->addr;
 	for (; i < npgs; ++i) {
 		struct page *pg = page_alloc(0);
 		if (!pg)
@@ -151,7 +151,7 @@ void *vmalloc(size_t size)
 		area->pages[i] = pg;
 		if (map_kernel_pages(vaddr, PAGE_SIZE, page_to_phys(pg),
 				     PTE_R | PTE_W)) {
-			ASSERT(pg);
+			assert(pg);
 			page_free(pg, 0);
 			goto out_cleanup;
 		}
@@ -163,7 +163,7 @@ void *vmalloc(size_t size)
 
 out_cleanup:
 	for (size_t j = 0; j < i; ++j) {
-		ASSERT(area->pages[j]);
+		assert(area->pages[j]);
 		page_free(area->pages[j], 0);
 	}
 	kfree(area->pages);
@@ -185,7 +185,7 @@ void vfree(void *ptr)
 
 	unmap_kernel_pages(area->addr, area->size);
 	for (size_t i = 0; i < area->nr_pages; ++i) {
-		ASSERT(area->pages[i]);
+		assert(area->pages[i]);
 		page_free(area->pages[i], 0);
 	}
 	kfree(area->pages);

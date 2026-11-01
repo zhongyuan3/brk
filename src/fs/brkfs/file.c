@@ -9,8 +9,8 @@
 #include <brk/pagecache.h>
 #include <brk/printk.h>
 #include <brk/sleeplock.h>
-#include <brk/string.h>
 #include <brk/types.h>
+#include <string.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 
@@ -18,18 +18,18 @@ static int brkfs_file_read_page(struct page_cache *m, struct cached_page *cp)
 {
 	struct fs_inode *inode = m->host;
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
-	u32 bs = sbi->s_sb.s_blocksize;
+	uint32_t bs = sbi->s_sb.s_blocksize;
 	loff_t off = (loff_t)cp->index << PAGE_SHIFT;
-	u8 *data = cached_page_addr(cp);
+	uint8_t *data = cached_page_addr(cp);
 
 	if (bs > PAGE_SIZE || PAGE_SIZE % bs != 0) {
 		pr_warn("%s(): unsupported blocksize %" PRIu32 "\n", __func__,
-			  bs);
+			bs);
 		return -EIO;
 	}
 
 	for (size_t boff = 0; boff < PAGE_SIZE; boff += bs) {
-		u32 bno;
+		uint32_t bno;
 		int err;
 
 		err = brkfs_inode_getblk(inode, off + boff, &bno, 0, sbi);
@@ -59,21 +59,21 @@ static int brkfs_file_write_page(struct page_cache *m, struct cached_page *cp)
 {
 	struct fs_inode *inode = m->host;
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
-	u32 bs = sbi->s_sb.s_blocksize;
+	uint32_t bs = sbi->s_sb.s_blocksize;
 	loff_t off = (loff_t)cp->index << PAGE_SHIFT;
-	u8 *data = cached_page_addr(cp);
+	uint8_t *data = cached_page_addr(cp);
 	int ret = 0;
 
 	if (bs > PAGE_SIZE || PAGE_SIZE % bs != 0) {
 		pr_warn("%s(): unsupported blocksize %" PRIu32 "\n", __func__,
-			  bs);
+			bs);
 		return -EIO;
 	}
 
 	for (size_t boff = 0; boff < PAGE_SIZE; boff += bs) {
 		loff_t block_off = off + (loff_t)boff;
 		size_t valid;
-		u32 bno;
+		uint32_t bno;
 		int err;
 
 		/* Do not allocate blocks past EOF.  Pages may be dirtied by a
@@ -232,7 +232,7 @@ int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
 	if ((loff_t)(off + size) > inode->size)
 		size = (size_t)(inode->size - off);
 
-	u8 *p = buf;
+	uint8_t *p = buf;
 	while (size > 0) {
 		size_t in_off = off % PAGE_SIZE;
 		size_t chunk = PAGE_SIZE - in_off;
@@ -246,7 +246,7 @@ int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
 		}
 
 		cached_page_lock(cp);
-		u8 *data = cached_page_addr(cp);
+		uint8_t *data = cached_page_addr(cp);
 		memcpy(p, data + in_off, chunk);
 		cached_page_unlock(cp);
 		cached_page_put(cp);
@@ -256,7 +256,7 @@ int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
 		p += chunk;
 	}
 
-	*read_out = p - (u8 *)buf;
+	*read_out = p - (uint8_t *)buf;
 	*pos = off;
 	return err;
 }
@@ -274,7 +274,7 @@ int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
 		return -EINVAL;
 	}
 
-	const u8 *p = buf;
+	const uint8_t *p = buf;
 	while (size > 0) {
 		size_t in_off = off % PAGE_SIZE;
 		size_t chunk = PAGE_SIZE - in_off;
@@ -288,7 +288,7 @@ int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
 		}
 
 		cached_page_lock(cp);
-		u8 *data = cached_page_addr(cp);
+		uint8_t *data = cached_page_addr(cp);
 		memcpy(data + in_off, p, chunk);
 		cached_page_mark_dirty(cp);
 		cached_page_unlock(cp);
@@ -301,7 +301,7 @@ int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
 
 	*pos = off;
 	if (written_out)
-		*written_out = p - (const u8 *)buf;
+		*written_out = p - (const uint8_t *)buf;
 	if (off > inode->size) {
 		inode->size = off;
 		fs_inode_mark_dirty(inode);
@@ -316,7 +316,7 @@ static int brkfs_file_fallocate(struct fs_file *file, int mode, loff_t offset,
 {
 	struct fs_inode *inode = file->inode;
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
-	u32 bs = sbi->s_sb.s_blocksize;
+	uint32_t bs = sbi->s_sb.s_blocksize;
 	loff_t end;
 	int err = 0;
 
@@ -326,7 +326,7 @@ static int brkfs_file_fallocate(struct fs_file *file, int mode, loff_t offset,
 		return -EINVAL;
 	if (offset < 0 || len <= 0)
 		return -EINVAL;
-	if ((u64)offset + (u64)len > 0xffffffffu)
+	if ((uint64_t)offset + (uint64_t)len > 0xffffffffu)
 		return -EFBIG;
 
 	end = offset + len;
@@ -334,7 +334,7 @@ static int brkfs_file_fallocate(struct fs_file *file, int mode, loff_t offset,
 	sleeplock_acquire(&inode->rwsem);
 
 	for (loff_t off = offset; off < end; off += bs) {
-		u32 bno;
+		uint32_t bno;
 
 		err = brkfs_inode_getblk(inode, off, &bno, 0, sbi);
 		if (err)
@@ -342,12 +342,12 @@ static int brkfs_file_fallocate(struct fs_file *file, int mode, loff_t offset,
 		if (bno != 0)
 			continue;
 
-		err = brkfs_inode_getblk(inode, off, &bno,
-					 BRKFS_GETBLK_CREATE, sbi);
+		err = brkfs_inode_getblk(inode, off, &bno, BRKFS_GETBLK_CREATE,
+					 sbi);
 		if (err)
 			break;
 
-		u8 *zero = kmalloc(bs);
+		uint8_t *zero = kmalloc(bs);
 
 		if (!zero) {
 			err = -ENOMEM;

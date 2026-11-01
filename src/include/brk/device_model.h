@@ -21,7 +21,7 @@ struct device_id {
 	/* platform_bus: DT compatible string */
 	const char *compatible;
 	/* virtio_bus: virtio device ID; 0 terminates the table */
-	u32 device_id;
+	uint32_t device_id;
 };
 
 struct device {
@@ -30,15 +30,15 @@ struct device {
 	struct bus_type *bus;
 	struct device_driver *driver;
 
-	struct list_head bus_list;    /* bus->devices */
+	struct list_head bus_list; /* bus->devices */
 	struct list_head device_list; /* global device list */
 	struct list_head children;
-	struct list_head child_node;  /* parent->children */
+	struct list_head child_node; /* parent->children */
 
 	void *platform_data;
 	void *driver_data;
 
-	dev_t devt;   /* 0: no devtmpfs node */
+	dev_t devt; /* 0: no devtmpfs node */
 	umode_t mode; /* S_IFCHR/S_IFBLK | permissions */
 	bool registered;
 };
