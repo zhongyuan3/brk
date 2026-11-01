@@ -101,6 +101,10 @@ if [[ -d $USER_ROOT/tests ]]; then
 	"$BRKFS" cp -r "$USER_ROOT/tests" "/home/tests" "$IMG"
 fi
 
+if [[ -f $USER_ROOT/include/cc.h ]]; then
+	"$BRKFS" cp "$USER_ROOT/include/cc.h" "/usr/include/cc.h" "$IMG"
+fi
+
 for doc in README.md README.cn.md LICENSE; do
 	if [[ -f $KERNEL_ROOT/$doc ]]; then
 		"$BRKFS" cp --parents "$KERNEL_ROOT/$doc" \
