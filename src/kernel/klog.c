@@ -1,3 +1,4 @@
+#include <brk/console.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/fsinfo.h>
@@ -5,11 +6,11 @@
 #include <brk/ktime.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
+#include <brk/printk_log.h>
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/timeconst.h>
 #include <brk/types.h>
-#include <brk/uart.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 
@@ -47,7 +48,10 @@ static void klog_write(struct fs_file *file, const char *buf, size_t len)
 		buf += n;
 		len -= (size_t)n;
 	}
+}
 
+static void klog_sync(struct fs_file *file)
+{
 	/*
 	 * The log file is the only persistent copy of kernel messages.
 	 * Flush it after each batch so a crash does not leave everything in
@@ -59,12 +63,14 @@ static void klog_write(struct fs_file *file, const char *buf, size_t len)
 
 static void klog_entry(void *arg)
 {
-	char rec[1024];
-	char out[1536];
+	char rec[PRINTK_MAX_PAYLOAD + 1];
+	char out[PRINTK_MAX_PAYLOAD + 256];
 	struct fs_file *file = NULL;
+	struct printk_log_reader reader;
+	bool reader_ready = false;
 	u8 level;
 	u64 ts;
-	int n = 0;
+	u8 flags;
 
 	(void)arg;
 
@@ -82,31 +88,70 @@ static void klog_entry(void *arg)
 			}
 
 			file = f;
+			if (!reader_ready) {
+				printk_log_reader_init(&reader,
+						       PRINTK_LOG_START_OLDEST);
+				reader_ready = true;
+			}
 			/*
-			 * The file is ready; switch kernel output from the
-			 * UART to the disk log.  User I/O through /dev/tty0 is
+			 * The file is ready; keep boot consoles available for
+			 * emergency panic output, but stop normal kernel log
+			 * traffic to them.  User I/O through /dev/tty0 is
 			 * unaffected.
 			 */
-			ns16550a_console_disable();
+			console_set_boot_consoles_level(KERN_EMERG);
 			pr_info("klogd: writing kernel log to %s\n", KLOG_PATH);
 		}
 
 		bool wrote = false;
+		bool empty = false;
+		bool error = false;
 		int budget = KLOG_BATCH;
 
-		while (budget-- > 0 &&
-		       (n = printk_read_record(rec, sizeof(rec), &level, &ts)) >
-			       0) {
-			int m;
+		while (budget-- > 0) {
+			int n = printk_log_read(&reader, rec, sizeof(rec),
+						&level, &ts, &flags);
 
+			if (reader.pending_lost) {
+				char lostbuf[96];
+				u64 lost = reader.pending_lost;
+				int m;
+
+				reader.pending_lost = 0;
+				m = snprintf(lostbuf, sizeof(lostbuf),
+					     "<%u>[            ] ** %" PRIu64
+					     " bytes lost **\n",
+					     KERN_WARN, lost);
+				if (m > 0) {
+					size_t len = (size_t)m;
+
+					if (len >= sizeof(lostbuf))
+						len = sizeof(lostbuf) - 1;
+					klog_write(file, lostbuf, len);
+					wrote = true;
+				}
+			}
+
+			if (n == 0) {
+				empty = true;
+				break;
+			}
+			if (n == -ENOSPC)
+				continue;
+			if (n < 0) {
+				error = true;
+				break;
+			}
 			if (level > KLOG_LEVEL)
 				continue;
 
-			m = snprintf(out, sizeof(out),
-				     "<%u>[%5" PRIu64 ".%06" PRIu64 "] %s%s",
-				     level, (u64)(ts / NS_PER_SEC),
-				     (u64)((ts % NS_PER_SEC) / NS_PER_US), rec,
-				     (n > 0 && rec[n - 1] == '\n') ? "" : "\n");
+			int m = snprintf(
+				out, sizeof(out),
+				"<%u>[%5" PRIu64 ".%06" PRIu64 "] %s%s%s",
+				level, (u64)(ts / NS_PER_SEC),
+				(u64)((ts % NS_PER_SEC) / NS_PER_US), rec,
+				(flags & PRINTK_FLAGS_TRUNCATED) ? "..." : "",
+				(rec[n - 1] == '\n') ? "" : "\n");
 			if (m < 0)
 				continue;
 			if ((size_t)m >= sizeof(out))
@@ -116,12 +161,12 @@ static void klog_entry(void *arg)
 			wrote = true;
 		}
 
-		if (n < 0) {
-			/* Oversized record was consumed; nothing to write. */
+		if (!empty && !error)
 			continue;
-		}
 
-		klog_sleep_ms(wrote ? 10 : KLOG_POLL_MS);
+		if (wrote)
+			klog_sync(file);
+		klog_sleep_ms(error ? 10 : (wrote ? 10 : KLOG_POLL_MS));
 	}
 }
 

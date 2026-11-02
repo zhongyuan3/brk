@@ -30,6 +30,7 @@ struct cpu {
 int cpu_init(cpuid_t cpuid);
 struct cpu *this_cpu(void);
 cpuid_t this_cpuid(void);
+cpuid_t this_cpuid_safe(void);
 void set_this_cpuid(cpuid_t cpuid);
 
 void preempt_disable(void);
