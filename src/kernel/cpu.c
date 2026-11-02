@@ -85,6 +85,19 @@ cpuid_t this_cpuid(void)
 	return this_cpu()->id;
 }
 
+/*
+ * Panic-safe CPU id: returns -1 if the per-CPU pointer has not been set up
+ * yet.  Unlike this_cpuid(), this must never call panic().
+ */
+cpuid_t this_cpuid_safe(void)
+{
+	unsigned long ptr = get_thread_pointer();
+
+	if (!cpu_is_valid(ptr))
+		return (cpuid_t)-1;
+	return ((struct cpu *)ptr)->id;
+}
+
 void set_this_cpuid(cpuid_t cpuid)
 {
 	(void)cpuid;

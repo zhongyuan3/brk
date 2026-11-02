@@ -4,6 +4,7 @@
 #include <arch/trapframe.h>
 #include <brk/asm/cpu.h>
 #include <brk/assert.h>
+#include <brk/console.h>
 #include <brk/cpu.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
@@ -343,6 +344,11 @@ void init_task_do(void)
 	 * succeeded.  Until klogd has opened /var/log/kernel.log the UART console
 	 * stays active, so an exec failure is still visible.
 	 */
+	int console_err = console_log_start();
+	if (console_err)
+		pr_warn("console: failed to start log thread: %d\n",
+			console_err);
+
 	int klog_err = klog_start();
 	if (klog_err)
 		pr_warn("klog: failed to start log thread: %d\n", klog_err);

@@ -1,5 +1,5 @@
-#ifndef LIMITS_H
-#define LIMITS_H
+#ifndef BRK_FREESTANDING_LIMITS_H
+#define BRK_FREESTANDING_LIMITS_H
 
 #define CHAR_BIT 8
 

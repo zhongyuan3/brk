@@ -1,5 +1,5 @@
-#ifndef STDALIGN_H
-#define STDALIGN_H
+#ifndef BRK_FREESTANDING_STDALIGN_H
+#define BRK_FREESTANDING_STDALIGN_H
 
 #define alignas _Alignas
 #define alignof _Alignof

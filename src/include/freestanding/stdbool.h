@@ -1,5 +1,5 @@
-#ifndef STDBOOL_H
-#define STDBOOL_H
+#ifndef BRK_FREESTANDING_STDBOOL_H
+#define BRK_FREESTANDING_STDBOOL_H
 
 #define bool _Bool
 #define true 1

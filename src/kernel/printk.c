@@ -1,212 +1,377 @@
-#define SPINLOCK_IMPL
 #include <brk/console.h>
 #include <brk/kernel.h>
 #include <brk/ktime.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
+#include <brk/printk_log.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/timekeeper.h>
 #include <uapi/errno.h>
 
-#define LOG_BUF_LEN (64 * 1024)
-
-#define LOG_RECORD_MARK 0xffffffffu
-
-/* One record in the log ring buffer. 8-byte aligned in the buffer. */
-struct log_record {
-	u32 len; /* Text length; LOG_RECORD_MARK marks a wrap point */
-	u8 level;
-	u8 flags;
-	u16 pad;
-	u64 ts_nsec;
+static struct printk_ring_buffer printk_ring = {
+	.lock = SPINLOCK_INITIALIZER("printk_ring"),
 };
 
-static char log_buf[LOG_BUF_LEN] __attribute__((aligned(8)));
-static u32 log_next_off;
-/* Next record for the console flush. */
-static u32 log_first_off;
-/* Next record for the persistent disk log (klogd). */
-static u32 log_disk_off;
+static char printk_buf[PRINTK_MAX_PAYLOAD];
 
-static SPINLOCK_DEFINE(printk_lock);
-static char printk_buf[1024];
+/* Early boot needs the console immediately; the console thread turns this off. */
+static bool printk_console_sync = true;
 
-static u32 log_record_used(u32 len)
+_Static_assert(sizeof(struct printk_log_header) == 16,
+	       "printk_log_header must stay 16 bytes");
+_Static_assert(offsetof(struct printk_log_header, len) == 4,
+	       "printk_log_header layout changed");
+_Static_assert(offsetof(struct printk_log_header, nsec) == 8,
+	       "printk_log_header layout changed");
+_Static_assert(PRINTK_RING_BUFFER_SIZE % sizeof(struct printk_log_header) == 0,
+	       "ring size must be header-aligned");
+
+static inline u32 printk_ring_off(u64 seq)
 {
-	return sizeof(struct log_record) + round_up(len, 8);
+	return (u32)(seq & PRINTK_RING_BUFFER_MASK);
 }
 
-static void log_store(u8 level, const char *text, u32 len)
+static inline u32 printk_record_total(u32 len)
 {
-	struct log_record *rec;
-	u32 total;
+	return (u32)round_up(sizeof(struct printk_log_header) + len,
+			     alignof(struct printk_log_header));
+}
 
-	if (len > LOG_BUF_LEN - sizeof(struct log_record))
-		len = LOG_BUF_LEN - sizeof(struct log_record);
-	total = log_record_used(len);
+static u64 printk_now_nsec(void)
+{
+	return timekeeper_initialized() ? ktime_get_boot_ns() : 0;
+}
 
-	if (log_next_off + total > LOG_BUF_LEN) {
-		/*
-		 * Not enough contiguous tail space: drop whatever was left
-		 * unflushed (keep the newest records) and restart at 0.
-		 */
-		log_next_off = 0;
-		log_first_off = 0;
-		/* The disk reader also loses unread records on overflow. */
-		log_disk_off = 0;
+static bool printk_header_valid(const struct printk_log_header *h)
+{
+	if (h->magic[0] != PRINTK_LOG_MAGIC0 ||
+	    h->magic[1] != PRINTK_LOG_MAGIC1)
+		return false;
+
+	if (h->flags & PRINTK_FLAGS_WRAP)
+		return h->len <= PRINTK_RING_BUFFER_SIZE -
+					sizeof(struct printk_log_header);
+	return h->len <= PRINTK_MAX_PAYLOAD;
+}
+
+/*
+ * Size of the record at ring->tail.  When the header is corrupt, return all
+ * currently used bytes so the caller drops everything instead of looping.
+ */
+static u32 printk_oldest_record_total(void)
+{
+	u32 off = printk_ring_off(printk_ring.tail);
+
+	if (off + sizeof(struct printk_log_header) >
+	    PRINTK_RING_BUFFER_SIZE)
+		return PRINTK_RING_BUFFER_SIZE - off;
+
+	const struct printk_log_header *h =
+		(const struct printk_log_header *)&printk_ring.buf[off];
+
+	if (!printk_header_valid(h))
+		return (u32)(printk_ring.head - printk_ring.tail);
+
+	u32 total = printk_record_total(h->len);
+	if (total == 0 || total > PRINTK_RING_BUFFER_SIZE ||
+	    off + total > PRINTK_RING_BUFFER_SIZE)
+		return (u32)(printk_ring.head - printk_ring.tail);
+	return total;
+}
+
+static void printk_drop_oldest(void)
+{
+	if (printk_ring.tail == printk_ring.head)
+		return;
+
+	u32 step = printk_oldest_record_total();
+
+	if (step == 0) {
+		printk_ring.tail = printk_ring.head;
+		return;
 	}
 
-	rec = (struct log_record *)&log_buf[log_next_off];
-	rec->len = len;
-	rec->level = level;
-	rec->flags = 0;
-	rec->ts_nsec = timekeeper_initialized() ? ktime_get_boot_ns() : 0;
-	memcpy(&log_buf[log_next_off + sizeof(struct log_record)], text, len);
-	log_next_off += total;
+	printk_ring.tail += step;
+	if (printk_ring.tail > printk_ring.head)
+		printk_ring.tail = printk_ring.head;
 }
 
-static void log_flush(void)
+/*
+ * Tail space is too small for a full record.  Write a WRAP record when there
+ * is room for its header; otherwise zero-fill the tiny remainder.  In both
+ * cases the reader can skip to the next ring boundary.
+ */
+static void printk_write_wrap(u32 off, u32 pad)
 {
-	u32 off = log_first_off;
+	if (pad >= sizeof(struct printk_log_header)) {
+		struct printk_log_header *h =
+			(struct printk_log_header *)&printk_ring.buf[off];
 
-	while (off != log_next_off) {
-		struct log_record *rec;
-		u32 used;
+		h->magic[0] = PRINTK_LOG_MAGIC0;
+		h->magic[1] = PRINTK_LOG_MAGIC1;
+		h->level = KERN_DEBUG;
+		h->flags = PRINTK_FLAGS_WRAP;
+		h->len = pad - sizeof(struct printk_log_header);
+		h->nsec = 0;
+	} else {
+		memset(&printk_ring.buf[off], 0, pad);
+	}
 
-		if (off + sizeof(struct log_record) > LOG_BUF_LEN)
+	printk_ring.head += pad;
+}
+
+/* Caller must hold printk_ring.lock. */
+static void printk_log_store_locked(u8 level, const char *text, size_t len,
+				    u8 flags, u64 nsec)
+{
+	if (level > KERN_MAX)
+		level = KERN_MAX;
+	if (len == 0)
+		return;
+	if (len > PRINTK_MAX_PAYLOAD) {
+		len = PRINTK_MAX_PAYLOAD;
+		flags |= PRINTK_FLAGS_TRUNCATED;
+	}
+
+	u32 total = printk_record_total((u32)len);
+	if (total > PRINTK_RING_BUFFER_SIZE)
+		return;
+
+	u32 off = printk_ring_off(printk_ring.head);
+	u32 pad = 0;
+
+	if ((u64)off + total > PRINTK_RING_BUFFER_SIZE)
+		pad = PRINTK_RING_BUFFER_SIZE - off;
+
+	u64 need = (u64)pad + total;
+	if (need > PRINTK_RING_BUFFER_SIZE)
+		return;
+
+	while (printk_ring.head - printk_ring.tail + need >
+	       PRINTK_RING_BUFFER_SIZE)
+		printk_drop_oldest();
+
+	if (pad) {
+		printk_write_wrap(off, pad);
+		off = printk_ring_off(printk_ring.head);
+	}
+
+	struct printk_log_header *h =
+		(struct printk_log_header *)&printk_ring.buf[off];
+
+	h->magic[0] = PRINTK_LOG_MAGIC0;
+	h->magic[1] = PRINTK_LOG_MAGIC1;
+	h->level = level;
+	h->flags = flags;
+	h->len = (u32)len;
+	h->nsec = nsec;
+
+	if (len)
+		memcpy(&printk_ring.buf[off + sizeof(*h)], text, len);
+
+	u32 used = (u32)sizeof(*h) + (u32)len;
+	if (used < total)
+		memset(&printk_ring.buf[off + used], 0, total - used);
+
+	printk_ring.head += total;
+}
+
+size_t printk_log_write(u8 level, const char *text, size_t len, u64 nsec)
+{
+	u8 flags = 0;
+
+	if (len > PRINTK_MAX_PAYLOAD) {
+		len = PRINTK_MAX_PAYLOAD;
+		flags |= PRINTK_FLAGS_TRUNCATED;
+	}
+
+	irqstate_t lock = spin_lock_irqsave(&printk_ring.lock);
+	printk_log_store_locked(level, text, len, flags, nsec);
+	spin_unlock_irqrestore(&printk_ring.lock, lock);
+
+	return len;
+}
+
+void printk_log_reader_init(struct printk_log_reader *reader,
+			    enum printk_log_start start)
+{
+	irqstate_t flags = spin_lock_irqsave(&printk_ring.lock);
+
+	reader->ring = &printk_ring;
+	reader->cursor = start == PRINTK_LOG_START_NEWEST ?
+				 printk_ring.head : printk_ring.tail;
+	reader->pending_lost = 0;
+
+	spin_unlock_irqrestore(&printk_ring.lock, flags);
+}
+
+static int printk_log_read_common(struct printk_log_reader *reader, char *buf,
+				  size_t size, u8 *level, u64 *nsec, u8 *flags,
+				  bool trylock)
+{
+	if (!reader || !reader->ring || !buf || size == 0)
+		return -EINVAL;
+
+	struct printk_ring_buffer *ring = reader->ring;
+	irqstate_t lock;
+
+	if (trylock) {
+		if (!spin_trylock_irqsave(&ring->lock, &lock))
+			return -EAGAIN;
+	} else {
+		lock = spin_lock_irqsave(&ring->lock);
+	}
+
+	if (reader->cursor < ring->tail) {
+		reader->pending_lost += ring->tail - reader->cursor;
+		reader->cursor = ring->tail;
+	}
+
+	for (;;) {
+		if (reader->cursor == ring->head)
 			break;
-		rec = (struct log_record *)&log_buf[off];
-		if (rec->len == LOG_RECORD_MARK) {
-			off = 0;
+
+		u32 off = printk_ring_off(reader->cursor);
+
+		/* Tiny tail padding: no header fits here. */
+		if (off + sizeof(struct printk_log_header) >
+		    PRINTK_RING_BUFFER_SIZE) {
+			reader->cursor += PRINTK_RING_BUFFER_SIZE - off;
 			continue;
 		}
-		used = log_record_used(rec->len);
-		if (off + used > LOG_BUF_LEN)
-			break;
-		console_write_record(rec->level, rec->ts_nsec,
-				     &log_buf[off + sizeof(struct log_record)],
-				     rec->len);
-		off += used;
+
+		struct printk_log_header *h =
+			(struct printk_log_header *)&ring->buf[off];
+
+		if (!printk_header_valid(h)) {
+			reader->pending_lost += ring->head - reader->cursor;
+			reader->cursor = ring->head;
+			spin_unlock_irqrestore(&ring->lock, lock);
+			return -EIO;
+		}
+
+		u32 total = printk_record_total(h->len);
+		if (total == 0 || total > PRINTK_RING_BUFFER_SIZE ||
+		    off + total > PRINTK_RING_BUFFER_SIZE ||
+		    reader->cursor + total > ring->head) {
+			reader->pending_lost += ring->head - reader->cursor;
+			reader->cursor = ring->head;
+			spin_unlock_irqrestore(&ring->lock, lock);
+			return -EIO;
+		}
+
+		if (h->flags & PRINTK_FLAGS_WRAP) {
+			reader->cursor += total;
+			continue;
+		}
+
+		if ((size_t)h->len + 1 > size) {
+			reader->cursor += total;
+			spin_unlock_irqrestore(&ring->lock, lock);
+			return -ENOSPC;
+		}
+
+		if (h->len)
+			memcpy(buf, &ring->buf[off + sizeof(*h)], h->len);
+		buf[h->len] = '\0';
+
+		if (level)
+			*level = h->level;
+		if (nsec)
+			*nsec = h->nsec;
+		if (flags)
+			*flags = h->flags;
+
+		reader->cursor += total;
+		spin_unlock_irqrestore(&ring->lock, lock);
+		return (int)h->len;
 	}
-	log_first_off = log_next_off;
+
+	spin_unlock_irqrestore(&ring->lock, lock);
+	return 0;
+}
+
+int printk_log_read(struct printk_log_reader *reader, char *buf, size_t size,
+		    u8 *level, u64 *nsec, u8 *flags)
+{
+	return printk_log_read_common(reader, buf, size, level, nsec, flags,
+				      false);
+}
+
+int printk_log_read_try(struct printk_log_reader *reader, char *buf,
+			size_t size, u8 *level, u64 *nsec, u8 *flags)
+{
+	return printk_log_read_common(reader, buf, size, level, nsec, flags,
+				      true);
+}
+
+static void vprintk_common(int level, const char *fmt, va_list ap)
+{
+	u64 nsec = printk_now_nsec();
+	irqstate_t lock = spin_lock_irqsave(&printk_ring.lock);
+	int n = vsnprintf(printk_buf, sizeof(printk_buf), fmt, ap);
+
+	if (n > 0) {
+		size_t len = (size_t)n;
+		u8 flags = 0;
+
+		if (len >= sizeof(printk_buf)) {
+			len = sizeof(printk_buf) - 1;
+			flags |= PRINTK_FLAGS_TRUNCATED;
+		}
+		printk_log_store_locked(level, printk_buf, len, flags, nsec);
+	}
+	spin_unlock_irqrestore(&printk_ring.lock, lock);
+
+	if (printk_console_sync)
+		(void)printk_flush_pending();
 }
 
 void printk(char const *fmt, ...)
 {
 	va_list ap;
+
 	va_start(ap, fmt);
 	vprintk(fmt, ap);
 	va_end(ap);
 }
 
-/*
- * Format the message, append it to the log ring buffer and, if any console
- * is active, drain the buffer so the record is printed. Caller must hold
- * printk_lock.
- */
-static void vprintk_locked(int level, const char *fmt, va_list ap)
-{
-	int n = vsnprintf(printk_buf, sizeof(printk_buf), fmt, ap);
-
-	if (n > 0)
-		log_store(level, printk_buf,
-			  strnlen(printk_buf, sizeof(printk_buf)));
-	if (console_has_active())
-		log_flush();
-}
-
 void vprintk(char const *fmt, va_list ap)
 {
-	irqstate_t flags = spin_lock_irqsave(&printk_lock);
-
-	vprintk_locked(KERN_DEFAULT, fmt, ap);
-	spin_unlock_irqrestore(&printk_lock, flags);
+	vprintk_common(KERN_DEFAULT, fmt, ap);
 }
 
 void _printk(int level, const char *fmt, ...)
 {
 	va_list ap;
-	irqstate_t flags;
 
 	va_start(ap, fmt);
-	flags = spin_lock_irqsave(&printk_lock);
-	vprintk_locked(level, fmt, ap);
-	spin_unlock_irqrestore(&printk_lock, flags);
+	vprintk_common(level, fmt, ap);
 	va_end(ap);
 }
 
-void printk_flush_pending(void)
+void printk_console_set_async(bool async)
 {
-	irqstate_t flags = spin_lock_irqsave(&printk_lock);
-
-	log_flush();
-	spin_unlock_irqrestore(&printk_lock, flags);
-}
-
-int printk_read_record(char *buf, size_t size, u8 *level, u64 *ts_nsec)
-{
-	irqstate_t flags = spin_lock_irqsave(&printk_lock);
-	int ret = 0;
-
-	while (log_disk_off != log_next_off) {
-		u32 off = log_disk_off;
-		struct log_record *rec;
-		u32 used;
-
-		if (off + sizeof(*rec) > LOG_BUF_LEN) {
-			/* Corrupt/partial tail: restart from the beginning. */
-			log_disk_off = 0;
-			continue;
-		}
-
-		rec = (struct log_record *)&log_buf[off];
-		if (rec->len == LOG_RECORD_MARK) {
-			log_disk_off = 0;
-			continue;
-		}
-
-		used = log_record_used(rec->len);
-		if (off + used > LOG_BUF_LEN) {
-			log_disk_off = 0;
-			continue;
-		}
-
-		if (rec->len + 1 > size) {
-			/* Consume it anyway; the caller cannot use this record. */
-			ret = -ENOSPC;
-		} else {
-			memcpy(buf, &log_buf[off + sizeof(*rec)], rec->len);
-			buf[rec->len] = '\0';
-			ret = (int)rec->len;
-		}
-
-		if (level)
-			*level = rec->level;
-		if (ts_nsec)
-			*ts_nsec = rec->ts_nsec;
-
-		log_disk_off = off + used;
-		break;
-	}
-
-	spin_unlock_irqrestore(&printk_lock, flags);
-	return ret;
+	printk_console_sync = !async;
 }
 
 void printk_panic_text(const char *text, size_t len)
 {
-	if (spin_is_locked_by_me(&printk_lock)) {
-		/* Panic fired inside printk(): we already own the lock. */
-		log_store(KERN_EMERG, text, len);
-		log_flush();
-	} else if (spin_trylock(&printk_lock)) {
-		log_store(KERN_EMERG, text, len);
-		log_flush();
-		spin_unlock(&printk_lock);
-	} else {
-		/* Another CPU holds the lock; best-effort raw output. */
-		console_write_record_direct(KERN_EMERG, ktime_get_boot_ns(),
-					    text, len);
+	u64 nsec = printk_now_nsec();
+
+	/* Best-effort: drain records queued before the panic (trap dumps etc.). */
+	console_flush_on_panic();
+
+	/*
+	 * Never wait for another CPU on the panic path.  If the ring lock is
+	 * available, preserve the panic message in the ring as well.
+	 */
+	if (!spin_is_locked_by_me(&printk_ring.lock) &&
+	    spin_trylock(&printk_ring.lock)) {
+		printk_log_store_locked(KERN_EMERG, text, len, 0, nsec);
+		spin_unlock(&printk_ring.lock);
 	}
+
+	console_write_record_panic(KERN_EMERG, nsec, text, len);
 }

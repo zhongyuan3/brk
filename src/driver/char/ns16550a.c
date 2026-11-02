@@ -237,6 +237,26 @@ static int ns16550a_device_putc(struct ns16550a_device *dev, int c)
 	return ret;
 }
 
+static int ns16550a_device_putc_atomic(struct ns16550a_device *dev, int c)
+{
+	irqstate_t flags;
+	int ret = -EBUSY;
+
+	if (!spin_trylock_irqsave(&dev->lock, &flags))
+		return -EBUSY;
+
+	for (int i = 0; i < 100000; i++) {
+		if (ns16550a_device_read_reg(dev, LSR) & LSR_TX_IDLE) {
+			ns16550a_device_write_reg(dev, THR, c);
+			ret = 0;
+			break;
+		}
+	}
+
+	spin_unlock_irqrestore(&dev->lock, flags);
+	return ret;
+}
+
 static int ns16550a_console_put_char(struct console *console, int c)
 {
 	struct ns16550a_device *dev = console->client_data;
@@ -246,15 +266,21 @@ static int ns16550a_console_put_char(struct console *console, int c)
 	return ns16550a_device_putc(dev, c);
 }
 
+static int ns16550a_console_put_char_atomic(struct console *console, int c)
+{
+	struct ns16550a_device *dev = console->client_data;
+
+	if (!dev)
+		return -EIO;
+	return ns16550a_device_putc_atomic(dev, c);
+}
+
 static struct console ns16550a_console = {
 	.put_char = ns16550a_console_put_char,
+	.put_char_atomic = ns16550a_console_put_char_atomic,
 	.active = true,
+	.flags = CONSOLE_FLAG_BOOT,
 };
-
-void ns16550a_console_disable(void)
-{
-	console_deactivate(&ns16550a_console);
-}
 
 static int ns16550a_tty_put_char(struct tty *tty, int c)
 {
@@ -344,7 +370,7 @@ int ns16550a_add_device(struct ns16550a_device *dev)
 
 	if (first) {
 		ns16550a_console.client_data = dev;
-		console_register(&ns16550a_console);
+		console_register(&ns16550a_console, KERN_DEBUG);
 	}
 
 	return 0;

@@ -1,5 +1,14 @@
-#ifndef STDINT_H
-#define STDINT_H
+#ifndef BRK_FREESTANDING_STDINT_H
+#define BRK_FREESTANDING_STDINT_H
+
+/*
+ * C-standard spellings of the compiler's base integer types.  uapi/types.h
+ * defines the same underlying types under __u* / __s* names, and brk/types.h
+ * aliases them as u8/u32/... on top of __u*.  The headers stay separate so
+ * that vendor code and userland can use <stdint.h> without pulling in the
+ * kernel UAPI; src/kernel/abi_check.c asserts that the names denote the same
+ * types.
+ */
 
 typedef __INT8_TYPE__ int8_t;
 typedef __INT16_TYPE__ int16_t;

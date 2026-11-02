@@ -22,22 +22,17 @@ void vprintk(char const *fmt, va_list ap);
 void _printk(int level, const char *fmt, ...)
 	__attribute__((format(printf, 2, 3)));
 
-/* Drain the accumulated log ring buffer to the consoles. */
-void printk_flush_pending(void);
+/* Drain pending records to all active consoles.  Returns true if a progress
+ * was made (a record or a lost notification was consumed). */
+bool printk_flush_pending(void);
+
+/* Switch console output between synchronous boot flushing and the async
+ * console log thread. */
+void printk_console_set_async(bool async);
 
 /*
- * Consume the oldest record from the printk ring buffer into @buf.
- * @buf is NUL-terminated when a record is returned.
- *
- * Return the text length, 0 if the buffer is empty, or -ENOSPC if the
- * record did not fit in @size (the record is consumed either way).
- */
-int printk_read_record(char *buf, size_t size, u8 *level, u64 *ts_nsec);
-
-/*
- * Panic helper: append a pre-formatted message to the log ring buffer and
- * flush it, tolerating the lock states found on the panic path. Falls back
- * to a raw console write if printk_lock cannot be taken.
+ * Panic helper: best-effort append to the log ring and always write directly
+ * to the active consoles.  Tolerates the lock states found on the panic path.
  */
 void printk_panic_text(const char *text, size_t len);
 
