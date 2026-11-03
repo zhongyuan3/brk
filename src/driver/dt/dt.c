@@ -1,3 +1,4 @@
+#define pr_fmt(fmt) "dt: " fmt
 #include <arch/hart.h>
 #include <arch/mm.h>
 #include <brk/assert.h>
@@ -24,18 +25,58 @@
 
 static void *fdt;
 
+static int __fdt_err_to_errno(int err)
+{
+	int code;
+
+	if (err >= 0)
+		return err;
+	if (err < -FDT_ERR_MAX)
+		return -EINVAL;
+
+	code = -err;
+
+	switch (code) {
+	case FDT_ERR_NOTFOUND:
+		return -ENOENT;
+	case FDT_ERR_EXISTS:
+		return -EEXIST;
+	case FDT_ERR_NOSPACE:
+	case FDT_ERR_NOPHANDLES:
+		return -ENOSPC;
+	case FDT_ERR_INTERNAL:
+		return -EIO;
+	case FDT_ERR_BADOFFSET:
+	case FDT_ERR_BADPATH:
+	case FDT_ERR_BADPHANDLE:
+	case FDT_ERR_BADSTATE:
+	case FDT_ERR_TRUNCATED:
+	case FDT_ERR_BADMAGIC:
+	case FDT_ERR_BADVERSION:
+	case FDT_ERR_BADSTRUCTURE:
+	case FDT_ERR_BADLAYOUT:
+	case FDT_ERR_BADNCELLS:
+	case FDT_ERR_BADVALUE:
+	case FDT_ERR_BADOVERLAY:
+	case FDT_ERR_BADFLAGS:
+	case FDT_ERR_ALIGNMENT:
+	default:
+		return -EINVAL;
+	}
+}
+
 static int get_addr_cells(int node, int *addr_cells, int *size_cells)
 {
 	int ret;
 
 	ret = fdt_address_cells(fdt, node);
 	if (ret < 0)
-		return ret;
+		return __fdt_err_to_errno(ret);
 	*addr_cells = ret;
 
 	ret = fdt_size_cells(fdt, node);
 	if (ret < 0)
-		return ret;
+		return __fdt_err_to_errno(ret);
 	*size_cells = ret;
 
 	return 0;
@@ -45,31 +86,26 @@ static int get_parent_addr_cells(int node, int *addr_cells, int *size_cells)
 {
 	int ret = fdt_parent_offset(fdt, node);
 	if (ret < 0)
-		return ret;
+		return __fdt_err_to_errno(ret);
 	return get_addr_cells(ret, addr_cells, size_cells);
 }
 
-static int for_each_node_reg(int node, int addr_cells, int size_cells,
-			     int (*callback)(u64 addr, size_t size, void *arg),
-			     void *arg)
+static int for_each_reg(int node, int addr_cells, int size_cells,
+			int (*fn)(u64 addr, size_t size, void *arg), void *arg)
 {
 	const u32 *reg;
 	u64 addr, size;
 	int len = 0;
 	int reg_bytes = (addr_cells + size_cells) * sizeof(u32);
-	int nr_regs;
 	int err;
 
 	reg = fdt_getprop(fdt, node, "reg", &len);
-
 	if (!reg)
-		return -EINVAL;
-
+		return __fdt_err_to_errno(len);
 	if (len < reg_bytes || len % reg_bytes != 0)
 		return -EINVAL;
 
-	nr_regs = len / reg_bytes;
-	for (int i = 0; i < nr_regs; ++i) {
+	for (int i = 0, nr = len / reg_bytes; i < nr; ++i) {
 		addr = 0;
 		size = 0;
 
@@ -79,7 +115,7 @@ static int for_each_node_reg(int node, int addr_cells, int size_cells,
 		for (int j = 0; j < size_cells; ++j)
 			size = (size << 32) | fdt32_to_cpu(*reg++);
 
-		err = callback(addr, size, arg);
+		err = fn(addr, size, arg);
 		if (err)
 			return err;
 	}
@@ -94,7 +130,7 @@ void dt_set_fdt(unsigned long addr)
 
 static int __memblock_add_or_reserve(u64 addr, size_t size, void *add)
 {
-	if (add == NULL)
+	if (!add)
 		return memblock_reserve(addr, size);
 	else
 		return memblock_add(addr, size);
@@ -108,14 +144,14 @@ int dt_init_scan_mem(void)
 
 	node = fdt_path_offset(fdt, "/memory");
 	if (node < 0)
-		return -EINVAL;
+		return __fdt_err_to_errno(node);
 
 	err = get_parent_addr_cells(node, &addr_cells, &size_cells);
 	if (err)
 		return err;
 
-	err = for_each_node_reg(node, addr_cells, size_cells,
-				__memblock_add_or_reserve, (void *)1);
+	err = for_each_reg(node, addr_cells, size_cells,
+			   __memblock_add_or_reserve, (void *)1);
 	if (err)
 		return err;
 
@@ -129,16 +165,18 @@ int dt_init_scan_rsvd_mem(void)
 	int addr_cells, size_cells;
 
 	node = fdt_path_offset(fdt, "/reserved-memory");
-	if (node < 0)
+	if (node < 0) {
+		pr_info("no reserved-memory node in the DT\n");
 		return 0;
+	}
 
 	err = get_addr_cells(node, &addr_cells, &size_cells);
 	if (err)
 		return err;
 
 	fdt_for_each_subnode(subnode, fdt, node) {
-		err = for_each_node_reg(subnode, addr_cells, size_cells,
-					__memblock_add_or_reserve, (void *)0);
+		err = for_each_reg(subnode, addr_cells, size_cells,
+				   __memblock_add_or_reserve, (void *)0);
 		if (err)
 			return err;
 	}
@@ -154,11 +192,15 @@ int dt_setup_timebase_freq(void)
 	int len;
 
 	node = fdt_path_offset(fdt, "/cpus");
-	if (node < 0)
-		return -EINVAL;
+	if (node < 0) {
+		pr_err("no cpus node in the DT\n");
+		return __fdt_err_to_errno(node);
+	}
 
 	freq = fdt_getprop(fdt, node, "timebase-frequency", &len);
-	if (!freq || len != sizeof(u32))
+	if (!freq)
+		return __fdt_err_to_errno(len);
+	if (len != sizeof(u32))
 		return -EINVAL;
 
 	timebase_freq = fdt32_to_cpu(*freq);
@@ -175,7 +217,7 @@ int dt_init_scan_cpu(void)
 
 	node = fdt_path_offset(fdt, "/cpus");
 	if (node < 0)
-		return -EINVAL;
+		return __fdt_err_to_errno(node);
 
 	fdt_for_each_subnode(subnode, fdt, node) {
 		len = 0;
@@ -196,12 +238,14 @@ int dt_get_reg(int node, int index, u64 *addr, u64 *size)
 {
 	int len, addr_cells, size_cells, cell_bytes, nr;
 	const u32 *reg;
+	int err;
 
 	if (!addr || !size || index < 0)
 		return -EINVAL;
 
-	if (get_parent_addr_cells(node, &addr_cells, &size_cells))
-		return -EINVAL;
+	err = get_parent_addr_cells(node, &addr_cells, &size_cells);
+	if (err)
+		return err;
 
 	cell_bytes = (addr_cells + size_cells) * sizeof(u32);
 	reg = fdt_getprop(fdt, node, "reg", &len);
@@ -224,23 +268,20 @@ int dt_get_reg(int node, int index, u64 *addr, u64 *size)
 	return 0;
 }
 
-static int dtb_get_one_reg(int node, u64 *addr, u64 *size)
-{
-	return dt_get_reg(node, 0, addr, size);
-}
-
 int dt_parse_rtc(struct rtc_device *rtc)
 {
 	int node;
+	int err;
 	u64 addr = 0;
 	u64 size = 0;
 
 	node = fdt_node_offset_by_compatible(fdt, -1, "google,goldfish-rtc");
 	if (node < 0)
-		return node;
+		return __fdt_err_to_errno(node);
 
-	if (dt_get_reg(node, 0, &addr, &size))
-		return -EINVAL;
+	err = dt_get_reg(node, 0, &addr, &size);
+	if (err)
+		return err;
 
 	rtc->phys_base = addr;
 	rtc->size = size;
@@ -285,7 +326,7 @@ int dt_init_scan_virtio_dev(void)
 		addr = 0;
 		size = 0;
 		irq = 0;
-		if (dtb_get_one_reg(node, &addr, &size))
+		if (dt_get_reg(node, 0, &addr, &size))
 			continue;
 
 		irq = irq_of_parse_and_map(node, 0);
@@ -328,51 +369,59 @@ void dt_init_scan_serial(void)
 	int subnode;
 	struct ns16550a_platform_data *pdata;
 	char name[DEVICE_NAME_LEN];
+	const char *node_name;
+	int node_name_len;
 
 	parent = fdt_path_offset(fdt, "/soc/");
 	if (parent < 0) {
-		pr_debug("no /soc/ node found\n");
+		pr_err("no /soc/ node found: %d\n", __fdt_err_to_errno(parent));
 		return;
 	}
 
 	fdt_for_each_subnode(subnode, fdt, parent) {
-		pr_debug("subnode: %d, name: %s\n", subnode,
-			 fdt_get_name(fdt, subnode, NULL));
 		if (fdt_node_check_compatible(fdt, subnode, "ns16550a") == 0) {
-			pr_debug("found ns16550a node: %d, name: %s\n", subnode,
-				 fdt_get_name(fdt, subnode, NULL));
-
-			err = dtb_get_one_reg(subnode, &addr, &size);
-			if (err) {
-				pr_debug("failed to get one reg: %d\n", err);
+			node_name = fdt_get_name(fdt, subnode, &node_name_len);
+			if (!node_name) {
+				pr_err("failed to get the name of node: err=%d\n",
+				       __fdt_err_to_errno(node_name_len));
 				continue;
 			}
+
+			err = dt_get_reg(subnode, 0, &addr, &size);
+			if (err) {
+				pr_err("failed to get the reg of %s: err=%d\n",
+				       node_name, err);
+				continue;
+			}
+			snprintf(name, sizeof(name), "ns16550a@%lx", addr);
+
 			irq = irq_of_parse_and_map(subnode, 0);
 			if (!irq) {
-				pr_debug("failed to map irq\n");
+				pr_err("failed to map irq for %s\n", name);
 				continue;
 			}
 			clock_freq = fdt_getprop(fdt, subnode,
 						 "clock-frequency", &len);
 			if (!clock_freq || len != sizeof(u32)) {
-				pr_debug("failed to get clock frequency: %d\n",
-					 (int)(unsigned long)clock_freq);
+				pr_err("failed to get clock frequency of %s: err=%d\n",
+				       name, (int)(unsigned long)clock_freq);
 				continue;
 			}
 
 			pdata = kzalloc(sizeof(*pdata));
-			if (!pdata)
+			if (!pdata) {
+				pr_err("memory allocation failed, drop %s\n",
+				       name);
 				continue;
+			}
 			pdata->clock_freq = fdt32_to_cpu(*clock_freq);
 
-			snprintf(name, sizeof(name), "ns16550a@%lx", addr);
 			err = platform_device_register_simple(
 				name, "ns16550a", addr, size, irq, pdata);
 			if (err) {
 				kfree(pdata);
-				pr_debug(
-					"failed to register ns16550a device: %d\n",
-					err);
+				pr_err("failed to register ns16550a device %s: %d\n",
+				       name, err);
 				continue;
 			}
 			pr_info("ns16550a platform device registered: %s\n",
