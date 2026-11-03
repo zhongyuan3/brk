@@ -265,7 +265,7 @@ static void handle_exception(unsigned long code, struct riscv_trap_frame *frame,
 		if (from_user) {
 			pr_warn("%s: pid=%d,scause=%#" PRIx64 ",sepc=%#" PRIx64
 				",stval=%#" PRIx64 "\n",
-				interrupt_name(code), task->pid, frame->scause,
+				exception_name(code), task->pid, frame->scause,
 				frame->sepc, frame->stval);
 			task_set_killed(task);
 		} else {
