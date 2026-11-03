@@ -1,4 +1,6 @@
 BUILD_ROOT ?= build
+USER_ROOT ?= ../brk-user
+BOARD_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)
 
 MAKEFLAGS += --no-print-directory --silent
 
@@ -17,7 +19,7 @@ BUILD ?= debug
 RAM ?= 128M
 CPU ?= 3
 KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)/$(BUILD)
-ROOTFS_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)
+ROOTFS_IMG ?= $(BOARD_BUILD_ROOT)/rootfs.img
 
 CROSS_COMPILE ?=
 CC := $(CROSS_COMPILE)gcc
@@ -75,13 +77,12 @@ LDFLAGS += -z max-page-size=4096
 LIBGCC := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name 2>/dev/null)
 
 export ARCH
-export BUILD_ROOT KERNEL_BUILD_ROOT ROOTFS_BUILD_ROOT
+export BUILD_ROOT KERNEL_BUILD_ROOT
 export CROSS_COMPILE CC LD AS AR CFLAGS LDFLAGS
 
 LINKER_SCRIPT_SRC := src/arch/$(ARCH)/kernel/brk.ld.S
 LINKER_SCRIPT := $(KERNEL_BUILD_ROOT)/brk.ld
 KERNEL_ELF := $(KERNEL_BUILD_ROOT)/brk
-ROOTFS_IMG := $(ROOTFS_BUILD_ROOT)/rootfs.img
 
 core-y := src
 core-y += vendor
@@ -124,14 +125,16 @@ help:
 	@echo "  run                    Boot uniprocessor kernel in QEMU"
 	@echo "  gdb-server             QEMU + GDB stub (uniprocessor)"
 	@echo "  gdb-client             Connect GDB to :1234"
-	@echo "  rootfs                 Create brkfs root disk"
+	@echo "  rootfs                 Build the root filesystem via $(USER_ROOT)"
 	@echo "  clean                  Remove all build outputs"
 	@echo "  clean-kernel           Remove current variant build directory"
+	@echo ""
 	@echo "Configurable vars:"
 	@echo "  ARCH=<name>"
 	@echo "  CROSS_COMPILE=<prefix>"
 	@echo "  BUILD={debug|release}  (default: debug)"
 	@echo "  BUILD_ROOT=<path>      (default: build)"
+	@echo "  USER_ROOT=<path>       (default: ../brk-user)"
 	@echo "  CPU=<n>                (default 3)"
 	@echo "  RAM=<size>             (default 128M)"
 
@@ -157,11 +160,10 @@ gdb-client: $(KERNEL_ELF)
 	$(GDB) --tui -quiet -ex "target remote :1234" $(KERNEL_ELF)
 
 rootfs:
-	@$(RM) $(ROOTFS_IMG)
-	@./scripts/mkrootfs.sh "$(ROOTFS_IMG)"
+	@KERNEL_ROOT="$(CURDIR)" $(USER_ROOT)/scripts/mkrootfs.sh "$(ROOTFS_IMG)"
 
-$(ROOTFS_IMG): scripts/mkrootfs.sh
-	@./scripts/mkrootfs.sh "$(ROOTFS_IMG)"
+$(ROOTFS_IMG): $(USER_ROOT)/scripts/mkrootfs.sh
+	@KERNEL_ROOT="$(CURDIR)" $(USER_ROOT)/scripts/mkrootfs.sh "$@"
 
 clean:
 	$(RM) -r $(BUILD_ROOT)
@@ -169,16 +171,12 @@ clean:
 clean-kernel:
 	$(RM) -r $(KERNEL_BUILD_ROOT)
 
-.PHONY: clean-rootfs
-clean-rootfs:
-	$(RM) -r $(ROOTFS_IMG)
-
 .PHONY: debug
 debug: $(KERNEL_ELF) $(ROOTFS_IMG)
 	$(QEMU) $(QEMU_OPTS) -kernel $(KERNEL_ELF) -d int
 
-DTB := $(ROOTFS_BUILD_ROOT)/qemu_virt.dtb
-DTS := $(ROOTFS_BUILD_ROOT)/qemu_virt.dts
+DTB := $(BOARD_BUILD_ROOT)/qemu_virt.dtb
+DTS := $(BOARD_BUILD_ROOT)/qemu_virt.dts
 
 .PHONY: dtb dts
 dtb: $(DTB)
