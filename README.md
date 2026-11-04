@@ -72,6 +72,8 @@ make help
 make headers-check
 make check
 make rootfs
+make smoke
+make ci
 make size
 make disasm
 ```
@@ -80,7 +82,9 @@ Useful variables:
 
 - `BUILD=debug|release`
 - `CPU=<n>` and `RAM=<size>` for QEMU
+- `NR_CPUS=<n>` for the build-time `MAX_CPUS` value (default 8)
 - `QEMU_NET=0` to boot without the virtio network device
 - `V=1` to show the full compiler/linker commands
 - `EXTRA_CFLAGS=...` / `EXTRA_LDFLAGS=...` for temporary additions
 - `WERROR=0` to keep warnings non-fatal while bringing up a new toolchain
+- `SMOKE_TIMEOUT` / `SMOKE_BOOT_DELAY` to tune the QEMU smoke test
