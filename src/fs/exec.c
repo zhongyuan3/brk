@@ -169,10 +169,12 @@ static void push_args(struct exec_args *args, uintptr_t *psp,
 	uintptr_t argv_strs_kstart = ksp;
 	uintptr_t argv_strs_ustart = sp;
 
-	task->frame->a2 = stack_push_ptr_slots(&ksp, &sp, args->envc);
+	trap_frame_set_arg(task->frame, 2,
+			   stack_push_ptr_slots(&ksp, &sp, args->envc));
 	char **envp_kstart = (char **)ksp;
 
-	task->frame->a1 = stack_push_ptr_slots(&ksp, &sp, args->argc);
+	trap_frame_set_arg(task->frame, 1,
+			   stack_push_ptr_slots(&ksp, &sp, args->argc));
 	char **argv_kstart = (char **)ksp;
 
 	copy_exec_strings(args->envp, args->envc, &envp_strs_kstart,
@@ -435,8 +437,8 @@ static int __do_execve(const char *path, struct exec_args *args)
 		task->mm = new_mm;
 		uvm_space_put(old_mm);
 		signal_reset(task);
-		task->frame->sepc = elf_hdr.e_entry;
-		task->frame->sp = sp;
+		trap_frame_set_pc(task->frame, elf_hdr.e_entry);
+		trap_frame_set_sp(task->frame, sp);
 
 		if (file_mode & S_ISUID) {
 			task->euid = file_uid;

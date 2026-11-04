@@ -89,7 +89,7 @@ void bring_up_secondaries(void)
 	smp_wake_secondary_harts(boot_info.boot_hart_id);
 }
 
-void arch_send_ipi(cpuid_t cpuid)
+void send_ipi(cpuid_t cpuid)
 {
 	if (cpuid >= MAX_CPUS)
 		return;

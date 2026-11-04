@@ -8,9 +8,7 @@
 #include <brk/types.h>
 #include <stddef.h>
 
-struct task;
-
-struct riscv_trap_frame {
+struct trap_frame {
 	union {
 		unsigned long x[32];
 		/* The following registers are the 32 general-purpose registers
@@ -71,19 +69,101 @@ struct riscv_trap_frame {
 	/* 296 */ unsigned long __pad;
 };
 
-#define TRAP_FRAME_SIZE sizeof(struct riscv_trap_frame)
+#define TRAP_FRAME_SIZE sizeof(struct trap_frame)
 
-static_assert(sizeof(struct riscv_trap_frame) == RISCV_TRAP_FRAME_SIZE,
-	      "'struct riscv_trap_frame' size mismatch");
-static_assert(offsetof(struct riscv_trap_frame, sp) == 16,
-	      "'struct riscv_trap_frame' sp offset mismatch");
-static_assert(offsetof(struct riscv_trap_frame, a7) == 136,
-	      "'struct riscv_trap_frame' a7 offset mismatch");
-static_assert(offsetof(struct riscv_trap_frame, sstatus) == 256,
-	      "'struct riscv_trap_frame' sstatus offset mismatch");
-static_assert(offsetof(struct riscv_trap_frame, sepc) == 264,
-	      "'struct riscv_trap_frame' sepc offset mismatch");
-static_assert(offsetof(struct riscv_trap_frame, kernel_tp) == 288,
-	      "'struct riscv_trap_frame' kernel_tp offset mismatch");
+static_assert(sizeof(struct trap_frame) == __RISCV_TRAP_FRAME_SIZE,
+	      "'struct trap_frame' size mismatch");
+static_assert(offsetof(struct trap_frame, sp) == 16,
+	      "'struct trap_frame' sp offset mismatch");
+static_assert(offsetof(struct trap_frame, a7) == 136,
+	      "'struct trap_frame' a7 offset mismatch");
+static_assert(offsetof(struct trap_frame, sstatus) == 256,
+	      "'struct trap_frame' sstatus offset mismatch");
+static_assert(offsetof(struct trap_frame, sepc) == 264,
+	      "'struct trap_frame' sepc offset mismatch");
+static_assert(offsetof(struct trap_frame, kernel_tp) == 288,
+	      "'struct trap_frame' kernel_tp offset mismatch");
+
+static inline void trap_frame_set_kernel_tp(struct trap_frame *frame,
+					    unsigned long value)
+{
+	frame->kernel_tp = value;
+}
+
+static inline void trap_frame_set_sp(struct trap_frame *frame,
+				     unsigned long value)
+{
+	frame->sp = value;
+}
+
+static inline unsigned long trap_frame_get_sp(struct trap_frame *frame)
+{
+	return frame->sp;
+}
+
+static inline void trap_frame_set_pc(struct trap_frame *frame,
+				     unsigned long value)
+{
+	frame->sepc = value;
+}
+
+static inline void trap_frame_set_ret_val(struct trap_frame *frame,
+					  unsigned long value)
+{
+	frame->a0 = value;
+}
+
+static inline void trap_frame_set_arg(struct trap_frame *frame, int argno,
+				      unsigned long value)
+{
+	switch (argno) {
+	case 0:
+		frame->a0 = value;
+		break;
+	case 1:
+		frame->a1 = value;
+		break;
+	case 2:
+		frame->a2 = value;
+		break;
+	case 3:
+		frame->a3 = value;
+		break;
+	case 4:
+		frame->a4 = value;
+		break;
+	case 5:
+		frame->a5 = value;
+		break;
+	default:
+		panic("%s(): illegal argument number: %d\n", __func__, argno);
+	}
+}
+
+static inline unsigned long trap_frame_get_arg(struct trap_frame *frame,
+					       unsigned int argno)
+{
+	switch (argno) {
+	case 0:
+		return frame->a0;
+	case 1:
+		return frame->a1;
+	case 2:
+		return frame->a2;
+	case 3:
+		return frame->a3;
+	case 4:
+		return frame->a4;
+	case 5:
+		return frame->a5;
+	default:
+		panic("%s(): illegal argument number: %d\n", __func__, argno);
+	}
+}
+
+static inline unsigned long trap_frame_get_syscall_no(struct trap_frame *frame)
+{
+	return frame->a7;
+}
 
 #endif

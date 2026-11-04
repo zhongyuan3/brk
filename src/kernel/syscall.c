@@ -136,35 +136,20 @@ static u64 (*systable[])(void) = {
 void syscall(void)
 {
 	struct task *task = current_task();
-	u64 num = task->frame->a7;
+	u64 num = trap_frame_get_syscall_no(task->frame);
 	u64 ret;
 
 	if (num < countof(systable) && systable[num])
 		ret = systable[num]();
 	else
 		ret = -ENOSYS;
-	task->frame->a0 = ret;
+	trap_frame_set_ret_val(task->frame, ret);
 }
 
 u64 syscall_arg_raw(int argno)
 {
-	struct riscv_trap_frame *tf = current_task()->frame;
-	switch (argno) {
-	case 0:
-		return tf->a0;
-	case 1:
-		return tf->a1;
-	case 2:
-		return tf->a2;
-	case 3:
-		return tf->a3;
-	case 4:
-		return tf->a4;
-	case 5:
-		return tf->a5;
-	default:
-		panic("%s(): illegal argument number\n", __func__);
-	}
+	struct trap_frame *tf = current_task()->frame;
+	return trap_frame_get_arg(tf, argno);
 }
 
 void *syscall_arg_ptr(int argno)

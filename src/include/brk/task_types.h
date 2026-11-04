@@ -115,7 +115,7 @@ struct task {
 	struct task_resource_usage *rsrc_usage;
 
 	/* the following fields are private, not protected by any locks */
-	struct riscv_trap_frame *frame; /* no lock protection */
+	struct trap_frame *frame; /* no lock protection */
 	u64 kstack_base; /* no lock protection */
 	u64 kstack_top; /* no lock protection */
 	int oncpu; /* CPU currently running this task, -1 if not running */
