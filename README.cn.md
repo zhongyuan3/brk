@@ -56,3 +56,31 @@ BRK 是一个完全出于个人兴趣、用纯 C 语言编写的宏内核。
 - `QEMU` (系统模式，支持 `riscv64`)
 
 **跑一下试试：**
+
+```sh
+# 构建内核（默认 debug）
+make CROSS_COMPILE=riscv64-unknown-elf-
+
+# 构建并在 QEMU 中启动（同时重新打包 rootfs）
+make run CROSS_COMPILE=riscv64-unknown-elf-
+
+# Release 构建
+make BUILD=release CROSS_COMPILE=riscv64-unknown-elf-
+
+# 常用检查和辅助目标
+make help
+make headers-check
+make check
+make rootfs
+make size
+make disasm
+```
+
+常用变量：
+
+- `BUILD=debug|release`
+- `CPU=<n>`、`RAM=<size>`：QEMU 的 CPU 数量和内存大小
+- `QEMU_NET=0`：不启动 virtio 网络设备
+- `V=1`：显示完整的编译/链接命令
+- `EXTRA_CFLAGS=...` / `EXTRA_LDFLAGS=...`：临时追加编译/链接参数
+- `WERROR=0`：工具链升级时临时让警告不致命

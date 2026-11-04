@@ -6,8 +6,9 @@
 # *.h file found under src/, skipping vendor/ directories anywhere in the
 # tree. Requires clang-format >= 11.
 #
-# Usage: scripts/format-src.sh [--dry-run] [path]
+# Usage: scripts/format-src.sh [--dry-run|--check] [path]
 #   --dry-run   Only list the files that would be formatted.
+#   --check     Check formatting without modifying files.
 #   path        Directory to format (default: <repo>/src).
 #
 
@@ -15,11 +16,13 @@ set -eu
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 dry_run=0
+check=0
 srcdir=
 
 for arg in "$@"; do
 	case "$arg" in
 	--dry-run | -n) dry_run=1 ;;
+	--check | -c) check=1 ;;
 	-*)
 		echo "error: unknown option: $arg" >&2
 		exit 1
@@ -61,6 +64,17 @@ echo "Found $count file(s) under $srcdir (vendor/ excluded)."
 if [ "$dry_run" -eq 1 ]; then
 	printf '%s\n' "${files[@]}"
 	exit 0
+fi
+
+if [ "$check" -eq 1 ]; then
+	if printf '%s\0' "${files[@]}" | \
+		xargs -0 -r -P "$(nproc)" clang-format \
+			--dry-run --Werror --style=file; then
+		echo "Formatting check passed."
+		exit 0
+	fi
+	echo "Formatting check failed." >&2
+	exit 1
 fi
 
 # Format in place, in parallel.

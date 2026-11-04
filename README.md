@@ -56,3 +56,31 @@ If you are morbidly curious to see what a "barely running kernel" looks like, yo
 - `QEMU` (System mode, `qemu-system-riscv64`)
 
 **Try it out:**
+
+```sh
+# Build the kernel (debug by default)
+make CROSS_COMPILE=riscv64-unknown-elf-
+
+# Build and boot in QEMU (also rebuilds the root filesystem)
+make run CROSS_COMPILE=riscv64-unknown-elf-
+
+# Release build
+make BUILD=release CROSS_COMPILE=riscv64-unknown-elf-
+
+# Useful checks and helpers
+make help
+make headers-check
+make check
+make rootfs
+make size
+make disasm
+```
+
+Useful variables:
+
+- `BUILD=debug|release`
+- `CPU=<n>` and `RAM=<size>` for QEMU
+- `QEMU_NET=0` to boot without the virtio network device
+- `V=1` to show the full compiler/linker commands
+- `EXTRA_CFLAGS=...` / `EXTRA_LDFLAGS=...` for temporary additions
+- `WERROR=0` to keep warnings non-fatal while bringing up a new toolchain

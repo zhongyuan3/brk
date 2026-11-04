@@ -2,9 +2,9 @@
 #include <brk/kernel.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
+#include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/printk_log.h>
-#include <brk/printf.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
@@ -190,9 +190,9 @@ void console_flush_on_panic(void)
 			int tries = 0;
 
 			do {
-				n = printk_log_read_try(
-					&con->reader, rec, sizeof(rec), &level,
-					&nsec, &flags);
+				n = printk_log_read_try(&con->reader, rec,
+							sizeof(rec), &level,
+							&nsec, &flags);
 			} while (n == -EAGAIN && ++tries < 10000);
 
 			if (con->reader.pending_lost) {
@@ -210,8 +210,8 @@ void console_flush_on_panic(void)
 					if (len >= sizeof(lostbuf))
 						len = sizeof(lostbuf) - 1;
 					console_write_one_panic(con, KERN_EMERG,
-								0, lostbuf,
-								len, 0);
+								0, lostbuf, len,
+								0);
 				}
 			}
 
@@ -228,8 +228,8 @@ void console_flush_on_panic(void)
 	}
 }
 
-static void console_write_record_locked(u8 level, u64 ts_nsec,
-					const char *text, size_t len)
+static void console_write_record_locked(u8 level, u64 ts_nsec, const char *text,
+					size_t len)
 {
 	struct console *con;
 
@@ -331,8 +331,7 @@ static void console_log_thread(void *arg)
 
 	for (;;) {
 		if (!printk_flush_pending())
-			ktime_nanosleep((ktime_t)10 * (ktime_t)NS_PER_MS,
-					NULL);
+			ktime_nanosleep((ktime_t)10 * (ktime_t)NS_PER_MS, NULL);
 	}
 }
 

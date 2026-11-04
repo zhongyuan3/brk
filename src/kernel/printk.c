@@ -51,7 +51,7 @@ static bool printk_header_valid(const struct printk_log_header *h)
 
 	if (h->flags & PRINTK_FLAGS_WRAP)
 		return h->len <= PRINTK_RING_BUFFER_SIZE -
-					sizeof(struct printk_log_header);
+					 sizeof(struct printk_log_header);
 	return h->len <= PRINTK_MAX_PAYLOAD;
 }
 
@@ -63,8 +63,7 @@ static u32 printk_oldest_record_total(void)
 {
 	u32 off = printk_ring_off(printk_ring.tail);
 
-	if (off + sizeof(struct printk_log_header) >
-	    PRINTK_RING_BUFFER_SIZE)
+	if (off + sizeof(struct printk_log_header) > PRINTK_RING_BUFFER_SIZE)
 		return PRINTK_RING_BUFFER_SIZE - off;
 
 	const struct printk_log_header *h =
@@ -199,8 +198,8 @@ void printk_log_reader_init(struct printk_log_reader *reader,
 	irqstate_t flags = spin_lock_irqsave(&printk_ring.lock);
 
 	reader->ring = &printk_ring;
-	reader->cursor = start == PRINTK_LOG_START_NEWEST ?
-				 printk_ring.head : printk_ring.tail;
+	reader->cursor = start == PRINTK_LOG_START_NEWEST ? printk_ring.head :
+							    printk_ring.tail;
 	reader->pending_lost = 0;
 
 	spin_unlock_irqrestore(&printk_ring.lock, flags);
