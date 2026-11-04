@@ -21,9 +21,10 @@ void panic(char const *fmt, ...)
 
 	if (!__atomic_compare_exchange_n(&panic_owner, &expected, 1, false,
 					 __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
-		int n = snprintf(buf, sizeof(buf),
-				 "PANIC: CPU %ld: another CPU is already panicking\n",
-				 cpu);
+		int n = snprintf(
+			buf, sizeof(buf),
+			"PANIC: CPU %ld: another CPU is already panicking\n",
+			cpu);
 
 		if (n > 0) {
 			if ((size_t)n >= sizeof(buf))
