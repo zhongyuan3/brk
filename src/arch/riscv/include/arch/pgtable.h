@@ -5,6 +5,8 @@
 #include <arch/pgtable_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 #define PTE_V 1 /* Valid */
 #define PTE_R 2 /* Read */

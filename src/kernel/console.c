@@ -10,6 +10,7 @@
 #include <brk/task.h>
 #include <brk/timeconst.h>
 #include <brk/types.h>
+#include <inttypes.h>
 #include <uapi/errno.h>
 
 static LIST_DEFINE(console_list);

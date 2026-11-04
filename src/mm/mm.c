@@ -20,6 +20,7 @@
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
+#include <stdalign.h>
 #include <uapi/errno.h>
 
 static struct slab_allocator uvms_cache;

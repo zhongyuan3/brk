@@ -10,6 +10,7 @@
 #include <brk/pgalloc.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <inttypes.h>
 #include <uapi/errno.h>
 
 SPINLOCK_DEFINE(kernel_pgdir_lock);

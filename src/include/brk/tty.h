@@ -5,6 +5,8 @@
 #include <brk/sleeplock_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <uapi/ioctl.h>
 #include <uapi/termios.h>
 #include <uapi/types.h>

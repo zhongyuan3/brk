@@ -6,6 +6,7 @@
 #include <brk/refcnt_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <stdbool.h>
 
 #define DENTRY_HTABLE_BITS 8
 #define DENTRY_HTABLE_SIZE (1 << DENTRY_HTABLE_BITS)

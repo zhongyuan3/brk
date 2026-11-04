@@ -3,6 +3,8 @@
 
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <stdalign.h>
+#include <stddef.h>
 
 #define PRINTK_RING_BUFFER_SIZE (1u << 16)
 #define PRINTK_RING_BUFFER_MASK (PRINTK_RING_BUFFER_SIZE - 1u)

@@ -4,6 +4,8 @@
 #include <arch/asm/vmlayout.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <uapi/errno.h>
 
 /*

@@ -4,6 +4,7 @@
 #include <brk/device.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <stddef.h>
 
 #define NS16550A_NUM_PORTS NS16550A_MINOR_COUNT
 

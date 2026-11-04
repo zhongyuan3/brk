@@ -11,6 +11,7 @@
 #include <brk/task.h>
 #include <brk/timeconst.h>
 #include <brk/types.h>
+#include <inttypes.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 

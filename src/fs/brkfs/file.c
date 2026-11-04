@@ -11,6 +11,7 @@
 #include <brk/sleeplock.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <inttypes.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/stat.h>

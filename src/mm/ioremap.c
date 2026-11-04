@@ -3,6 +3,7 @@
 #include <brk/kernel.h>
 #include <brk/mm.h>
 #include <brk/vmalloc.h>
+#include <stdint.h>
 
 void *ioremap(u64 paddr, size_t size, unsigned int flags)
 {

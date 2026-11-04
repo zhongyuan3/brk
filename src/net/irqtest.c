@@ -7,6 +7,7 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <brk/virtio_net.h>
+#include <inttypes.h>
 #include <uapi/errno.h>
 
 static u64 shared_net_calls;

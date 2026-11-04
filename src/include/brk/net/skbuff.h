@@ -2,6 +2,8 @@
 #define BRK_NET_SKBUFF_H
 
 #include <brk/types.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 struct net_device;
 

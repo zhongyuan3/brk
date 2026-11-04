@@ -11,6 +11,7 @@
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <stdint.h>
 #include <uapi/errno.h>
 #include <uapi/signal.h>
 

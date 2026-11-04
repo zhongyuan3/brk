@@ -20,6 +20,7 @@
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <stdalign.h>
 #include <uapi/dirent.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>

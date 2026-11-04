@@ -17,6 +17,7 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <inttypes.h>
 #include <uapi/errno.h>
 #include <uapi/ioctl.h>
 #include <uapi/types.h>

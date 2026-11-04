@@ -2,6 +2,8 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <limits.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <uapi/errno.h>
 
 #define FMT_F_ZERO_PAD (1U << 0)

@@ -1,7 +1,8 @@
 #ifndef BRK_BITMAP_H
 #define BRK_BITMAP_H
 
-#include <brk/types.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 #define BITS_PER_LONG (sizeof(unsigned long) * 8)
 #define BITS_TO_LONGS(nbits) (((nbits) + BITS_PER_LONG - 1) / BITS_PER_LONG)

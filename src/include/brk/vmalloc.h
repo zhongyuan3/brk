@@ -1,7 +1,7 @@
 #ifndef BRK_VMALLOC_H
 #define BRK_VMALLOC_H
 
-#include <brk/types.h>
+#include <stddef.h>
 
 void vmalloc_init(void);
 void *vmalloc(size_t size);

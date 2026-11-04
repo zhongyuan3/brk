@@ -2,6 +2,7 @@
 #define BRK_REFCNT_H
 
 #include <brk/refcnt_types.h>
+#include <stdbool.h>
 
 void refcnt_init(refcnt_t *rc, refcnt_value_t val);
 refcnt_value_t refcnt_read(refcnt_t *rc);

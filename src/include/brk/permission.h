@@ -2,6 +2,7 @@
 #define BRK_PERMISSION_H
 
 #include <brk/types.h>
+#include <stdbool.h>
 #include <uapi/capability.h>
 
 struct fs_inode;

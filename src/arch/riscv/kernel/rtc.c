@@ -8,6 +8,7 @@
 #include <brk/rtc.h>
 #include <brk/spinlock.h>
 #include <brk/spinlock_types.h>
+#include <inttypes.h>
 
 /* Android Goldfish RTC lives behind a two-register MMIO interface. */
 

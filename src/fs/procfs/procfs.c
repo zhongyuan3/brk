@@ -65,6 +65,7 @@
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <inttypes.h>
 #include <uapi/dirent.h>
 #include <uapi/errno.h>
 #include <uapi/stat.h>

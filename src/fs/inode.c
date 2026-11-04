@@ -12,6 +12,7 @@
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <stdalign.h>
 #include <uapi/errno.h>
 
 static struct hlist_head inode_hash_table[INODE_HTABLE_SIZE];

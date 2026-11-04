@@ -5,6 +5,7 @@
 #include <brk/signal_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <stdbool.h>
 #include <uapi/signal.h>
 #include <uapi/types.h>
 

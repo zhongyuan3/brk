@@ -2,6 +2,7 @@
 #define BRK_NET_NET_H
 
 #include <brk/types.h>
+#include <stddef.h>
 
 /*
  * IPv4 addresses use the network byte order numeric convention: NET_IP4()

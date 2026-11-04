@@ -4,6 +4,8 @@
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <brk/virtio_queue.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 #define VIRTIO_BLK_F_SIZE_MAX 1
 #define VIRTIO_BLK_F_SEG_MAX 2

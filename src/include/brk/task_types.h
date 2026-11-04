@@ -5,6 +5,7 @@
 #include <arch/trapframe.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <stdbool.h>
 #include <uapi/times.h>
 #include <uapi/types.h>
 
