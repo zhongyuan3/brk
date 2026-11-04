@@ -7,9 +7,9 @@
 # gp is never initialized, so disable the small-data optimization.  Keep the
 # ABI explicit instead of relying on the toolchain default.
 
-CFLAGS += -march=rv64gc -mabi=lp64d -mcmodel=medany
-CFLAGS += -msmall-data-limit=0
-LDFLAGS += -m elf64lriscv
+KBUILD_CFLAGS += -march=rv64gc -mabi=lp64d -mcmodel=medany
+KBUILD_CFLAGS += -msmall-data-limit=0
+KBUILD_LDFLAGS += -m elf64lriscv
 QEMU ?= qemu-system-riscv64
 
 QEMU_OPTS := -machine virt -nographic

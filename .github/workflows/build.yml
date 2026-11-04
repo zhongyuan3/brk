@@ -1,0 +1,51 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout kernel
+        uses: actions/checkout@v4
+        with:
+          path: brk
+
+      - name: Checkout userland
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/brk-user
+          path: brk-user
+
+      - name: Checkout tools
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/brk-tools
+          path: brk-tools
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-riscv64-unknown-elf \
+            binutils-riscv64-unknown-elf \
+            qemu-system-misc \
+            device-tree-compiler \
+            bear \
+            clang-format
+
+      - name: Build and check
+        working-directory: brk
+        run: make CROSS_COMPILE=riscv64-unknown-elf- check
+
+      - name: Format check
+        working-directory: brk
+        run: make CROSS_COMPILE=riscv64-unknown-elf- format-check
+
+      - name: QEMU smoke test
+        working-directory: brk
+        run: |
+          make CROSS_COMPILE=riscv64-unknown-elf- smoke CPU=1 QEMU_NET=0 \
+            SMOKE_BOOT_DELAY=10 SMOKE_TIMEOUT=45

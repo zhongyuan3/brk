@@ -1,3 +1,5 @@
+.DEFAULT_GOAL := all
+
 BUILD_ROOT ?= build
 USER_ROOT ?= ../brk-user
 BOARD_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)
@@ -13,8 +15,10 @@ endif
 
 ARCH ?= riscv
 
-CFLAGS :=
-LDFLAGS :=
+KBUILD_CFLAGS :=
+KBUILD_LDFLAGS :=
+CFLAGS ?=
+LDFLAGS ?=
 LDFLAGS_FINAL :=
 
 ifeq ($(ARCH),riscv)
@@ -27,8 +31,17 @@ BUILD ?= debug
 WERROR ?= 1
 RAM ?= 128M
 CPU ?= 3
+NR_CPUS ?= 8
 KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)/$(BUILD)
 ROOTFS_IMG ?= $(BOARD_BUILD_ROOT)/rootfs.img
+USER_BIN_DIR := $(USER_ROOT)/build/bin
+
+# Inputs that determine the rootfs contents.  Rebuild the image when userland
+# sources, headers, binaries, tests, or the packaging script change.
+ROOTFS_DEPS := $(USER_ROOT)/scripts/mkrootfs.sh $(USER_ROOT)/Makefile \
+	$(wildcard $(USER_BIN_DIR)/*) \
+	$(shell find $(USER_ROOT)/src $(USER_ROOT)/lib $(USER_ROOT)/include \
+		$(USER_ROOT)/etc $(USER_ROOT)/tests -type f 2>/dev/null)
 
 CROSS_COMPILE ?=
 
@@ -52,64 +65,70 @@ OBJDUMP ?= $(CROSS_COMPILE)objdump
 SIZE ?= $(CROSS_COMPILE)size
 GDB ?= $(CROSS_COMPILE)gdb
 
-CFLAGS += -Wall
-CFLAGS += -Wextra
-CFLAGS += -Wundef
-CFLAGS += -Wvla
-CFLAGS += -Wformat=2
-CFLAGS += -Wimplicit-fallthrough
-CFLAGS += -Wframe-larger-than=4096
-CFLAGS += -Wstack-usage=4096
+KBUILD_CFLAGS += -Wall
+KBUILD_CFLAGS += -Wextra
+KBUILD_CFLAGS += -Wundef
+KBUILD_CFLAGS += -Wvla
+KBUILD_CFLAGS += -Wformat=2
+KBUILD_CFLAGS += -Wimplicit-fallthrough
+KBUILD_CFLAGS += -Wframe-larger-than=4096
+KBUILD_CFLAGS += -Wstack-usage=4096
 ifeq ($(WERROR),1)
-CFLAGS += -Werror
+KBUILD_CFLAGS += -Werror
 endif
-CFLAGS += -ffreestanding
-CFLAGS += -fno-common
-CFLAGS += -fno-strict-aliasing
-CFLAGS += -fno-delete-null-pointer-checks
-CFLAGS += -nostdlib
-CFLAGS += -fno-stack-protector
-CFLAGS += -fno-pie
-CFLAGS += -no-pie
+KBUILD_CFLAGS += -ffreestanding
+KBUILD_CFLAGS += -fno-common
+KBUILD_CFLAGS += -fno-strict-aliasing
+KBUILD_CFLAGS += -fno-delete-null-pointer-checks
+KBUILD_CFLAGS += -nostdlib
+KBUILD_CFLAGS += -fno-stack-protector
+KBUILD_CFLAGS += -fno-pie
+KBUILD_CFLAGS += -no-pie
 
 ifeq ($(BUILD),debug)
-CFLAGS += -Og
-CFLAGS += -ggdb
-CFLAGS += -gdwarf-4
-CFLAGS += -fno-omit-frame-pointer
+KBUILD_CFLAGS += -Og
+KBUILD_CFLAGS += -ggdb
+KBUILD_CFLAGS += -gdwarf-4
+KBUILD_CFLAGS += -fno-omit-frame-pointer
 else ifeq ($(BUILD),release)
-CFLAGS += -O2
-CFLAGS += -DNDEBUG
-CFLAGS += -fomit-frame-pointer
-CFLAGS += -fno-semantic-interposition
-CFLAGS += -fno-unwind-tables
-CFLAGS += -fno-asynchronous-unwind-tables
-CFLAGS += -ffunction-sections
-CFLAGS += -fdata-sections
+KBUILD_CFLAGS += -O2
+KBUILD_CFLAGS += -DNDEBUG
+KBUILD_CFLAGS += -fomit-frame-pointer
+KBUILD_CFLAGS += -fno-semantic-interposition
+KBUILD_CFLAGS += -fno-unwind-tables
+KBUILD_CFLAGS += -fno-asynchronous-unwind-tables
+KBUILD_CFLAGS += -ffunction-sections
+KBUILD_CFLAGS += -fdata-sections
 LDFLAGS_FINAL += --gc-sections
 else
 $(error Unknown build type '$(BUILD)')
 endif
 
-CFLAGS += -std=gnu11
+KBUILD_CFLAGS += -std=gnu11
 
-CFLAGS += -nostdinc
-CFLAGS += -MMD
-CFLAGS += -MP
-CFLAGS += -Isrc/arch/$(ARCH)/include
-CFLAGS += -Isrc/include
-CFLAGS += -Isrc/include/freestanding
-CFLAGS += -Ivendor/libfdt
+KBUILD_CFLAGS += -nostdinc
+KBUILD_CFLAGS += -MMD
+KBUILD_CFLAGS += -MP
+KBUILD_CFLAGS += -Isrc/arch/$(ARCH)/include
+KBUILD_CFLAGS += -Isrc/include
+KBUILD_CFLAGS += -Isrc/include/freestanding
+KBUILD_CFLAGS += -Ivendor/libfdt
+KBUILD_CFLAGS += -DMAX_CPUS=$(NR_CPUS)
 
-LDFLAGS += -z max-page-size=4096
+KBUILD_LDFLAGS += -z max-page-size=4096
 
 # User-supplied additions; use these instead of overriding CFLAGS/LDFLAGS,
 # which would discard the flags assembled above.
-CFLAGS += $(EXTRA_CFLAGS)
-LDFLAGS += $(EXTRA_LDFLAGS)
+KBUILD_CFLAGS += $(EXTRA_CFLAGS)
+KBUILD_LDFLAGS += $(EXTRA_LDFLAGS)
+
+# Command-line/environment CFLAGS/LDFLAGS are appended last so users can
+# override individual options without discarding the kernel's own flags.
+KBUILD_CFLAGS += $(CFLAGS)
+KBUILD_LDFLAGS += $(LDFLAGS)
 
 # Compiler runtime helpers (e.g. 128-bit division) not emitted natively.
-LIBGCC := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name 2>/dev/null)
+LIBGCC := $(shell $(CC) $(KBUILD_CFLAGS) -print-libgcc-file-name 2>/dev/null)
 
 # Goals that do not build kernel objects do not need the RISC-V toolchain.
 # An empty MAKECMDGOALS means the default "all" target.
@@ -125,27 +144,48 @@ ifneq ($(KERNEL_GOALS),)
 ifeq ($(shell $(CC) -dumpmachine 2>/dev/null | grep -c '^riscv'),0)
 $(error $(CC) is not a RISC-V compiler; set CROSS_COMPILE (e.g. riscv64-unknown-elf-))
 endif
+ifneq ($(shell test "$(CPU)" -le "$(NR_CPUS)" 2>/dev/null && echo yes),yes)
+$(error CPU ($(CPU)) exceeds NR_CPUS ($(NR_CPUS)))
+endif
 ifeq ($(strip $(LIBGCC)),)
 $(error Cannot find libgcc for $(CC); set CROSS_COMPILE (e.g. riscv64-unknown-elf-))
 endif
 endif
 
-# Rebuild objects when the compiler or flags change.  The stamp is only
-# rewritten when its contents differ, so unchanged builds stay incremental.
+# Rebuild objects when the compiler or flags change.  .build-flags.mk is
+# regenerated by a makefile-remaking rule; the stamp is touched only when
+# its contents actually change, so unchanged builds stay incremental.
 FLAGS_STAMP := $(KERNEL_BUILD_ROOT)/.build-flags
+FLAGS_DEP := $(wildcard $(FLAGS_STAMP))
+FLAGS_CONFIG := $(KERNEL_BUILD_ROOT)/.build-flags.mk
 FLAGS_SIGNATURE := ARCH=$(ARCH) BUILD=$(BUILD) CC=$(CC) LD=$(LD) \
+	KBUILD_CFLAGS=$(KBUILD_CFLAGS) KBUILD_LDFLAGS=$(KBUILD_LDFLAGS) \
 	CFLAGS=$(CFLAGS) LDFLAGS=$(LDFLAGS) \
 	LDFLAGS_FINAL=$(LDFLAGS_FINAL) LIBGCC=$(LIBGCC) \
 	LINK_CHECK=$(LINK_CHECK)
-ifneq ($(KERNEL_GOALS),)
-FLAGS_OLD := $(shell cat $(FLAGS_STAMP) 2>/dev/null)
-ifneq ($(FLAGS_SIGNATURE),$(FLAGS_OLD))
-$(shell mkdir -p $(dir $(FLAGS_STAMP)); printf '%s\n' '$(FLAGS_SIGNATURE)' > $(FLAGS_STAMP))
-endif
-endif
 export ARCH
 export BUILD_ROOT
-export CROSS_COMPILE CC LD AS AR CFLAGS LDFLAGS
+export CROSS_COMPILE CC LD AS AR CFLAGS LDFLAGS KBUILD_CFLAGS KBUILD_LDFLAGS
+
+ifneq ($(KERNEL_GOALS),)
+ifneq ($(findstring n,$(firstword $(MAKEFLAGS))),)
+# Dry run: make remakes included makefiles even with -n, so do not let the
+# flag check rewrite the build stamp.
+$(FLAGS_CONFIG): ;
+else
+$(FLAGS_CONFIG): FORCE
+	@mkdir -p $(dir $@)
+	@printf '# generated by the build system; do not edit\nFLAGS_CONFIG_SIGNATURE := %s\n' \
+		'$(FLAGS_SIGNATURE)' > $@.tmp
+	@if cmp -s $@.tmp $@; then \
+		rm -f $@.tmp; \
+		[ -e $(FLAGS_STAMP) ] || touch $(FLAGS_STAMP); \
+	else \
+		mv $@.tmp $@; \
+		touch $(FLAGS_STAMP); \
+	fi
+endif
+endif
 
 LINKER_SCRIPT_SRC := src/arch/$(ARCH)/kernel/brk.ld.S
 LINKER_SCRIPT := $(KERNEL_BUILD_ROOT)/brk.ld
@@ -189,11 +229,15 @@ endif
 
 QEMU_OPTS += $(EXTRA_QEMU_OPTS)
 
+SMOKE_LOG ?= $(KERNEL_BUILD_ROOT)/smoke.log
+SMOKE_TIMEOUT ?= 30
+SMOKE_BOOT_DELAY ?= 6
+
 .DELETE_ON_ERROR:
 
 .PHONY: all brk run gdb-server gdb-client rootfs clean clean-kernel \
 	headers-check check format format-check compile_commands size disasm \
-	help FORCE
+	smoke ci syncconfig distclean help FORCE
 
 all: brk
 
@@ -224,6 +268,20 @@ disasm: $(KERNEL_ELF)
 	$(Q)$(OBJDUMP) -d $< > $<.dis
 	$(Q)echo "  DIS     $<.dis"
 
+syncconfig:
+	$(Q)rm -f $(FLAGS_CONFIG) $(FLAGS_STAMP)
+	$(Q)echo "  SYNC    build flags will be regenerated on the next build"
+
+smoke: $(KERNEL_ELF) $(ROOTFS_IMG)
+	$(Q)QEMU="$(QEMU)" QEMU_OPTS="$(QEMU_OPTS)" \
+		SMOKE_TIMEOUT="$(SMOKE_TIMEOUT)" \
+		SMOKE_BOOT_DELAY="$(SMOKE_BOOT_DELAY)" \
+		./scripts/smoke.sh "$(KERNEL_ELF)" "$(SMOKE_LOG)"
+
+ci: check
+	$(Q)$(MAKE) format-check
+	$(Q)$(MAKE) smoke
+
 help:
 	$(Q)echo "Targets:"
 	$(Q)echo "  all / brk              Build the kernel (SMP capable)"
@@ -239,7 +297,11 @@ help:
 	$(Q)echo "  rootfs                 Build the root filesystem via $(USER_ROOT)"
 	$(Q)echo "  dtb / dts              Dump the QEMU virt device tree"
 	$(Q)echo "  size / disasm          Show kernel size / disassembly"
+	$(Q)echo "  syncconfig             Force build-flag regeneration"
+	$(Q)echo "  smoke                  Boot QEMU and verify the shell runs a command"
+	$(Q)echo "  ci                     check + format-check + smoke"
 	$(Q)echo "  clean                  Remove all build outputs"
+	$(Q)echo "  distclean              clean + generated compile_commands.json"
 	$(Q)echo "  clean-kernel           Remove current variant build directory"
 	$(Q)echo ""
 	$(Q)echo "Configurable vars:"
@@ -249,6 +311,7 @@ help:
 	$(Q)echo "  BUILD_ROOT=<path>      (default: build)"
 	$(Q)echo "  USER_ROOT=<path>       (default: ../brk-user)"
 	$(Q)echo "  CPU=<n>                (default 3)"
+	$(Q)echo "  NR_CPUS=<n>            (default 8, build-time MAX_CPUS)"
 	$(Q)echo "  RAM=<size>             (default 128M)"
 	$(Q)echo "  WERROR={0|1}           (default: 1)"
 	$(Q)echo "  V=1                    Show full build commands"
@@ -258,17 +321,19 @@ help:
 	$(Q)echo "  EXTRA_LDFLAGS=...      Additional linker flags"
 	$(Q)echo "  EXTRA_QEMU_OPTS=...    Additional QEMU flags"
 	$(Q)echo "  LINK_CHECK={0|1}       Warn about linker orphan sections"
+	$(Q)echo "  SMOKE_TIMEOUT=<sec>    QEMU smoke timeout (default: 30)"
+	$(Q)echo "  SMOKE_BOOT_DELAY=<sec> Wait before typing (default: 6)"
 
-$(LINKER_SCRIPT): $(LINKER_SCRIPT_SRC) $(FLAGS_STAMP) \
+$(LINKER_SCRIPT): $(LINKER_SCRIPT_SRC) $(FLAGS_DEP) \
 	$(if $(wildcard $(LINKER_SCRIPT_DEP)),,FORCE)
 	$(Q)mkdir -p $(dir $@)
 	$(Q)echo "  CPP     $@"
-	$(Q)$(CPP) $(filter-out -MMD -MP,$(CFLAGS)) \
+	$(Q)$(CPP) $(filter-out -MMD -MP,$(KBUILD_CFLAGS)) \
 		-MD -MF $(LINKER_SCRIPT_DEP) -MT $@ -o $@ $<
 
-$(KERNEL_ELF): $(BUILT_IN_OBJS) $(LINKER_SCRIPT) $(FLAGS_STAMP)
+$(KERNEL_ELF): $(BUILT_IN_OBJS) $(LINKER_SCRIPT) $(FLAGS_DEP)
 	$(Q)echo "  LD      $@"
-	$(Q)$(LD) $(LDFLAGS) $(LDFLAGS_FINAL) -T $(LINKER_SCRIPT) -static -o $@ $(BUILT_IN_OBJS) $(LIBGCC)
+	$(Q)$(LD) $(KBUILD_LDFLAGS) $(LDFLAGS_FINAL) -T $(LINKER_SCRIPT) -static -o $@ $(BUILT_IN_OBJS) $(LIBGCC)
 
 $(KERNEL_BUILD_ROOT)/%/built-in.o: FORCE
 	$(Q)$(MAKE) -f scripts/Makefile.build build=$* \
@@ -286,21 +351,20 @@ $(KERNEL_BUILD_ROOT)/vendor/%.o: FORCE
 		build=vendor/$(patsubst %/,%,$(dir $*)) \
 		KERNEL_BUILD_ROOT=$(KERNEL_BUILD_ROOT) FLAGS_STAMP=$(FLAGS_STAMP)
 
-
-
-run: rootfs $(KERNEL_ELF)
+run: $(ROOTFS_IMG) $(KERNEL_ELF)
 	$(Q)$(QEMU) $(QEMU_OPTS) -kernel $(KERNEL_ELF)
 
-gdb-server: rootfs $(KERNEL_ELF)
+gdb-server: $(ROOTFS_IMG) $(KERNEL_ELF)
 	$(Q)$(QEMU) $(QEMU_OPTS) -S -s -kernel $(KERNEL_ELF)
 
 gdb-client: $(KERNEL_ELF)
 	$(Q)$(GDB) --tui -quiet -ex "target remote :1234" $(KERNEL_ELF)
 
 rootfs:
+	$(Q)rm -f $(ROOTFS_IMG)
 	$(Q)KERNEL_ROOT="$(CURDIR)" $(USER_ROOT)/scripts/mkrootfs.sh "$(ROOTFS_IMG)"
 
-$(ROOTFS_IMG): $(USER_ROOT)/scripts/mkrootfs.sh
+$(ROOTFS_IMG): $(ROOTFS_DEPS)
 	$(Q)KERNEL_ROOT="$(CURDIR)" $(USER_ROOT)/scripts/mkrootfs.sh "$@"
 
 clean:
@@ -309,8 +373,11 @@ clean:
 clean-kernel:
 	$(Q)$(RM) -r $(KERNEL_BUILD_ROOT)
 
+distclean: clean
+	$(Q)$(RM) compile_commands.json
+
 .PHONY: debug
-debug: rootfs $(KERNEL_ELF)
+debug: $(ROOTFS_IMG) $(KERNEL_ELF)
 	$(Q)$(QEMU) $(QEMU_OPTS) -kernel $(KERNEL_ELF) -d int
 
 DTB := $(BOARD_BUILD_ROOT)/qemu_virt.dtb
@@ -329,5 +396,9 @@ $(DTS): $(DTB)
 	@command -v dtc >/dev/null 2>&1 || \
 		{ echo "error: dtc not found in PATH" >&2; exit 1; }
 	$(Q)dtc -I dtb -O dts $< -o $@
+
+ifneq ($(KERNEL_GOALS),)
+-include $(FLAGS_CONFIG)
+endif
 
 -include $(LINKER_SCRIPT_DEP)

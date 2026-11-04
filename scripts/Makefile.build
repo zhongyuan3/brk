@@ -19,25 +19,26 @@ subdir-y := $(strip $(subdir-y))
 
 obj-y-full := $(addprefix $(obj)/,$(obj-y))
 subdir-built-in := $(addprefix $(obj)/,$(patsubst %,%/built-in.o,$(subdir-y)))
+FLAGS_DEP := $(wildcard $(FLAGS_STAMP))
 
-$(obj)/built-in.o: $(obj-y-full) $(subdir-built-in) $(FLAGS_STAMP)
+$(obj)/built-in.o: $(obj-y-full) $(subdir-built-in) $(FLAGS_DEP)
 	$(Q)echo "  LD      $@"
-	$(Q)$(LD) $(LDFLAGS) -r -o $@ $(obj-y-full) $(subdir-built-in)
+	$(Q)$(LD) $(KBUILD_LDFLAGS) -r -o $@ $(obj-y-full) $(subdir-built-in)
 
 $(subdir-built-in): FORCE
 	$(Q)$(MAKE) -f scripts/Makefile.build \
 		build=$(patsubst $(KERNEL_BUILD_ROOT)/%,%,$(@D)) \
 		KERNEL_BUILD_ROOT=$(KERNEL_BUILD_ROOT) FLAGS_STAMP=$(FLAGS_STAMP)
 
-$(obj)/%.o: $(src)/%.c $(src)/Makefile $(FLAGS_STAMP)
+$(obj)/%.o: $(src)/%.c $(src)/Makefile $(FLAGS_DEP)
 	$(Q)mkdir -p $(dir $@)
 	$(Q)echo "  CC      $@"
-	$(Q)$(CC) $(CFLAGS) $(ccflags-y) -c -o $@ $<
+	$(Q)$(CC) $(KBUILD_CFLAGS) $(ccflags-y) -c -o $@ $<
 
-$(obj)/%.o: $(src)/%.S $(src)/Makefile $(FLAGS_STAMP)
+$(obj)/%.o: $(src)/%.S $(src)/Makefile $(FLAGS_DEP)
 	$(Q)mkdir -p $(dir $@)
 	$(Q)echo "  AS      $@"
-	$(Q)$(CC) $(CFLAGS) $(asflags-y) -c -o $@ $<
+	$(Q)$(CC) $(KBUILD_CFLAGS) $(asflags-y) -c -o $@ $<
 
 .DELETE_ON_ERROR:
 
