@@ -47,15 +47,9 @@ endif
 ifeq ($(origin AR),default)
 AR := $(CROSS_COMPILE)ar
 endif
-ifeq ($(origin OBJCOPY),default)
-OBJCOPY := $(CROSS_COMPILE)objcopy
-endif
-ifeq ($(origin OBJDUMP),default)
-OBJDUMP := $(CROSS_COMPILE)objdump
-endif
-ifeq ($(origin SIZE),default)
-SIZE := $(CROSS_COMPILE)size
-endif
+OBJCOPY ?= $(CROSS_COMPILE)objcopy
+OBJDUMP ?= $(CROSS_COMPILE)objdump
+SIZE ?= $(CROSS_COMPILE)size
 GDB ?= $(CROSS_COMPILE)gdb
 
 CFLAGS += -Wall
@@ -265,7 +259,8 @@ help:
 	$(Q)echo "  EXTRA_QEMU_OPTS=...    Additional QEMU flags"
 	$(Q)echo "  LINK_CHECK={0|1}       Warn about linker orphan sections"
 
-$(LINKER_SCRIPT): $(LINKER_SCRIPT_SRC) $(FLAGS_STAMP)
+$(LINKER_SCRIPT): $(LINKER_SCRIPT_SRC) $(FLAGS_STAMP) \
+	$(if $(wildcard $(LINKER_SCRIPT_DEP)),,FORCE)
 	$(Q)mkdir -p $(dir $@)
 	$(Q)echo "  CPP     $@"
 	$(Q)$(CPP) $(filter-out -MMD -MP,$(CFLAGS)) \
@@ -291,9 +286,6 @@ $(KERNEL_BUILD_ROOT)/vendor/%.o: FORCE
 		build=vendor/$(patsubst %/,%,$(dir $*)) \
 		KERNEL_BUILD_ROOT=$(KERNEL_BUILD_ROOT) FLAGS_STAMP=$(FLAGS_STAMP)
 
-# Do not let make try to rebuild an included dependency file through an
-# implicit rule (e.g. brk.ld.d -> brk.ld.d.o).
-$(LINKER_SCRIPT_DEP): ;
 
 
 run: rootfs $(KERNEL_ELF)
