@@ -19,11 +19,6 @@
 #define INTERRUPT_SUPERVISOR_TIMER 5
 #define INTERRUPT_SUPERVISOR_EXTERNAL 9
 
-/* scause is a 64-bit CSR: the interrupt bit is bit 63. */
-#define TRAP_IS_INTERRUPT(scause) ((scause) & (1ULL << 63))
-#define TRAP_IS_EXCEPTION(scause) (!TRAP_IS_INTERRUPT(scause))
-#define TRAP_CAUSE_CODE(scause) ((scause) & ~(1ULL << 63))
-
 void setup_trap_entry_early(void);
 void setup_trap_entry(void);
 

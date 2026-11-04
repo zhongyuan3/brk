@@ -46,7 +46,7 @@ extern struct cpu cpus[MAX_CPUS];
 
 const char *uname_machine(void);
 void cpu_idle(void);
-void arch_send_ipi(cpuid_t cpuid);
+void send_ipi(cpuid_t cpuid);
 
 void local_irq_disable(void);
 void local_irq_enable(void);

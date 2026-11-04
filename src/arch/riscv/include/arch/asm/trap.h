@@ -7,7 +7,7 @@
  * state that must survive while running in user mode: the kernel per-CPU
  * pointer restored on the next user -> kernel transition.
  */
-#define RISCV_TRAP_FRAME_SIZE 304
-#define RISCV_TRAP_FRAME_KERNEL_TP 288
+#define __RISCV_TRAP_FRAME_SIZE 304
+#define __RISCV_TRAP_FRAME_KERNEL_TP 288
 
 #endif

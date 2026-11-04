@@ -142,11 +142,11 @@ struct task *task_create(struct task_create_args *args)
 	unsigned long kernel_sp = task->kstack_top;
 	kernel_sp -= TRAP_FRAME_SIZE;
 	assert(is_aligned(kernel_sp, 16));
-	task->frame = (struct riscv_trap_frame *)kernel_sp;
+	task->frame = (struct trap_frame *)kernel_sp;
 	memset(task->frame, 0, TRAP_FRAME_SIZE);
 	kernel_sp -= CONTEXT_SIZE;
 	assert(is_aligned(kernel_sp, 16));
-	struct riscv_context *ctx = (struct riscv_context *)kernel_sp;
+	struct context *ctx = (struct context *)kernel_sp;
 	if (args && args->fn)
 		ctx->ra = (unsigned long)args->fn;
 	else
@@ -239,7 +239,7 @@ struct task *task_create_idle(cpuid_t cpuid)
 {
 	struct task *task;
 	unsigned long kernel_sp;
-	struct riscv_context *ctx;
+	struct context *ctx;
 
 	if (cpuid >= MAX_CPUS)
 		return NULL;
@@ -268,15 +268,15 @@ struct task *task_create_idle(cpuid_t cpuid)
 	task->kstack_top = task->kstack_base + KSTACK_SIZE;
 	kernel_sp = task->kstack_top - TRAP_FRAME_SIZE;
 	assert(is_aligned(kernel_sp, 16));
-	task->frame = (struct riscv_trap_frame *)kernel_sp;
+	task->frame = (struct trap_frame *)kernel_sp;
 	memset(task->frame, 0, TRAP_FRAME_SIZE);
 	kernel_sp -= CONTEXT_SIZE;
 	assert(is_aligned(kernel_sp, 16));
-	ctx = (struct riscv_context *)kernel_sp;
+	ctx = (struct context *)kernel_sp;
 	ctx->ra = (unsigned long)idle_entry;
 	task->kernel_sp = kernel_sp;
 
-	task->frame->kernel_tp = (unsigned long)&cpus[cpuid];
+	trap_frame_set_kernel_tp(task->frame, (unsigned long)&cpus[cpuid]);
 	strlcpy(task->name, "idle", sizeof(task->name));
 
 	return task;
@@ -360,12 +360,7 @@ void init_task_do(void)
 
 	bring_up_secondaries();
 
-	unsigned long sstatus = read_sstatus();
-	sstatus &= ~SSTATUS_SPP;
-	sstatus |= SSTATUS_SPIE;
-	sstatus &= ~SSTATUS_SIE;
-	sstatus &= ~SSTATUS_SUM;
-	current_task()->frame->sstatus = sstatus;
+	prepare_to_ret_to_user(current_task()->frame);
 }
 
 void task_init_user(void)
@@ -692,7 +687,7 @@ int task_fork(void)
 	fdtable_copy(child->fdtable, parent->fdtable);
 	fsinfo_copy(child->fsinfo, parent->fsinfo);
 
-	child->frame->a0 = 0;
+	trap_frame_set_ret_val(child->frame, 0);
 
 	irqstate_t flags = spin_lock_irqsave(&wait_lock);
 

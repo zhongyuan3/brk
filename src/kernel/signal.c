@@ -297,7 +297,7 @@ static bool setup_signal_frame_locked(struct task *task, int sig, u64 handler)
 	u64 sp;
 	struct user_sigframe *frame;
 
-	sp = task->frame->sp;
+	sp = trap_frame_get_sp(task->frame);
 	sp -= sizeof(*frame);
 	sp &= ~0xFULL;
 	if (!user_access_ok(sp, sizeof(*frame)))
@@ -315,9 +315,9 @@ static bool setup_signal_frame_locked(struct task *task, int sig, u64 handler)
 	clear_pending_locked(task, sig);
 	task->in_handler = true;
 
-	task->frame->sp = sp;
-	task->frame->sepc = handler;
-	task->frame->a0 = sig;
+	trap_frame_set_sp(task->frame, sp);
+	trap_frame_set_pc(task->frame, handler);
+	trap_frame_set_ret_val(task->frame, sig);
 	return true;
 }
 
@@ -419,7 +419,7 @@ u64 signal_do_sigreturn(struct task *task)
 	task->blocked = frame->blocked;
 	task->in_handler = false;
 	task->sigframe_sp = 0;
-	ret = task->frame->a0;
+	ret = trap_frame_get_arg(task->frame, 0);
 
 unlock_and_return:
 	spin_unlock_irqrestore(&task->sigactions->lock, flags);

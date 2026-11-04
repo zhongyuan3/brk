@@ -111,7 +111,7 @@ void task_join(struct task *task)
 	 * wakeup latency bounded and is required for prompt migration.
 	 */
 	if (target != (int)this_cpuid())
-		arch_send_ipi((cpuid_t)target);
+		send_ipi((cpuid_t)target);
 }
 
 /*
@@ -157,7 +157,7 @@ void task_scheduler(void)
 
 	assert(idle->oncpu == -1);
 	idle->oncpu = cpu->id;
-	idle->frame->kernel_tp = (unsigned long)cpu;
+	trap_frame_set_kernel_tp(idle->frame, (unsigned long)cpu);
 	set_current_task(idle);
 
 	load_final_page_table();
@@ -225,7 +225,7 @@ static void task_sched(void)
 	assert(next->oncpu == -1);
 	next->oncpu = cpu->id;
 	set_current_task(next);
-	next->frame->kernel_tp = (unsigned long)cpu;
+	trap_frame_set_kernel_tp(next->frame, (unsigned long)cpu);
 	if (next->mm) {
 		switch_pgtable(next->mm->pgd);
 		user_access_enable();

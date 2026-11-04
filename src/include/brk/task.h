@@ -19,9 +19,9 @@
 #include <uapi/times.h>
 #include <uapi/types.h>
 
-#define KSTACK_PAGE_ORDER 1
+#define KSTACK_PAGE_ORDER 2
 #define KSTACK_SIZE (PAGE_SIZE * (1 << KSTACK_PAGE_ORDER))
-#define USTACK_PAGE_ORDER 4
+#define USTACK_PAGE_ORDER 8
 #define USTACK_SIZE (PAGE_SIZE * (1 << USTACK_PAGE_ORDER))
 
 #define TIME_SLICE_MAX 5

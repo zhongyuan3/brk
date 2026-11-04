@@ -106,7 +106,7 @@ static bool in_early = true;
 static bool in_early_trap = false;
 
 static void __attribute__((noreturn))
-early_trap_handler(struct riscv_trap_frame *frame, bool is_interrupt,
+early_trap_handler(struct trap_frame *frame, bool is_interrupt,
 		   unsigned long code)
 {
 	if (in_early_trap) {
@@ -147,7 +147,7 @@ early_trap_handler(struct riscv_trap_frame *frame, bool is_interrupt,
 }
 
 static void __attribute__((noreturn))
-trap_panic(const char *name, unsigned long code, struct riscv_trap_frame *frame)
+trap_panic(const char *name, unsigned long code, struct trap_frame *frame)
 {
 	pr_emerg("trap: unhandled %s (code %lu)\n", name, code);
 	pr_emerg("trap: sepc=%#018lx stval=%#018lx\n", frame->sepc,
@@ -160,7 +160,7 @@ trap_panic(const char *name, unsigned long code, struct riscv_trap_frame *frame)
 	panic("trap: unhandled %s (code %lu)\n", name, code);
 }
 
-static void handle_interrupt(unsigned long code, struct riscv_trap_frame *frame,
+static void handle_interrupt(unsigned long code, struct trap_frame *frame,
 			     bool from_user, struct task *task)
 {
 	switch (code) {
@@ -213,9 +213,8 @@ static void handle_interrupt(unsigned long code, struct riscv_trap_frame *frame,
  * user mode and SIGSEGV has been queued.  Kernel-mode faults on kernel
  * addresses are left to the caller, which panics.
  */
-static bool handle_page_fault(unsigned long code,
-			      struct riscv_trap_frame *frame, bool from_user,
-			      struct task *task)
+static bool handle_page_fault(unsigned long code, struct trap_frame *frame,
+			      bool from_user, struct task *task)
 {
 	bool write = (code == EXCEPTION_STORE_PAGE_FAULT);
 	bool instr = (code == EXCEPTION_INSTRUCTION_PAGE_FAULT);
@@ -242,7 +241,7 @@ static bool handle_page_fault(unsigned long code,
 	return false;
 }
 
-static void handle_exception(unsigned long code, struct riscv_trap_frame *frame,
+static void handle_exception(unsigned long code, struct trap_frame *frame,
 			     bool from_user, struct task *task)
 {
 	switch (code) {
@@ -274,7 +273,7 @@ static void handle_exception(unsigned long code, struct riscv_trap_frame *frame,
 	}
 }
 
-void trap_handler(struct riscv_trap_frame *frame)
+void trap_handler(struct trap_frame *frame)
 {
 	bool is_interrupt = (frame->scause & BIT(63)) != 0;
 	unsigned long code = frame->scause & ~BIT(63);
@@ -299,12 +298,7 @@ void trap_handler(struct riscv_trap_frame *frame)
 		handle_exception(code, frame, from_user, task);
 
 	if (from_user) {
-		unsigned long sstatus = read_sstatus();
-		sstatus &= ~SSTATUS_SPP;
-		sstatus |= SSTATUS_SPIE;
-		sstatus &= ~SSTATUS_SIE;
-		sstatus &= ~SSTATUS_SUM;
-		frame->sstatus = sstatus;
+		prepare_to_ret_to_user(frame);
 		signal_deliver_pending(task);
 		jiffies = jiffies_get();
 		task_add_system_time(task, jiffies - task->ktime);
@@ -330,4 +324,14 @@ void trap_init(void)
 	trap_enable_timer();
 	trap_enable_external();
 	trap_enable_software();
+}
+
+void prepare_to_ret_to_user(struct trap_frame *frame)
+{
+	unsigned long sstatus = read_sstatus();
+	sstatus &= ~SSTATUS_SPP;
+	sstatus |= SSTATUS_SPIE;
+	sstatus &= ~SSTATUS_SIE;
+	sstatus &= ~SSTATUS_SUM;
+	frame->sstatus = sstatus;
 }

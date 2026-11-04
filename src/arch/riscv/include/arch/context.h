@@ -1,7 +1,7 @@
 #ifndef ARCH_CONTEXT_H
 #define ARCH_CONTEXT_H
 
-struct riscv_context {
+struct context {
 	unsigned long s0;
 	unsigned long s1;
 	unsigned long s2;
@@ -18,6 +18,6 @@ struct riscv_context {
 	unsigned long __pad;
 };
 
-#define CONTEXT_SIZE sizeof(struct riscv_context)
+#define CONTEXT_SIZE sizeof(struct context)
 
 #endif
