@@ -82,7 +82,6 @@ make disasm
 
 - `BUILD=debug|release`
 - `CPU=<n>`、`RAM=<size>`：QEMU 的 CPU 数量和内存大小
-- `NR_CPUS=<n>`：构建期 `MAX_CPUS`（默认 8）
 - `QEMU_NET=0`：不启动 virtio 网络设备
 - `V=1`：显示完整的编译/链接命令
 - `EXTRA_CFLAGS=...` / `EXTRA_LDFLAGS=...`：临时追加编译/链接参数
