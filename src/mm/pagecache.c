@@ -15,6 +15,7 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <stdalign.h>
 #include <uapi/errno.h>
 
 static struct slab_allocator cached_page_cache;

@@ -7,6 +7,7 @@
 #include <brk/panic.h>
 #include <brk/spinlock.h>
 #include <brk/types.h>
+#include <stdalign.h>
 #include <stddef.h>
 #include <uapi/errno.h>
 

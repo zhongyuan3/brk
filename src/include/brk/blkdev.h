@@ -4,6 +4,7 @@
 #include <brk/device.h>
 #include <brk/refcnt_types.h>
 #include <brk/types.h>
+#include <stdbool.h>
 
 struct block_dev;
 struct page_cache;

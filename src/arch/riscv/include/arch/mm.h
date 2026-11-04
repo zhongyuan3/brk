@@ -9,6 +9,7 @@
 #include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/types.h>
+#include <stdint.h>
 
 extern unsigned long phys_offset;
 

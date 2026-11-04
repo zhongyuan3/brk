@@ -11,6 +11,7 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <stdalign.h>
 #include <uapi/errno.h>
 #include <uapi/poll.h>
 #include <uapi/stat.h>

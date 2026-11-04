@@ -3,6 +3,7 @@
 
 #include <arch/pgtable_types.h>
 #include <brk/mm_types.h>
+#include <stdbool.h>
 
 void switch_pgtable(pgd_t *pgd);
 

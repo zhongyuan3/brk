@@ -4,6 +4,7 @@
 #include <arch/pgtable_types.h>
 #include <brk/refcnt_types.h>
 #include <brk/types.h>
+#include <stddef.h>
 
 struct cached_page;
 struct fs_inode;

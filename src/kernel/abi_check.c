@@ -1,6 +1,7 @@
 #include <stddef.h>
 
 #include <brk/types.h>
+#include <stdint.h>
 #include <uapi/capability.h>
 #include <uapi/dirent.h>
 #include <uapi/elf.h>

@@ -1,7 +1,7 @@
 #ifndef BRK_KMALLOC_H
 #define BRK_KMALLOC_H
 
-#include <brk/types.h>
+#include <stddef.h>
 
 void kmalloc_init(void);
 void *kmalloc(size_t size);

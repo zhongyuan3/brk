@@ -23,6 +23,7 @@
 #include <brk/virtio_blk.h>
 #include <brk/virtio_mmio.h>
 #include <brk/virtio_queue.h>
+#include <inttypes.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/stat.h>

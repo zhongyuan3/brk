@@ -2,6 +2,7 @@
 #define BRK_VIRTIO_QUEUE_H
 
 #include <brk/types.h>
+#include <stdbool.h>
 
 /* This marks a buffer as continuing via the next field. */
 #define VIRTQ_DESC_F_NEXT 1

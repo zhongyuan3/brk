@@ -2,6 +2,8 @@
 #define BRK_ERROR_H
 
 #include <brk/types.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 static inline __attribute__((warn_unused_result)) void *__err_ptr(int err)
 {

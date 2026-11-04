@@ -3,6 +3,8 @@
 
 #include <brk/types.h>
 #include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 #define KERN_EMERG 0
 #define KERN_ALERT 1

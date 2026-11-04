@@ -6,6 +6,7 @@
 #include <brk/printk.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <inttypes.h>
 #include <uapi/errno.h>
 
 int brkfs_get_block(struct brkfs_sb_info *sbi, u32 bno, struct brkfs_block *bb)

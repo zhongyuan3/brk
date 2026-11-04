@@ -4,6 +4,7 @@
 #include <brk/panic.h>
 #include <brk/virtio.h>
 #include <brk/virtio_mmio.h>
+#include <inttypes.h>
 #include <uapi/errno.h>
 
 static u64 virtio_mmio_base(struct virtio_device *dev)

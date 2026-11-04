@@ -2,6 +2,7 @@
 #define ARCH_CSR_H
 
 #include <brk/types.h>
+#include <stdint.h>
 
 static inline uintptr_t read_tp(void)
 {

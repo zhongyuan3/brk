@@ -14,6 +14,7 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <inttypes.h>
 #include <libfdt.h>
 #include <uapi/errno.h>
 

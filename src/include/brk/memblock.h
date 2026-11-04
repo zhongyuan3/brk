@@ -2,6 +2,7 @@
 #define BRK_MEMBLOCK_H
 
 #include <brk/types.h>
+#include <stddef.h>
 
 #define INIT_MEMBLOCK_REGIONS 32
 #define INIT_MEMBLOCK_RESERVED_REGIONS 32

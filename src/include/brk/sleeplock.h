@@ -3,6 +3,7 @@
 
 #include <brk/sleeplock_types.h>
 #include <brk/types.h>
+#include <stdbool.h>
 
 void sleeplock_init(sleeplock_t *lock, const char *name);
 void sleeplock_acquire(sleeplock_t *lock);

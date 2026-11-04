@@ -5,6 +5,7 @@
 #include <brk/printk.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
+#include <stdint.h>
 #include <uapi/errno.h>
 
 static u64 (*systable[])(void) = {

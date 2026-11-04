@@ -2,6 +2,7 @@
 #define BRK_IRQ_H
 
 #include <brk/types.h>
+#include <stddef.h>
 
 typedef int irqreturn_t;
 

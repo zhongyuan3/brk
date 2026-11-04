@@ -1,3 +1,4 @@
+#include <stdalign.h>
 #define pr_fmt(fmt) "%s:%d " fmt, __func__, __LINE__
 #include <brk/assert.h>
 #include <brk/dcache.h>

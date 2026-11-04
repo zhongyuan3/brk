@@ -13,6 +13,7 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/vmalloc.h>
+#include <stdalign.h>
 #include <uapi/errno.h>
 
 struct vmalloc_region {

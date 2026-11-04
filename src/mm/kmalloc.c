@@ -4,6 +4,7 @@
 #include <brk/printk.h>
 #include <brk/slab.h>
 #include <brk/string.h>
+#include <stdalign.h>
 
 #define NR_KMALLOC_ALLOCATORS 10
 

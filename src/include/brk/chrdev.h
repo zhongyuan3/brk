@@ -4,6 +4,7 @@
 #include <brk/device.h>
 #include <brk/refcnt_types.h>
 #include <brk/types.h>
+#include <stdbool.h>
 #include <uapi/types.h>
 
 struct fs_file_ops;

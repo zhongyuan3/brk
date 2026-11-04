@@ -3,6 +3,8 @@
 
 #include <brk/kernel.h>
 #include <brk/types.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 #define LIST_INITIALIZER(name) { &name, &name }
 #define LIST_DEFINE(name) struct list_head name = LIST_INITIALIZER(name)

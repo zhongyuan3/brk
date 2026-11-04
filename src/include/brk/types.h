@@ -1,13 +1,6 @@
 #ifndef BRK_TYPES_H
 #define BRK_TYPES_H
 
-#include <brk/assert.h>
-#include <inttypes.h>
-#include <limits.h>
-#include <stdalign.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
 #include <uapi/types.h>
 
 /*

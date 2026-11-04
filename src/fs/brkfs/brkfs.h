@@ -1,6 +1,7 @@
 #ifndef BRKFS_H
 #define BRKFS_H
 
+#include <brk/assert.h>
 #include <brk/blkdev.h>
 #include <brk/fs_types.h>
 #include <brk/pagecache.h>

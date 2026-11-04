@@ -9,6 +9,7 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <inttypes.h>
 #include <uapi/errno.h>
 #include <uapi/stat.h>
 

@@ -2,6 +2,7 @@
 #define BRK_TIMEKEEPER_H
 
 #include <brk/types.h>
+#include <stdbool.h>
 
 void timekeeper_init(void);
 void timekeeper_tick(void);

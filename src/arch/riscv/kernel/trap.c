@@ -20,6 +20,7 @@
 #include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>
+#include <inttypes.h>
 #include <uapi/errno.h>
 
 static const char *const exception_names[] = {

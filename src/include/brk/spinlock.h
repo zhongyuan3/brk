@@ -4,6 +4,7 @@
 #include <arch/irqstate.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <stdbool.h>
 
 /*
  * Plain spinlock: mutual exclusion plus preemption disable. It does not

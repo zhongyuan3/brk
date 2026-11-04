@@ -2,6 +2,7 @@
 #define BRK_FS_TYPES_H
 
 #include <brk/types.h>
+#include <stdbool.h>
 
 struct fs_driver;
 struct fs_super_block;

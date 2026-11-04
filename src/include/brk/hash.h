@@ -2,6 +2,7 @@
 #define BRK_HASH_H
 
 #include <brk/types.h>
+#include <stddef.h>
 
 #define FNV1A_32_INIT 0x811C9DC5
 #define FNV1A_32_PRIME 0x01000193
