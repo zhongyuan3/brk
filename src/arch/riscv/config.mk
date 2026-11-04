@@ -12,4 +12,4 @@ KBUILD_CFLAGS += -msmall-data-limit=0
 KBUILD_LDFLAGS += -m elf64lriscv
 QEMU ?= qemu-system-riscv64
 
-QEMU_OPTS := -machine virt -nographic
+QEMU_OPTS += -machine virt -nographic

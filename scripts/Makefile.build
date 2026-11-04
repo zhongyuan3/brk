@@ -33,12 +33,12 @@ $(subdir-built-in): FORCE
 $(obj)/%.o: $(src)/%.c $(src)/Makefile $(FLAGS_DEP)
 	$(Q)mkdir -p $(dir $@)
 	$(Q)echo "  CC      $@"
-	$(Q)$(CC) $(KBUILD_CFLAGS) $(ccflags-y) -c -o $@ $<
+	$(Q)$(CC) $(KBUILD_CFLAGS) $(ccflags-y) $(CFLAGS_$(notdir $@)) -c -o $@ $<
 
 $(obj)/%.o: $(src)/%.S $(src)/Makefile $(FLAGS_DEP)
 	$(Q)mkdir -p $(dir $@)
 	$(Q)echo "  AS      $@"
-	$(Q)$(CC) $(KBUILD_CFLAGS) $(asflags-y) -c -o $@ $<
+	$(Q)$(CC) $(KBUILD_CFLAGS) $(asflags-y) $(AFLAGS_$(notdir $@)) -c -o $@ $<
 
 .DELETE_ON_ERROR:
 
