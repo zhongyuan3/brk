@@ -31,7 +31,6 @@ BUILD ?= debug
 WERROR ?= 1
 RAM ?= 128M
 CPU ?= 3
-NR_CPUS ?= 8
 KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)/$(BUILD)
 ROOTFS_IMG ?= $(BOARD_BUILD_ROOT)/rootfs.img
 USER_BIN_DIR := $(USER_ROOT)/build/bin
@@ -113,7 +112,6 @@ KBUILD_CFLAGS += -Isrc/arch/$(ARCH)/include
 KBUILD_CFLAGS += -Isrc/include
 KBUILD_CFLAGS += -Isrc/include/freestanding
 KBUILD_CFLAGS += -Ivendor/libfdt
-KBUILD_CFLAGS += -DMAX_CPUS=$(NR_CPUS)
 
 KBUILD_LDFLAGS += -z max-page-size=4096
 
@@ -143,9 +141,6 @@ endif
 ifneq ($(KERNEL_GOALS),)
 ifeq ($(shell $(CC) -dumpmachine 2>/dev/null | grep -c '^riscv'),0)
 $(error $(CC) is not a RISC-V compiler; set CROSS_COMPILE (e.g. riscv64-unknown-elf-))
-endif
-ifneq ($(shell test "$(CPU)" -le "$(NR_CPUS)" 2>/dev/null && echo yes),yes)
-$(error CPU ($(CPU)) exceeds NR_CPUS ($(NR_CPUS)))
 endif
 ifeq ($(strip $(LIBGCC)),)
 $(error Cannot find libgcc for $(CC); set CROSS_COMPILE (e.g. riscv64-unknown-elf-))
@@ -311,7 +306,6 @@ help:
 	$(Q)echo "  BUILD_ROOT=<path>      (default: build)"
 	$(Q)echo "  USER_ROOT=<path>       (default: ../brk-user)"
 	$(Q)echo "  CPU=<n>                (default 3)"
-	$(Q)echo "  NR_CPUS=<n>            (default 8, build-time MAX_CPUS)"
 	$(Q)echo "  RAM=<size>             (default 128M)"
 	$(Q)echo "  WERROR={0|1}           (default: 1)"
 	$(Q)echo "  V=1                    Show full build commands"

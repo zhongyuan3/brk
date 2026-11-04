@@ -82,7 +82,6 @@ Useful variables:
 
 - `BUILD=debug|release`
 - `CPU=<n>` and `RAM=<size>` for QEMU
-- `NR_CPUS=<n>` for the build-time `MAX_CPUS` value (default 8)
 - `QEMU_NET=0` to boot without the virtio network device
 - `V=1` to show the full compiler/linker commands
 - `EXTRA_CFLAGS=...` / `EXTRA_LDFLAGS=...` for temporary additions
