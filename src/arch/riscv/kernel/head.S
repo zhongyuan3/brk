@@ -1,5 +1,6 @@
 #include <arch/asm/vmlayout.h>
 #include <arch/asm/page.h>
+#include <arch/asm/trap.h>
 #include <brk/asm/cpu.h>
 
 #define HART_ID_SAVED s2
@@ -21,6 +22,11 @@
 	mul t0, t1, t0
 	la t2, init_stack_rsvd_pages
 	add INIT_STACK_SAVED, t2, t0
+	/*
+	 * Keep the top of the boot stack free for the trap frame of the
+	 * per-CPU init task, matching the layout of a normal kernel stack.
+	 */
+	addi INIT_STACK_SAVED, INIT_STACK_SAVED, -__RISCV_TRAP_FRAME_SIZE
 	mv sp, INIT_STACK_SAVED
 	.endm
 

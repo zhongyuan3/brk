@@ -14,7 +14,6 @@ struct cpu {
 	struct task *handoff;
 	struct task *current;
 	struct task *idle;
-	unsigned long kernel_sp;
 	cpuid_t id;
 	int preempt_count;
 	bool initialized;
@@ -54,7 +53,12 @@ irqstate_t local_irq_save(void);
 void local_irq_restore(irqstate_t state);
 bool local_irq_enabled(void);
 
-void __switch_to(unsigned long *old_sp, unsigned long *new_sp);
+/*
+ * Save the callee-saved state of @prev and resume @next.  Both tasks must be
+ * distinct, and @prev must be the task currently running on this CPU.
+ */
+void context_switch(struct task *prev, struct task *next);
+
 void set_thread_pointer(unsigned long value);
 unsigned long get_thread_pointer(void);
 

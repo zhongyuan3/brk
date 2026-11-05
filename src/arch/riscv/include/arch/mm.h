@@ -24,6 +24,9 @@ extern unsigned long early_pgdir_rsvd_page_next;
 extern char early_pgdir_rsvd_pages[];
 extern char init_stack_rsvd_pages[];
 
+/* Top of the static boot stack reserved for @cpuid. */
+unsigned long arch_boot_stack_top(cpuid_t cpuid);
+
 static inline u64 symbol_phys(void *vaddr)
 {
 	return (uintptr_t)vaddr - boot_info.kernel_image_offset;

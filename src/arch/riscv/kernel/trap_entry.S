@@ -78,9 +78,9 @@ trap_entry:
 
 	j ret_from_trap
 
-	.global ret_from_init
-ret_from_init:
-	call init_task_do
+	.global ret_from_user_init
+ret_from_user_init:
+	call user_init_entry
 	j ret_from_trap
 
 	# Body of a trap return. Newly forked processes are switched into here

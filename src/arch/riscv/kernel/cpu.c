@@ -1,6 +1,9 @@
+#include <arch/context.h>
 #include <arch/csr.h>
 #include <arch/hart.h>
 #include <arch/irqstate.h>
+#include <arch/mm.h>
+#include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/panic.h>
 #include <brk/task.h>
@@ -16,6 +19,21 @@ const char *uname_machine(void)
 void cpu_idle(void)
 {
 	asm volatile("wfi");
+}
+
+unsigned long arch_boot_stack_top(cpuid_t cpuid)
+{
+	return (unsigned long)init_stack_rsvd_pages +
+	       ((unsigned long)cpuid + 1) *
+		       (PAGE_SIZE << INIT_STACK_PAGE_ORDER);
+}
+
+void context_switch(struct task *prev, struct task *next)
+{
+	assert(prev != NULL);
+	assert(prev != next);
+
+	__switch_to(&prev->kernel_sp, &next->kernel_sp);
 }
 
 void local_irq_disable(void)

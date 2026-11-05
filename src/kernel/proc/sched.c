@@ -1,5 +1,7 @@
+#include <arch/boot_info.h>
 #include <arch/irqflags.h>
 #include <arch/mm.h>
+#include <arch/trapframe.h>
 #include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/fdtable.h>
@@ -9,11 +11,14 @@
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/refcnt.h>
+#include <brk/signal.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
 #include <brk/timekeeper.h>
 #include <brk/types.h>
+#include <uapi/capability.h>
 #include <uapi/errno.h>
 #include <uapi/limits.h>
 
@@ -78,10 +83,10 @@ void task_join(struct task *task)
 	int target;
 
 	/*
-	 * The currently running task must stay on this CPU until __switch_to()
-	 * has saved its context.  Everything else (new tasks and tasks woken
-	 * from sleep) has a complete saved context and may be placed on any
-	 * online CPU.
+	 * The currently running task must stay on this CPU until
+	 * context_switch() has saved its context.  Everything else (new tasks
+	 * and tasks woken from sleep) has a complete saved context and may be
+	 * placed on any online CPU.
 	 */
 	if (task->oncpu < 0) {
 		target = task_select_cpu();
@@ -135,47 +140,108 @@ static struct task *task_pick_next(struct cpu *cpu)
 }
 
 /*
- * Bootstrap the CPU into its idle task. From this point on the scheduler is
- * entered from task context only; cpu->kernel_sp is just the stack this
- * startup path is abandoned on.
+ * Static bootstrap task for every CPU.  CPU0 runs the filesystem setup in
+ * this task and then keeps it as the orphan reaper; secondary CPUs park their
+ * boot task and hand the CPU over to a real idle task.
+ */
+static struct task init_tasks[MAX_CPUS];
+
+static_assert(KSTACK_SIZE == (PAGE_SIZE << INIT_STACK_PAGE_ORDER),
+	      "boot stack and kernel stack sizes differ");
+
+static void init_task_setup(struct task *task, cpuid_t cpuid)
+{
+	if (task->kstack_base)
+		return;
+
+	list_init(&task->list);
+	list_init(&task->queue);
+	list_init(&task->children);
+	list_init(&task->child);
+	spinlock_init(&task->lock, "init_task");
+
+	task->state = TASK_STATE_RUNNING;
+	task->oncpu = -1;
+	task->cpu = (int)cpuid;
+	task->is_init_task = true;
+	task->pid = 0;
+	task->tgid = 0;
+	task->pgid = 0;
+	task->sid = 0;
+	task->umask = 022;
+	task->cap_effective = CAP_FULL_SET;
+	task->cap_permitted = CAP_FULL_SET;
+
+	task->kstack_top = arch_boot_stack_top(cpuid);
+	task->kstack_base = task->kstack_top - KSTACK_SIZE;
+	task->frame = (struct trap_frame *)(task->kstack_top - TRAP_FRAME_SIZE);
+	memset(task->frame, 0, TRAP_FRAME_SIZE);
+	trap_frame_set_kernel_tp(task->frame, (unsigned long)&cpus[cpuid]);
+
+	if (cpuid == boot_info.boot_hart_id) {
+		task->fsinfo = fsinfo_alloc();
+		task->fdtable = fdtable_alloc();
+		if (!task->fsinfo || !task->fdtable)
+			panic("failed to allocate init task filesystem state\n");
+		if (signal_init(task, NULL, 0))
+			panic("failed to initialize init task signals\n");
+	}
+
+	strlcpy(task->name, "init_task", sizeof(task->name));
+}
+
+/*
+ * Bootstrap the CPU into its boot task.  The current stack is the boot stack
+ * and becomes init_task's kernel stack.  A separate idle task is allocated so
+ * init_task may sleep during filesystem setup and later while reaping.
  */
 void task_scheduler(void)
 {
 	struct cpu *cpu = this_cpu();
-	struct task *idle = cpu->idle;
+	struct task *init = &init_tasks[cpu->id];
+	struct task *idle;
 
-	if (!idle) {
-		idle = task_create_idle(cpu->id);
-		if (!idle)
-			panic("failed to create idle task for cpu %lu\n",
-			      cpu->id);
-		cpu->idle = idle;
-	}
-
-	cpu->handoff = NULL;
 	local_irq_disable();
 
-	assert(idle->oncpu == -1);
-	idle->oncpu = cpu->id;
-	trap_frame_set_kernel_tp(idle->frame, (unsigned long)cpu);
-	set_current_task(idle);
+	init_task_setup(init, cpu->id);
+
+	idle = task_create_idle(cpu->id);
+	if (!idle)
+		panic("failed to create idle task for cpu %lu\n", cpu->id);
+
+	cpu->idle = idle;
+	cpu->handoff = NULL;
+
+	assert(init->oncpu == -1);
+	init->oncpu = cpu->id;
+	set_current_task(init);
 
 	load_final_page_table();
 	user_access_disable();
 
-	idle->time_slice = TIME_SLICE_MAX;
-	idle->ktime = jiffies_get();
+	init->time_slice = TIME_SLICE_MAX;
+	init->ktime = jiffies_get();
 
 	/*
-	 * Publish this CPU as online only after current is the idle task.  An
+	 * Publish this CPU as online only after current is the boot task.  An
 	 * IPI may then queue work immediately, but it stays pending until the
-	 * idle task enables interrupts after __switch_to().
+	 * task enables interrupts or switches to idle.
 	 */
 	__atomic_store_n(&cpu->online, true, __ATOMIC_RELEASE);
 
-	__switch_to(&cpu->kernel_sp, &idle->kernel_sp);
+	if (cpu->id == boot_info.boot_hart_id) {
+		local_irq_enable();
+		task_init_main();
+		panic("init task returned\n");
+	}
 
-	panic("scheduler returned to bootstrap context\n");
+	/*
+	 * Secondary CPUs have no boot work.  Park the static boot task and
+	 * hand over to the real idle task through the normal scheduler path.
+	 */
+	init->state = TASK_STATE_ZOMBIE;
+	task_yield();
+	panic("secondary init task resumed\n");
 }
 
 static void task_sched(void)
@@ -240,7 +306,7 @@ static void task_sched(void)
 	 * context, i.e. only after this CPU has completely left curr.  This
 	 * lets a parent on another CPU wait until a zombie is safe to reap.
 	 */
-	__switch_to(&curr->kernel_sp, &next->kernel_sp);
+	context_switch(curr, next);
 
 	task_sched_resume();
 }
@@ -385,10 +451,7 @@ void task_exit(int status)
 	struct task *child;
 	struct task *task = current_task();
 	irqstate_t flags;
-	bool reparented;
-
-	if (task == initial_task)
-		panic("%s(): init exit\n", __func__);
+	bool reparented = false;
 
 	/*
 	 * Drop this task's references now.  For a private table this closes
@@ -408,11 +471,17 @@ void task_exit(int status)
 	}
 
 	flags = spin_lock_irqsave(&wait_lock);
-	reparented = !list_empty(&task->children);
-	list_for_each_entry(child, &task->children, child) {
-		child->parent = initial_task;
+	if (!list_empty(&task->children)) {
+		struct task *reaper = init_reaper;
+
+		if (!reaper)
+			panic("task_exit: no init reaper\n");
+
+		list_for_each_entry(child, &task->children, child)
+			child->parent = reaper;
+		list_splice(&task->children, &reaper->children);
+		reparented = true;
 	}
-	list_splice(&task->children, &initial_task->children);
 	spin_unlock_irqrestore(&wait_lock, flags);
 
 	/*
@@ -421,7 +490,7 @@ void task_exit(int status)
 	 * while this task is still on-CPU and its state is not yet ZOMBIE.
 	 */
 	if (reparented)
-		task_wake_spec(initial_task);
+		task_wake_spec(init_reaper);
 
 	assert(preempt_count() == 0);
 

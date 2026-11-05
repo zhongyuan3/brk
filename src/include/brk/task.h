@@ -44,7 +44,7 @@ struct task_create_args {
 	void (*fn)(void); /* function to run after the task is created */
 };
 
-void task_init_user(void);
+void task_init_main(void);
 
 void task_cache_init(void);
 struct task *task_create(struct task_create_args *args);
@@ -110,7 +110,7 @@ bool task_pid_exists(pid_t tgid);
 struct task *kthread_create(void (*fn)(void *), void *data);
 void kthread_join(struct task *kthread);
 
-extern struct task *initial_task;
+extern struct task *init_reaper;
 extern struct list_head tasks;
 extern spinlock_t tasks_lock;
 extern spinlock_t wait_lock;
