@@ -126,6 +126,7 @@ struct task {
 	int time_slice; /* no lock protection */
 	char name[TASK_NAME_MAX]; /* no lock protection */
 	bool newly_forked; /* no lock protection */
+	bool is_init_task; /* static boot/idle task, never destroyed */
 	void (*kthrd_fn)(void *); /* no lock protection */
 	void *kthrd_data; /* no lock protection */
 };

@@ -16,6 +16,7 @@
 #include <brk/kernel.h>
 #include <brk/klog.h>
 #include <brk/kmalloc.h>
+#include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
@@ -38,7 +39,7 @@
 #include <uapi/limits.h>
 #include <uapi/signal.h>
 
-struct task *initial_task;
+struct task *init_reaper;
 
 LIST_DEFINE(tasks);
 SPINLOCK_DEFINE(tasks_lock);
@@ -225,8 +226,48 @@ pid_alloc_failed:
 	return ERR_PTR(err);
 }
 
-static void idle_entry(void)
+void task_destroy(struct task *task)
 {
+	if (task->is_init_task)
+		panic("attempt to destroy init task for cpu %d\n", task->cpu);
+
+	irqstate_t flags = spin_lock_irqsave(&tasks_lock);
+	list_del_init(&task->list);
+	spin_unlock_irqrestore(&tasks_lock, flags);
+
+	signal_deinit(task);
+	if (task_is_leader(task))
+		task_rusage_free(task->rsrc_usage);
+	/* task_exit() may already have dropped these references. */
+	if (task->fsinfo)
+		fsinfo_put(task->fsinfo);
+	if (task->fdtable)
+		fdtable_put(task->fdtable);
+	uvm_space_put(task->mm);
+	kstack_free(task->kstack_base);
+	pid_free(task->pid);
+	task_free(task);
+}
+
+static void complete_task_switch(void)
+{
+	task_sched_resume();
+
+	struct task *task = current_task();
+	raw_spin_unlock(&task->lock);
+
+	/*
+	 * The switch path always runs with interrupts disabled. A task enters
+	 * its kernel entry trampoline for the first time here, so this is the
+	 * point where normal interrupt handling resumes.
+	 */
+	local_irq_enable();
+}
+
+static void task_idle_entry(void)
+{
+	complete_task_switch();
+
 	for (;;) {
 		local_irq_enable();
 		cpu_idle();
@@ -273,7 +314,7 @@ struct task *task_create_idle(cpuid_t cpuid)
 	kernel_sp -= CONTEXT_SIZE;
 	assert(is_aligned(kernel_sp, 16));
 	ctx = (struct context *)kernel_sp;
-	ctx->ra = (unsigned long)idle_entry;
+	ctx->ra = (unsigned long)task_idle_entry;
 	task->kernel_sp = kernel_sp;
 
 	trap_frame_set_kernel_tp(task->frame, (unsigned long)&cpus[cpuid]);
@@ -286,58 +327,75 @@ fail:
 	return NULL;
 }
 
-void task_destroy(struct task *task)
+static struct task *task_create_user_init(void)
 {
-	irqstate_t flags = spin_lock_irqsave(&tasks_lock);
-	list_del_init(&task->list);
-	spin_unlock_irqrestore(&tasks_lock, flags);
+	struct task *init = task_create(&(struct task_create_args){
+		.fn = ret_from_user_init,
+	});
+	if (IS_ERR(init))
+		panic("failed to create user init task: %s\n",
+		      strerror(PTR_ERR(init)));
 
-	signal_deinit(task);
-	if (task_is_leader(task))
-		task_rusage_free(task->rsrc_usage);
-	/* task_exit() may already have dropped these references. */
-	if (task->fsinfo)
-		fsinfo_put(task->fsinfo);
-	if (task->fdtable)
-		fdtable_put(task->fdtable);
-	uvm_space_put(task->mm);
-	kstack_free(task->kstack_base);
-	pid_free(task->pid);
-	task_free(task);
+	strlcpy(init->name, "init", sizeof(init->name));
+	return init;
 }
 
-static void complete_task_switch(void)
+static void task_start_user_init(struct task *init)
 {
-	task_sched_resume();
+	struct task *parent = current_task();
 
-	struct task *task = current_task();
-	raw_spin_unlock(&task->lock);
+	fsinfo_copy(init->fsinfo, parent->fsinfo);
+	fdtable_copy(init->fdtable, parent->fdtable);
+
+	irqstate_t flags = spin_lock_irqsave(&wait_lock);
+	init->parent = parent;
+	list_add(&init->child, &parent->children);
+	spin_unlock_irqrestore(&wait_lock, flags);
+
+	flags = spin_lock_irqsave(&init->lock);
+	init->state = TASK_STATE_RUNNING;
+	spin_unlock_irqrestore(&init->lock, flags);
+
+	task_join(init);
+}
+
+void task_init_main(void)
+{
+	init_reaper = current_task();
 
 	/*
-	 * The switch path always runs with interrupts disabled. A task enters
-	 * its kernel entry trampoline for the first time here, so this is the
-	 * point where normal interrupt handling resumes.
+	 * Allocate the user init task before fs_init() so it keeps PID 1.
+	 * It stays NEW until the filesystem is ready and is only then made
+	 * runnable.
 	 */
-	local_irq_enable();
-}
-
-void init_task_do(void)
-{
-	complete_task_switch();
+	struct task *init = task_create_user_init();
 
 	int err = fs_init();
 	if (err)
 		panic("failed to initialize filesystem: %s\n", strerror(err));
-	else
-		pr_info("file system initialized\n");
+	pr_info("file system initialized\n");
+
+	task_start_user_init(init);
+
+	for (;;) {
+		if (task_wait(-1, NULL, 0, NULL) < 0)
+			ktime_nanosleep((ktime_t)100 * NS_PER_MS, NULL);
+	}
+}
+
+void user_init_entry(void)
+{
+	complete_task_switch();
 
 	char *argv[] = { "/sbin/init", 0 };
 	char *envp[] = { 0 };
-	err = do_execve(argv[0], argv, envp);
-	if (err < 0)
-		panic("execve %s failed: %s\n", argv[0], strerror(err));
-	else
-		pr_debug("execve /bin/init ok\n");
+	int err = do_execve(argv[0], argv, envp);
+	if (err < 0) {
+		pr_err("execve %s failed: %s\n", argv[0], strerror(err));
+		task_exit_normal(1);
+		panic("user init exit returned\n");
+	}
+	pr_debug("execve /bin/init ok\n");
 
 	/*
 	 * Start persistent kernel logging only after the initial exec
@@ -362,23 +420,6 @@ void init_task_do(void)
 
 	prepare_to_ret_to_user(current_task()->frame);
 }
-
-void task_init_user(void)
-{
-	initial_task = task_create(&(struct task_create_args){
-		.fn = ret_from_init,
-	});
-	if (IS_ERR(initial_task))
-		panic("failed to create initial user task: %s\n",
-		      strerror(PTR_ERR(initial_task)));
-	irqstate_t flags = spin_lock_irqsave(&initial_task->lock);
-
-	strlcpy(initial_task->name, "init", sizeof(initial_task->name));
-	initial_task->state = TASK_STATE_RUNNING;
-	spin_unlock_irqrestore(&initial_task->lock, flags);
-	task_join(initial_task);
-}
-device_initcall(task_init_user);
 
 void task_set_killed(struct task *task)
 {
@@ -590,11 +631,11 @@ bool task_get_info(pid_t tgid, struct task_info *info)
 	}
 
 	/*
-	 * tasks_lock keeps both @target and its parent on the tasks list,
-	 * so neither can be freed underneath us. We take a snapshot of
-	 * parent->tgid without taking wait_lock: a concurrent reparent
-	 * (task_exit re-parenting orphans to initial_task) is a benign race
-	 * here -- we may observe either the old or new parent tgid.
+	 * tasks_lock keeps @target on the tasks list, so it cannot be freed
+	 * underneath us.  We take a snapshot of parent->tgid without taking
+	 * wait_lock: a concurrent reparent (task_exit re-parenting orphans to
+	 * the init reaper) is a benign race here -- we may observe either the
+	 * old or new parent tgid.
 	 */
 	par = target->parent;
 	info->ppid = par ? par->tgid : 0;

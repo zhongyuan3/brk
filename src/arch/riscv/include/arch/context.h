@@ -20,4 +20,7 @@ struct context {
 
 #define CONTEXT_SIZE sizeof(struct context)
 
+/* RISC-V context switch primitive.  Scheduler code uses context_switch(). */
+void __switch_to(unsigned long *old_sp, unsigned long *new_sp);
+
 #endif

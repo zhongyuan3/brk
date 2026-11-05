@@ -145,8 +145,6 @@ static int signal_kill_pgrp(pid_t pgrp, int sig)
 	list_for_each_entry(p, &tasks, list) {
 		if (p->pgid != pgrp || p->pid != p->tgid)
 			continue;
-		if (p == initial_task && sig != 0)
-			continue;
 		found = true;
 		if (!signal_may_send(p))
 			continue;
@@ -180,7 +178,7 @@ int signal_do_kill(pid_t pid, int sig)
 
 			irqstate_t flags = spin_lock_irqsave(&tasks_lock);
 			list_for_each_entry(p, &tasks, list) {
-				if (p == initial_task || p->pid != p->tgid)
+				if (p->pid != p->tgid)
 					continue;
 				found = true;
 				if (!signal_may_send(p))
@@ -209,10 +207,6 @@ int signal_do_kill(pid_t pid, int sig)
 	if (!target) {
 		spin_unlock_irqrestore(&tasks_lock, flags);
 		return -ESRCH;
-	}
-	if (target == initial_task) {
-		spin_unlock_irqrestore(&tasks_lock, flags);
-		return -EPERM;
 	}
 	if (!signal_may_send(target)) {
 		spin_unlock_irqrestore(&tasks_lock, flags);
