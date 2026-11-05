@@ -1,8 +1,9 @@
 #ifndef BRK_ASSERT_H
 #define BRK_ASSERT_H
 
-void __assert_fail(char const *file, int line, char const *expr)
-	__attribute__((noreturn));
+#include <stdnoreturn.h>
+
+noreturn void __assert_fail(char const *file, int line, char const *expr);
 
 #ifndef NDEBUG
 #define assert(expr)                                              \

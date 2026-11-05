@@ -21,6 +21,7 @@
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <inttypes.h>
+#include <stdnoreturn.h>
 #include <uapi/errno.h>
 
 static const char *const exception_names[] = {
@@ -106,9 +107,8 @@ static void print_hex(unsigned long num)
 static bool in_early = true;
 static bool in_early_trap = false;
 
-static void __attribute__((noreturn))
-early_trap_handler(struct trap_frame *frame, bool is_interrupt,
-		   unsigned long code)
+noreturn static void early_trap_handler(struct trap_frame *frame,
+					bool is_interrupt, unsigned long code)
 {
 	if (in_early_trap) {
 		sbi_console_putstr("EARLY NESTED TRAP");
@@ -147,8 +147,8 @@ early_trap_handler(struct trap_frame *frame, bool is_interrupt,
 	}
 }
 
-static void __attribute__((noreturn))
-trap_panic(const char *name, unsigned long code, struct trap_frame *frame)
+noreturn static void trap_panic(const char *name, unsigned long code,
+				struct trap_frame *frame)
 {
 	pr_emerg("trap: unhandled %s (code %lu)\n", name, code);
 	pr_emerg("trap: sepc=%#018lx stval=%#018lx\n", frame->sepc,
