@@ -7,7 +7,7 @@
  * Device number encoding (dev_t):
  *   bits 28..31 : device type (CHRDEV / BLKDEV)
  *   bits 20..27 : major (8 bits, 0..255)
- *   bits  0..19 : minor (20 bits)
+ *   bits  0..19 : minor (20 bits, 0..1048575)
  */
 #define MAJOR_BITS 8
 #define MINOR_BITS 20
