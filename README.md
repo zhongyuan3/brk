@@ -28,24 +28,6 @@ I'm not trying to reinvent the wheel here. BRK stands firmly on the shoulders of
 
 **In short: xv6 taught me how to start; Linux taught me how far I need to go.**
 
-## Current Status (The "Barely" Part)
-
-BRK has recently graduated from just printing characters to the console. It currently features a mix of "things that actually work" and "things that are held together by duct tape and prayers":
-
-- [x] Early console output via RISC-V SBI
-- [x] Physical memory probing and basic page memory management
-- [x] A rudimentary kernel heap allocator (slightly better than a basic `sbrk()`)
-- [x] Timer interrupts and basic Trap context save/restore
-- [x] Virtual File System (VFS)
-- [x] User mode & System Calls
-- [ ] Multi-core (SMP) support — _Still a lonely, single-core beast_
-
-## The Roadmap
-
-1.  **Architecture Decoupling:** Abstracting RISC-V specific assembly and MMU code to prepare for future x86 or ARM ports.
-2.  **A Real File System:** Stopping the practice of hardcoding everything into memory.
-3.  **Stably Running:** The ultimate goal is to drop the "Barely" from the name (though I'll probably keep the acronym).
-
 ## Build & Run (At Your Own Risk)
 
 If you are morbidly curious to see what a "barely running kernel" looks like, you can try spinning it up in a RISC-V environment.
