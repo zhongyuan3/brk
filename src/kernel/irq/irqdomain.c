@@ -127,8 +127,8 @@ unsigned int irq_of_parse_and_map(int fdt_node, int index)
 	void *fdt = dt_get_fdt();
 	struct irq_domain *d;
 	const u32 *ints, *prop;
-	irq_hw_number_t hwirq;
-	unsigned int type, virq;
+	irq_hw_number_t hwirq = 0;
+	unsigned int type = 0, virq;
 	int parent = -1, cells, len;
 	u32 spec[4];
 

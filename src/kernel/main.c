@@ -19,7 +19,6 @@
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
-#include <stddef.h>
 
 extern initcall_t __initcall_start[];
 extern initcall_t __initcall_end[];
