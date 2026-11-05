@@ -4,12 +4,13 @@
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/string.h>
+#include <stdnoreturn.h>
 
 #define PANIC_BUF_SIZE 512
 
 static int panic_owner;
 
-void panic(char const *fmt, ...)
+noreturn void panic(char const *fmt, ...)
 {
 	char buf[PANIC_BUF_SIZE];
 	va_list ap;
@@ -51,7 +52,7 @@ void panic(char const *fmt, ...)
 		__asm__ volatile("wfi");
 }
 
-void __assert_fail(char const *file, int line, char const *expr)
+noreturn void __assert_fail(char const *file, int line, char const *expr)
 {
 	panic("assertion failed: %s:%d: %s\n", file, line, expr);
 }
