@@ -35,7 +35,6 @@ typedef __s64 s64;
 /* Kernel-internal time, always nanoseconds. */
 typedef __s64 ktime_t;
 
-typedef unsigned int fmode_t;
 typedef unsigned long cpuid_t;
 typedef unsigned int umode_t;
 typedef unsigned int kuid_t;

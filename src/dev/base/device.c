@@ -1,4 +1,4 @@
-#include <brk/device_model.h>
+#include <brk/device.h>
 #include <brk/devtmpfs.h>
 #include <brk/initcall.h>
 #include <brk/kernel.h>

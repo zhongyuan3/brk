@@ -1,5 +1,5 @@
 #include <arch/mm.h>
-#include <brk/device_model.h>
+#include <brk/device.h>
 #include <brk/dt.h>
 #include <brk/eth.h>
 #include <brk/initcall.h>

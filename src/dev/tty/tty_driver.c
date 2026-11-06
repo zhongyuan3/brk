@@ -1,6 +1,5 @@
 #include <brk/chrdev.h>
 #include <brk/device.h>
-#include <brk/device_model.h>
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
