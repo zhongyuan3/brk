@@ -21,7 +21,7 @@
   - [Build \& Run (At Your Own Risk)](#build--run-at-your-own-risk)
     - [Prerequisites](#prerequisites)
     - [Quick Start](#quick-start)
-    - [Useful Checks and Helpers](#useful-checks-and-helpers)
+    - [Useful Helpers](#useful-helpers)
     - [Useful Variables](#useful-variables)
   - [License](#license)
 
@@ -66,15 +66,11 @@ make run CROSS_COMPILE=riscv64-unknown-elf-
 make BUILD=release CROSS_COMPILE=riscv64-unknown-elf-
 ```
 
-### Useful Checks and Helpers
+### Useful Helpers
 
 ```sh
 make help           # list all available targets
-make headers-check  # header checks
-make check          # static checks
 make rootfs         # build the root filesystem
-make smoke          # QEMU smoke test
-make ci             # CI pipeline
 make size           # show kernel size
 make disasm         # disassemble the kernel
 ```
@@ -84,12 +80,10 @@ make disasm         # disassemble the kernel
 | Variable                                 | Description                                               |
 | ---------------------------------------- | --------------------------------------------------------- |
 | `BUILD=debug\|release`                   | Build type                                                |
-| `CPU=<n>` / `RAM=<size>`                 | Configure QEMU CPU count and RAM size                     |
-| `QEMU_NET=0`                             | Boot without the virtio network device                    |
+| `SMP=<n>` / `M=<size>`                   | Configure QEMU CPU count and RAM size                     |
 | `V=1`                                    | Show full compiler/linker commands                        |
 | `EXTRA_CFLAGS=...` / `EXTRA_LDFLAGS=...` | Temporarily append compile/link flags                     |
 | `WERROR=0`                               | Keep warnings non-fatal while bringing up a new toolchain |
-| `SMOKE_TIMEOUT` / `SMOKE_BOOT_DELAY`     | Tune the QEMU smoke test timing                           |
 
 ## License
 

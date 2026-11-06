@@ -1,5 +1,5 @@
-#ifndef BRK_FREESTANDING_INTTYPES_H
-#define BRK_FREESTANDING_INTTYPES_H
+#ifndef INTTYPES_H
+#define INTTYPES_H
 
 #define __PRIL32 ""
 #define __PRIL64 "l"

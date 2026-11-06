@@ -1,9 +1,5 @@
-CompileFlags:
-    Add:
-        - -Isrc/include/freestanding
-
 Style:
     AngledHeaders:
         - "src/include/.*"
-        - "src/arch/riscv/include/.*"
+        - "src/riscv/include/.*"
         - "vendor/libfdt/*"

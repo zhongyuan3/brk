@@ -17,23 +17,8 @@
 #include <uapi/times.h>
 #include <uapi/utsname.h>
 
-/*
- * These assertions are part of the kernel build.  Any change to a UAPI
- * structure that is visible to userland must be intentional, so it must also
- * update (or explicitly invalidate) the ABI contract here.
- *
- * Layouts below are for RV64 (LP64).  Add per-architecture values here when
- * another ABI is supported.
- */
-
 _Static_assert(sizeof(ktime_t) == 8, "ktime_t is not 64-bit");
 
-/*
- * freestanding/stdint.h and uapi/types.h intentionally define separate
- * namespaces (u64 vs __u64), but they must name the same underlying
- * compiler types.  If one side changes its base type, this fails the build
- * instead of silently producing incompatible pointer types.
- */
 _Static_assert(__builtin_types_compatible_p(s8, __s8), "s8 and __s8 differ");
 _Static_assert(__builtin_types_compatible_p(s16, __s16),
 	       "s16 and __s16 differ");

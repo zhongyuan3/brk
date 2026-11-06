@@ -1,5 +1,5 @@
-#ifndef BRK_FREESTANDING_STRING_H
-#define BRK_FREESTANDING_STRING_H
+#ifndef STRING_H
+#define STRING_H
 
 #include <stddef.h>
 

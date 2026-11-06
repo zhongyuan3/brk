@@ -1,5 +1,5 @@
-#ifndef BRK_FREESTANDING_STDDEF_H
-#define BRK_FREESTANDING_STDDEF_H
+#ifndef STDDEF_H
+#define STDDEF_H
 
 typedef __SIZE_TYPE__ size_t;
 
