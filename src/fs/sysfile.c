@@ -26,7 +26,7 @@
 #include <uapi/fcntl.h>
 #include <uapi/limits.h>
 #include <uapi/stat.h>
-#include <uapi/statfs.h>
+#include <uapi/statvfs.h>
 #include <uapi/time.h>
 #include <uapi/types.h>
 #include <uapi/utsname.h>
@@ -262,15 +262,6 @@ u64 sys_faccessat(void)
 	int dirfd = syscall_arg_int(0);
 	const char *path = syscall_arg_ptr(1);
 	int mode = syscall_arg_int(2);
-
-	return access_path_at(dirfd, path, mode, LOOKUP_FOLLOW);
-}
-
-u64 sys_faccessat2(void)
-{
-	int dirfd = syscall_arg_int(0);
-	const char *path = syscall_arg_ptr(1);
-	int mode = syscall_arg_int(2);
 	int flags = syscall_arg_int(3);
 	unsigned int lookup_flags;
 
@@ -281,11 +272,11 @@ u64 sys_faccessat2(void)
 	return access_path_at(dirfd, path, mode, lookup_flags);
 }
 
-u64 sys_fstatfs(void)
+u64 sys_fstatvfs(void)
 {
 	int fd = syscall_arg_int(0);
-	struct statfs *ubuf = syscall_arg_ptr(1);
-	struct statfs st;
+	struct statvfs *ubuf = syscall_arg_ptr(1);
+	struct statvfs st;
 	struct kstatfs ks;
 	struct task *task = current_task();
 	struct fs_file *fp;
@@ -304,17 +295,17 @@ u64 sys_fstatfs(void)
 	if (ret)
 		return ret;
 
-	kstatfs_to_statfs(&ks, &st);
+	kstatfs_to_statvfs(&ks, &st);
 	if (copy_to_user(ubuf, &st, sizeof(st)))
 		return -EFAULT;
 	return 0;
 }
 
-u64 sys_statfs(void)
+u64 sys_statvfs(void)
 {
 	const char *path = syscall_arg_ptr(0);
-	struct statfs *ubuf = syscall_arg_ptr(1);
-	struct statfs st;
+	struct statvfs *ubuf = syscall_arg_ptr(1);
+	struct statvfs st;
 	struct kstatfs ks;
 	struct fs_path p = { 0 };
 	struct fs_inode *inode;
@@ -338,21 +329,23 @@ u64 sys_statfs(void)
 	if (ret)
 		return ret;
 
-	kstatfs_to_statfs(&ks, &st);
+	kstatfs_to_statvfs(&ks, &st);
 	if (copy_to_user(ubuf, &st, sizeof(st)))
 		return -EFAULT;
 	return 0;
 }
 
-u64 sys_fallocate(void)
+u64 sys_posix_fallocate(void)
 {
 	int fd = syscall_arg_int(0);
-	int mode = syscall_arg_int(1);
-	loff_t offset = (loff_t)syscall_arg_raw(2);
-	loff_t len = (loff_t)syscall_arg_raw(3);
+	loff_t offset = (loff_t)syscall_arg_raw(1);
+	loff_t len = (loff_t)syscall_arg_raw(2);
 	struct task *task = current_task();
 	struct fs_file *fp;
 	int ret;
+
+	if (offset < 0 || len <= 0)
+		return -EINVAL;
 
 	fp = fdtable_get_file(task->fdtable, fd);
 	if (IS_ERR(fp))
@@ -363,7 +356,7 @@ u64 sys_fallocate(void)
 		return -EINVAL;
 	}
 
-	ret = fs_file_fallocate(fp, mode, offset, len);
+	ret = fs_file_fallocate(fp, 0, offset, len);
 	fs_file_put(fp);
 	return ret;
 }
@@ -534,16 +527,6 @@ u64 sys_renameat(void)
 	return do_renameat(olddirfd, oldpathname, newdirfd, newpathname, 0);
 }
 
-u64 sys_renameat2(void)
-{
-	int olddirfd = syscall_arg_int(0);
-	const char *oldpathname = syscall_arg_ptr(1);
-	int newdirfd = syscall_arg_int(2);
-	const char *newpathname = syscall_arg_ptr(3);
-	int flags = syscall_arg_raw(4);
-	return do_renameat(olddirfd, oldpathname, newdirfd, newpathname, flags);
-}
-
 u64 sys_symlinkat(void)
 {
 	const char *target;
@@ -645,69 +628,6 @@ u64 sys_dup2(void)
 	return newfd;
 }
 
-u64 sys_mount(void)
-{
-	const char *source = syscall_arg_ptr(0);
-	const char *target = syscall_arg_ptr(1);
-	const char *type = syscall_arg_ptr(2);
-	unsigned long flags = syscall_arg_raw(3);
-	void *data = syscall_arg_ptr(4);
-
-	if (!capable(CAP_SYS_ADMIN))
-		return -EPERM;
-	return do_mount(source, target, type, flags, data);
-}
-
-u64 sys_umount2(void)
-{
-	const char *target = syscall_arg_ptr(0);
-	int flags = syscall_arg_int(1);
-	struct fs_path path;
-	int err;
-
-	if (!capable(CAP_SYS_ADMIN))
-		return -EPERM;
-
-	/*
-	 * Resolve the mountpoint as seen from its parent mount.  With plain
-	 * flags the final follow_mount() would enter the filesystem we are
-	 * trying to unmount, and fs_mount_state_lookup() would look for a
-	 * nested mount instead of this one.
-	 */
-	err = fs_path_lookup(target, LOOKUP_MOUNTPOINT, &path);
-	if (err)
-		return err;
-
-	spin_lock(&path.dentry->lock);
-	if (path.dentry->flags & DCACHE_NEGATIVE) {
-		spin_unlock(&path.dentry->lock);
-		fs_path_put(&path);
-		return -ENOENT;
-	}
-	spin_unlock(&path.dentry->lock);
-
-	struct fs_mount_state *mnt = fs_mount_state_lookup(&path);
-	if (!mnt) {
-		fs_path_put(&path);
-		return -ENOENT;
-	}
-
-	err = do_umount(mnt, flags);
-	if (err) {
-		fs_mount_state_put(mnt);
-		fs_path_put(&path);
-		return err;
-	}
-
-	/*
-	 * do_umount() dropped the topology reference; the reference obtained
-	 * by fs_mount_state_lookup() above belongs to this syscall.
-	 */
-	fs_mount_state_put(mnt);
-	fs_path_put(&path);
-	return 0;
-}
-
 u64 sys_lseek(void)
 {
 	int fd = 0;
@@ -729,33 +649,34 @@ u64 sys_lseek(void)
 	return ret;
 }
 
-struct getdents_context {
+struct posix_getdents_context {
 	struct fs_dir_iterator ctx;
 	u8 *buf;
 	size_t size;
 	size_t pos;
 };
 
-static bool getdents_filldir(struct fs_dir_iterator *ctx, const char *name,
-			     int namelen, loff_t offset, u64 ino,
-			     unsigned int d_type)
+static bool posix_getdents_filldir(struct fs_dir_iterator *ctx,
+				   const char *name, int namelen, loff_t offset,
+				   u64 ino, unsigned int d_type)
 {
-	struct getdents_context *gctx;
-	struct dirent *de;
+	struct posix_getdents_context *gctx;
+	struct posix_dent *de;
 
-	gctx = container_of(ctx, struct getdents_context, ctx);
+	(void)offset;
+
+	gctx = container_of(ctx, struct posix_getdents_context, ctx);
 	if (gctx->pos > gctx->size)
 		return false;
 
-	size_t len = offsetof(struct dirent, d_name) + namelen + 1;
-	len = round_up(len, alignof(struct dirent));
+	size_t len = offsetof(struct posix_dent, d_name) + namelen + 1;
+	len = round_up(len, alignof(struct posix_dent));
 
 	if (len > gctx->size - gctx->pos)
 		return false;
 
-	de = (struct dirent *)(gctx->buf + gctx->pos);
+	de = (struct posix_dent *)(gctx->buf + gctx->pos);
 	de->d_ino = ino;
-	de->d_off = offset;
 	de->d_reclen = len;
 	de->d_type = d_type;
 	memcpy(de->d_name, name, namelen);
@@ -765,15 +686,23 @@ static bool getdents_filldir(struct fs_dir_iterator *ctx, const char *name,
 	return true;
 }
 
-u64 sys_getdents(void)
+u64 sys_posix_getdents(void)
 {
 	int fd = -1;
 	struct fs_file *fp = NULL;
 	void *buf;
 	size_t size;
+	int flags;
 	int err;
 
 	fd = syscall_arg_int(0);
+	buf = syscall_arg_ptr(1);
+	size = syscall_arg_raw(2);
+	flags = syscall_arg_int(3);
+
+	if (flags)
+		return -EINVAL;
+
 	fp = fdtable_get_file(current_task()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
@@ -782,9 +711,6 @@ u64 sys_getdents(void)
 		fs_file_put(fp);
 		return -ENOTDIR;
 	}
-
-	buf = syscall_arg_ptr(1);
-	size = syscall_arg_raw(2);
 
 	struct fs_inode *inode = fs_dentry_inode(fp->path.dentry);
 	const struct fs_file_ops *fop = fp->ops;
@@ -800,104 +726,8 @@ u64 sys_getdents(void)
 
 	sleeplock_acquire(&fp->pos_lock);
 
-	struct getdents_context ctx = {
-		.ctx.actor = getdents_filldir,
-		.ctx.pos = fp->pos,
-		.buf = buf,
-		.size = size,
-		.pos = 0,
-	};
-
-	sleeplock_acquire(&inode->rwsem);
-	err = fop->iterate_shared(fp, &ctx.ctx);
-	sleeplock_release(&inode->rwsem);
-	if (err) {
-		sleeplock_release(&fp->pos_lock);
-		fs_file_put(fp);
-		return err;
-	}
-
-	fp->pos = ctx.pos;
-	sleeplock_release(&fp->pos_lock);
-	fs_file_put(fp);
-
-	return ctx.pos;
-}
-
-struct getdents64_context {
-	struct fs_dir_iterator ctx;
-	u8 *buf;
-	size_t size;
-	size_t pos;
-};
-
-static bool getdents64_filldir(struct fs_dir_iterator *ctx, const char *name,
-			       int namelen, loff_t offset, u64 ino,
-			       unsigned int d_type)
-{
-	struct getdents64_context *gctx;
-	struct dirent64 *de;
-
-	gctx = container_of(ctx, struct getdents64_context, ctx);
-	if (gctx->pos > gctx->size)
-		return false;
-
-	size_t len = offsetof(struct dirent64, d_name) + namelen + 1;
-	len = round_up(len, alignof(struct dirent64));
-
-	if (len > gctx->size - gctx->pos)
-		return false;
-
-	de = (struct dirent64 *)(gctx->buf + gctx->pos);
-	de->d_ino = ino;
-	de->d_off = offset;
-	de->d_reclen = len;
-	de->d_type = d_type;
-	memcpy(de->d_name, name, namelen);
-	de->d_name[namelen] = '\0';
-	gctx->pos += len;
-
-	return true;
-}
-
-u64 sys_getdents64(void)
-{
-	int fd = -1;
-	struct fs_file *fp = NULL;
-	void *buf;
-	size_t size;
-	int err;
-
-	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(current_task()->fdtable, fd);
-	if (IS_ERR(fp))
-		return PTR_ERR(fp);
-
-	if (!(fp->mode & FMODE_DIR)) {
-		pr_info("%s(): Not a directory\n", __func__);
-		fs_file_put(fp);
-		return -ENOTDIR;
-	}
-
-	buf = syscall_arg_ptr(1);
-	size = syscall_arg_raw(2);
-
-	struct fs_inode *inode = fs_dentry_inode(fp->path.dentry);
-	const struct fs_file_ops *fop = fp->ops;
-
-	if (!inode) {
-		fs_file_put(fp);
-		return -ENOENT;
-	}
-	if (!fop->iterate_shared) {
-		fs_file_put(fp);
-		return -EOPNOTSUPP;
-	}
-
-	sleeplock_acquire(&fp->pos_lock);
-
-	struct getdents64_context ctx = {
-		.ctx.actor = getdents64_filldir,
+	struct posix_getdents_context ctx = {
+		.ctx.actor = posix_getdents_filldir,
 		.ctx.pos = fp->pos,
 		.buf = buf,
 		.size = size,
@@ -1306,30 +1136,6 @@ u64 sys_utimes(void)
 	return set_times_path_at(AT_FDCWD, path, ts, LOOKUP_FOLLOW);
 }
 
-u64 sys_futimesat(void)
-{
-	int dirfd = syscall_arg_int(0);
-	const char *path = syscall_arg_ptr(1);
-	const struct timeval *utimes = syscall_arg_ptr(2);
-	struct timeval tv[2];
-	struct timespec ts[2];
-	int err;
-
-	if (!path)
-		return -EINVAL;
-
-	if (!utimes)
-		return set_times_path_at(dirfd, path, NULL, LOOKUP_FOLLOW);
-
-	if (copy_from_user(tv, utimes, sizeof(tv)))
-		return -EFAULT;
-	err = timeval_pair_to_timespec(tv, ts);
-	if (err)
-		return err;
-
-	return set_times_path_at(dirfd, path, ts, LOOKUP_FOLLOW);
-}
-
 u64 sys_utimensat(void)
 {
 	int dirfd = syscall_arg_int(0);
@@ -1390,24 +1196,4 @@ u64 sys_sync(void)
 {
 	sync_all_filesystems();
 	return 0;
-}
-
-u64 sys_syncfs(void)
-{
-	struct fs_file *fp = NULL;
-	int ret;
-	int fd;
-
-	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(current_task()->fdtable, fd);
-	if (IS_ERR(fp))
-		return PTR_ERR(fp);
-
-	if (!fp->inode) {
-		fs_file_put(fp);
-		return -EINVAL;
-	}
-	ret = sync_filesystem(fp->inode->sb);
-	fs_file_put(fp);
-	return ret;
 }

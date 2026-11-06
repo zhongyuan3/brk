@@ -506,14 +506,17 @@ void task_exit(int status)
 	panic("scheduling zombie\n");
 }
 
-pid_t task_wait(pid_t pid, int *status, int options, struct rusage *rus)
+pid_t task_wait(pid_t pid, int *status, int options, struct rusage *rus,
+		kuid_t *uid)
 {
 	struct task *child;
 	struct task *parent = current_task();
 	irqstate_t flags;
 	bool found;
+	bool nohang = options & WNOHANG;
+	bool nowait = options & WNOWAIT;
+	pid_t retpid;
 
-	(void)options;
 	(void)rus;
 
 	flags = spin_lock_irqsave(&wait_lock);
@@ -546,23 +549,40 @@ again:
 
 		if (status)
 			*status = child->exit_status;
-		pid = child->tgid;
-		task_add_child_system_time(
-			parent, task_get_system_time(child) +
+		if (uid)
+			*uid = child->uid;
+		retpid = child->tgid;
+		if (!nowait) {
+			task_add_child_system_time(
+				parent,
+				task_get_system_time(child) +
 					task_get_child_system_time(child));
-		task_add_child_user_time(
-			parent, task_get_user_time(child) +
+			task_add_child_user_time(
+				parent,
+				task_get_user_time(child) +
 					task_get_child_user_time(child));
+		}
 		spin_unlock_irqrestore(&child->lock, cflags);
+
+		if (nowait) {
+			spin_unlock_irqrestore(&wait_lock, flags);
+			return retpid;
+		}
+
 		list_del_init(&child->child);
 		spin_unlock_irqrestore(&wait_lock, flags);
 		task_destroy(child);
-		return pid;
+		return retpid;
 	}
 
 	if (pid > 0 && !found) {
 		spin_unlock_irqrestore(&wait_lock, flags);
 		return -ECHILD;
+	}
+
+	if (nohang) {
+		spin_unlock_irqrestore(&wait_lock, flags);
+		return 0;
 	}
 
 	task_sleep(parent, &wait_lock);

@@ -20,9 +20,4 @@
 #define MS_INVALIDATE 0x2
 #define MS_SYNC 0x4
 
-/* mremap flags */
-#define MREMAP_MAYMOVE 0x1
-#define MREMAP_FIXED 0x2
-#define MREMAP_DONTUNMAP 0x4
-
 #endif
