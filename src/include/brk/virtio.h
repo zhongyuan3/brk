@@ -1,7 +1,7 @@
 #ifndef BRK_VIRTIO_H
 #define BRK_VIRTIO_H
 
-#include <brk/device_model.h>
+#include <brk/device.h>
 #include <brk/list.h>
 #include <brk/types.h>
 #include <brk/virtio_regs.h>

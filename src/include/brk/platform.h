@@ -1,7 +1,7 @@
 #ifndef BRK_PLATFORM_H
 #define BRK_PLATFORM_H
 
-#include <brk/device_model.h>
+#include <brk/device.h>
 #include <brk/kernel.h>
 #include <brk/types.h>
 

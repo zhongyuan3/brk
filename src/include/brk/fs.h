@@ -29,6 +29,8 @@
 #define I_BAD (1 << 7) /* I_NEW initialization failed; do not evict */
 #define I_DIRTY (I_DIRTY_SYNC | I_DIRTY_DATASYNC | I_DIRTY_PAGES)
 
+typedef unsigned int fmode_t;
+
 #define FMODE_READ (1 << 0)
 #define FMODE_WRITE (1 << 1)
 #define FMODE_DIR (1 << 2)

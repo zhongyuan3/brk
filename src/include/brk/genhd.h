@@ -3,7 +3,7 @@
 
 #include <brk/bio.h>
 #include <brk/blkdev.h>
-#include <brk/device_model.h>
+#include <brk/device.h>
 #include <brk/types.h>
 
 /*

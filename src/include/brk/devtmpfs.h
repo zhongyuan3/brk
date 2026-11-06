@@ -1,7 +1,7 @@
 #ifndef BRK_DEVTMPFS_H
 #define BRK_DEVTMPFS_H
 
-#include <brk/device_model.h>
+#include <brk/device.h>
 #include <brk/fs.h>
 #include <brk/types.h>
 

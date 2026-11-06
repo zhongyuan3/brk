@@ -1,5 +1,5 @@
 #include <brk/blkdev.h>
-#include <brk/device_model.h>
+#include <brk/device.h>
 #include <brk/genhd.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>

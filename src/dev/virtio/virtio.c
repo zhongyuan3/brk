@@ -1,5 +1,5 @@
 #include <arch/pgtable.h>
-#include <brk/device_model.h>
+#include <brk/device.h>
 #include <brk/initcall.h>
 #include <brk/ioremap.h>
 #include <brk/kernel.h>
