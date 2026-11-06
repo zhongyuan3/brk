@@ -25,8 +25,6 @@ int uvm_mmap_file_private(struct uvm_space *mm, u64 hint, size_t len, int prot,
 /* File-backed, MAP_SHARED: map page cache pages directly. */
 int uvm_mmap_file_shared(struct uvm_space *mm, u64 hint, size_t len, int prot,
 			 int flags, int fd, u64 offset, u64 *addr_out);
-int uvm_mremap(struct uvm_space *mm, u64 old_addr, size_t old_len,
-	       size_t new_len, int flags, u64 new_addr, u64 *addr_out);
 /*
  * Resolve a user page fault.  @write/@instr describe the access type.
  * Returns 0 when the PTE now maps @addr, or a negative errno when the access

@@ -59,13 +59,13 @@ void task_exit(int status);
 void task_exit_normal(int code);
 void task_exit_signal(int sig);
 int task_fork(void);
-int task_set_brk(u64 addr);
 void task_dump(void);
 
 void task_yield(void);
 void task_sleep(void *chan, spinlock_t *lock);
 void task_wake_all(void *chan);
-pid_t task_wait(pid_t cpid, int *status, int options, struct rusage *rus);
+pid_t task_wait(pid_t cpid, int *status, int options, struct rusage *rus,
+		kuid_t *uid);
 void task_wake_spec(struct task *task);
 void task_sched_resume(void);
 void task_scheduler(void);

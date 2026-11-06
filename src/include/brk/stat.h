@@ -3,13 +3,13 @@
 
 #include <brk/stat_types.h>
 #include <uapi/stat.h>
-#include <uapi/statfs.h>
+#include <uapi/statvfs.h>
 
 /*
  * Convert kernel-internal status into the user ABI layouts.  These are the
- * only places where struct kstat/kstatfs and struct stat/statfs meet.
+ * only places where struct kstat/kstatfs and struct stat/statvfs meet.
  */
 void kstat_to_stat(const struct kstat *ks, struct stat *st);
-void kstatfs_to_statfs(const struct kstatfs *ks, struct statfs *st);
+void kstatfs_to_statvfs(const struct kstatfs *ks, struct statvfs *st);
 
 #endif

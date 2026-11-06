@@ -49,4 +49,45 @@ struct sigaction {
 	__kernel_ulong_t sa_flags;
 };
 
+/* waitid() id types. */
+#define P_ALL 0
+#define P_PID 1
+#define P_PGID 2
+
+/* waitid()/waitpid() options. */
+#define WNOHANG 0x00000001
+#define WUNTRACED 0x00000002
+#define WSTOPPED WUNTRACED
+#define WEXITED 0x00000004
+#define WCONTINUED 0x00000008
+#define WNOWAIT 0x01000000
+
+/* si_code values for child state changes. */
+#define CLD_EXITED 1
+#define CLD_KILLED 2
+#define CLD_DUMPED 3
+#define CLD_TRAPPED 4
+#define CLD_STOPPED 5
+#define CLD_CONTINUED 6
+
+union sigval {
+	int sival_int;
+	void *sival_ptr;
+};
+
+typedef union sigval sigval_t;
+
+/* POSIX minimal siginfo_t layout used by waitid(). */
+typedef struct {
+	int si_signo;
+	int si_errno;
+	int si_code;
+	int __pad0;
+	__kernel_pid_t si_pid;
+	__kernel_uid_t si_uid;
+	int si_status;
+	int __pad1;
+	sigval_t si_value;
+} siginfo_t;
+
 #endif

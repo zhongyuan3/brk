@@ -18,16 +18,6 @@
 #define O_TRUNC 00001000 /* not fcntl */
 #endif
 
-/* renameat2() flags */
-#ifndef RENAME_NOREPLACE
-#define RENAME_NOREPLACE (1 << 0)
-#endif
-#ifndef RENAME_EXCHANGE
-#define RENAME_EXCHANGE (1 << 1)
-#endif
-#ifndef RENAME_WHITEOUT
-#define RENAME_WHITEOUT (1 << 2)
-#endif
 #ifndef O_APPEND
 #define O_APPEND 00002000
 #endif
@@ -99,9 +89,5 @@
 #define AT_SYMLINK_FOLLOW 0x400
 #define AT_NO_AUTOMOUNT 0x800
 #define AT_EMPTY_PATH 0x1000
-
-#define FALLOC_FL_KEEP_SIZE 0x01
-#define FALLOC_FL_PUNCH_HOLE 0x02
-#define FALLOC_FL_ZERO_RANGE 0x04
 
 #endif

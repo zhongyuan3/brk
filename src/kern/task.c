@@ -378,7 +378,7 @@ void task_init_main(void)
 	task_start_user_init(init);
 
 	for (;;) {
-		if (task_wait(-1, NULL, 0, NULL) < 0)
+		if (task_wait(-1, NULL, 0, NULL, NULL) < 0)
 			ktime_nanosleep((ktime_t)100 * NS_PER_MS, NULL);
 	}
 }
@@ -429,81 +429,6 @@ void task_set_killed(struct task *task)
 bool task_is_killed(struct task *task)
 {
 	return signal_pending(task);
-}
-
-int task_set_brk(u64 addr)
-{
-	struct task *task = current_task();
-	struct uvm_space *mm = task->mm;
-	struct uvm_region *heap = mm->heap;
-	u64 heap_start = heap->addr;
-	u64 curr_heap_end = heap_start + heap->size;
-	int err = 0;
-	u64 new_heap_end;
-	size_t incr;
-
-	if (addr < heap_start)
-		return 0;
-
-	if (addr <= curr_heap_end) {
-		mm->brk = addr;
-		return 0;
-	}
-
-	new_heap_end = round_up(addr, PAGE_SIZE);
-	incr = new_heap_end - curr_heap_end;
-
-	/* Do not let brk grow into an mmap region (or the stack). */
-	if (incr && uvm_range_conflicts(mm, curr_heap_end, incr))
-		return -ENOMEM;
-
-	size_t old_npgs = heap->nr_pages;
-	size_t new_npgs = old_npgs + (incr >> PAGE_SHIFT);
-	struct page **new_pgs = kcalloc(new_npgs, sizeof(struct page *));
-	if (!new_pgs)
-		return -ENOMEM;
-	memcpy(new_pgs, heap->pages, old_npgs * sizeof(struct page *));
-
-	addr = curr_heap_end;
-	size_t i = old_npgs;
-	while (i < new_npgs) {
-		struct page *pg = page_alloc(0);
-		if (!pg) {
-			err = -ENOMEM;
-			goto failed;
-		}
-		u64 pa = page_to_phys(pg);
-		err = map_user_pages(mm->pgd, addr, PAGE_SIZE, pa,
-				     PTE_R | PTE_W);
-		if (err) {
-			assert(pg);
-			page_free(pg, 0);
-			goto failed;
-		}
-		new_pgs[i] = pg;
-		++i;
-		addr += PAGE_SIZE;
-	}
-
-	struct page **old_pgs = heap->pages;
-	heap->pages = new_pgs;
-	heap->nr_pages = new_npgs;
-	kfree(old_pgs);
-
-	heap->size = new_heap_end - heap_start;
-	mm->brk = addr;
-
-	return 0;
-
-failed:
-	for (u64 a = curr_heap_end; a < addr; a += PAGE_SIZE)
-		unmap_user_pages(mm->pgd, a, PAGE_SIZE);
-	for (size_t j = old_npgs; j < i; ++j) {
-		assert(new_pgs[j]);
-		page_free(new_pgs[j], 0);
-	}
-	kfree(new_pgs);
-	return err;
 }
 
 /*

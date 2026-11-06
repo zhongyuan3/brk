@@ -14,26 +14,64 @@
 #include <uapi/resource.h>
 #include <uapi/time.h>
 
-u64 sys_brk(void)
+u64 sys_waitid(void)
 {
-	u64 addr = syscall_arg_raw(0);
-	if (addr == 0)
-		return current_task()->mm->brk;
-	return task_set_brk(addr);
-}
+	int idtype = syscall_arg_int(0);
+	pid_t id = syscall_arg_int(1);
+	siginfo_t *infop = syscall_arg_ptr(2);
+	int options = syscall_arg_int(3);
+	kuid_t uid = 0;
+	int status = 0;
+	pid_t pid;
+	int ret;
 
-u64 sys_clone(void)
-{
-	return -ENOSYS;
-}
+	if (options & ~(WNOHANG | WNOWAIT | WEXITED | WSTOPPED | WCONTINUED))
+		return -EINVAL;
 
-u64 sys_wait4(void)
-{
-	pid_t pid = syscall_arg_raw(0);
-	int *wstatus = (int *)(uintptr_t)syscall_arg_raw(1);
-	int opts = syscall_arg_raw(2);
-	struct rusage *rus = (struct rusage *)(uintptr_t)syscall_arg_raw(3);
-	return task_wait(pid, wstatus, opts, rus);
+	/* Job control is not implemented yet. */
+	if (options & (WSTOPPED | WCONTINUED))
+		return -EINVAL;
+
+	switch (idtype) {
+	case P_ALL:
+		pid = -1;
+		break;
+	case P_PID:
+		if (id <= 0)
+			return -EINVAL;
+		pid = id;
+		break;
+	case P_PGID:
+	default:
+		return -EINVAL;
+	}
+
+	ret = task_wait(pid, &status, options, NULL, &uid);
+	if (ret < 0)
+		return ret;
+
+	if (infop) {
+		siginfo_t si = { 0 };
+
+		if (ret == 0) {
+			si.si_signo = 0;
+		} else {
+			si.si_signo = SIGCHLD;
+			si.si_pid = ret;
+			si.si_uid = uid;
+			if ((status & 0x7f) == 0) {
+				si.si_code = CLD_EXITED;
+				si.si_status = (status >> 8) & 0xff;
+			} else {
+				si.si_code = CLD_KILLED;
+				si.si_status = status & 0x7f;
+			}
+		}
+		if (copy_to_user(infop, &si, sizeof(si)))
+			return -EFAULT;
+	}
+
+	return 0;
 }
 
 u64 sys_fork(void)
@@ -73,11 +111,6 @@ u64 sys_getppid(void)
 	struct task *par = current_task()->parent;
 
 	return par ? par->tgid : 0;
-}
-
-u64 sys_gettid(void)
-{
-	return current_task()->pid;
 }
 
 u64 sys_getuid(void)
@@ -323,32 +356,6 @@ u64 sys_getresgid(void)
 	return 0;
 }
 
-u64 sys_setfsuid(void)
-{
-	struct task *task = current_task();
-	int uid = syscall_arg_int(0);
-	kuid_t old = task->fsuid;
-
-	if (uid >= 0 &&
-	    (capable(CAP_SETUID) || (kuid_t)uid == task->uid ||
-	     (kuid_t)uid == task->euid || (kuid_t)uid == task->suid))
-		task->fsuid = (kuid_t)uid;
-	return old;
-}
-
-u64 sys_setfsgid(void)
-{
-	struct task *task = current_task();
-	int gid = syscall_arg_int(0);
-	kgid_t old = task->fsgid;
-
-	if (gid >= 0 &&
-	    (capable(CAP_SETGID) || (kgid_t)gid == task->gid ||
-	     (kgid_t)gid == task->egid || (kgid_t)gid == task->sgid))
-		task->fsgid = (kgid_t)gid;
-	return old;
-}
-
 u64 sys_getgroups(void)
 {
 	struct task *task = current_task();
@@ -371,98 +378,6 @@ u64 sys_getgroups(void)
 			return -EFAULT;
 	}
 	return task->ngroups;
-}
-
-u64 sys_setgroups(void)
-{
-	struct task *task = current_task();
-	int size = syscall_arg_int(0);
-	const u32 *list = syscall_arg_ptr(1);
-	kgid_t groups[NGROUPS_MAX];
-
-	if (size < 0 || size > NGROUPS_MAX)
-		return -EINVAL;
-	if (!capable(CAP_SETGID))
-		return -EPERM;
-	if (size && !list)
-		return -EFAULT;
-
-	if (size &&
-	    copy_from_user(groups, list, sizeof(groups[0]) * (size_t)size))
-		return -EFAULT;
-
-	for (int i = 0; i < size; i++)
-		task->groups[i] = (kgid_t)groups[i];
-	task->ngroups = size;
-	return 0;
-}
-
-u64 sys_capget(void)
-{
-	struct task *task = current_task();
-	struct cap_header hdr;
-	struct cap_data data[2];
-	struct cap_header *uhdr = syscall_arg_ptr(0);
-	struct cap_data *udata = syscall_arg_ptr(1);
-
-	if (!uhdr || !udata)
-		return -EFAULT;
-	if (copy_from_user(&hdr, uhdr, sizeof(hdr)))
-		return -EFAULT;
-	if (hdr.version != _LINUX_CAPABILITY_VERSION_3)
-		return -EINVAL;
-	if (hdr.pid != 0 && hdr.pid != task->tgid)
-		return -EINVAL;
-
-	memset(data, 0, sizeof(data));
-	data[0].effective = (unsigned int)task->cap_effective;
-	data[0].permitted = (unsigned int)task->cap_permitted;
-	data[0].inheritable = (unsigned int)task->cap_inheritable;
-	data[1].effective = (unsigned int)(task->cap_effective >> 32);
-	data[1].permitted = (unsigned int)(task->cap_permitted >> 32);
-	data[1].inheritable = (unsigned int)(task->cap_inheritable >> 32);
-
-	if (copy_to_user(udata, data, sizeof(data)))
-		return -EFAULT;
-	return 0;
-}
-
-u64 sys_capset(void)
-{
-	struct task *task = current_task();
-	struct cap_header hdr;
-	struct cap_data data[2];
-	struct cap_header *uhdr = syscall_arg_ptr(0);
-	struct cap_data *udata = syscall_arg_ptr(1);
-	u64 effective, permitted, inheritable;
-
-	if (!uhdr || !udata)
-		return -EFAULT;
-	if (copy_from_user(&hdr, uhdr, sizeof(hdr)))
-		return -EFAULT;
-	if (hdr.version != _LINUX_CAPABILITY_VERSION_3)
-		return -EINVAL;
-	if (hdr.pid != 0 && hdr.pid != task->tgid)
-		return -EINVAL;
-	if (copy_from_user(data, udata, sizeof(data)))
-		return -EFAULT;
-
-	effective = (u64)data[0].effective | ((u64)data[1].effective << 32);
-	permitted = (u64)data[0].permitted | ((u64)data[1].permitted << 32);
-	inheritable = (u64)data[0].inheritable |
-		      ((u64)data[1].inheritable << 32);
-
-	if (permitted & ~task->cap_permitted)
-		return -EPERM;
-	if (effective & ~permitted)
-		return -EPERM;
-	if (!capable(CAP_SETPCAP) && (inheritable & ~task->cap_inheritable))
-		return -EPERM;
-
-	task->cap_effective = effective;
-	task->cap_permitted = permitted;
-	task->cap_inheritable = inheritable;
-	return 0;
 }
 
 u64 sys_umask(void)

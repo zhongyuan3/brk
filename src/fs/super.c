@@ -212,5 +212,7 @@ int fs_statfs(struct fs_super_block *sb, struct kstatfs *buf)
 		return -ENOSYS;
 
 	memset(buf, 0, sizeof(*buf));
+	if (sb->flags)
+		buf->flags = sb->flags;
 	return sb->ops->statfs(sb, buf);
 }

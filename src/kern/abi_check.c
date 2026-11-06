@@ -11,7 +11,7 @@
 #include <uapi/signal.h>
 #include <uapi/socket.h>
 #include <uapi/stat.h>
-#include <uapi/statfs.h>
+#include <uapi/statvfs.h>
 #include <uapi/termios.h>
 #include <uapi/time.h>
 #include <uapi/times.h>
@@ -47,7 +47,7 @@ _Static_assert(offsetof(struct stat, st_size) == 48, "struct stat ABI changed");
 _Static_assert(offsetof(struct stat, st_atime) == 72,
 	       "struct stat ABI changed");
 
-_Static_assert(sizeof(struct statfs) == 120, "struct statfs ABI changed");
+_Static_assert(sizeof(struct statvfs) == 88, "struct statvfs ABI changed");
 _Static_assert(sizeof(struct timespec) == 16, "struct timespec ABI changed");
 _Static_assert(sizeof(struct timeval) == 16, "struct timeval ABI changed");
 _Static_assert(sizeof(struct rusage) == 144, "struct rusage ABI changed");
@@ -55,7 +55,11 @@ _Static_assert(sizeof(struct sigaction) == 24, "struct sigaction ABI changed");
 _Static_assert(sizeof(struct tms) == 32, "struct tms ABI changed");
 
 _Static_assert(sizeof(struct dirent) == 268, "struct dirent ABI changed");
-_Static_assert(sizeof(struct dirent64) == 280, "struct dirent64 ABI changed");
+_Static_assert(sizeof(ino_t) == 8, "ino_t is not 64-bit");
+_Static_assert(sizeof(struct posix_dent) == 24,
+	       "struct posix_dent ABI changed");
+_Static_assert(offsetof(struct posix_dent, d_name) == 17,
+	       "struct posix_dent ABI changed");
 
 _Static_assert(sizeof(struct elf_hdr) == 64, "struct elf_hdr ABI changed");
 _Static_assert(sizeof(struct elf_phdr) == 56, "struct elf_phdr ABI changed");

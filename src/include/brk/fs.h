@@ -12,6 +12,14 @@
 #define SEEK_CUR 1
 #define SEEK_END 2
 
+/* Internal rename flags; not exposed through the syscall ABI anymore. */
+#define RENAME_NOREPLACE (1 << 0)
+#define RENAME_EXCHANGE (1 << 1)
+#define RENAME_WHITEOUT (1 << 2)
+
+/* Internal fallocate mode bits; POSIX posix_fallocate() implies mode 0. */
+#define FALLOC_FL_KEEP_SIZE 0x01
+
 #define FS_REQUIRES_DEV 1
 #define FS_BINARY_MOUNTDATA 2
 #define FS_USERNS_MOUNT 4
