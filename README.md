@@ -1,8 +1,6 @@
-[中文](README.cn.md) | [English](README.md)
-
 # BRK
 
-### **B**arely **R**unning **K**ernel
+**B**arely **R**unning **K**ernel
 
 > _"Yes, it's a BRK. But it's MY BRK."_
 
@@ -10,6 +8,24 @@
 ![Language](https://img.shields.io/badge/language-C-blue)
 ![Arch](https://img.shields.io/badge/target-RISCV--64-orange)
 ![Mood](https://img.shields.io/badge/mood-panic%20but_happy-red)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+---
+
+## Table of Contents
+
+- [BRK](#brk)
+  - [Table of Contents](#table-of-contents)
+  - [What the heck is this?](#what-the-heck-is-this)
+  - [Inspiration \& Origins](#inspiration--origins)
+  - [Build \& Run (At Your Own Risk)](#build--run-at-your-own-risk)
+    - [Prerequisites](#prerequisites)
+    - [Quick Start](#quick-start)
+    - [Useful Checks and Helpers](#useful-checks-and-helpers)
+    - [Useful Variables](#useful-variables)
+  - [License](#license)
+
+---
 
 ## What the heck is this?
 
@@ -32,12 +48,12 @@ I'm not trying to reinvent the wheel here. BRK stands firmly on the shoulders of
 
 If you are morbidly curious to see what a "barely running kernel" looks like, you can try spinning it up in a RISC-V environment.
 
-**Prerequisites:**
+### Prerequisites
 
 - `riscv64-unknown-elf-toolchain` (or any RISC-V cross-compiler)
 - `QEMU` (System mode, `qemu-system-riscv64`)
 
-**Try it out:**
+### Quick Start
 
 ```sh
 # Build the kernel (debug by default)
@@ -48,24 +64,33 @@ make run CROSS_COMPILE=riscv64-unknown-elf-
 
 # Release build
 make BUILD=release CROSS_COMPILE=riscv64-unknown-elf-
-
-# Useful checks and helpers
-make help
-make headers-check
-make check
-make rootfs
-make smoke
-make ci
-make size
-make disasm
 ```
 
-Useful variables:
+### Useful Checks and Helpers
 
-- `BUILD=debug|release`
-- `CPU=<n>` and `RAM=<size>` for QEMU
-- `QEMU_NET=0` to boot without the virtio network device
-- `V=1` to show the full compiler/linker commands
-- `EXTRA_CFLAGS=...` / `EXTRA_LDFLAGS=...` for temporary additions
-- `WERROR=0` to keep warnings non-fatal while bringing up a new toolchain
-- `SMOKE_TIMEOUT` / `SMOKE_BOOT_DELAY` to tune the QEMU smoke test
+```sh
+make help           # list all available targets
+make headers-check  # header checks
+make check          # static checks
+make rootfs         # build the root filesystem
+make smoke          # QEMU smoke test
+make ci             # CI pipeline
+make size           # show kernel size
+make disasm         # disassemble the kernel
+```
+
+### Useful Variables
+
+| Variable                                 | Description                                               |
+| ---------------------------------------- | --------------------------------------------------------- |
+| `BUILD=debug\|release`                   | Build type                                                |
+| `CPU=<n>` / `RAM=<size>`                 | Configure QEMU CPU count and RAM size                     |
+| `QEMU_NET=0`                             | Boot without the virtio network device                    |
+| `V=1`                                    | Show full compiler/linker commands                        |
+| `EXTRA_CFLAGS=...` / `EXTRA_LDFLAGS=...` | Temporarily append compile/link flags                     |
+| `WERROR=0`                               | Keep warnings non-fatal while bringing up a new toolchain |
+| `SMOKE_TIMEOUT` / `SMOKE_BOOT_DELAY`     | Tune the QEMU smoke test timing                           |
+
+## License
+
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
