@@ -104,6 +104,19 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 
 	port = tty->port;
 
+	/*
+	 * Standard input/output may be inherited without an explicit open(),
+	 * so a terminal can reach userspace with no foreground process group
+	 * recorded.  Bind it lazily to the first task that uses the terminal;
+	 * this also makes TIOCSWINSZ and the line discipline's signal keys
+	 * target the right process group.
+	 */
+	task = current_task();
+	flags = spin_lock_irqsave(&port->lock);
+	if (port->pgrp <= 0 && task && task->pgid > 0)
+		port->pgrp = task->pgid;
+	spin_unlock_irqrestore(&port->lock, flags);
+
 	switch (cmd) {
 	case TIOCGWINSZ:
 		if (!arg)
