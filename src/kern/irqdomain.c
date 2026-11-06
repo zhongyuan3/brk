@@ -1,7 +1,7 @@
 #include <brk/cpu.h>
 #include <brk/dt.h>
-#include <brk/irq/irqdesc.h>
-#include <brk/irq/irqdomain.h>
+#include <brk/irqdesc.h>
+#include <brk/irqdomain.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/spinlock.h>

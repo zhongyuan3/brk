@@ -1,8 +1,8 @@
-#ifndef BRK_NET_SOCKET_H
-#define BRK_NET_SOCKET_H
+#ifndef BRK_SOCKET_H
+#define BRK_SOCKET_H
 
 #include <brk/list.h>
-#include <brk/net/skbuff.h>
+#include <brk/skbuff.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <uapi/socket.h>

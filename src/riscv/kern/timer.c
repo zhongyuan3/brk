@@ -3,9 +3,9 @@
 #include <arch/sbi.h>
 #include <arch/timer.h>
 #include <brk/clocksource.h>
-#include <brk/net/tcp.h>
 #include <brk/printk.h>
 #include <brk/task.h>
+#include <brk/tcp.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
 #include <brk/trap.h>

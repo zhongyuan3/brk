@@ -1,8 +1,8 @@
 #include <brk/assert.h>
-#include <brk/net/eth.h>
-#include <brk/net/net.h>
-#include <brk/net/netdevice.h>
-#include <brk/net/skbuff.h>
+#include <brk/eth.h>
+#include <brk/net.h>
+#include <brk/netdevice.h>
+#include <brk/skbuff.h>
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/errno.h>

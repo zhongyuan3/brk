@@ -2,7 +2,7 @@
 #include <brk/fdtable.h>
 #include <brk/fs.h>
 #include <brk/kernel.h>
-#include <brk/net/socket.h>
+#include <brk/socket.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/types.h>

@@ -1,7 +1,7 @@
-#ifndef BRK_NET_ROUTE_H
-#define BRK_NET_ROUTE_H
+#ifndef BRK_ROUTE_H
+#define BRK_ROUTE_H
 
-#include <brk/net/netdevice.h>
+#include <brk/netdevice.h>
 #include <brk/types.h>
 
 struct rt_entry {

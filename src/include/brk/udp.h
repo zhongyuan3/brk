@@ -1,7 +1,7 @@
-#ifndef BRK_NET_UDP_H
-#define BRK_NET_UDP_H
+#ifndef BRK_UDP_H
+#define BRK_UDP_H
 
-#include <brk/net/skbuff.h>
+#include <brk/skbuff.h>
 #include <brk/types.h>
 
 struct socket;

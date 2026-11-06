@@ -1,8 +1,8 @@
-#include <brk/net/icmp.h>
-#include <brk/net/ip.h>
-#include <brk/net/net.h>
-#include <brk/net/skbuff.h>
+#include <brk/icmp.h>
+#include <brk/ip.h>
+#include <brk/net.h>
 #include <brk/printk.h>
+#include <brk/skbuff.h>
 #include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/errno.h>

@@ -1,5 +1,5 @@
-#ifndef BRK_NET_IRQTEST_H
-#define BRK_NET_IRQTEST_H
+#ifndef BRK_NETIRQTEST_H
+#define BRK_NETIRQTEST_H
 
 #include <stddef.h>
 

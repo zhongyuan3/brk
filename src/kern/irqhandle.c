@@ -1,6 +1,6 @@
 #include <brk/irq.h>
-#include <brk/irq/irqchip.h>
-#include <brk/irq/irqdesc.h>
+#include <brk/irqchip.h>
+#include <brk/irqdesc.h>
 #include <brk/spinlock.h>
 #include <brk/types.h>
 

@@ -1,11 +1,11 @@
 #include <brk/fs.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
-#include <brk/net/socket.h>
-#include <brk/net/tcp.h>
-#include <brk/net/udp.h>
+#include <brk/socket.h>
 #include <brk/string.h>
+#include <brk/tcp.h>
 #include <brk/types.h>
+#include <brk/udp.h>
 #include <uapi/errno.h>
 #include <uapi/poll.h>
 #include <uapi/socket.h>

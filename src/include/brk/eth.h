@@ -1,8 +1,8 @@
-#ifndef BRK_NET_ETH_H
-#define BRK_NET_ETH_H
+#ifndef BRK_ETH_H
+#define BRK_ETH_H
 
-#include <brk/net/netdevice.h>
-#include <brk/net/skbuff.h>
+#include <brk/netdevice.h>
+#include <brk/skbuff.h>
 #include <brk/types.h>
 
 #define ETH_ALEN 6
