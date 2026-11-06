@@ -16,6 +16,7 @@
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <brk/uaccess.h>
 #include <uapi/errno.h>
 #include <uapi/mman.h>
 #include <uapi/stat.h>
@@ -1134,4 +1135,40 @@ u64 sys_msync(void)
 	if (!task || !task->mm)
 		return -EFAULT;
 	return (u64)(long)uvm_msync(task->mm, addr, len, flags);
+}
+
+static u64 mlock_range(void)
+{
+	u64 addr = syscall_arg_raw(0);
+	size_t len = (size_t)syscall_arg_raw(1);
+
+	if (!len)
+		return 0;
+	if (!user_range_ok(addr, len))
+		return -ENOMEM;
+	return 0;
+}
+
+u64 sys_mlock(void)
+{
+	return mlock_range();
+}
+
+u64 sys_munlock(void)
+{
+	return mlock_range();
+}
+
+u64 sys_mlockall(void)
+{
+	int flags = syscall_arg_int(0);
+
+	if (flags & ~(MCL_CURRENT | MCL_FUTURE))
+		return -EINVAL;
+	return 0;
+}
+
+u64 sys_munlockall(void)
+{
+	return 0;
 }
