@@ -2,8 +2,8 @@
 #include <brk/dt.h>
 #include <brk/initcall.h>
 #include <brk/irq.h>
-#include <brk/irq/irqchip.h>
-#include <brk/irq/irqdomain.h>
+#include <brk/irqchip.h>
+#include <brk/irqdomain.h>
 #include <brk/list.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>

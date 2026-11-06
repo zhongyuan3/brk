@@ -1,7 +1,7 @@
 #include <brk/assert.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
-#include <brk/net/skbuff.h>
+#include <brk/skbuff.h>
 #include <brk/string.h>
 #include <brk/types.h>
 

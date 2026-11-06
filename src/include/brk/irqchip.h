@@ -1,5 +1,5 @@
-#ifndef BRK_IRQ_IRQCHIP_H
-#define BRK_IRQ_IRQCHIP_H
+#ifndef BRK_IRQCHIP_H
+#define BRK_IRQCHIP_H
 
 #include <brk/list.h>
 #include <brk/types.h>

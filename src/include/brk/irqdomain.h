@@ -1,7 +1,7 @@
-#ifndef BRK_IRQ_IRQDOMAIN_H
-#define BRK_IRQ_IRQDOMAIN_H
+#ifndef BRK_IRQDOMAIN_H
+#define BRK_IRQDOMAIN_H
 
-#include <brk/irq/irqdesc.h>
+#include <brk/irqdesc.h>
 #include <brk/list.h>
 #include <brk/types.h>
 

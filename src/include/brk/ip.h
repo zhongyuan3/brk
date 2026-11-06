@@ -1,9 +1,9 @@
-#ifndef BRK_NET_IP_H
-#define BRK_NET_IP_H
+#ifndef BRK_IP_H
+#define BRK_IP_H
 
-#include <brk/net/net.h>
-#include <brk/net/netdevice.h>
-#include <brk/net/skbuff.h>
+#include <brk/net.h>
+#include <brk/netdevice.h>
+#include <brk/skbuff.h>
 #include <brk/types.h>
 
 #define IPPROTO_ICMP 1

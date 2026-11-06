@@ -1,7 +1,7 @@
-#ifndef BRK_NET_ICMP_H
-#define BRK_NET_ICMP_H
+#ifndef BRK_ICMP_H
+#define BRK_ICMP_H
 
-#include <brk/net/skbuff.h>
+#include <brk/skbuff.h>
 #include <brk/types.h>
 #include <stddef.h>
 

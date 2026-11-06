@@ -1,10 +1,10 @@
+#include <brk/arp.h>
+#include <brk/eth.h>
+#include <brk/ip.h>
 #include <brk/ktime.h>
-#include <brk/net/arp.h>
-#include <brk/net/eth.h>
-#include <brk/net/ip.h>
-#include <brk/net/net.h>
-#include <brk/net/netdevice.h>
-#include <brk/net/skbuff.h>
+#include <brk/net.h>
+#include <brk/netdevice.h>
+#include <brk/skbuff.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>

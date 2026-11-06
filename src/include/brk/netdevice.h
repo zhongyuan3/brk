@@ -1,8 +1,8 @@
-#ifndef BRK_NET_NETDEVICE_H
-#define BRK_NET_NETDEVICE_H
+#ifndef BRK_NETDEVICE_H
+#define BRK_NETDEVICE_H
 
 #include <brk/list.h>
-#include <brk/net/skbuff.h>
+#include <brk/skbuff.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 

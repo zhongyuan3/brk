@@ -1,8 +1,8 @@
-#ifndef BRK_NET_ARP_H
-#define BRK_NET_ARP_H
+#ifndef BRK_ARP_H
+#define BRK_ARP_H
 
-#include <brk/net/netdevice.h>
-#include <brk/net/skbuff.h>
+#include <brk/netdevice.h>
+#include <brk/skbuff.h>
 #include <brk/types.h>
 
 #define ARP_HWTYPE_ETHER 1

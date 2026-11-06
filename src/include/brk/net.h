@@ -1,5 +1,5 @@
-#ifndef BRK_NET_NET_H
-#define BRK_NET_NET_H
+#ifndef BRK_NET_H
+#define BRK_NET_H
 
 #include <brk/types.h>
 #include <stddef.h>

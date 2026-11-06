@@ -1,7 +1,7 @@
 #include <brk/irq.h>
+#include <brk/irqtest.h>
 #include <brk/ktime.h>
-#include <brk/net/irqtest.h>
-#include <brk/net/net.h>
+#include <brk/net.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/string.h>

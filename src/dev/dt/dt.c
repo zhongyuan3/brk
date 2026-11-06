@@ -6,7 +6,7 @@
 #include <brk/device.h>
 #include <brk/dt.h>
 #include <brk/initcall.h>
-#include <brk/irq/irqdomain.h>
+#include <brk/irqdomain.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/memblock.h>

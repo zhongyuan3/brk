@@ -1,7 +1,7 @@
-#ifndef BRK_NET_TCP_H
-#define BRK_NET_TCP_H
+#ifndef BRK_TCP_H
+#define BRK_TCP_H
 
-#include <brk/net/skbuff.h>
+#include <brk/skbuff.h>
 #include <brk/types.h>
 
 struct socket;

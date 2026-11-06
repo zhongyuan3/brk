@@ -1,4 +1,4 @@
-#include <brk/net/net.h>
+#include <brk/net.h>
 #include <brk/types.h>
 
 u32 inet_csum_add(u32 sum, const void *data, size_t len)

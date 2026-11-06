@@ -49,13 +49,12 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/irq.h>
+#include <brk/irqtest.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
-#include <brk/net/irqtest.h>
-#include <brk/net/net.h>
-#include <brk/net/tcp.h>
+#include <brk/net.h>
 #include <brk/pagecache.h>
 #include <brk/path.h>
 #include <brk/pgalloc.h>
@@ -64,6 +63,7 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
+#include <brk/tcp.h>
 #include <brk/types.h>
 #include <inttypes.h>
 #include <uapi/dirent.h>

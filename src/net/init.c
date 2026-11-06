@@ -1,8 +1,8 @@
+#include <brk/arp.h>
+#include <brk/eth.h>
 #include <brk/initcall.h>
-#include <brk/net/arp.h>
-#include <brk/net/eth.h>
-#include <brk/net/ip.h>
-#include <brk/net/netdevice.h>
+#include <brk/ip.h>
+#include <brk/netdevice.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/types.h>
