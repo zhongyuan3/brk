@@ -223,10 +223,10 @@ all: brk
 brk: $(KERNEL_ELF)
 
 format:
-	$(Q)./scripts/format-src.sh
+	$(Q)./scripts/format_src.py
 
 format-check:
-	$(Q)./scripts/format-src.sh --check
+	$(Q)./scripts/format_src.py --check
 
 compile_commands:
 	@command -v bear >/dev/null 2>&1 || \
