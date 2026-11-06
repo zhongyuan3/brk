@@ -1,12 +1,6 @@
 #ifndef BRK_STRING_H
 #define BRK_STRING_H
 
-#include <brk/types.h>
-
-/*
- * Kernel string API.  The standard names come from the freestanding layer;
- * only non-standard helpers are declared here.
- */
 #include <string.h>
 
 void *memrchr(void const *s, int c, size_t n);

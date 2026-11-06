@@ -17,7 +17,7 @@ obj-y += sysfile.o
 obj-y += select.o
 obj-y += stat.o
 obj-y += writeback.o
+obj-y += tmpfs.o
+obj-y += procfs.o
 
-subdir-y += tmpfs
-subdir-y += procfs
 subdir-y += brkfs

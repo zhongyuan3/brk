@@ -1,7 +1,7 @@
-subdir-y := arch/$(ARCH)
-subdir-y += kernel
+subdir-y := $(ARCH)
+subdir-y += kern
 subdir-y += mm
-subdir-y += driver
+subdir-y += dev
 subdir-y += fs
 subdir-y += net
 subdir-y += lib

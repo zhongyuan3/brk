@@ -1,5 +1,5 @@
-#ifndef BRK_FREESTANDING_STDINT_H
-#define BRK_FREESTANDING_STDINT_H
+#ifndef STDINT_H
+#define STDINT_H
 
 /*
  * C-standard spellings of the compiler's base integer types.  uapi/types.h

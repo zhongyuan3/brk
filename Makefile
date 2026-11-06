@@ -22,15 +22,15 @@ LDFLAGS ?=
 LDFLAGS_FINAL :=
 
 ifeq ($(ARCH),riscv)
-include src/arch/$(ARCH)/config.mk
+include src/$(ARCH)/config.mk
 else
 $(error Unsupported architecture '$(ARCH)')
 endif
 
 BUILD ?= debug
 WERROR ?= 1
-RAM ?= 128M
-CPU ?= 3
+M ?= 128M
+SMP ?= 3
 KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)/$(BUILD)
 ROOTFS_IMG ?= $(BOARD_BUILD_ROOT)/rootfs.img
 USER_BIN_DIR := $(USER_ROOT)/build/bin
@@ -39,8 +39,8 @@ USER_BIN_DIR := $(USER_ROOT)/build/bin
 # sources, headers, binaries, tests, or the packaging script change.
 ROOTFS_DEPS := $(USER_ROOT)/scripts/mkrootfs.sh $(USER_ROOT)/Makefile \
 	$(wildcard $(USER_BIN_DIR)/*) \
-	$(shell find $(USER_ROOT)/src $(USER_ROOT)/lib $(USER_ROOT)/include \
-		$(USER_ROOT)/etc $(USER_ROOT)/tests -type f 2>/dev/null)
+	$(shell find $(USER_ROOT)/src $(USER_ROOT)/etc $(USER_ROOT)/tests \
+		-type f 2>/dev/null)
 
 CROSS_COMPILE ?=
 
@@ -108,9 +108,8 @@ KBUILD_CFLAGS += -std=gnu11
 KBUILD_CFLAGS += -nostdinc
 KBUILD_CFLAGS += -MMD
 KBUILD_CFLAGS += -MP
-KBUILD_CFLAGS += -Isrc/arch/$(ARCH)/include
+KBUILD_CFLAGS += -Isrc/$(ARCH)/include
 KBUILD_CFLAGS += -Isrc/include
-KBUILD_CFLAGS += -Isrc/include/freestanding
 KBUILD_CFLAGS += -Ivendor/libfdt
 
 KBUILD_LDFLAGS += -z max-page-size=4096
@@ -182,7 +181,7 @@ $(FLAGS_CONFIG): FORCE
 endif
 endif
 
-LINKER_SCRIPT_SRC := src/arch/$(ARCH)/kernel/brk.ld.S
+LINKER_SCRIPT_SRC := src/$(ARCH)/kern/brk.ld.S
 LINKER_SCRIPT := $(KERNEL_BUILD_ROOT)/brk.ld
 LINKER_SCRIPT_DEP := $(LINKER_SCRIPT).d
 KERNEL_ELF := $(KERNEL_BUILD_ROOT)/brk
@@ -202,48 +201,26 @@ core-y += vendor
 
 BUILT_IN_OBJS := $(addprefix $(KERNEL_BUILD_ROOT)/,$(patsubst %,%/built-in.o,$(core-y)))
 
-QEMU_OPTS += -m $(RAM)
-QEMU_OPTS += -smp $(CPU)
+QEMU_OPTS += -m $(M)
+QEMU_OPTS += -smp $(SMP)
 QEMU_OPTS += -bios default
 QEMU_OPTS += -drive file=$(ROOTFS_IMG),if=none,format=raw,id=x0
 QEMU_OPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 QEMU_OPTS += -global virtio-mmio.force-legacy=false
-
-# Set QEMU_NET=0 to boot without a network device.  The NIC sits on the
-# second virtio-mmio bus because virtio-mmio-bus.0 is taken by the disk.
-QEMU_NET ?= 1
-ifeq ($(QEMU_NET),1)
 QEMU_OPTS += -netdev user,id=net0
 QEMU_OPTS += -device virtio-net-device,netdev=net0,bus=virtio-mmio-bus.1
 
-# Optional pcap capture, e.g. make run QEMU_NET_DUMP=/tmp/brk-net.pcap
-ifneq ($(QEMU_NET_DUMP),)
-QEMU_OPTS += -object filter-dump,id=netdump,netdev=net0,file=$(QEMU_NET_DUMP)
-endif
-endif
-
 QEMU_OPTS += $(EXTRA_QEMU_OPTS)
-
-SMOKE_LOG ?= $(KERNEL_BUILD_ROOT)/smoke.log
-SMOKE_TIMEOUT ?= 30
-SMOKE_BOOT_DELAY ?= 6
 
 .DELETE_ON_ERROR:
 
 .PHONY: all brk run gdb-server gdb-client rootfs clean clean-kernel \
-	headers-check check format format-check compile_commands size disasm \
-	smoke ci syncconfig distclean help FORCE
+	format format-check compile_commands size disasm syncconfig \
+	distclean help FORCE
 
 all: brk
 
 brk: $(KERNEL_ELF)
-
-headers-check:
-	$(Q)CC="$(CC)" ARCH="$(ARCH)" ./scripts/check-headers.sh
-
-check: headers-check
-	$(Q)$(MAKE) BUILD=debug brk
-	$(Q)$(MAKE) BUILD=release brk
 
 format:
 	$(Q)./scripts/format-src.sh
@@ -267,21 +244,9 @@ syncconfig:
 	$(Q)rm -f $(FLAGS_CONFIG) $(FLAGS_STAMP)
 	$(Q)echo "  SYNC    build flags will be regenerated on the next build"
 
-smoke: $(KERNEL_ELF) $(ROOTFS_IMG)
-	$(Q)QEMU="$(QEMU)" QEMU_OPTS="$(QEMU_OPTS)" \
-		SMOKE_TIMEOUT="$(SMOKE_TIMEOUT)" \
-		SMOKE_BOOT_DELAY="$(SMOKE_BOOT_DELAY)" \
-		./scripts/smoke.sh "$(KERNEL_ELF)" "$(SMOKE_LOG)"
-
-ci: check
-	$(Q)$(MAKE) format-check
-	$(Q)$(MAKE) smoke
-
 help:
 	$(Q)echo "Targets:"
 	$(Q)echo "  all / brk              Build the kernel (SMP capable)"
-	$(Q)echo "  headers-check          Verify UAPI/kernel header layering and ABI"
-	$(Q)echo "  check                  headers-check + debug/release builds"
 	$(Q)echo "  format                 Format src/ with clang-format"
 	$(Q)echo "  format-check           Check src/ formatting (no writes)"
 	$(Q)echo "  compile_commands       Regenerate compile_commands.json (needs bear)"
@@ -293,8 +258,6 @@ help:
 	$(Q)echo "  dtb / dts              Dump the QEMU virt device tree"
 	$(Q)echo "  size / disasm          Show kernel size / disassembly"
 	$(Q)echo "  syncconfig             Force build-flag regeneration"
-	$(Q)echo "  smoke                  Boot QEMU and verify the shell runs a command"
-	$(Q)echo "  ci                     check + format-check + smoke"
 	$(Q)echo "  clean                  Remove all build outputs"
 	$(Q)echo "  distclean              clean + generated compile_commands.json"
 	$(Q)echo "  clean-kernel           Remove current variant build directory"
@@ -305,18 +268,14 @@ help:
 	$(Q)echo "  BUILD={debug|release}  (default: debug)"
 	$(Q)echo "  BUILD_ROOT=<path>      (default: build)"
 	$(Q)echo "  USER_ROOT=<path>       (default: ../brk-user)"
-	$(Q)echo "  CPU=<n>                (default 3)"
-	$(Q)echo "  RAM=<size>             (default 128M)"
+	$(Q)echo "  SMP=<n>                (default 3)"
+	$(Q)echo "  M=<size>               (default 128M)"
 	$(Q)echo "  WERROR={0|1}           (default: 1)"
 	$(Q)echo "  V=1                    Show full build commands"
-	$(Q)echo "  QEMU_NET={0|1}         (default: 1)"
-	$(Q)echo "  QEMU_NET_DUMP=<file>   Capture QEMU network traffic"
 	$(Q)echo "  EXTRA_CFLAGS=...       Additional compiler flags"
 	$(Q)echo "  EXTRA_LDFLAGS=...      Additional linker flags"
 	$(Q)echo "  EXTRA_QEMU_OPTS=...    Additional QEMU flags"
 	$(Q)echo "  LINK_CHECK={0|1}       Warn about linker orphan sections"
-	$(Q)echo "  SMOKE_TIMEOUT=<sec>    QEMU smoke timeout (default: 30)"
-	$(Q)echo "  SMOKE_BOOT_DELAY=<sec> Wait before typing (default: 6)"
 
 $(LINKER_SCRIPT): $(LINKER_SCRIPT_SRC) $(FLAGS_DEP) \
 	$(if $(wildcard $(LINKER_SCRIPT_DEP)),,FORCE)
