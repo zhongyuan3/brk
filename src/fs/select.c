@@ -4,15 +4,18 @@
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
+#include <brk/signal.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
+#include <brk/timeconst.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
 #include <uapi/errno.h>
 #include <uapi/limits.h>
 #include <uapi/poll.h>
 #include <uapi/select.h>
+#include <uapi/signal.h>
 #include <uapi/time.h>
 
 #define POLL_SLEEP_NS 10000000ULL
@@ -65,11 +68,8 @@ static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 	}
 }
 
-u64 sys_poll(void)
+static u64 poll_common(struct pollfd *ufds, nfds_t nfds, int timeout_ms)
 {
-	struct pollfd *ufds = syscall_arg_ptr(0);
-	nfds_t nfds = (nfds_t)syscall_arg_raw(1);
-	int timeout_ms = syscall_arg_int(2);
 	struct pollfd *fds = NULL;
 	size_t bytes = 0;
 	int ret;
@@ -99,6 +99,73 @@ u64 sys_poll(void)
 	return ret;
 }
 
+u64 sys_poll(void)
+{
+	return poll_common(syscall_arg_ptr(0), (nfds_t)syscall_arg_raw(1),
+			   syscall_arg_int(2));
+}
+
+static int timespec_to_ms(const struct timespec *ts, int *ms)
+{
+	u64 v;
+
+	if (ts->tv_sec < 0 || ts->tv_nsec < 0 ||
+	    ts->tv_nsec >= (__kernel_long_t)NS_PER_SEC)
+		return -EINVAL;
+
+	v = (u64)ts->tv_sec * MS_PER_SEC;
+	v += ((u64)ts->tv_nsec + NS_PER_MS - 1) / NS_PER_MS;
+	if (v > 0x7fffffffULL)
+		v = 0x7fffffffULL;
+	*ms = (int)v;
+	return 0;
+}
+
+static int apply_sigmask(const sigset_t *uset, sigset_t *oldmask)
+{
+	sigset_t mask;
+
+	if (!uset)
+		return 0;
+	if (copy_from_user(&mask, uset, sizeof(mask)))
+		return -EFAULT;
+	if (signal_do_sigprocmask(current_task(), SIG_SETMASK, &mask, oldmask))
+		return -EINVAL;
+	return 1;
+}
+
+u64 sys_ppoll(void)
+{
+	struct pollfd *ufds = syscall_arg_ptr(0);
+	nfds_t nfds = (nfds_t)syscall_arg_raw(1);
+	const struct timespec *utimeout = syscall_arg_ptr(2);
+	const sigset_t *usigmask = syscall_arg_ptr(3);
+	struct timespec ts;
+	sigset_t oldmask;
+	int timeout_ms = -1;
+	int applied;
+	int ret;
+
+	if (utimeout) {
+		if (copy_from_user(&ts, utimeout, sizeof(ts)))
+			return -EFAULT;
+		ret = timespec_to_ms(&ts, &timeout_ms);
+		if (ret)
+			return ret;
+	}
+
+	applied = apply_sigmask(usigmask, &oldmask);
+	if (applied < 0)
+		return applied;
+
+	ret = (int)poll_common(ufds, nfds, timeout_ms);
+
+	if (applied > 0)
+		signal_do_sigprocmask(current_task(), SIG_SETMASK, &oldmask,
+				      NULL);
+	return ret;
+}
+
 static int timeval_to_ms(const struct timeval *tv)
 {
 	u64 ms;
@@ -112,17 +179,12 @@ static int timeval_to_ms(const struct timeval *tv)
 	return (int)ms;
 }
 
-u64 sys_select(void)
+static u64 select_common(int nfds, fd_set *uread, fd_set *uwrite,
+			 fd_set *uexcept, int timeout_ms)
 {
-	int nfds = syscall_arg_int(0);
-	fd_set *uread = syscall_arg_ptr(1);
-	fd_set *uwrite = syscall_arg_ptr(2);
-	fd_set *uexcept = syscall_arg_ptr(3);
-	struct timeval *utimeout = syscall_arg_ptr(4);
 	fd_set rset, wset, eset, rout, wout, eout;
 	struct pollfd *fds = NULL;
 	unsigned int cnt = 0;
-	int timeout_ms = -1;
 	int ret;
 
 	if (nfds < 0 || nfds > OPEN_MAX)
@@ -138,16 +200,6 @@ u64 sys_select(void)
 		return -EFAULT;
 	if (uexcept && copy_from_user(&eset, uexcept, sizeof(fd_set)))
 		return -EFAULT;
-
-	if (utimeout) {
-		struct timeval tv;
-
-		if (copy_from_user(&tv, utimeout, sizeof(tv)))
-			return -EFAULT;
-		timeout_ms = timeval_to_ms(&tv);
-		if (timeout_ms < 0)
-			return -EINVAL;
-	}
 
 	if (nfds) {
 		fds = kcalloc((size_t)nfds, sizeof(*fds));
@@ -208,5 +260,61 @@ u64 sys_select(void)
 		ret = -EFAULT;
 
 	kfree(fds);
+	return ret;
+}
+
+u64 sys_select(void)
+{
+	int nfds = syscall_arg_int(0);
+	fd_set *uread = syscall_arg_ptr(1);
+	fd_set *uwrite = syscall_arg_ptr(2);
+	fd_set *uexcept = syscall_arg_ptr(3);
+	struct timeval *utimeout = syscall_arg_ptr(4);
+	int timeout_ms = -1;
+
+	if (utimeout) {
+		struct timeval tv;
+
+		if (copy_from_user(&tv, utimeout, sizeof(tv)))
+			return -EFAULT;
+		timeout_ms = timeval_to_ms(&tv);
+		if (timeout_ms < 0)
+			return -EINVAL;
+	}
+
+	return select_common(nfds, uread, uwrite, uexcept, timeout_ms);
+}
+
+u64 sys_pselect(void)
+{
+	int nfds = syscall_arg_int(0);
+	fd_set *uread = syscall_arg_ptr(1);
+	fd_set *uwrite = syscall_arg_ptr(2);
+	fd_set *uexcept = syscall_arg_ptr(3);
+	const struct timespec *utimeout = syscall_arg_ptr(4);
+	const sigset_t *usigmask = syscall_arg_ptr(5);
+	struct timespec ts;
+	sigset_t oldmask;
+	int timeout_ms = -1;
+	int applied;
+	int ret;
+
+	if (utimeout) {
+		if (copy_from_user(&ts, utimeout, sizeof(ts)))
+			return -EFAULT;
+		ret = timespec_to_ms(&ts, &timeout_ms);
+		if (ret)
+			return ret;
+	}
+
+	applied = apply_sigmask(usigmask, &oldmask);
+	if (applied < 0)
+		return applied;
+
+	ret = (int)select_common(nfds, uread, uwrite, uexcept, timeout_ms);
+
+	if (applied > 0)
+		signal_do_sigprocmask(current_task(), SIG_SETMASK, &oldmask,
+				      NULL);
 	return ret;
 }

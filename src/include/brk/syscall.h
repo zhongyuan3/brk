@@ -121,5 +121,30 @@ u64 sys_getsockopt(void);
 
 u64 sys_poll(void);
 u64 sys_select(void);
+u64 sys_pselect(void);
+u64 sys_ppoll(void);
+
+u64 sys_time(void);
+u64 sys_clock_gettime(void);
+u64 sys_clock_getres(void);
+u64 sys_clock_settime(void);
+u64 sys_clock_nanosleep(void);
+u64 sys_getrusage(void);
+
+u64 sys_futimens(void);
+u64 sys_fstatat(void);
+u64 sys_lchown(void);
+u64 sys_mkfifo(void);
+u64 sys_readv(void);
+u64 sys_writev(void);
+u64 sys_dup3(void);
+
+u64 sys_mlock(void);
+u64 sys_munlock(void);
+u64 sys_mlockall(void);
+u64 sys_munlockall(void);
+
+u64 sys_sigpending(void);
+u64 sys_pause(void);
 
 #endif

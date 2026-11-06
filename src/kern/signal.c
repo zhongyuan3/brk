@@ -2,6 +2,7 @@
 #include <arch/trapframe.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
+#include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/permission.h>
 #include <brk/refcnt.h>
@@ -10,7 +11,9 @@
 #include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
+#include <brk/timeconst.h>
 #include <brk/types.h>
+#include <brk/uaccess.h>
 #include <stdint.h>
 #include <uapi/errno.h>
 #include <uapi/signal.h>
@@ -529,6 +532,35 @@ u64 sys_sigprocmask(void)
 	sigset_t *oldset = syscall_arg_ptr(2);
 
 	return signal_do_sigprocmask(current_task(), how, set, oldset);
+}
+
+u64 sys_sigpending(void)
+{
+	struct task *task = current_task();
+	sigset_t *uset = syscall_arg_ptr(0);
+	sigset_t set;
+	irqstate_t flags;
+
+	if (!uset)
+		return -EFAULT;
+
+	flags = spin_lock_irqsave(&task->sigactions->lock);
+	set = task->pending & task->blocked;
+	spin_unlock_irqrestore(&task->sigactions->lock, flags);
+
+	if (copy_to_user(uset, &set, sizeof(set)))
+		return -EFAULT;
+	return 0;
+}
+
+u64 sys_pause(void)
+{
+	struct task *task = current_task();
+
+	while (!signal_pending(task))
+		ktime_nanosleep(NS_PER_MS, NULL);
+
+	return -EINTR;
 }
 
 u64 sys_sigreturn(void)

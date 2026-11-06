@@ -81,3 +81,181 @@ u64 sys_nanosleep(void)
 
 	return (u64)(long)ret;
 }
+
+u64 sys_time(void)
+{
+	time_t *ut = syscall_arg_ptr(0);
+	time_t now = ktime_get_real_sec();
+
+	if (ut && copy_to_user(ut, &now, sizeof(now)))
+		return -EFAULT;
+	return (u64)now;
+}
+
+static int clock_now(int clockid, ktime_t *now)
+{
+	struct task *task = current_task();
+
+	switch (clockid) {
+	case CLOCK_REALTIME:
+		*now = ktime_get_real();
+		return 0;
+	case CLOCK_MONOTONIC:
+		*now = (ktime_t)ktime_get_boot_ns();
+		return 0;
+	case CLOCK_PROCESS_CPUTIME_ID:
+	case CLOCK_THREAD_CPUTIME_ID:
+		*now = (ktime_t)(task_get_user_time(task) +
+				 task_get_system_time(task)) *
+		       (ktime_t)NS_PER_MS;
+		return 0;
+	default:
+		return -EINVAL;
+	}
+}
+
+u64 sys_clock_gettime(void)
+{
+	int clockid = syscall_arg_int(0);
+	struct timespec *ut = syscall_arg_ptr(1);
+	struct timespec ts;
+	ktime_t now;
+	int ret;
+
+	if (!ut)
+		return -EFAULT;
+
+	ret = clock_now(clockid, &now);
+	if (ret)
+		return ret;
+
+	ktime_to_timespec(now, &ts);
+	if (copy_to_user(ut, &ts, sizeof(ts)))
+		return -EFAULT;
+	return 0;
+}
+
+u64 sys_clock_getres(void)
+{
+	int clockid = syscall_arg_int(0);
+	struct timespec *ut = syscall_arg_ptr(1);
+	struct timespec ts = { .tv_sec = 0, .tv_nsec = NS_PER_MS };
+
+	switch (clockid) {
+	case CLOCK_REALTIME:
+	case CLOCK_MONOTONIC:
+	case CLOCK_PROCESS_CPUTIME_ID:
+	case CLOCK_THREAD_CPUTIME_ID:
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	if (ut && copy_to_user(ut, &ts, sizeof(ts)))
+		return -EFAULT;
+	return 0;
+}
+
+u64 sys_clock_settime(void)
+{
+	int clockid = syscall_arg_int(0);
+	const struct timespec *ut = syscall_arg_ptr(1);
+	struct timespec ts;
+
+	if (clockid != CLOCK_REALTIME)
+		return -EINVAL;
+	if (!capable(CAP_SYS_TIME))
+		return -EPERM;
+	if (!ut)
+		return -EFAULT;
+	if (copy_from_user(&ts, ut, sizeof(ts)))
+		return -EFAULT;
+	if (ts.tv_sec < 0 || ts.tv_nsec < 0 ||
+	    ts.tv_nsec >= (__kernel_long_t)NS_PER_SEC)
+		return -EINVAL;
+
+	ktime_set_real(ktime_from_timespec(&ts));
+	return 0;
+}
+
+u64 sys_clock_nanosleep(void)
+{
+	int clockid = syscall_arg_int(0);
+	int flags = syscall_arg_int(1);
+	const struct timespec *ureq = syscall_arg_ptr(2);
+	struct timespec *urem = syscall_arg_ptr(3);
+	struct timespec req;
+	ktime_t now, target, duration, rem = 0;
+	int ret;
+
+	if (flags & ~TIMER_ABSTIME)
+		return -EINVAL;
+	if (clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC)
+		return -EINVAL;
+	if (!ureq)
+		return -EFAULT;
+	if (copy_from_user(&req, ureq, sizeof(req)))
+		return -EFAULT;
+	if (req.tv_sec < 0 || req.tv_nsec < 0 ||
+	    req.tv_nsec >= (__kernel_long_t)NS_PER_SEC)
+		return -EINVAL;
+
+	target = ktime_from_timespec(&req);
+	if (flags & TIMER_ABSTIME) {
+		if (clockid == CLOCK_REALTIME)
+			now = ktime_get_real();
+		else
+			now = (ktime_t)ktime_get_boot_ns();
+		duration = target - now;
+		if (duration <= 0)
+			return 0;
+	} else {
+		duration = target;
+	}
+
+	ret = ktime_nanosleep(duration, &rem);
+	if (ret == -EINTR && !(flags & TIMER_ABSTIME) && urem) {
+		ktime_to_timespec(rem, &req);
+		if (copy_to_user(urem, &req, sizeof(req)))
+			return -EFAULT;
+	}
+
+	return (u64)(long)ret;
+}
+
+static void jiffies_to_timeval(u64 ticks, struct timeval *tv)
+{
+	tv->tv_sec = (__kernel_time_t)(ticks / MS_PER_SEC);
+	tv->tv_usec = (__kernel_suseconds_t)((ticks % MS_PER_SEC) * US_PER_MS);
+}
+
+u64 sys_getrusage(void)
+{
+	int who = syscall_arg_int(0);
+	struct rusage *uru = syscall_arg_ptr(1);
+	struct rusage ru = { 0 };
+	struct task *task = current_task();
+	u64 utime, stime;
+
+	switch (who) {
+	case RUSAGE_SELF:
+		utime = task_get_user_time(task);
+		stime = task_get_system_time(task);
+		break;
+	case RUSAGE_CHILDREN:
+		utime = task_get_child_user_time(task);
+		stime = task_get_child_system_time(task);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	jiffies_to_timeval(utime, &ru.ru_utime);
+	jiffies_to_timeval(stime, &ru.ru_stime);
+
+	if (!uru)
+		return -EFAULT;
+	if (copy_to_user(uru, &ru, sizeof(ru)))
+		return -EFAULT;
+	return 0;
+}

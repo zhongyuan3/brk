@@ -3,6 +3,10 @@
 
 #include <uapi/time.h>
 
+/* getrusage() who values. */
+#define RUSAGE_SELF 0
+#define RUSAGE_CHILDREN (-1)
+
 struct rusage {
 	struct timeval ru_utime; /* user time used */
 	struct timeval ru_stime; /* system time used */

@@ -20,4 +20,8 @@
 #define MS_INVALIDATE 0x2
 #define MS_SYNC 0x4
 
+/* mlockall flags */
+#define MCL_CURRENT 0x1
+#define MCL_FUTURE 0x2
+
 #endif
