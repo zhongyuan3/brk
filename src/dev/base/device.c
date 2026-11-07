@@ -9,23 +9,42 @@
 #include <brk/of.h>
 #include <brk/platform.h>
 #include <brk/printk.h>
+#include <brk/refcnt.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <uapi/errno.h>
 
 static LIST_DEFINE(bus_list);
 static LIST_DEFINE(device_list);
+static LIST_DEFINE(deferred_list);
 static SPINLOCK_DEFINE(device_lock);
 
-void device_init(struct device *dev, const char *name)
+void device_initialize(struct device *dev)
 {
-	memset(dev, 0, sizeof(*dev));
-	if (name)
-		strlcpy(dev->name, name, sizeof(dev->name));
+	if (!dev)
+		return;
+
+	spinlock_init(&dev->lock, "device");
+	refcnt_init(&dev->refcnt, 1);
 	list_init(&dev->bus_list);
 	list_init(&dev->device_list);
 	list_init(&dev->children);
 	list_init(&dev->child_node);
+	list_init(&dev->deferred_node);
+	dev->driver = NULL;
+	dev->state = DEVICE_STATE_NEW;
+	dev->registered = false;
+}
+
+void device_init(struct device *dev, const char *name)
+{
+	if (!dev)
+		return;
+
+	memset(dev, 0, sizeof(*dev));
+	if (name)
+		strlcpy(dev->name, name, sizeof(dev->name));
+	device_initialize(dev);
 }
 
 int bus_register(struct bus_type *bus)
@@ -43,18 +62,63 @@ int bus_register(struct bus_type *bus)
 	return 0;
 }
 
+struct device *device_get(struct device *dev)
+{
+	if (!dev)
+		return NULL;
+	if (!refcnt_inc_unless_zero(&dev->refcnt))
+		return NULL;
+	return dev;
+}
+
+void device_put(struct device *dev)
+{
+	if (!dev)
+		return;
+
+	if (refcnt_dec_fetch(&dev->refcnt) != 0)
+		return;
+
+	if (dev->release)
+		dev->release(dev);
+}
+
+/* Caller must hold device_lock. */
+static void device_defer_locked(struct device *dev)
+{
+	if (list_empty(&dev->deferred_node))
+		list_add_tail(&dev->deferred_node, &deferred_list);
+}
+
+/* Caller must hold device_lock. */
+static void device_undefer_locked(struct device *dev)
+{
+	if (!list_empty(&dev->deferred_node))
+		list_del_init(&dev->deferred_node);
+}
+
 static void device_probe(struct device *dev)
 {
-	struct device_driver *drv;
+	struct device_driver *drv = NULL;
+	enum device_state state;
+	bool claimed = false;
+	bool remove = false;
 	int err;
 
-	if (!dev->bus || !dev->bus->match)
+	if (!dev || !device_get(dev))
 		return;
 
+	if (!dev->bus || !dev->bus->match)
+		goto out;
+
 	spin_lock(&device_lock);
-	if (dev->driver) {
+	spin_lock(&dev->lock);
+	state = dev->state;
+	spin_unlock(&dev->lock);
+
+	if (state != DEVICE_STATE_ADDED && state != DEVICE_STATE_DEFERRED) {
 		spin_unlock(&device_lock);
-		return;
+		goto out;
 	}
 
 	list_for_each_entry(drv, &dev->bus->drivers, bus_list) {
@@ -62,44 +126,87 @@ static void device_probe(struct device *dev)
 			continue;
 
 		/* Claim the device before dropping the lock. */
+		spin_lock(&dev->lock);
 		dev->driver = drv;
-		spin_unlock(&device_lock);
-
-		err = drv->probe ? drv->probe(dev) : 0;
-		if (err) {
-			pr_warn("device: %s: probe by %s failed: %d\n",
-				dev->name, drv->name, err);
-			spin_lock(&device_lock);
-			if (dev->driver == drv)
-				dev->driver = NULL;
-			spin_unlock(&device_lock);
-		}
-		return;
+		dev->state = DEVICE_STATE_PROBING;
+		spin_unlock(&dev->lock);
+		claimed = true;
+		break;
 	}
-
 	spin_unlock(&device_lock);
+
+	if (!claimed)
+		goto out;
+
+	err = drv->probe ? drv->probe(dev) : 0;
+
+	spin_lock(&device_lock);
+	spin_lock(&dev->lock);
+	if (dev->driver == drv) {
+		if (dev->state == DEVICE_STATE_REMOVED) {
+			/* device_del() raced with probe. */
+			dev->driver = NULL;
+			device_undefer_locked(dev);
+			remove = !err && drv->remove;
+		} else if (!drv->registered) {
+			/* driver_unregister() raced with probe. */
+			dev->driver = NULL;
+			dev->state = DEVICE_STATE_ADDED;
+			device_undefer_locked(dev);
+			remove = !err && drv->remove;
+		} else if (!err) {
+			dev->state = DEVICE_STATE_BOUND;
+			device_undefer_locked(dev);
+		} else if (err == -EPROBE_DEFER) {
+			dev->driver = NULL;
+			dev->state = DEVICE_STATE_DEFERRED;
+			device_defer_locked(dev);
+		} else {
+			dev->driver = NULL;
+			dev->state = DEVICE_STATE_ADDED;
+			device_undefer_locked(dev);
+		}
+	}
+	spin_unlock(&dev->lock);
+	spin_unlock(&device_lock);
+
+	if (remove)
+		drv->remove(dev);
+	if (err && err != -EPROBE_DEFER)
+		pr_warn("device: %s: probe by %s failed: %d\n", dev->name,
+			drv->name, err);
+out:
+	device_put(dev);
 }
 
-int device_register(struct device *dev)
+int device_add(struct device *dev)
 {
+	enum device_state state;
+
 	if (!dev || !dev->name[0])
 		return -EINVAL;
 
-	pr_info("register %s\n", dev->name);
-
 	spin_lock(&device_lock);
-	if (dev->registered) {
+	spin_lock(&dev->lock);
+	state = dev->state;
+	if (dev->registered || state != DEVICE_STATE_NEW) {
+		spin_unlock(&dev->lock);
 		spin_unlock(&device_lock);
 		return -EBUSY;
 	}
 
 	dev->registered = true;
+	dev->state = DEVICE_STATE_ADDED;
+	spin_unlock(&dev->lock);
+
 	list_add_tail(&dev->device_list, &device_list);
 	if (dev->parent)
 		list_add_tail(&dev->child_node, &dev->parent->children);
 	if (dev->bus)
 		list_add_tail(&dev->bus_list, &dev->bus->devices);
 	spin_unlock(&device_lock);
+
+	pr_info("register %s\n", dev->name);
 
 	if (dev->devt)
 		devtmpfs_notify(dev, false);
@@ -108,37 +215,63 @@ int device_register(struct device *dev)
 	return 0;
 }
 
-void device_unregister(struct device *dev)
+int device_register(struct device *dev)
+{
+	return device_add(dev);
+}
+
+void device_del(struct device *dev)
 {
 	struct device_driver *drv;
+	enum device_state state;
+	bool call_remove = false;
 
 	if (!dev)
 		return;
 
 	spin_lock(&device_lock);
+	spin_lock(&dev->lock);
 	if (!dev->registered) {
+		spin_unlock(&dev->lock);
 		spin_unlock(&device_lock);
 		return;
 	}
+
+	dev->registered = false;
+	state = dev->state;
 	drv = dev->driver;
-	dev->driver = NULL;
-	spin_unlock(&device_lock);
+	dev->state = DEVICE_STATE_REMOVED;
 
-	if (drv && drv->remove)
-		drv->remove(dev);
+	if (state != DEVICE_STATE_PROBING) {
+		dev->driver = NULL;
+		call_remove = state == DEVICE_STATE_BOUND && drv && drv->remove;
+	}
+	/* A running probe unbinds itself in device_probe(). */
+	spin_unlock(&dev->lock);
 
-	spin_lock(&device_lock);
 	if (!list_empty(&dev->bus_list))
 		list_del_init(&dev->bus_list);
 	if (!list_empty(&dev->device_list))
 		list_del_init(&dev->device_list);
 	if (dev->parent && !list_empty(&dev->child_node))
 		list_del_init(&dev->child_node);
-	dev->registered = false;
+	device_undefer_locked(dev);
 	spin_unlock(&device_lock);
+
+	if (call_remove)
+		drv->remove(dev);
 
 	if (dev->devt)
 		devtmpfs_notify(dev, true);
+}
+
+void device_unregister(struct device *dev)
+{
+	if (!dev)
+		return;
+
+	device_del(dev);
+	device_put(dev);
 }
 
 struct device **device_snapshot(size_t *count)
@@ -164,7 +297,7 @@ struct device **device_snapshot(size_t *count)
 
 	spin_lock(&device_lock);
 	list_for_each_entry(dev, &device_list, device_list) {
-		if (i < nr)
+		if (i < nr && device_get(dev))
 			devices[i++] = dev;
 	}
 	spin_unlock(&device_lock);
@@ -173,13 +306,59 @@ struct device **device_snapshot(size_t *count)
 	return devices;
 }
 
-void device_snapshot_free(struct device **devices)
+void device_snapshot_free(struct device **devices, size_t count)
 {
+	size_t i;
+
+	if (!devices)
+		return;
+
+	for (i = 0; i < count; ++i)
+		device_put(devices[i]);
+	kfree(devices);
+}
+
+static void device_probe_deferred(struct bus_type *bus)
+{
+	struct device **devices;
+	struct device *dev;
+	size_t nr = 0;
+	size_t i = 0;
+	size_t j;
+
+	spin_lock(&device_lock);
+	list_for_each_entry(dev, &deferred_list, deferred_node) {
+		if (!bus || dev->bus == bus)
+			nr++;
+	}
+	spin_unlock(&device_lock);
+
+	if (!nr)
+		return;
+
+	devices = kcalloc(nr, sizeof(*devices));
+	if (!devices)
+		return;
+
+	spin_lock(&device_lock);
+	list_for_each_entry(dev, &deferred_list, deferred_node) {
+		if (bus && dev->bus != bus)
+			continue;
+		if (i < nr && device_get(dev))
+			devices[i++] = dev;
+	}
+	spin_unlock(&device_lock);
+
+	for (j = 0; j < i; ++j) {
+		device_probe(devices[j]);
+		device_put(devices[j]);
+	}
 	kfree(devices);
 }
 
 int driver_register(struct device_driver *drv)
 {
+	struct device_driver *other;
 	struct device **devices;
 	size_t count;
 	size_t i;
@@ -188,6 +367,20 @@ int driver_register(struct device_driver *drv)
 		return -EINVAL;
 
 	spin_lock(&device_lock);
+	if (drv->registered) {
+		spin_unlock(&device_lock);
+		return -EBUSY;
+	}
+
+	list_for_each_entry(other, &drv->bus->drivers, bus_list) {
+		if (!strcmp(other->name, drv->name)) {
+			spin_unlock(&device_lock);
+			return -EEXIST;
+		}
+	}
+
+	list_init(&drv->bus_list);
+	drv->registered = true;
 	list_add_tail(&drv->bus_list, &drv->bus->drivers);
 	spin_unlock(&device_lock);
 
@@ -196,40 +389,62 @@ int driver_register(struct device_driver *drv)
 		if (devices[i]->bus == drv->bus)
 			device_probe(devices[i]);
 	}
-	device_snapshot_free(devices);
+	device_snapshot_free(devices, count);
+
+	/* Retry devices that deferred waiting for this driver. */
+	device_probe_deferred(drv->bus);
 	return 0;
 }
 
 void driver_unregister(struct device_driver *drv)
 {
 	struct device **devices;
-	struct device *dev;
 	size_t count;
 	size_t i;
 
-	if (!drv)
+	if (!drv || !drv->registered)
 		return;
 
 	spin_lock(&device_lock);
 	if (!list_empty(&drv->bus_list))
 		list_del_init(&drv->bus_list);
+	drv->registered = false;
 	spin_unlock(&device_lock);
 
 	devices = device_snapshot(&count);
 	for (i = 0; i < count; ++i) {
-		dev = devices[i];
-		if (dev->driver != drv)
-			continue;
+		struct device *dev = devices[i];
+		enum device_state state;
+		bool call_remove = false;
 
 		spin_lock(&device_lock);
-		dev->driver = NULL;
+		spin_lock(&dev->lock);
+		if (dev->driver == drv) {
+			state = dev->state;
+			if (state != DEVICE_STATE_PROBING &&
+			    state != DEVICE_STATE_REMOVED) {
+				dev->driver = NULL;
+				dev->state = DEVICE_STATE_ADDED;
+				device_undefer_locked(dev);
+				call_remove = state == DEVICE_STATE_BOUND &&
+					      drv->remove;
+			}
+			/* A running probe unbinds itself in device_probe(). */
+		}
+		spin_unlock(&dev->lock);
 		spin_unlock(&device_lock);
 
-		if (drv->remove)
+		if (call_remove)
 			drv->remove(dev);
 	}
-	device_snapshot_free(devices);
+	device_snapshot_free(devices, count);
 }
+
+static void device_deferred_probe_init(void)
+{
+	device_probe_deferred(NULL);
+}
+late_initcall(device_deferred_probe_init);
 
 /* ---- platform bus ---- */
 
@@ -269,6 +484,14 @@ static void platform_bus_init(void)
 	bus_register(&platform_bus);
 }
 core_initcall(platform_bus_init);
+
+void platform_device_release(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+
+	kfree(pdev->resources);
+	kfree(pdev);
+}
 
 int platform_device_register_simple(const char *name, const char *compatible,
 				    u64 phys_base, u64 size, u32 irq,
@@ -316,13 +539,13 @@ int platform_device_register_simple(const char *name, const char *compatible,
 
 	device_init(&pdev->dev, name);
 	pdev->dev.bus = &platform_bus;
+	pdev->dev.release = platform_device_release;
 	pdev->compatible = compatible;
 	pdev->pdata = pdata;
 
 	err = device_register(&pdev->dev);
 	if (err) {
-		kfree(pdev->resources);
-		kfree(pdev);
+		device_put(&pdev->dev);
 		return err;
 	}
 
@@ -334,8 +557,6 @@ void platform_device_unregister(struct platform_device *pdev)
 	if (!pdev)
 		return;
 	device_unregister(&pdev->dev);
-	kfree(pdev->resources);
-	kfree(pdev);
 }
 
 struct resource *platform_get_resource(struct platform_device *pdev,

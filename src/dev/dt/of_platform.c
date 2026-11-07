@@ -58,6 +58,7 @@ static int of_platform_device_create(struct device_node *node)
 	device_init(&pdev->dev, of_node_name(node));
 	pdev->dev.bus = &platform_bus;
 	pdev->dev.of_node = node;
+	pdev->dev.release = platform_device_release;
 	pdev->compatible = compatible && len > 0 ? compatible : NULL;
 	pdev->resources = res;
 	pdev->num_resources = nr;
@@ -66,8 +67,7 @@ static int of_platform_device_create(struct device_node *node)
 	if (err) {
 		pr_warn("of: cannot register %s: %d\n", of_node_full_name(node),
 			err);
-		kfree(res);
-		kfree(pdev);
+		device_put(&pdev->dev);
 		return err;
 	}
 

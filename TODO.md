@@ -26,8 +26,8 @@ DT 解析 → device_node / resource
 - [ ] 驱动直接依赖 libfdt / `dt_get_fdt()` / `dt_get_reg()`
 - [ ] virtio-mmio transport 的逻辑在 DT 层，virtio 设备没有 parent
 - [ ] virtio 设备顺序依赖反向注册 hack
-- [ ] `device_snapshot()` 保存裸指针，缺少设备引用和生命周期保护
-- [ ] 没有 `device_add()` / `device_del()` / release / deferred probe
+- [x] `device_snapshot()` 保存裸指针，缺少设备引用和生命周期保护
+- [x] 没有 `device_add()` / `device_del()` / release / deferred probe
 - [ ] 同 initcall level 的依赖主要依赖链接顺序
 
 ---
@@ -103,16 +103,24 @@ DT/OF 层
   - [x] console 注册时机保持可用
 - [x] 验证串口、early printk、rootfs
 
-## Phase 3 — 设备核心生命周期
+## Phase 3 — 设备核心生命周期（已完成）
 
-- [ ] `device_initialize()` / `device_add()` / `device_del()`
-- [ ] `device_get()` / `device_put()` / `release()`
-- [ ] `device` 增加 `of_node`、refcount、state、per-device lock
-- [ ] `device_snapshot()` 返回带引用的设备
-- [ ] `driver_register()` 检查重复驱动
-- [ ] probe/remove 与设备注销的并发语义
-- [ ] 增加 `-EPROBE_DEFER` 和延迟 probe 队列
-- [ ] 验证设备注册/注销路径
+- [x] `device_initialize()` / `device_add()` / `device_del()`
+- [x] `device_get()` / `device_put()` / `release()`
+- [x] `device` 增加 refcount、state、per-device lock、deferred-probe 节点
+- [x] `device_snapshot()` 返回带引用的设备，`device_snapshot_free(devices, count)` 负责释放
+- [x] `driver_register()` 检查重复驱动（同实例 `-EBUSY`，同名 `-EEXIST`）
+- [x] probe/remove 与设备注销的并发语义
+  - [x] probe 期间持有设备引用
+  - [x] `device_del()` 与正在运行的 probe 通过 state/driver 交接
+  - [x] `driver_unregister()` 与正在运行的 probe 通过 `drv->registered` 交接
+- [x] 增加 `-EPROBE_DEFER`、延迟 probe 队列和 `late_initcall` 重试
+- [x] 验证设备注册/注销路径
+  - [x] 新增 `src/dev/base/device_selftest.c`
+  - [x] 覆盖 release、device_get/put、snapshot 引用、重复驱动、deferred probe
+  - [x] QEMU 启动输出 `device-selftest: all tests passed`
+
+说明：platform device 已改为由 `dev->release` 负责最终释放；tty、virtio、gendisk 仍由各自容器手动释放，后续迁移到 release 回调时再统一。
 
 ---
 
