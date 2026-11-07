@@ -558,4 +558,4 @@ void virtio_blk_init(void)
 	if (err)
 		panic("%s(): driver_register failed\n", __func__);
 }
-subsys_initcall(virtio_blk_init);
+device_initcall(virtio_blk_init);

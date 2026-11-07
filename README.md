@@ -23,6 +23,7 @@
     - [Quick Start](#quick-start)
     - [Useful Helpers](#useful-helpers)
     - [Useful Variables](#useful-variables)
+  - [Kernel Architecture](#kernel-architecture)
   - [License](#license)
 
 ---
@@ -84,6 +85,52 @@ make disasm         # disassemble the kernel
 | `V=1`                                    | Show full compiler/linker commands                        |
 | `EXTRA_CFLAGS=...` / `EXTRA_LDFLAGS=...` | Temporarily append compile/link flags                     |
 | `WERROR=0`                               | Keep warnings non-fatal while bringing up a new toolchain |
+
+## Kernel Architecture
+
+BRK follows a small, Linux-inspired device model:
+
+```text
+FDT
+ └─ device_node / struct resource
+     └─ platform device
+         └─ bus match
+             └─ driver probe
+```
+
+The virtio stack uses the same path one level deeper:
+
+```text
+virtio,mmio platform device
+ └─ virtio-mmio transport driver
+     └─ virtio device (child, on virtio_bus)
+         └─ virtio-blk / virtio-net driver probe
+```
+
+Boot is split into explicit stages:
+
+| Stage | Contents |
+| ----- | -------- |
+| before initcalls | paging, memory, CPU discovery, timebase, early RTC wall clock |
+| `core` | device/bus/driver/IRQ core, slab caches, network core |
+| `postcore` | OF `device_node` tree, IRQ domains, platform device population |
+| `subsys` | platform and transport drivers (`ns16550a`, goldfish RTC, virtio-mmio) |
+| `device` | leaf drivers (`virtio-blk`, `virtio-net`) |
+| `late` | deferred-probe retry and self-tests |
+
+Filesystems start after `do_initcalls()`, from task context.
+
+A few dependencies are deliberately handled early and are documented in the
+code:
+
+- **IRQ controllers** probe at `postcore` so IRQ domains exist before normal
+  devices resolve their interrupts in probe context.
+- **RTC** is brought up before `timekeeper_init()`; the platform driver binds
+  later and adopts the already-mapped controller.
+- **clocksource/timebase** and early memory/CPU discovery happen before
+  initcalls because the rest of the boot path depends on them.
+- **UART/console** is registered from the platform probe; messages produced
+  before that are buffered by printk.
 
 ## License
 

@@ -23,6 +23,11 @@
 extern initcall_t __initcall_start[];
 extern initcall_t __initcall_end[];
 
+/*
+ * Explicit pre-initcall boot stage: paging, memory, CPU, timebase, early RTC
+ * wall clock and traps.  These cannot move into normal initcalls because the
+ * initcall infrastructure itself depends on them.
+ */
 void start_kernel(void)
 {
 	arch_init();

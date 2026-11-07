@@ -159,7 +159,7 @@ static void of_initcall(void)
 	if (err)
 		pr_warn("of: failed to build device tree: %d\n", err);
 }
-core_initcall(of_initcall);
+postcore_initcall(of_initcall);
 
 static int of_ensure_init(void)
 {
@@ -483,6 +483,6 @@ int of_irq_get(const struct device_node *node, int index)
 	if (!node || index < 0 || of_ensure_init())
 		return -EINVAL;
 
-	virq = irq_of_parse_and_map(node->fdt_offset, index);
+	virq = irq_of_parse_and_map(node, index);
 	return virq ? (int)virq : -ENOENT;
 }

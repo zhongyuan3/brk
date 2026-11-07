@@ -179,4 +179,4 @@ static void of_platform_populate_init(void)
 	if (err)
 		pr_warn("of: platform populate failed: %d\n", err);
 }
-subsys_initcall(of_platform_populate_init);
+postcore_initcall(of_platform_populate_init);

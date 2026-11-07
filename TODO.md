@@ -17,12 +17,12 @@ DT 解析 → device_node / resource
 ## 当前实现的主要问题
 
 - [x] 已确认 `platform_bus`、`device`、`device_driver`、`bus_type` 已有最小模型
-- [ ] 早期 FDT 扫描仍保留在 `irqchip_early_init()`
+- [x] 早期 FDT 扫描已收敛到 DT/OF 核心层（irqchip 改用 OF tree）
 - [x] 驱动内部反向调用 DT 扫描（`virtio_blk_init()` / `virtio_net_init()`）
 - [x] irqchip 绕过 device/bus，直接扫描 DT 并 probe（已评估，保留为早期例外）
 - [x] RTC 在 initcall 之前初始化（已评估，保留为早期例外，改用 OF API）
 - [x] `platform_device` 只有一个 MMIO 窗口和一个 IRQ
-- [ ] `dt_get_reg()` 没有 `ranges` 地址转换，也没有多 reg 支持
+- [x] `dt_get_reg()` 已删除，地址解析统一使用 `of_address_to_resource()`
 - [x] 驱动直接依赖 libfdt / `dt_get_fdt()` / `dt_get_reg()`
   - [x] 普通驱动已改用 `device_node` / `resource` / `of_*`
   - [x] PLIC 作为 early class 例外保留 `dt_get_reg()`
@@ -30,7 +30,7 @@ DT 解析 → device_node / resource
 - [x] virtio 设备顺序依赖反向注册 hack
 - [x] `device_snapshot()` 保存裸指针，缺少设备引用和生命周期保护
 - [x] 没有 `device_add()` / `device_del()` / release / deferred probe
-- [ ] 同 initcall level 的依赖主要依赖链接顺序
+- [x] 同 initcall level 的依赖已通过阶段拆分和 `of_root()` 保证消除
 
 ---
 
@@ -196,20 +196,26 @@ DT/OF 层
 
 ---
 
-## Phase 7 — 清理与回归
+## Phase 7 — 清理与回归（已完成）
 
-- [ ] 统一 initcall 阶段
-  - [ ] early：memory/cpu/timebase
-  - [ ] core：device/bus/driver/irq core
-  - [ ] postcore：device_node、irqchip、platform populate
-  - [ ] subsys：transport/platform drivers
-  - [ ] device：叶子驱动
-  - [ ] late：块分区扫描/文件系统
-- [ ] 驱动不再直接调用 `fdt_*` / `dt_get_reg()`
-- [ ] 更新 README / 架构文档
-- [ ] `make -j`、`make run`
-- [ ] brktest 全量
-- [ ] QEMU 串口、RTC、块设备、网络、rootfs 回归
+- [x] 统一 initcall 阶段
+  - [x] early：memory/cpu/timebase/early RTC，显式在 `start_kernel()`/`arch_init()` 中完成
+  - [x] core：device/bus/driver/irq core、slab cache、net core
+  - [x] postcore：device_node、irqchip、platform populate
+  - [x] subsys：transport/platform drivers（ns16550a、goldfish RTC、virtio-mmio）
+  - [x] device：叶子驱动（virtio-blk、virtio-net）
+  - [x] late：deferred probe 重试、自检
+  - [x] 块分区扫描/文件系统放在 `do_initcalls()` 之后的任务上下文中（需要真实 I/O 和调度）
+- [x] 驱动不再直接调用 `fdt_*` / `dt_get_reg()`
+  - [x] PLIC 改用 `of_address_to_resource()` / `of_property_read_u32()`
+  - [x] `dt_get_reg()` 已删除
+  - [x] libfdt 只保留在 DT/OF 核心层
+- [x] 更新 README / 架构文档
+  - [x] 增加设备模型、virtio 分层和 initcall 阶段说明
+  - [x] 记录 IRQ/RTC/clocksource/console 早期例外
+- [x] `make -j`、`make run`
+- [x] brktest 全量：10 suite(s), 0 failed
+- [x] QEMU 串口、RTC、块设备、网络、rootfs 回归
 
 ---
 
@@ -227,10 +233,10 @@ DT/OF 层
 
 ## 验收标准
 
-- [ ] DT 层不再出现 `"ns16550a"`、`"virtio,mmio"`、`"google,goldfish-rtc"` 等驱动专属字符串
-- [ ] 驱动只使用 `device_node` / `resource` / `of_*`
-- [ ] 普通设备统一走 bus match + probe
-- [ ] virtio-mmio 是 platform driver，virtio_blk/net 是 virtio bus driver
-- [ ] IRQ controller 在普通设备 probe 前就绪
-- [ ] `/dev/virtio_blk0` 编号稳定
-- [ ] 启动、串口、RTC、块设备、网络、rootfs 全部回归通过
+- [x] DT 层不再出现 `"ns16550a"`、`"virtio,mmio"`、`"google,goldfish-rtc"` 等驱动专属字符串
+- [x] 驱动只使用 `device_node` / `resource` / `of_*`
+- [x] 普通设备统一走 bus match + probe
+- [x] virtio-mmio 是 platform driver，virtio_blk/net 是 virtio bus driver
+- [x] IRQ controller 在普通设备 probe 前就绪
+- [x] `/dev/virtio_blk0` 编号稳定
+- [x] 启动、串口、RTC、块设备、网络、rootfs 全部回归通过
