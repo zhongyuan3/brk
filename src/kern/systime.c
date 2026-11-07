@@ -225,8 +225,9 @@ u64 sys_clock_nanosleep(void)
 
 static void jiffies_to_timeval(u64 ticks, struct timeval *tv)
 {
-	tv->tv_sec = (__kernel_time_t)(ticks / MS_PER_SEC);
-	tv->tv_usec = (__kernel_suseconds_t)((ticks % MS_PER_SEC) * US_PER_MS);
+	tv->tv_sec = (__kernel_time_t)(ticks / USER_HZ);
+	tv->tv_usec = (__kernel_suseconds_t)((ticks % USER_HZ) *
+					     (US_PER_SEC / USER_HZ));
 }
 
 u64 sys_getrusage(void)

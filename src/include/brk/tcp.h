@@ -33,7 +33,7 @@ struct tcphdr {
 
 int tcp_rcv(struct sk_buff *skb);
 int tcp_sock_create(struct socket *sock, int protocol);
-void tcp_timer_tick(void);
+void tcp_init(void);
 int tcp_proc_show(char *buf, size_t size);
 
 #endif

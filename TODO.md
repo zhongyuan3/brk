@@ -243,7 +243,7 @@ DT/OF 层
 
 ---
 
-# 时间子系统重构方案（T1/T2 已完成，T3–T5 待实施）
+# 时间子系统重构方案（T1/T2/T3 已完成，T4–T5 待实施）
 
 ## 现有问题
 
@@ -441,20 +441,23 @@ struct clocksource {
 - timebase-frequency 暂时保留为早期 DT 例外，通过 `dt_get_timebase_freq()` 提供
 - `timer_read()` 仍保留给 arch timer 编程和随机数种子，不再参与 timekeeper
 
-## Phase T3 — clockevent / tick 解耦
+## Phase T3 — clockevent / tick 解耦（已完成）
 
-- 定义 tick 回调注册机制，例如：
-  - `timer_tick_register(struct timer_tick *tt)`
-  - `timer_tick_unregister()`
-- `timekeeper_tick()` 只负责 jiffies 和等待队列唤醒
-- arch `handle_tick()` 不再直接调用网络/任务代码
-- 将 TCP timer tick 等周期性工作移到注册回调
-- 明确 `HZ` / tick period 常量，统一 jiffies 与用户态 clock tick 换算
+实施状态：
 
-验证：
-
-- 网络重传、`select`、`nanosleep`、调度时间统计正常
-- `/proc/uptime`、`times()`、`getrusage()` 一致
+- [x] `struct tick_handler` + `timekeeper_register_tick_handler()` / `timekeeper_unregister_tick_handler()`
+- [x] `timekeeper_tick()` 更新 jiffies、执行 tick handlers、唤醒等待队列
+- [x] arch `handle_tick()` 只负责 `timekeeper_tick()`（boot hart）和重新编程 tick
+- [x] TCP timer tick 移到注册回调，由 `net_init()` 注册
+- [x] 明确 `HZ=1000`、`USER_HZ`、`TICK_NS`
+- [x] `timer_interval` 使用 `HZ` 计算
+- [x] `jiffies_to_timeval()` 使用 `USER_HZ` 换算
+- [x] `tcp_timer_tick()` 改为 static，不再暴露给 arch timer
+- [x] 验证：
+  - [x] 网络 socket / TCP 测试通过
+  - [x] `sleep` / `nanosleep` 正常
+  - [x] `date`、`/proc/uptime` 正常
+  - [x] `brktest all` 通过
 
 ## Phase T4 — POSIX 时间语义与错误传播
 

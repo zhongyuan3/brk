@@ -3,14 +3,13 @@
 #include <arch/sbi.h>
 #include <arch/timer.h>
 #include <brk/clocksource.h>
+#include <brk/cpu.h>
 #include <brk/dt.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
-#include <brk/task.h>
-#include <brk/tcp.h>
+#include <brk/timeconst.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
-#include <brk/trap.h>
 
 #define DEFAULT_TIMEBASE_FREQ 0x989680u
 
@@ -52,8 +51,8 @@ void timer_init(void)
 	if (!timebase_freq)
 		panic("timer: no clocksource selected\n");
 
-	timer_interval = timebase_freq / 1000;
-	pr_debug("timer: timer_interval=%lu\n", timer_interval);
+	timer_interval = timebase_freq / HZ;
+	pr_debug("timer: timer_interval=%lu (HZ=%d)\n", timer_interval, HZ);
 	timer_init_hart();
 }
 
@@ -74,12 +73,8 @@ void program_next_tick(void)
 
 void handle_tick(void)
 {
-	if (this_cpuid() == boot_info.boot_hart_id) {
+	if (this_cpuid() == boot_info.boot_hart_id)
 		timekeeper_tick();
-		tcp_timer_tick();
-	}
-
-	task_wake_all(timekeeper_wait_chan());
 
 	program_next_tick();
 }

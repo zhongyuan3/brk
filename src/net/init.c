@@ -5,6 +5,7 @@
 #include <brk/netdevice.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
+#include <brk/tcp.h>
 #include <brk/types.h>
 
 static struct packet_type arp_packet_type = {
@@ -22,6 +23,7 @@ static void net_init(void)
 	int err;
 
 	arp_init();
+	tcp_init();
 
 	err = loopback_init();
 	if (err)
