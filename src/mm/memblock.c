@@ -327,7 +327,6 @@ static void memblock_free_range(u64 start, u64 end)
 	start = round_up(start, PAGE_SIZE);
 	end = round_down(end, PAGE_SIZE);
 
-	pr_debug("memblock: free range: %#lx-%#lx\n", start, end);
 	memblock_reserve(start, end - start);
 
 	while (start < end) {
@@ -387,8 +386,6 @@ void memblock_free_all(void)
 
 	for (size_t i = 0; i < nr_ranges; ++i)
 		memblock_free_range(ranges[i].start, ranges[i].end);
-
-	pr_debug("memblock: %s() done\n", __func__);
 }
 
 void memblock_dump(struct memblock_region_set *set)

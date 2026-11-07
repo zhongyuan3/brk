@@ -49,7 +49,7 @@ void secondary_entry(unsigned long hart_id)
 
 	local_irq_enable();
 
-	pr_debug("smp: hart %lu online\n", hart_id);
+	pr_info("smp: cpu@%lu online\n", hart_id);
 
 	task_scheduler();
 }

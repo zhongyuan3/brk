@@ -1,3 +1,4 @@
+#define pr_fmt(fmt) "mm: " fmt
 #include <arch/asm/large_page.h>
 #include <arch/asm/mm.h>
 #include <arch/asm/page.h>
@@ -177,7 +178,6 @@ static void final_pgtable_init(void)
 		rngs_cnt += 1;
 	}
 	rngs_cnt += 7;
-	pr_debug("rngs_cnt = %lu\n", rngs_cnt);
 
 	rngs_size = sizeof(struct mapping_region) * rngs_cnt;
 	rngs_size = round_up(rngs_size, PAGE_SIZE);
@@ -252,7 +252,7 @@ static void final_pgtable_init(void)
 		if (!rngs[i].do_map)
 			break;
 
-		pr_debug("mm: map %s: va=%#lx,pa=%#lx,sz=%lu\n", rngs[i].name,
+		pr_debug("map %s: va=%#lx,pa=%#lx,sz=%lu\n", rngs[i].name,
 			 rngs[i].addr, rngs[i].paddr, rngs[i].size);
 
 		struct map_pages_context ctx = {
@@ -286,16 +286,13 @@ static void vmemmap_init(void)
 	unsigned long paddr;
 	unsigned long vaddr;
 
-	pr_debug("mm: vmemmap: %s() was called\n", __func__);
-
 	for_each_mem_pfn_range(idx, start, end) {
 		sz = round_up((end - start) * sizeof(struct page), PAGE_SIZE);
 		paddr = memblock_alloc(sz, 0, PAGE_SIZE);
 		assert(paddr);
 		memset((void *)phys_to_virt(paddr), 0, sz);
 		vaddr = (unsigned long)pfn_to_page(start);
-		pr_debug("mm: vmemmap: va=%#lx,pa=%#lx,sz=%lu\n", vaddr, paddr,
-			 sz);
+		pr_debug("vmemmap: va=%#lx,pa=%#lx,sz=%lu\n", vaddr, paddr, sz);
 		struct map_pages_context ctx = {
 			.root = kernel_pgdir,
 			.addr = (void *)vaddr,

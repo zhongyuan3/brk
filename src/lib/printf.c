@@ -210,6 +210,15 @@ static void pad(struct fmt_ctx *ctx, size_t pad_len, char pad_ch)
 	}
 }
 
+static void fmt_terminate(struct fmt_ctx *ctx)
+{
+	if (ctx->size == 0 || ctx->buf == NULL)
+		return;
+
+	size_t null_pos = (ctx->pos < ctx->size) ? ctx->pos : ctx->size - 1;
+	ctx->buf[null_pos] = '\0';
+}
+
 static inline int vsnprintf_internal(struct fmt_ctx *ctx, const char *fmt,
 				     va_list ap)
 {
@@ -543,17 +552,14 @@ check_neg:
 		pad(ctx, rspace_pad, ' ');
 	}
 
-	if (ctx->size > 0) {
-		size_t null_pos = (ctx->pos < ctx->size) ? ctx->pos :
-							   ctx->size - 1;
-		ctx->buf[null_pos] = '\0';
-	}
+	fmt_terminate(ctx);
 
 	if (ctx->cnt > INT_MAX)
 		return -EOVERFLOW;
 	return (int)ctx->cnt;
 
 err:
+	fmt_terminate(ctx);
 	return err;
 }
 

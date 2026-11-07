@@ -728,7 +728,5 @@ int mm_core_init(void)
 	kmalloc_init();
 	vmalloc_init();
 
-	memblock_dump_all();
-
 	return 0;
 }

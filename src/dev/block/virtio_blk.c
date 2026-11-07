@@ -429,8 +429,6 @@ int virtio_blk_register(struct virtio_blk_dev *vblk)
 	vblk_registry->vblks[slot] = vblk;
 	spin_unlock(&vblk_registry->lock);
 
-	pr_info("%s: capacity: %" PRIu64 "\n", __func__, vblk->config.capacity);
-
 	snprintf(name, sizeof(name), "virtio_blk%u", slot);
 	disk = gendisk_alloc(vblk_registry->major,
 			     vblk_registry->minor_start +
@@ -558,9 +556,6 @@ void virtio_blk_init(void)
 		panic("%s(): blkdev_alloc_region failed\n", __func__);
 	vblk_registry->major = MAJOR(dev);
 	vblk_registry->minor_start = MINOR(dev);
-
-	pr_info("%s: major: %u\n", __func__, vblk_registry->major);
-	pr_info("%s: minor: %u\n", __func__, vblk_registry->minor_start);
 
 	err = driver_register(&virtio_blk_driver);
 	if (err)

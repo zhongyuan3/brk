@@ -1,3 +1,5 @@
+#define pr_fmt(fmt) "device: " fmt
+
 #include <brk/device.h>
 #include <brk/devtmpfs.h>
 #include <brk/initcall.h>
@@ -81,6 +83,8 @@ int device_register(struct device *dev)
 {
 	if (!dev || !dev->name[0])
 		return -EINVAL;
+
+	pr_info("register %s\n", dev->name);
 
 	spin_lock(&device_lock);
 	if (dev->registered) {

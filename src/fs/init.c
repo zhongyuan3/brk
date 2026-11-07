@@ -8,7 +8,6 @@
 #include <brk/mount.h>
 #include <brk/path.h>
 #include <brk/printf.h>
-#include <brk/printk.h>
 #include <brk/string.h>
 #include <brk/task.h>
 #include <uapi/errno.h>
@@ -49,12 +48,10 @@ int fs_init(void)
 	fsinfo_set_root(task->fsinfo, &root_path);
 	fs_path_get(&root_path);
 	fsinfo_set_cwd(task->fsinfo, &root_path);
-	pr_info("root mount point initialized\n");
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
 	if (err)
 		return err;
-	pr_info("/dev directory created\n");
 
 	/* The brkfs mount below needs the block device nodes to exist already. */
 	err = devtmpfs_populate();
@@ -79,7 +76,6 @@ int fs_init(void)
 	err = mount_err;
 	if (err)
 		return err;
-	pr_info("/ mounted successfully\n");
 
 	new_root_mnt = fs_mount_state_lookup(&root_path);
 	if (!new_root_mnt)
@@ -103,7 +99,6 @@ int fs_init(void)
 	err = do_mount(NULL, "/dev", "devtmpfs", 0, NULL);
 	if (err)
 		return err;
-	pr_info("/dev mounted successfully\n");
 
 	err = do_mkdirat(AT_FDCWD, "/proc", 0755);
 	if (err && err != -EEXIST)
@@ -114,7 +109,6 @@ int fs_init(void)
 	err = do_mount(NULL, "/proc", "procfs", 0, NULL);
 	if (err)
 		return err;
-	pr_info("/proc mounted successfully\n");
 
 	/* The devtmpfs instance is fresh, so recreate all device nodes. */
 	err = devtmpfs_populate();
