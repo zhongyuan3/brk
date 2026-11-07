@@ -147,6 +147,12 @@ The boot hart's timer tick calls `timekeeper_tick()`, which advances jiffies,
 runs registered tick handlers (for example TCP retransmission timers), and
 wakes sleepers. Secondary harts only reprogram their timer.
 
+`CLOCK_REALTIME` is monotonic time plus the wall offset; wall-clock changes do
+not affect `CLOCK_MONOTONIC` or `CLOCK_BOOTTIME`. `clock_getres()` reports the
+clocksource resolution for monotonic clocks and the tick resolution for CPU
+clocks.  Since BRK has no suspend support yet, `CLOCK_BOOTTIME` is currently
+equivalent to `CLOCK_MONOTONIC`.
+
 ## License
 
 This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.

@@ -167,6 +167,7 @@ ktime_t timekeeper_real(void)
 	offset = wall_offset_ns;
 	spin_unlock_irqrestore(&tk_lock, flags);
 
+	/* CLOCK_REALTIME = monotonic time + wall offset. */
 	return (ktime_t)((s64)timekeeper_mono_ns() + offset);
 }
 

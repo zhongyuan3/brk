@@ -23,6 +23,8 @@ struct timespec {
 #define CLOCK_MONOTONIC 1
 #define CLOCK_PROCESS_CPUTIME_ID 2
 #define CLOCK_THREAD_CPUTIME_ID 3
+/* No suspend support yet, so BOOTTIME is the same as MONOTONIC. */
+#define CLOCK_BOOTTIME 7
 
 /* clock_nanosleep() flags. */
 #define TIMER_ABSTIME 1

@@ -78,3 +78,15 @@ u32 clocksource_get_frequency(void)
 {
 	return current_clocksource ? current_clocksource->frequency : 0;
 }
+
+u64 clocksource_get_resolution_ns(void)
+{
+	struct clocksource *cs = current_clocksource;
+	u64 res;
+
+	if (!cs || !cs->frequency)
+		return TICK_NS;
+
+	res = (NS_PER_SEC + cs->frequency - 1) / cs->frequency;
+	return res ? res : 1;
+}
