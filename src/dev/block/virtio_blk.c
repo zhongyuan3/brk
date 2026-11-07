@@ -3,7 +3,6 @@
 #include <brk/bio.h>
 #include <brk/blkdev.h>
 #include <brk/device.h>
-#include <brk/dt.h>
 #include <brk/fs.h>
 #include <brk/genhd.h>
 #include <brk/initcall.h>
@@ -535,8 +534,6 @@ void virtio_blk_init(void)
 {
 	dev_t dev = 0;
 	int err;
-
-	dt_init_scan_virtio_dev();
 
 	vblk_registry = &__vblk_registry;
 	spinlock_init(&vblk_registry->lock, "virtio_blk_driver");

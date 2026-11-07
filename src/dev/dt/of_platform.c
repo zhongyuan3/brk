@@ -76,13 +76,75 @@ static int of_platform_device_create(struct device_node *node)
 	return 0;
 }
 
+static u64 of_platform_node_address(const struct device_node *node)
+{
+	struct resource res;
+
+	if (of_address_to_resource(node, 0, &res))
+		return 0;
+	return res.start;
+}
+
+static int of_platform_node_cmp(const struct device_node *a,
+				const struct device_node *b)
+{
+	u64 a_addr = of_platform_node_address(a);
+	u64 b_addr = of_platform_node_address(b);
+
+	if (a_addr < b_addr)
+		return -1;
+	if (a_addr > b_addr)
+		return 1;
+	return strcmp(of_node_full_name(a), of_node_full_name(b));
+}
+
+/* Sort children by first MMIO address, then by full path. */
+static void of_platform_sort_nodes(struct device_node **nodes, size_t count)
+{
+	size_t i, j;
+
+	for (i = 1; i < count; i++) {
+		struct device_node *key = nodes[i];
+
+		j = i;
+		while (j > 0 && of_platform_node_cmp(nodes[j - 1], key) > 0) {
+			nodes[j] = nodes[j - 1];
+			j--;
+		}
+		nodes[j] = key;
+	}
+}
+
 static int of_platform_populate_children(struct device_node *parent)
 {
 	struct device_node *node;
+	struct device_node **nodes;
+	size_t count = 0;
+	size_t i;
 	int err = 0;
 
+	of_for_each_child(node, parent) count++;
+
+	if (!count)
+		return 0;
+
+	nodes = kcalloc(count, sizeof(*nodes));
+	if (!nodes)
+		return -ENOMEM;
+
+	i = 0;
 	of_for_each_child(node, parent)
 	{
+		if (i < count)
+			nodes[i++] = node;
+	}
+
+	of_platform_sort_nodes(nodes, i);
+
+	for (size_t n = 0; n < i; n++) {
+		int ret;
+
+		node = nodes[n];
 		if (!of_device_is_available(node))
 			continue;
 
@@ -91,18 +153,19 @@ static int of_platform_populate_children(struct device_node *parent)
 
 		if (of_get_property(node, "compatible", NULL) &&
 		    !of_device_is_compatible(node, "simple-bus")) {
-			int ret = of_platform_device_create(node);
+			ret = of_platform_device_create(node);
 
 			if (ret && ret != -EEXIST)
 				err = ret;
 		}
 
-		int ret = of_platform_populate_children(node);
+		ret = of_platform_populate_children(node);
 
 		if (ret && !err)
 			err = ret;
 	}
 
+	kfree(nodes);
 	return err;
 }
 

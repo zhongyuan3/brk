@@ -3,22 +3,17 @@
 #include <arch/mm.h>
 #include <brk/assert.h>
 #include <brk/clocksource.h>
-#include <brk/device.h>
 #include <brk/dt.h>
 #include <brk/initcall.h>
-#include <brk/irqdomain.h>
-#include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
-#include <brk/platform.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/string.h>
 #include <brk/types.h>
 #include <brk/uart.h>
-#include <brk/virtio.h>
 #include <libfdt.h>
 #include <stddef.h>
 #include <uapi/errno.h>
@@ -286,72 +281,5 @@ int dt_parse_rtc(struct rtc_device *rtc)
 	rtc->phys_base = addr;
 	rtc->size = size;
 
-	return 0;
-}
-
-int dt_init_scan_virtio_dev(void)
-{
-	static bool scanned;
-	struct virtio_device **vdevs;
-	int node;
-	int count = 0;
-	int i = 0;
-	u64 addr = 0;
-	u64 size = 0;
-	u32 irq = 0;
-
-	/* Several drivers may call this during their initcall. */
-	if (scanned)
-		return 0;
-
-	for (node = fdt_node_offset_by_compatible(fdt, -1, "virtio,mmio");
-	     node >= 0;
-	     node = fdt_node_offset_by_compatible(fdt, node, "virtio,mmio"))
-		count++;
-
-	if (!count) {
-		scanned = true;
-		return 0;
-	}
-
-	vdevs = kcalloc(count, sizeof(*vdevs));
-	if (!vdevs)
-		return -ENOMEM;
-
-	for (node = fdt_node_offset_by_compatible(fdt, -1, "virtio,mmio");
-	     node >= 0;
-	     node = fdt_node_offset_by_compatible(fdt, node, "virtio,mmio")) {
-		struct virtio_device *vdev;
-
-		addr = 0;
-		size = 0;
-		irq = 0;
-		if (dt_get_reg(node, 0, &addr, &size))
-			continue;
-
-		irq = irq_of_parse_and_map(node, 0);
-		if (!irq)
-			continue;
-
-		vdev = virtio_dev_create(addr, size, irq);
-		if (!vdev)
-			continue;
-
-		vdevs[i++] = vdev;
-	}
-
-	/*
-	 * The QEMU virt machine numbers virtio-mmio buses from the highest
-	 * MMIO address down.  DT nodes are walked in the opposite order, so
-	 * register them in reverse to keep virtio_blk0 on bus 0.
-	 */
-	while (i > 0) {
-		--i;
-		if (virtio_dev_add(vdevs[i]))
-			virtio_dev_destroy(vdevs[i]);
-	}
-
-	kfree(vdevs);
-	scanned = true;
 	return 0;
 }

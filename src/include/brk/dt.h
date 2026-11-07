@@ -13,7 +13,6 @@ int dt_init_scan_rsvd_mem(void);
 
 int dt_init_scan_cpu(void);
 
-int dt_init_scan_virtio_dev(void);
 int dt_parse_rtc(struct rtc_device *rtc);
 
 int dt_setup_timebase_freq(void);
