@@ -9,9 +9,9 @@ ktime_t ktime_get_real(void)
 	return timekeeper_real();
 }
 
-void ktime_set_real(ktime_t t)
+int ktime_set_real(ktime_t t)
 {
-	timekeeper_set_real(t);
+	return timekeeper_set_real(t);
 }
 
 time_t ktime_get_real_sec(void)

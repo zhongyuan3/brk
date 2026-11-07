@@ -20,7 +20,7 @@ DT 解析 → device_node / resource
 - [x] 早期 FDT 扫描已收敛到 DT/OF 核心层（irqchip 改用 OF tree）
 - [x] 驱动内部反向调用 DT 扫描（`virtio_blk_init()` / `virtio_net_init()`）
 - [x] irqchip 绕过 device/bus，直接扫描 DT 并 probe（已评估，保留为早期例外）
-- [x] RTC 在 initcall 之前初始化（已评估，保留为早期例外，改用 OF API）
+- [x] RTC 已去特殊化：platform driver probe 时注册 `wall_clock` provider
 - [x] `platform_device` 只有一个 MMIO 窗口和一个 IRQ
 - [x] `dt_get_reg()` 已删除，地址解析统一使用 `of_address_to_resource()`
 - [x] 驱动直接依赖 libfdt / `dt_get_fdt()` / `dt_get_reg()`
@@ -199,7 +199,7 @@ DT/OF 层
 ## Phase 7 — 清理与回归（已完成）
 
 - [x] 统一 initcall 阶段
-  - [x] early：memory/cpu/timebase/early RTC，显式在 `start_kernel()`/`arch_init()` 中完成
+  - [x] early：memory/cpu/timebase，显式在 `start_kernel()`/`arch_init()` 中完成
   - [x] core：device/bus/driver/irq core、slab cache、net core
   - [x] postcore：device_node、irqchip、platform populate
   - [x] subsys：transport/platform drivers（ns16550a、goldfish RTC、virtio-mmio）
@@ -227,7 +227,7 @@ DT/OF 层
 - IRQ domain 必须先于消费者 probe
 - 驱动 probe 不在全局 spinlock 内执行
 - 设备快照必须有生命周期保护
-- 早期 console/RTC/clocksource 可以作为明确记录的例外
+- 早期 console/clocksource 可以作为明确记录的例外
 
 ---
 
@@ -240,3 +240,239 @@ DT/OF 层
 - [x] IRQ controller 在普通设备 probe 前就绪
 - [x] `/dev/virtio_blk0` 编号稳定
 - [x] 启动、串口、RTC、块设备、网络、rootfs 全部回归通过
+
+---
+
+# 时间子系统重构方案（T1 已完成，T2–T5 待实施）
+
+## 现有问题
+
+- `rtc_init()` 在 `start_kernel()` 中、所有 initcall 之前被直接调用，RTC 被迫成为特殊设备
+- `timekeeper_init()` 直接调用 `rtc_is_available()` / `rtc_read_ns()`
+- `timekeeper_set_real()` 直接调用 `rtc_set_ns()`，时间核心反向依赖 RTC 驱动
+- `rtc_*` 是全局单例 API，驱动只负责“接管”早期已经映射好的 RTC
+- RTC 早期路径需要提前调用 `of_init()`，把 OF 初始化也拖到了 initcall 之前
+- clocksource 只有全局 timebase frequency，没有 `struct clocksource` 抽象
+- timekeeper 直接调用 `timer_read()`，与 RISC-V timer 强耦合
+- 每个 tick 由 arch timer 直接调用 `timekeeper_tick()`、`tcp_timer_tick()`、`task_wake_all()`
+- `timekeeper_set_real()` 无法把 RTC 写失败返回给 `settimeofday()` / `clock_settime()`
+- `CLOCK_MONOTONIC` / `CLOCK_REALTIME` / `CLOCK_GETRES` 的分辨率和语义仍比较粗糙
+
+## 目标分层
+
+```text
+clocksource（单调 cycle counter）
+        │
+        ▼
+timekeeper（monotonic ns、wall offset、jiffies）
+        │
+        ├── clockevent/tick
+        └── wall_clock provider（RTC / 其他 wall clock）
+                │
+                ▼
+        goldfish RTC platform driver
+```
+
+关键原则：
+
+- timekeeper 必须先于 initcalls 启动，但**不能依赖 RTC 已经 probe**
+- RTC 是普通 platform driver，probe 成功后注册 `wall_clock`
+- `wall_clock` 注册时，timekeeper 才读取 RTC 并建立 wall offset
+- `settimeofday()` 更新 offset，并可选地把时间写回当前 provider
+- clocksource 与 wall clock 完全解耦
+- 没有 RTC 时，系统仍能启动，monotonic 时间正常，`CLOCK_REALTIME` 从 0 附近开始
+- 早期 clocksource/timebase 仍可作为明确记录的早期例外
+
+## Phase T1 — wall_clock 抽象与 RTC 去特殊化（已完成）
+
+实施状态：
+
+- [x] `struct wall_clock` / `wall_clock_ops`
+- [x] `timekeeper_register_wall_clock()` / `timekeeper_unregister_wall_clock()`
+- [x] `timekeeper_init()` 不再读取 RTC，wall offset 从 0 开始
+- [x] RTC probe 时注册 wall clock 并建立 wall offset
+- [x] `timekeeper_set_real()` / `ktime_set_real()` 返回错误码
+- [x] `settimeofday()` / `clock_settime()` 传播 provider 写错误
+- [x] RTC 只作为普通 platform driver
+- [x] 删除 `rtc_init()`、`src/riscv/kern/rtc.c`、全局 `rtc_*` API
+- [x] 验证：
+  - [x] 有 RTC：启动日志 `wall clock goldfish-rtc registered`，`date` 正确
+  - [x] 无 RTC：正常启动，realtime 从 0 附近开始
+  - [x] `settimeofday()` 往返测试通过（临时用户态测试程序）
+  - [x] `brktest all` 通过
+
+### 新增 wall clock 接口
+
+建议放在 `src/include/brk/timekeeper.h`：
+
+```c
+struct wall_clock;
+
+struct wall_clock_ops {
+	int (*read_ns)(struct wall_clock *wc, u64 *ns);
+	int (*set_ns)(struct wall_clock *wc, u64 ns);
+};
+
+struct wall_clock {
+	const char *name;
+	const struct wall_clock_ops *ops;
+};
+
+int timekeeper_register_wall_clock(struct wall_clock *wc);
+void timekeeper_unregister_wall_clock(struct wall_clock *wc);
+```
+
+### timekeeper 改动
+
+- `timekeeper_init()`
+  - 不再调用 `rtc_*`
+  - 初始化 `wall_offset_ns = 0`
+  - 记录 `mono_base`
+  - `wall_valid = false`
+- 新增内部状态：
+  - `struct wall_clock *wall_clock`
+  - `bool wall_valid`
+- `timekeeper_register_wall_clock()`
+  - 读取 provider 时间
+  - 若当前 wall 尚未被设置，建立 `wall_offset_ns = rtc_ns - mono_ns`
+  - 若用户已经 `settimeofday()`，不覆盖用户设置
+  - 同一时间只允许一个 active provider（或记录 owner）
+- `timekeeper_set_real(ns)`
+  - 更新 `wall_offset_ns`
+  - 标记 `wall_valid = true`
+  - 若存在 provider，调用 `provider->ops->set_ns()`
+  - 建议改为返回 `int`，把写失败传播给 syscall
+- `timekeeper_unregister_wall_clock()`
+  - 清空 provider
+  - 保留当前 wall offset
+
+### RTC driver 改动
+
+`src/dev/rtc/google_goldfish_rtc.c`：
+
+- 删除早期 `goldfish_rtc_early_probe()` 和全局 `rtc_ok`
+- probe 时：
+  - 从 platform resource 取 MMIO
+  - `ioremap`
+  - 初始化 `struct goldfish_rtc`
+  - 填充 `struct wall_clock`
+  - `timekeeper_register_wall_clock()`
+- remove 时：
+  - `timekeeper_unregister_wall_clock()`
+  - `iounmap`
+  - 释放 RTC 私有数据
+- RTC 读写只通过 `wall_clock_ops` 暴露给时间核心
+
+### 删除的特殊路径
+
+- 删除 `src/riscv/kern/rtc.c`
+- 从 `start_kernel()` 删除 `rtc_init()`
+- 删除 `brk/rtc.h` 中的全局 `rtc_*` API
+- 删除 `goldfish_rtc.h` 中的 early probe 声明
+- RTC 不再需要提前调用 `of_init()`
+- `of_init` 回归普通 `postcore_initcall`
+
+### 启动顺序
+
+```text
+start_kernel
+  clocksource_init()
+  timekeeper_init()          # wall = 0, mono base
+  timer_init()
+  do_initcalls()
+    postcore: of_init / irqchip / of_platform
+    subsys:   goldfish RTC probe
+                -> timekeeper_register_wall_clock()
+                -> wall offset corrected
+  fs_init()                  # 之后的文件时间已经是真实 wall time
+```
+
+### 验证
+
+- 正常启动后 `date` 正确
+- `settimeofday()` / `clock_settime(CLOCK_REALTIME)` 后 `gettimeofday()` 正确
+- 有 RTC 时 `settimeofday()` 可写回硬件
+- 临时移除 DTB 中 RTC 节点后：
+  - 内核仍能启动
+  - monotonic / nanosleep 正常
+  - `CLOCK_REALTIME` 从 0 附近开始
+- `brktest all` 10 suite(s), 0 failed
+
+## Phase T2 — clocksource 抽象
+
+- 新增 `struct clocksource`：
+
+```c
+struct clocksource {
+	const char *name;
+	u64 (*read)(void);
+	u32 frequency;
+	u32 rating;
+	struct list_head list;
+};
+```
+
+- 新增 `clocksource_register()` / `clocksource_select()`
+- RISC-V time CSR 注册为 arch clocksource
+- timekeeper 不再直接调用 `timer_read()`，改用当前 clocksource
+- `timekeeper_mono_ns()` 改为基于 clocksource 的 ns 读数
+- `timer_init()` 通过 clocksource frequency 计算 tick interval
+- 评估 timebase-frequency 解析：
+  - 短期保留 `dt_setup_timebase_freq()` 作为早期例外
+  - 后续可迁移到 RISC-V clocksource 初始化
+
+验证：
+
+- `CLOCK_MONOTONIC` 单调递增
+- nanosleep / select / TCP 超时正常
+- tick 频率与 jiffies 一致
+
+## Phase T3 — clockevent / tick 解耦
+
+- 定义 tick 回调注册机制，例如：
+  - `timer_tick_register(struct timer_tick *tt)`
+  - `timer_tick_unregister()`
+- `timekeeper_tick()` 只负责 jiffies 和等待队列唤醒
+- arch `handle_tick()` 不再直接调用网络/任务代码
+- 将 TCP timer tick 等周期性工作移到注册回调
+- 明确 `HZ` / tick period 常量，统一 jiffies 与用户态 clock tick 换算
+
+验证：
+
+- 网络重传、`select`、`nanosleep`、调度时间统计正常
+- `/proc/uptime`、`times()`、`getrusage()` 一致
+
+## Phase T4 — POSIX 时间语义与错误传播
+
+- `timekeeper_set_real()` / `ktime_set_real()` 返回错误码
+- `settimeofday()` / `clock_settime()` 传播 RTC 写失败
+- `clock_getres()` 使用 clocksource / wall clock 的实际分辨率
+- 明确：
+  - `CLOCK_REALTIME` = monotonic + wall offset
+  - `CLOCK_MONOTONIC` = 不受 wall 调整影响
+  - `CLOCK_PROCESS_CPUTIME_ID` / `CLOCK_THREAD_CPUTIME_ID`
+- 评估是否增加 `CLOCK_BOOTTIME`
+- 检查 `sys_times()` 的 `USER_HZ` 与内核 `HZ` 关系
+
+## Phase T5 — 文档与回归
+
+- README 增加时间子系统分层图
+- 增加时间 selftest（建议覆盖）：
+  - monotonic 单调性
+  - wall clock 注册/注销
+  - 用户 set time 不被后注册的 RTC 覆盖
+  - 无 wall clock 时的行为
+  - provider read/set 回调调用次数
+- 全量回归：
+  - debug / release 编译
+  - QEMU 起机
+  - 串口、RTC、块设备、网络、rootfs
+  - `brktest all`
+
+## 待决策
+
+- 多个 RTC/wall clock 的优先级：第一个注册者优先，还是按 rating 选择？
+- `settimeofday()` 时 provider 写失败是否返回错误，还是只告警？
+- wall clock 注册是否总是覆盖 boot 初始值，还是只在用户未设置时覆盖？
+- clocksource 是否引入 `mult/shift`，还是继续使用整数 frequency？
+- timebase-frequency 继续作为早期 DT 例外，还是迁移到 clocksource driver？

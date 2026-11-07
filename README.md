@@ -111,7 +111,7 @@ Boot is split into explicit stages:
 
 | Stage | Contents |
 | ----- | -------- |
-| before initcalls | paging, memory, CPU discovery, timebase, early RTC wall clock |
+| before initcalls | paging, memory, CPU discovery, timebase |
 | `core` | device/bus/driver/IRQ core, slab caches, network core |
 | `postcore` | OF `device_node` tree, IRQ domains, platform device population |
 | `subsys` | platform and transport drivers (`ns16550a`, goldfish RTC, virtio-mmio) |
@@ -125,8 +125,9 @@ code:
 
 - **IRQ controllers** probe at `postcore` so IRQ domains exist before normal
   devices resolve their interrupts in probe context.
-- **RTC** is brought up before `timekeeper_init()`; the platform driver binds
-  later and adopts the already-mapped controller.
+- **RTC** is a normal platform driver. It registers a `wall_clock` provider
+  when it probes; timekeeper starts with a zero wall offset and applies the
+  RTC's time once the provider is registered.
 - **clocksource/timebase** and early memory/CPU discovery happen before
   initcalls because the rest of the boot path depends on them.
 - **UART/console** is registered from the platform probe; messages produced

@@ -10,7 +10,7 @@ typedef void (*initcall_t)(void);
 /*
  * Initcall phases.  They run in order in do_initcalls().
  *
- *   before initcalls : memory, CPU, timebase, early wall clock
+ *   before initcalls : memory, CPU, timebase
  *   core             : device/bus/driver/IRQ core, slab caches, net core
  *   postcore         : device_node tree, IRQ domains, platform devices
  *   subsys           : transport and platform drivers
