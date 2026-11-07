@@ -1,6 +1,5 @@
 #include <arch/mm.h>
 #include <brk/device.h>
-#include <brk/dt.h>
 #include <brk/eth.h>
 #include <brk/initcall.h>
 #include <brk/irq.h>
@@ -624,13 +623,6 @@ static struct device_driver virtio_net_driver = {
 void virtio_net_init(void)
 {
 	int err;
-
-	/*
-	 * virtio_blk_init() already scans the device tree at postcore time,
-	 * but the scan is idempotent so this also works when only the network
-	 * driver is built in.
-	 */
-	dt_init_scan_virtio_dev();
 
 	err = driver_register(&virtio_net_driver);
 	if (err)

@@ -18,14 +18,14 @@ DT 解析 → device_node / resource
 
 - [x] 已确认 `platform_bus`、`device`、`device_driver`、`bus_type` 已有最小模型
 - [ ] DT 扫描分散在 `dt_init_scan_serial()`、`dt_init_scan_virtio_dev()`、`irqchip_init()`、`rtc_init()`
-- [ ] 驱动内部反向调用 DT 扫描（`virtio_blk_init()` / `virtio_net_init()`）
+- [x] 驱动内部反向调用 DT 扫描（`virtio_blk_init()` / `virtio_net_init()`）
 - [ ] irqchip 绕过 device/bus，直接扫描 DT 并 probe
 - [ ] RTC 在 initcall 之前直接解析 DT
 - [ ] `platform_device` 只有一个 MMIO 窗口和一个 IRQ
 - [ ] `dt_get_reg()` 没有 `ranges` 地址转换，也没有多 reg 支持
 - [ ] 驱动直接依赖 libfdt / `dt_get_fdt()` / `dt_get_reg()`
-- [ ] virtio-mmio transport 的逻辑在 DT 层，virtio 设备没有 parent
-- [ ] virtio 设备顺序依赖反向注册 hack
+- [x] virtio-mmio transport 的逻辑在 DT 层，virtio 设备没有 parent
+- [x] virtio 设备顺序依赖反向注册 hack
 - [x] `device_snapshot()` 保存裸指针，缺少设备引用和生命周期保护
 - [x] 没有 `device_add()` / `device_del()` / release / deferred probe
 - [ ] 同 initcall level 的依赖主要依赖链接顺序
@@ -124,19 +124,24 @@ DT/OF 层
 
 ---
 
-## Phase 4 — virtio transport 拆分
+## Phase 4 — virtio transport 拆分（已完成）
 
-- [ ] 新增 `virtio_mmio` platform driver，匹配 `"virtio,mmio"`
-- [ ] transport probe 负责：
-  - [ ] ioremap
-  - [ ] 读取 device ID
-  - [ ] 创建 child `virtio_device`
-  - [ ] 设置 parent
-  - [ ] 注册到 `virtio_bus`
-- [ ] `virtio_blk` / `virtio_net` 只注册到 `virtio_bus`
-- [ ] 删除 `dt_init_scan_virtio_dev()` 和驱动内部 DT 扫描
-- [ ] 删除反向注册 hack，改为稳定地址/别名排序
-- [ ] 验证 `/dev/virtio_blk0` 编号稳定、网络可用
+- [x] 新增 `virtio_mmio` platform driver，匹配 `"virtio,mmio"`
+  - [x] `src/dev/virtio/virtio_mmio_platform.c`
+- [x] transport probe 负责：
+  - [x] ioremap / 读取 device ID（`virtio_dev_create()`）
+  - [x] 创建 child `virtio_device`
+  - [x] 设置 parent
+  - [x] 注册到 `virtio_bus`
+- [x] `virtio_blk` / `virtio_net` 只注册到 `virtio_bus`
+- [x] 删除 `dt_init_scan_virtio_dev()` 和驱动内部 DT 扫描
+- [x] 删除反向注册 hack，改为稳定地址排序
+  - [x] `of_platform_populate()` 按第一个 `reg` 地址排序子节点
+  - [x] 地址相同时按节点完整路径排序
+- [x] 验证 `/dev/virtio_blk0` 编号稳定、网络可用
+  - [x] QEMU 中 virtio0 = bus 0，virtio_blk0 正常挂载 rootfs
+  - [x] virtio1 = bus 1，网络正常
+  - [x] `brktest all`: 10 suite(s), 0 failed
 
 ---
 
