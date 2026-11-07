@@ -6,6 +6,7 @@
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
+#include <brk/of.h>
 #include <brk/platform.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
@@ -241,7 +242,18 @@ static int platform_match(struct device *dev, struct device_driver *drv)
 	struct platform_device *pdev = to_platform_device(dev);
 	const struct device_id *id;
 
-	if (!pdev->compatible || !drv->id_table)
+	if (!drv->id_table)
+		return 0;
+
+	if (dev->of_node) {
+		for (id = drv->id_table; id->compatible; ++id) {
+			if (of_device_is_compatible(dev->of_node,
+						    id->compatible))
+				return 1;
+		}
+	}
+
+	if (!pdev->compatible)
 		return 0;
 
 	for (id = drv->id_table; id->compatible; ++id) {
@@ -263,6 +275,7 @@ int platform_device_register_simple(const char *name, const char *compatible,
 				    void *pdata)
 {
 	struct platform_device *pdev;
+	unsigned int nr = 0;
 	int err;
 
 	if (!name || !compatible)
@@ -272,16 +285,43 @@ int platform_device_register_simple(const char *name, const char *compatible,
 	if (!pdev)
 		return -ENOMEM;
 
+	if (size)
+		nr++;
+	if (irq)
+		nr++;
+	if (nr) {
+		pdev->resources = kcalloc(nr, sizeof(*pdev->resources));
+		if (!pdev->resources) {
+			kfree(pdev);
+			return -ENOMEM;
+		}
+	}
+
+	nr = 0;
+	if (size) {
+		pdev->resources[nr].start = phys_base;
+		pdev->resources[nr].end = phys_base + size - 1;
+		pdev->resources[nr].flags = IORESOURCE_MEM;
+		pdev->resources[nr].name = name;
+		nr++;
+	}
+	if (irq) {
+		pdev->resources[nr].start = irq;
+		pdev->resources[nr].end = irq;
+		pdev->resources[nr].flags = IORESOURCE_IRQ;
+		pdev->resources[nr].name = name;
+		nr++;
+	}
+	pdev->num_resources = nr;
+
 	device_init(&pdev->dev, name);
 	pdev->dev.bus = &platform_bus;
-	pdev->phys_base = phys_base;
-	pdev->size = size;
-	pdev->irq = irq;
 	pdev->compatible = compatible;
 	pdev->pdata = pdata;
 
 	err = device_register(&pdev->dev);
 	if (err) {
+		kfree(pdev->resources);
 		kfree(pdev);
 		return err;
 	}
@@ -294,7 +334,35 @@ void platform_device_unregister(struct platform_device *pdev)
 	if (!pdev)
 		return;
 	device_unregister(&pdev->dev);
+	kfree(pdev->resources);
 	kfree(pdev);
+}
+
+struct resource *platform_get_resource(struct platform_device *pdev,
+				       unsigned int type, unsigned int index)
+{
+	if (!pdev)
+		return NULL;
+
+	for (unsigned int i = 0; i < pdev->num_resources; i++) {
+		struct resource *res = &pdev->resources[i];
+
+		if (type && !(res->flags & type))
+			continue;
+		if (index-- == 0)
+			return res;
+	}
+	return NULL;
+}
+
+int platform_get_irq(struct platform_device *pdev, unsigned int index)
+{
+	struct resource *res =
+		platform_get_resource(pdev, IORESOURCE_IRQ, index);
+
+	if (!res)
+		return -ENOENT;
+	return (int)res->start;
 }
 
 int platform_driver_register(struct platform_driver *pdrv)

@@ -58,6 +58,7 @@
 
 struct bus_type;
 struct device_driver;
+struct device_node;
 
 struct device_id {
 	/* platform_bus: DT compatible string */
@@ -71,6 +72,7 @@ struct device {
 	struct device *parent;
 	struct bus_type *bus;
 	struct device_driver *driver;
+	struct device_node *of_node;
 
 	struct list_head bus_list; /* bus->devices */
 	struct list_head device_list; /* global device list */

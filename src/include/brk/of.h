@@ -58,4 +58,6 @@ int of_address_to_resource(const struct device_node *node, int index,
 			   struct resource *res);
 int of_irq_get(const struct device_node *node, int index);
 
+int of_platform_populate(void);
+
 #endif
