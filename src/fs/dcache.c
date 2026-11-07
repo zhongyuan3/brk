@@ -1,4 +1,3 @@
-#include <stdalign.h>
 #define pr_fmt(fmt) "%s:%d " fmt, __func__, __LINE__
 #include <brk/assert.h>
 #include <brk/dcache.h>
@@ -15,6 +14,7 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <stdalign.h>
 #include <uapi/errno.h>
 
 static struct hlist_head dentry_htable[DENTRY_HTABLE_SIZE];
@@ -168,9 +168,8 @@ void fs_dentry_make_negative(struct fs_dentry *dentry)
 
 struct fs_dentry *fs_dentry_get(struct fs_dentry *dentry)
 {
-	pr_debug("duplicating dentry: name=%.*s, refcnt=%d\n",
-		 (int)dentry->name.len, dentry->name.name,
-		 refcnt_read(&dentry->count));
+	pr_debug("duplicating: name=%.*s, refcnt=%d\n", (int)dentry->name.len,
+		 dentry->name.name, refcnt_read(&dentry->count));
 	refcnt_inc(&dentry->count);
 	return dentry;
 }
@@ -210,14 +209,13 @@ void fs_dentry_put(struct fs_dentry *dentry)
 	const struct fs_dentry_ops *op;
 	struct fs_inode *inode;
 
-	pr_debug("putting dentry: name=%.*s, refcnt=%d\n",
-		 (int)dentry->name.len, dentry->name.name,
-		 refcnt_read(&dentry->count));
+	pr_debug("putting: name=%.*s, refcnt=%d\n", (int)dentry->name.len,
+		 dentry->name.name, refcnt_read(&dentry->count));
 
 	if (refcnt_dec_fetch(&dentry->count) > 0)
 		return;
 
-	pr_debug("freeing dentry: name=%.*s\n", (int)dentry->name.len,
+	pr_debug("freeing: name=%.*s\n", (int)dentry->name.len,
 		 dentry->name.name);
 
 	if (dentry->parent != dentry) {
@@ -228,8 +226,8 @@ void fs_dentry_put(struct fs_dentry *dentry)
 	}
 
 	if (!(dentry->flags & DCACHE_UNHASHED)) {
-		pr_debug("removing dentry from hash table: name=%.*s\n",
-			 (int)dentry->name.len, dentry->name.name);
+		pr_debug("removing: name=%.*s\n", (int)dentry->name.len,
+			 dentry->name.name);
 		spin_lock(&dentry_htable_lock);
 		assert(!hlist_unhashed(&dentry->hash));
 		hlist_del_init(&dentry->hash);
@@ -296,8 +294,8 @@ static void fs_dentry_hash(struct fs_dentry *dentry, u32 idx)
 		spin_lock(&dentry_htable_lock);
 		hlist_add_head(&dentry->hash, &dentry_htable[idx]);
 		spin_unlock(&dentry_htable_lock);
-		pr_debug("added dentry to hash table: name=%.*s\n",
-			 (int)dentry->name.len, dentry->name.name);
+		pr_debug("added: name=%.*s\n", (int)dentry->name.len,
+			 dentry->name.name);
 	}
 	spin_unlock(&dentry->lock);
 }
