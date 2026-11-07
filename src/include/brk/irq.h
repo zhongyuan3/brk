@@ -47,7 +47,7 @@ void handle_level_irq(struct irq_desc *desc);
 void handle_edge_irq(struct irq_desc *desc);
 
 void irq_init(void);
-void irqchip_init(void);
+void irqchip_early_init(void);
 void irq_init_hart(unsigned int hart);
 int irq_handle_external(unsigned int hart);
 

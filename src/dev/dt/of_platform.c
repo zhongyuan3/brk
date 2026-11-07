@@ -42,18 +42,12 @@ static int of_platform_device_create(struct device_node *node)
 		res[nr++] = tmp;
 	}
 
-	for (int i = 0; i < PLATFORM_MAX_RESOURCES; i++) {
-		int irq = of_irq_get(node, i);
-
-		if (irq < 0)
-			break;
-		res[nr].start = (u64)irq;
-		res[nr].end = (u64)irq;
-		res[nr].flags = IORESOURCE_IRQ;
-		res[nr].name = of_node_name(node);
-		nr++;
-	}
-
+	/*
+	 * IRQs are deliberately not turned into resources here.  The IRQ
+	 * controller must be able to register its domain first, and normal
+	 * devices should resolve their IRQs from of_node in probe context via
+	 * platform_get_irq().
+	 */
 	compatible = of_get_property(node, "compatible", &len);
 	device_init(&pdev->dev, of_node_name(node));
 	pdev->dev.bus = &platform_bus;

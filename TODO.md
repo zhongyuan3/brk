@@ -17,11 +17,11 @@ DT 解析 → device_node / resource
 ## 当前实现的主要问题
 
 - [x] 已确认 `platform_bus`、`device`、`device_driver`、`bus_type` 已有最小模型
-- [ ] DT 扫描分散在 `dt_init_scan_serial()`、`dt_init_scan_virtio_dev()`、`irqchip_init()`、`rtc_init()`
+- [ ] 早期 DT 扫描仍保留在 `irqchip_early_init()` 和 `rtc_init()`
 - [x] 驱动内部反向调用 DT 扫描（`virtio_blk_init()` / `virtio_net_init()`）
-- [ ] irqchip 绕过 device/bus，直接扫描 DT 并 probe
+- [x] irqchip 绕过 device/bus，直接扫描 DT 并 probe（已评估，保留为早期例外）
 - [ ] RTC 在 initcall 之前直接解析 DT
-- [ ] `platform_device` 只有一个 MMIO 窗口和一个 IRQ
+- [x] `platform_device` 只有一个 MMIO 窗口和一个 IRQ
 - [ ] `dt_get_reg()` 没有 `ranges` 地址转换，也没有多 reg 支持
 - [ ] 驱动直接依赖 libfdt / `dt_get_fdt()` / `dt_get_reg()`
 - [x] virtio-mmio transport 的逻辑在 DT 层，virtio 设备没有 parent
@@ -145,14 +145,26 @@ DT/OF 层
 
 ---
 
-## Phase 5 — irqchip / 早期设备顺序
+## Phase 5 — irqchip / 早期设备顺序（已完成）
 
-- [ ] 明确 `irqchip` 早期 probe 阶段
-- [ ] IRQ controller 在普通设备 probe 前完成 domain 注册
-- [ ] 普通设备资源中的 IRQ 延迟到 probe 阶段解析
-- [ ] 支持 `interrupt-parent` 继承和 `interrupts-extended`
-- [ ] 评估是否将 irqchip 完全设备化；否则记录为明确例外
-- [ ] 验证 PLIC、串口、virtio、网络中断
+- [x] 明确 `irqchip` 早期 probe 阶段
+  - [x] `irqchip_early_init()` 在 `postcore_initcall` 执行
+  - [x] `of_platform_populate()` 在 `subsys_initcall` 创建设备
+- [x] IRQ controller 在普通设备 probe 前完成 domain 注册
+- [x] 普通设备资源中的 IRQ 延迟到 probe 阶段解析
+  - [x] `of_platform` 不再生成 IRQ resource
+  - [x] `platform_get_irq()` 在 probe 时通过 `of_irq_get()` 解析
+- [x] 支持 `interrupt-parent` 继承和 `interrupts-extended`
+  - [x] `interrupt-parent` 从最近祖先继承
+  - [x] `interrupts-extended` 按每个 entry 的 parent 解析
+- [x] 评估是否将 irqchip 完全设备化；否则记录为明确例外
+  - [x] 结论：保留 early irqchip 例外
+  - [x] 原因：控制器自身需要 bootstrap IRQ，且必须早于普通消费者 probe
+  - [x] 例外说明记录在 `src/kern/irqchip.c`
+- [x] 验证 PLIC、串口、virtio、网络中断
+  - [x] `/proc/interrupts`: `ns16550a` hwirq 10、`virtio_blk` hwirq 1 正常计数
+  - [x] 自定义 DTB 验证串口 `interrupts-extended` 和 virtio 的 `interrupt-parent` 继承
+  - [x] `brktest all`: 10 suite(s), 0 failed
 
 ---
 
