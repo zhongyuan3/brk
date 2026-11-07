@@ -872,7 +872,7 @@ u64 sys_posix_getdents(void)
 		return err;
 	}
 
-	fp->pos = ctx.pos;
+	fp->pos = ctx.ctx.pos;
 	sleeplock_release(&fp->pos_lock);
 	fs_file_put(fp);
 
