@@ -33,6 +33,11 @@ void platform_device_unregister(struct platform_device *pdev);
 void platform_device_release(struct device *dev);
 struct resource *platform_get_resource(struct platform_device *pdev,
 				       unsigned int type, unsigned int index);
+/*
+ * Return the mapped virq for an OF platform device, or the IRQ resource of a
+ * manually created platform device.  OF IRQs are resolved at call time so
+ * that the IRQ domain is guaranteed to exist.
+ */
 int platform_get_irq(struct platform_device *pdev, unsigned int index);
 
 int platform_driver_register(struct platform_driver *pdrv);

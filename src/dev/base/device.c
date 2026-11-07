@@ -578,12 +578,23 @@ struct resource *platform_get_resource(struct platform_device *pdev,
 
 int platform_get_irq(struct platform_device *pdev, unsigned int index)
 {
-	struct resource *res =
-		platform_get_resource(pdev, IORESOURCE_IRQ, index);
+	struct resource *res;
 
-	if (!res)
-		return -ENOENT;
-	return (int)res->start;
+	if (!pdev)
+		return -EINVAL;
+
+	res = platform_get_resource(pdev, IORESOURCE_IRQ, index);
+	if (res)
+		return (int)res->start;
+
+	/*
+	 * OF devices carry no IRQ resource: resolve interrupts from the node
+	 * at probe time, after the IRQ domain is available.
+	 */
+	if (pdev->dev.of_node)
+		return of_irq_get(pdev->dev.of_node, (int)index);
+
+	return -ENOENT;
 }
 
 int platform_driver_register(struct platform_driver *pdrv)

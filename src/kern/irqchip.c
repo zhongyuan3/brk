@@ -98,7 +98,21 @@ static struct irqchip_driver *irqchip_match(int fdt_node)
 	return NULL;
 }
 
-void irqchip_init(void)
+/*
+ * Early irqchip exception.
+ *
+ * Interrupt controllers are discovered directly from the FDT and probed at
+ * postcore_initcall, before of_platform_populate() creates ordinary platform
+ * devices at subsys_initcall.  Consumers resolve their IRQs later, from
+ * probe context, through platform_get_irq()/of_irq_get(), so every domain
+ * they need is already registered.
+ *
+ * Fully modelling an interrupt controller as a platform device would require
+ * a bootstrap IRQ for the controller itself and deferral of every consumer
+ * until the controller has probed.  Keep this direct early phase as an
+ * explicit exception until that dependency chain is implemented.
+ */
+void irqchip_early_init(void)
 {
 	void *fdt = dt_get_fdt();
 	int node = -1;
@@ -125,4 +139,4 @@ void irqchip_init(void)
 
 	irq_init_hart_all(this_cpuid());
 }
-postcore_initcall(irqchip_init);
+postcore_initcall(irqchip_early_init);

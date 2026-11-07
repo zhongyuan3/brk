@@ -36,7 +36,10 @@ unsigned int irq_create_mapping(struct irq_domain *d, irq_hw_number_t hwirq,
 				unsigned int type);
 unsigned int irq_find_mapping(struct irq_domain *d, irq_hw_number_t hwirq);
 
-/* Parse an "interrupts" entry and return the mapped virq (0 on failure). */
+/*
+ * Parse the index'th "interrupts" or "interrupts-extended" entry and return
+ * the mapped virq (0 on failure).
+ */
 unsigned int irq_of_parse_and_map(int fdt_node, int index);
 
 #endif
