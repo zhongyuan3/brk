@@ -4,6 +4,7 @@
 #include <brk/ktime.h>
 #include <brk/net.h>
 #include <brk/netdevice.h>
+#include <brk/panic.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/route.h>
@@ -13,6 +14,7 @@
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/tcp.h>
+#include <brk/timekeeper.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
 #include <uapi/errno.h>
@@ -1219,7 +1221,7 @@ struct tcp_timer_action {
 	u32 daddr;
 };
 
-void tcp_timer_tick(void)
+static void tcp_timer_tick(void)
 {
 	static u64 next_run;
 	struct tcp_timer_action actions[TCP_TIMER_BATCH];
@@ -1337,6 +1339,18 @@ void tcp_timer_tick(void)
 	for (unsigned int i = 0; i < nr; i++)
 		tcp_xmit_skb(actions[i].skb, actions[i].saddr,
 			     actions[i].daddr);
+}
+
+static struct tick_handler tcp_tick_handler = {
+	.fn = tcp_timer_tick,
+};
+
+void tcp_init(void)
+{
+	int err = timekeeper_register_tick_handler(&tcp_tick_handler);
+
+	if (err)
+		panic("tcp: tick handler registration failed: %d\n", err);
 }
 
 static const struct proto_ops tcp_proto_ops = {

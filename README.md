@@ -135,6 +135,18 @@ code:
 - **UART/console** is registered from the platform probe; messages produced
   before that are buffered by printk.
 
+### Timekeeping
+
+Time is layered as `clocksource` → `timekeeper` → `wall_clock`:
+
+- `clocksource` provides the monotonic cycle counter selected at boot.
+- `timekeeper` owns monotonic nanoseconds, the wall-clock offset and jiffies.
+- `wall_clock` is registered by a normal RTC platform driver.
+
+The boot hart's timer tick calls `timekeeper_tick()`, which advances jiffies,
+runs registered tick handlers (for example TCP retransmission timers), and
+wakes sleepers. Secondary harts only reprogram their timer.
+
 ## License
 
 This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.

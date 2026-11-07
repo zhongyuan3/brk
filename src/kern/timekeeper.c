@@ -14,6 +14,8 @@ static SPINLOCK_DEFINE(tk_lock);
 static bool initialized;
 static bool wall_valid;
 static struct wall_clock *wall_clock;
+static LIST_DEFINE(tick_handlers);
+static SPINLOCK_DEFINE(tick_lock);
 
 bool timekeeper_initialized(void)
 {
@@ -91,12 +93,55 @@ void timekeeper_unregister_wall_clock(struct wall_clock *wc)
 	spin_unlock_irqrestore(&tk_lock, flags);
 }
 
+int timekeeper_register_tick_handler(struct tick_handler *th)
+{
+	irqstate_t flags;
+
+	if (!th || !th->fn)
+		return -EINVAL;
+
+	flags = spin_lock_irqsave(&tick_lock);
+	if (th->registered) {
+		spin_unlock_irqrestore(&tick_lock, flags);
+		return -EBUSY;
+	}
+	list_add_tail(&th->node, &tick_handlers);
+	th->registered = true;
+	spin_unlock_irqrestore(&tick_lock, flags);
+	return 0;
+}
+
+void timekeeper_unregister_tick_handler(struct tick_handler *th)
+{
+	irqstate_t flags;
+
+	if (!th)
+		return;
+
+	flags = spin_lock_irqsave(&tick_lock);
+	if (th->registered) {
+		list_del_init(&th->node);
+		th->registered = false;
+	}
+	spin_unlock_irqrestore(&tick_lock, flags);
+}
+
 void timekeeper_tick(void)
 {
+	struct tick_handler *th;
 	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 
 	++jiffies;
 	spin_unlock_irqrestore(&tk_lock, flags);
+
+	flags = spin_lock_irqsave(&tick_lock);
+	list_for_each_entry(th, &tick_handlers, node) {
+		if (th->fn)
+			th->fn();
+	}
+	spin_unlock_irqrestore(&tick_lock, flags);
+
+	task_wake_all(&jiffies);
 }
 
 u64 jiffies_get(void)
