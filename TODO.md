@@ -243,7 +243,7 @@ DT/OF 层
 
 ---
 
-# 时间子系统重构方案（T1 已完成，T2–T5 待实施）
+# 时间子系统重构方案（T1/T2 已完成，T3–T5 待实施）
 
 ## 现有问题
 
@@ -398,7 +398,27 @@ start_kernel
   - `CLOCK_REALTIME` 从 0 附近开始
 - `brktest all` 10 suite(s), 0 failed
 
-## Phase T2 — clocksource 抽象
+## Phase T2 — clocksource 抽象（已完成）
+
+实施状态：
+
+- [x] `struct clocksource`：`name` / `read` / `frequency` / `rating` / `list`
+- [x] `clocksource_register()` / `clocksource_select()`
+- [x] RISC-V time CSR 注册为 `riscv-time` clocksource
+- [x] `timer_clocksource_init()` 读取 timebase-frequency 并注册
+- [x] `clocksource_init()` 选择 rating 最高的 clocksource
+- [x] timekeeper 不再直接调用 `timer_read()`
+- [x] `timekeeper_mono_ns()` 基于 `clocksource_read_ns()`
+- [x] `timer_init()` 使用选中 clocksource 的 frequency
+- [x] `dt_setup_timebase_freq()` 改为 `dt_get_timebase_freq()`
+- [x] 验证：
+  - [x] 启动日志 `clocksource: selected riscv-time (10000000 Hz, rating 100)`
+  - [x] `date`、`/proc/uptime` 正常
+  - [x] 无 RTC 启动正常
+  - [x] `settimeofday()` 往返测试通过
+  - [x] `brktest all` 通过
+
+### 设计
 
 - 新增 `struct clocksource`：
 
@@ -412,20 +432,14 @@ struct clocksource {
 };
 ```
 
-- 新增 `clocksource_register()` / `clocksource_select()`
-- RISC-V time CSR 注册为 arch clocksource
-- timekeeper 不再直接调用 `timer_read()`，改用当前 clocksource
-- `timekeeper_mono_ns()` 改为基于 clocksource 的 ns 读数
-- `timer_init()` 通过 clocksource frequency 计算 tick interval
-- 评估 timebase-frequency 解析：
-  - 短期保留 `dt_setup_timebase_freq()` 作为早期例外
-  - 后续可迁移到 RISC-V clocksource 初始化
+### 设计落点
 
-验证：
-
-- `CLOCK_MONOTONIC` 单调递增
-- nanosleep / select / TCP 超时正常
-- tick 频率与 jiffies 一致
+- `clocksource_register()` / `clocksource_select()` 实现在 `src/kern/clocksource.c`
+- RISC-V time CSR 由 `src/riscv/kern/timer.c` 注册为 arch clocksource
+- timekeeper 只消费 `clocksource_read_ns()`
+- `timer_init()` 通过选中 clocksource 的 frequency 计算 tick interval
+- timebase-frequency 暂时保留为早期 DT 例外，通过 `dt_get_timebase_freq()` 提供
+- `timer_read()` 仍保留给 arch timer 编程和随机数种子，不再参与 timekeeper
 
 ## Phase T3 — clockevent / tick 解耦
 

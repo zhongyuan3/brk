@@ -4,11 +4,10 @@
 #include <brk/task.h>
 #include <brk/timeconst.h>
 #include <brk/timekeeper.h>
-#include <brk/timer.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
 
-static u64 mono_base_cycles;
+static u64 mono_base_ns;
 static s64 wall_offset_ns;
 static u64 jiffies;
 static SPINLOCK_DEFINE(tk_lock);
@@ -21,23 +20,14 @@ bool timekeeper_initialized(void)
 	return initialized;
 }
 
-static u64 cycles_to_ns(u64 cycles)
-{
-	u32 freq = clocksource_get_timebase_freq();
-	u64 sec = cycles / freq;
-	u64 rem = cycles % freq;
-
-	return sec * NS_PER_SEC + rem * NS_PER_SEC / freq;
-}
-
 u64 timekeeper_mono_ns(void)
 {
-	return cycles_to_ns(timer_read() - mono_base_cycles);
+	return clocksource_read_ns() - mono_base_ns;
 }
 
 void timekeeper_init(void)
 {
-	mono_base_cycles = timer_read();
+	mono_base_ns = clocksource_read_ns();
 
 	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 

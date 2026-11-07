@@ -2,7 +2,6 @@
 #include <arch/hart.h>
 #include <arch/mm.h>
 #include <brk/assert.h>
-#include <brk/clocksource.h>
 #include <brk/dt.h>
 #include <brk/initcall.h>
 #include <brk/ktime.h>
@@ -178,12 +177,14 @@ int dt_init_scan_rsvd_mem(void)
 	return 0;
 }
 
-int dt_setup_timebase_freq(void)
+int dt_get_timebase_freq(u32 *freq_out)
 {
 	int node;
-	u32 timebase_freq = 0;
 	const u32 *freq;
 	int len;
+
+	if (!freq_out)
+		return -EINVAL;
 
 	node = fdt_path_offset(fdt, "/cpus");
 	if (node < 0) {
@@ -197,9 +198,7 @@ int dt_setup_timebase_freq(void)
 	if (len != sizeof(u32))
 		return -EINVAL;
 
-	timebase_freq = fdt32_to_cpu(*freq);
-	clocksource_set_timebase_freq(timebase_freq);
-
+	*freq_out = fdt32_to_cpu(*freq);
 	return 0;
 }
 
