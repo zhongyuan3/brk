@@ -1,6 +1,5 @@
 #include <arch/hart.h>
 #include <arch/pgtable.h>
-#include <brk/dt.h>
 #include <brk/initcall.h>
 #include <brk/ioremap.h>
 #include <brk/irq.h>
@@ -10,12 +9,13 @@
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/mmio.h>
+#include <brk/of.h>
 #include <brk/printk.h>
+#include <brk/resource.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
 #include <inttypes.h>
-#include <libfdt.h>
 #include <uapi/errno.h>
 
 #define PLIC_PRIORITY_OFFSET 0x000000
@@ -100,12 +100,13 @@ static struct irq_chip plic_chip = {
 	.irq_set_affinity = plic_irq_set_affinity,
 };
 
-static int plic_domain_xlate(struct irq_domain *d, int fdt_node,
-			     const u32 *intspec, unsigned int intsize,
-			     irq_hw_number_t *out_hwirq, unsigned int *out_type)
+static int plic_domain_xlate(struct irq_domain *d,
+			     const struct device_node *node, const u32 *intspec,
+			     unsigned int intsize, irq_hw_number_t *out_hwirq,
+			     unsigned int *out_type)
 {
 	(void)d;
-	(void)fdt_node;
+	(void)node;
 
 	if (intsize < 1)
 		return -EINVAL;
@@ -236,15 +237,19 @@ static void plic_selftest(struct sifive_plic *p)
 		plic_hwirq_clear_enable(p, 1, test_hwirq);
 }
 
-static int plic_probe(int fdt_node)
+static int plic_probe(const struct device_node *node)
 {
-	const u32 *ndev;
+	struct resource res;
 	struct sifive_plic *p;
-	u64 addr = 0, size = 0;
-	int len;
+	u32 ndev;
+	u64 addr;
+	size_t size;
 
-	if (dt_get_reg(fdt_node, 0, &addr, &size))
+	if (of_address_to_resource(node, 0, &res))
 		return -EINVAL;
+
+	addr = res.start;
+	size = resource_size(&res);
 
 	p = kzalloc(sizeof(*p));
 	if (!p)
@@ -256,13 +261,14 @@ static int plic_probe(int fdt_node)
 		return -ENOMEM;
 	}
 
-	ndev = fdt_getprop(dt_get_fdt(), fdt_node, "riscv,ndev", &len);
-	p->ndev = ndev && len == sizeof(u32) ? fdt32_to_cpu(*ndev) : 1024;
+	if (of_property_read_u32(node, "riscv,ndev", &ndev))
+		p->ndev = 1024;
+	else
+		p->ndev = ndev;
 	if (p->ndev < 2)
 		p->ndev = 2;
 
-	p->domain =
-		irq_domain_add_linear(fdt_node, p->ndev, &plic_domain_ops, p);
+	p->domain = irq_domain_add_linear(node, p->ndev, &plic_domain_ops, p);
 	if (!p->domain) {
 		iounmap(p->base, size);
 		kfree(p);

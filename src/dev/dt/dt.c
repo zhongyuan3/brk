@@ -227,37 +227,3 @@ void *dt_get_fdt(void)
 {
 	return fdt;
 }
-
-int dt_get_reg(int node, int index, u64 *addr, u64 *size)
-{
-	int len, addr_cells, size_cells, cell_bytes, nr;
-	const u32 *reg;
-	int err;
-
-	if (!addr || !size || index < 0)
-		return -EINVAL;
-
-	err = get_parent_addr_cells(node, &addr_cells, &size_cells);
-	if (err)
-		return err;
-
-	cell_bytes = (addr_cells + size_cells) * sizeof(u32);
-	reg = fdt_getprop(fdt, node, "reg", &len);
-	if (!reg || len < cell_bytes || len % cell_bytes != 0)
-		return -EINVAL;
-
-	nr = len / cell_bytes;
-	if (index >= nr)
-		return -EINVAL;
-
-	reg += index * (addr_cells + size_cells);
-	*addr = 0;
-	*size = 0;
-
-	for (int i = 0; i < addr_cells; ++i)
-		*addr = (*addr << 32) | fdt32_to_cpu(*reg++);
-	for (int i = 0; i < size_cells; ++i)
-		*size = (*size << 32) | fdt32_to_cpu(*reg++);
-
-	return 0;
-}

@@ -1,14 +1,13 @@
 #include <brk/cpu.h>
-#include <brk/dt.h>
 #include <brk/initcall.h>
 #include <brk/irq.h>
 #include <brk/irqchip.h>
 #include <brk/irqdomain.h>
 #include <brk/list.h>
+#include <brk/of.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
 #include <brk/types.h>
-#include <libfdt.h>
 #include <uapi/errno.h>
 
 static LIST_DEFINE(irqchip_drivers);
@@ -84,49 +83,25 @@ int irq_handle_external(unsigned int hart)
 	return irq_dispatch_external(hart);
 }
 
-static struct irqchip_driver *irqchip_match(int fdt_node)
+static struct irqchip_driver *irqchip_match(const struct device_node *node)
 {
-	void *fdt = dt_get_fdt();
 	struct irqchip_driver *drv;
 
 	list_for_each_entry(drv, &irqchip_drivers, list) {
 		for (const char *const *c = drv->compatibles; *c; c++) {
-			if (fdt_node_check_compatible(fdt, fdt_node, *c) == 0)
+			if (of_device_is_compatible(node, *c))
 				return drv;
 		}
 	}
 	return NULL;
 }
 
-/*
- * Early irqchip exception.
- *
- * Interrupt controllers are discovered directly from the FDT and probed at
- * postcore_initcall, before of_platform_populate() creates ordinary platform
- * devices at subsys_initcall.  Consumers resolve their IRQs later, from
- * probe context, through platform_get_irq()/of_irq_get(), so every domain
- * they need is already registered.
- *
- * Fully modelling an interrupt controller as a platform device would require
- * a bootstrap IRQ for the controller itself and deferral of every consumer
- * until the controller has probed.  Keep this direct early phase as an
- * explicit exception until that dependency chain is implemented.
- */
-void irqchip_early_init(void)
+static void irqchip_probe_node(const struct device_node *node)
 {
-	void *fdt = dt_get_fdt();
-	int node = -1;
-	int depth = 0;
+	struct device_node *child;
+	struct irqchip_driver *drv;
 
-	if (!fdt)
-		return;
-
-	while ((node = fdt_next_node(fdt, node, &depth)) >= 0) {
-		struct irqchip_driver *drv;
-
-		if (!fdt_getprop(fdt, node, "interrupt-controller", NULL))
-			continue;
-
+	if (of_get_property(node, "interrupt-controller", NULL)) {
 		drv = irqchip_match(node);
 		if (drv) {
 			int err = drv->probe(node);
@@ -137,6 +112,31 @@ void irqchip_early_init(void)
 		}
 	}
 
+	of_for_each_child(child, node) irqchip_probe_node(child);
+}
+
+/*
+ * Early irqchip exception.
+ *
+ * Interrupt controllers are discovered from the OF tree and probed at
+ * postcore_initcall, before ordinary platform drivers register.  Platform
+ * devices are populated in the same early phase, but consumers resolve their
+ * IRQs later, from probe context, through platform_get_irq()/of_irq_get(),
+ * so every domain they need is already registered.
+ *
+ * Fully modelling an interrupt controller as a platform device would require
+ * a bootstrap IRQ for the controller itself and deferral of every consumer
+ * until the controller has probed.  Keep this direct early phase as an
+ * explicit exception until that dependency chain is implemented.
+ */
+void irqchip_early_init(void)
+{
+	struct device_node *root = of_root();
+
+	if (!root)
+		return;
+
+	irqchip_probe_node(root);
 	irq_init_hart_all(this_cpuid());
 }
 postcore_initcall(irqchip_early_init);

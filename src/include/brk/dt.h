@@ -13,7 +13,4 @@ int dt_init_scan_cpu(void);
 
 int dt_setup_timebase_freq(void);
 
-/* Read the index'th "reg" entry of a DT node. */
-int dt_get_reg(int node, int index, u64 *addr, u64 *size);
-
 #endif

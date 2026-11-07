@@ -107,7 +107,7 @@ static void irq_selftest(void)
 
 	pr_info("irq-selftest: starting\n");
 
-	domain = irq_domain_add_linear(-1, 8, &test_domain_ops, NULL);
+	domain = irq_domain_add_linear(NULL, 8, &test_domain_ops, NULL);
 	if (!domain) {
 		pr_err("irq-selftest: cannot allocate test domain\n");
 		return;

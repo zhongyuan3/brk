@@ -4,6 +4,7 @@
 #include <brk/list.h>
 #include <brk/types.h>
 
+struct device_node;
 struct irq_data;
 struct irq_domain;
 
@@ -29,7 +30,7 @@ struct irq_controller {
 struct irqchip_driver {
 	const char *name;
 	const char *const *compatibles;
-	int (*probe)(int fdt_node);
+	int (*probe)(const struct device_node *node);
 	struct list_head list;
 };
 

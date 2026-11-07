@@ -4,6 +4,7 @@
 #include <brk/irqdomain.h>
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
+#include <brk/of.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
@@ -13,7 +14,8 @@
 static LIST_DEFINE(irq_domains);
 static SPINLOCK_DEFINE(irq_domain_lock);
 
-struct irq_domain *irq_domain_add_linear(int fdt_node, unsigned int size,
+struct irq_domain *irq_domain_add_linear(const struct device_node *node,
+					 unsigned int size,
 					 const struct irq_domain_ops *ops,
 					 void *host_data)
 {
@@ -34,7 +36,7 @@ struct irq_domain *irq_domain_add_linear(int fdt_node, unsigned int size,
 	}
 
 	d->name = "linear";
-	d->fdt_node = fdt_node;
+	d->of_node = node;
 	d->size = size;
 	d->ops = ops;
 	d->host_data = host_data;
@@ -62,20 +64,27 @@ void irq_domain_remove(struct irq_domain *d)
 	kfree(d);
 }
 
-struct irq_domain *irq_find_host(int fdt_node)
+static struct irq_domain *irq_find_host_by_offset(int fdt_node)
 {
 	struct irq_domain *d, *found = NULL;
 	irqstate_t flags;
 
 	flags = spin_lock_irqsave(&irq_domain_lock);
 	list_for_each_entry(d, &irq_domains, list) {
-		if (d->fdt_node == fdt_node) {
+		if (d->of_node && d->of_node->fdt_offset == fdt_node) {
 			found = d;
 			break;
 		}
 	}
 	spin_unlock_irqrestore(&irq_domain_lock, flags);
 	return found;
+}
+
+struct irq_domain *irq_find_host(const struct device_node *node)
+{
+	if (!node)
+		return NULL;
+	return irq_find_host_by_offset(node->fdt_offset);
 }
 
 unsigned int irq_create_mapping(struct irq_domain *d, irq_hw_number_t hwirq,
@@ -153,15 +162,15 @@ static int irq_find_parent(const void *fdt, int fdt_node)
 	return -1;
 }
 
-static unsigned int irq_map_spec(int fdt_node, int parent, const u32 *intspec,
-				 int cells)
+static unsigned int irq_map_spec(const struct device_node *node, int parent,
+				 const u32 *intspec, int cells)
 {
 	struct irq_domain *d;
 	irq_hw_number_t hwirq = 0;
 	unsigned int type = 0;
 	u32 spec[4];
 
-	d = irq_find_host(parent);
+	d = irq_find_host_by_offset(parent);
 	if (!d)
 		return 0;
 
@@ -171,14 +180,14 @@ static unsigned int irq_map_spec(int fdt_node, int parent, const u32 *intspec,
 	for (int i = 0; i < cells; i++)
 		spec[i] = fdt32_to_cpu(intspec[i]);
 
-	if (d->ops->xlate &&
-	    d->ops->xlate(d, fdt_node, spec, cells, &hwirq, &type))
+	if (d->ops->xlate && d->ops->xlate(d, node, spec, cells, &hwirq, &type))
 		return 0;
 
 	return irq_create_mapping(d, hwirq, type);
 }
 
-static unsigned int irq_parse_extended(const void *fdt, int fdt_node, int index)
+static unsigned int
+irq_parse_extended(const void *fdt, const struct device_node *node, int index)
 {
 	const u32 *ext;
 	const u32 *p;
@@ -186,7 +195,7 @@ static unsigned int irq_parse_extended(const void *fdt, int fdt_node, int index)
 	int entry = 0;
 	int remaining;
 
-	ext = fdt_getprop(fdt, fdt_node, "interrupts-extended", &len);
+	ext = fdt_getprop(fdt, node->fdt_offset, "interrupts-extended", &len);
 	if (!ext || len < (int)sizeof(u32) || len % sizeof(u32))
 		return 0;
 
@@ -215,7 +224,7 @@ static unsigned int irq_parse_extended(const void *fdt, int fdt_node, int index)
 			return 0;
 
 		if (entry == index)
-			return irq_map_spec(fdt_node, parent, p, cells);
+			return irq_map_spec(node, parent, p, cells);
 
 		p += cells;
 		remaining -= cells;
@@ -225,18 +234,20 @@ static unsigned int irq_parse_extended(const void *fdt, int fdt_node, int index)
 	return 0;
 }
 
-unsigned int irq_of_parse_and_map(int fdt_node, int index)
+unsigned int irq_of_parse_and_map(const struct device_node *node, int index)
 {
 	void *fdt = dt_get_fdt();
 	const u32 *ints, *ext;
-	int parent, cells, len;
+	int fdt_node, parent, cells, len;
 
-	if (!fdt || index < 0)
+	if (!fdt || !node || index < 0)
 		return 0;
+
+	fdt_node = node->fdt_offset;
 
 	ext = fdt_getprop(fdt, fdt_node, "interrupts-extended", &len);
 	if (ext && len > 0)
-		return irq_parse_extended(fdt, fdt_node, index);
+		return irq_parse_extended(fdt, node, index);
 
 	parent = irq_find_parent(fdt, fdt_node);
 	if (parent < 0)
@@ -250,5 +261,5 @@ unsigned int irq_of_parse_and_map(int fdt_node, int index)
 	if (!ints || len < (index + 1) * cells * (int)sizeof(u32))
 		return 0;
 
-	return irq_map_spec(fdt_node, parent, ints + index * cells, cells);
+	return irq_map_spec(node, parent, ints + index * cells, cells);
 }

@@ -628,4 +628,4 @@ void virtio_net_init(void)
 	if (err)
 		panic("%s(): driver_register failed: %d\n", __func__, err);
 }
-subsys_initcall(virtio_net_init);
+device_initcall(virtio_net_init);
