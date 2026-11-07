@@ -40,8 +40,8 @@ u64 sys_settimeofday(void)
 	if (tv.tv_usec < 0 || tv.tv_usec >= (__kernel_suseconds_t)US_PER_SEC)
 		return -EINVAL;
 
-	ktime_set_real(ktime_from_timeval(&tv));
-	return 0;
+	ktime_t t = ktime_from_timeval(&tv);
+	return (u64)(long)ktime_set_real(t);
 }
 
 u64 sys_times(void)
@@ -174,8 +174,8 @@ u64 sys_clock_settime(void)
 	    ts.tv_nsec >= (__kernel_long_t)NS_PER_SEC)
 		return -EINVAL;
 
-	ktime_set_real(ktime_from_timespec(&ts));
-	return 0;
+	ktime_t t = ktime_from_timespec(&ts);
+	return (u64)(long)ktime_set_real(t);
 }
 
 u64 sys_clock_nanosleep(void)

@@ -1,6 +1,5 @@
 #include <brk/clocksource.h>
 #include <brk/printk.h>
-#include <brk/rtc.h>
 #include <brk/spinlock.h>
 #include <brk/task.h>
 #include <brk/timeconst.h>
@@ -10,10 +9,12 @@
 #include <uapi/errno.h>
 
 static u64 mono_base_cycles;
-static s64 wall_to_mono_ns;
+static s64 wall_offset_ns;
 static u64 jiffies;
 static SPINLOCK_DEFINE(tk_lock);
 static bool initialized;
+static bool wall_valid;
+static struct wall_clock *wall_clock;
 
 bool timekeeper_initialized(void)
 {
@@ -36,22 +37,68 @@ u64 timekeeper_mono_ns(void)
 
 void timekeeper_init(void)
 {
-	u64 wall_ns = 0;
-
 	mono_base_cycles = timer_read();
-
-	if (rtc_is_available())
-		wall_ns = rtc_read_ns();
 
 	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 
-	wall_to_mono_ns = (s64)wall_ns;
+	wall_offset_ns = 0;
+	wall_valid = false;
+	wall_clock = NULL;
 	jiffies = 0;
 	spin_unlock_irqrestore(&tk_lock, flags);
 
 	initialized = true;
 
-	pr_debug("timekeeper: timekeeper initialized\n");
+	pr_debug("timekeeper: initialized (wall clock pending)\n");
+}
+
+int timekeeper_register_wall_clock(struct wall_clock *wc)
+{
+	u64 wall_ns = 0;
+	u64 mono_ns;
+	irqstate_t flags;
+	int err;
+
+	if (!wc || !wc->ops || !wc->ops->read_ns)
+		return -EINVAL;
+	if (!initialized)
+		return -EAGAIN;
+
+	err = wc->ops->read_ns(wc, &wall_ns);
+	if (err)
+		return err;
+
+	mono_ns = timekeeper_mono_ns();
+
+	flags = spin_lock_irqsave(&tk_lock);
+	if (wall_clock) {
+		spin_unlock_irqrestore(&tk_lock, flags);
+		return -EBUSY;
+	}
+
+	wall_clock = wc;
+	if (!wall_valid) {
+		wall_offset_ns = (s64)wall_ns - (s64)mono_ns;
+		wall_valid = true;
+	}
+	spin_unlock_irqrestore(&tk_lock, flags);
+
+	pr_debug("timekeeper: wall clock %s registered\n",
+		 wc->name ? wc->name : "?");
+	return 0;
+}
+
+void timekeeper_unregister_wall_clock(struct wall_clock *wc)
+{
+	irqstate_t flags;
+
+	if (!wc)
+		return;
+
+	flags = spin_lock_irqsave(&tk_lock);
+	if (wall_clock == wc)
+		wall_clock = NULL;
+	spin_unlock_irqrestore(&tk_lock, flags);
 }
 
 void timekeeper_tick(void)
@@ -79,25 +126,30 @@ void *timekeeper_wait_chan(void)
 
 ktime_t timekeeper_real(void)
 {
-	s64 wtm;
+	s64 offset;
 	irqstate_t flags = spin_lock_irqsave(&tk_lock);
 
-	wtm = wall_to_mono_ns;
+	offset = wall_offset_ns;
 	spin_unlock_irqrestore(&tk_lock, flags);
 
-	return (ktime_t)((s64)timekeeper_mono_ns() + wtm);
+	return (ktime_t)((s64)timekeeper_mono_ns() + offset);
 }
 
-void timekeeper_set_real(ktime_t ns)
+int timekeeper_set_real(ktime_t ns)
 {
 	u64 mono_ns = timekeeper_mono_ns();
-	irqstate_t flags = spin_lock_irqsave(&tk_lock);
+	struct wall_clock *wc;
+	irqstate_t flags;
 
-	wall_to_mono_ns = (s64)ns - (s64)mono_ns;
+	flags = spin_lock_irqsave(&tk_lock);
+	wall_offset_ns = (s64)ns - (s64)mono_ns;
+	wall_valid = true;
+	wc = wall_clock;
 	spin_unlock_irqrestore(&tk_lock, flags);
 
-	if (rtc_is_available())
-		rtc_set_ns((u64)ns);
+	if (wc && wc->ops->set_ns)
+		return wc->ops->set_ns(wc, (u64)ns);
+	return 0;
 }
 
 int timekeeper_nanosleep(ktime_t dur, ktime_t *rem)

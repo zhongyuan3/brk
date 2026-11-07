@@ -53,7 +53,7 @@ static inline ktime_t ktime_from_sec_nsec(__s64 sec, long nsec)
 }
 
 ktime_t ktime_get_real(void);
-void ktime_set_real(ktime_t t);
+int ktime_set_real(ktime_t t);
 time_t ktime_get_real_sec(void);
 
 u64 ktime_get_boot_ns(void);

@@ -11,7 +11,6 @@
 #include <brk/mm.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
-#include <brk/rtc.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
 #include <brk/timekeeper.h>
@@ -24,9 +23,10 @@ extern initcall_t __initcall_start[];
 extern initcall_t __initcall_end[];
 
 /*
- * Explicit pre-initcall boot stage: paging, memory, CPU, timebase, early RTC
- * wall clock and traps.  These cannot move into normal initcalls because the
- * initcall infrastructure itself depends on them.
+ * Explicit pre-initcall boot stage: paging, memory, CPU, timebase and traps.
+ * These cannot move into normal initcalls because the initcall infrastructure
+ * itself depends on them.  The RTC is a normal platform driver and registers
+ * its wall clock later, during initcalls.
  */
 void start_kernel(void)
 {
@@ -34,7 +34,6 @@ void start_kernel(void)
 	mm_core_init();
 
 	clocksource_init();
-	rtc_init();
 	timekeeper_init();
 	timer_init();
 
