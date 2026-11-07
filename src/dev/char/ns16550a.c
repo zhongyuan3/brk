@@ -10,6 +10,7 @@
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mmio.h>
+#include <brk/of.h>
 #include <brk/panic.h>
 #include <brk/platform.h>
 #include <brk/printk.h>
@@ -158,16 +159,31 @@ static int ns16550a_probe(struct device *dev)
 	struct platform_device *pdev = to_platform_device(dev);
 	struct ns16550a_platform_data *pdata = pdev->pdata;
 	struct ns16550a_device *uart;
+	struct resource *mem;
+	u32 clock_freq = 0;
+	int irq;
 	int err;
+
+	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	irq = platform_get_irq(pdev, 0);
+	if (!mem || irq < 0)
+		return -ENODEV;
+
+	if (pdata) {
+		clock_freq = pdata->clock_freq;
+	} else if (dev->of_node) {
+		(void)of_property_read_u32(dev->of_node, "clock-frequency",
+					   &clock_freq);
+	}
 
 	uart = ns16550a_device_alloc();
 	if (!uart)
 		return -ENOMEM;
 
-	uart->phys_base = pdev->phys_base;
-	uart->size = pdev->size;
-	uart->irq = pdev->irq;
-	uart->clock_freq = pdata ? pdata->clock_freq : 0;
+	uart->phys_base = mem->start;
+	uart->size = resource_size(mem);
+	uart->irq = (u32)irq;
+	uart->clock_freq = clock_freq;
 
 	err = ns16550a_device_init(uart);
 	if (err) {

@@ -86,24 +86,22 @@ DT/OF 层
   - [x] QEMU 起机，串口、virtio、RTC、rootfs 行为不变
   - [x] 节点树构建失败时只告警，不阻断启动
 
-## Phase 2 — 通用 platform device 枚举
+## Phase 2 — 通用 platform device 枚举（已完成）
 
-- [ ] 实现 `of_platform_populate()`
-  - [ ] 跳过 `cpus` / `memory` / `chosen` / `reserved-memory` / `aliases`
-  - [ ] 只处理 `status = "okay"` 或没有 status 的节点
-  - [ ] 有 `compatible` 的节点创建 platform device
-  - [ ] `simple-bus` 递归
-  - [ ] `ranges` 地址转换
-  - [ ] 使用 `<node-name>@<unit-address>` 命名
-- [ ] `platform_device` 改为 resource 数组
-- [ ] 新增 `platform_get_resource()` / `platform_get_irq()`
-- [ ] 串口迁移
-  - [ ] 删除 `dt_init_scan_serial()`
-  - [ ] `ns16550a` 使用 platform resource 和 `of_node`
-  - [ ] console 注册时机保持可用
-- [ ] 验证串口、early printk、rootfs
-
----
+- [x] 实现 `of_platform_populate()`
+  - [x] 跳过 `cpus` / `memory` / `chosen` / `reserved-memory` / `aliases`
+  - [x] 只处理 `status = "okay"` 或没有 status 的节点
+  - [x] 有 `compatible` 的节点创建 platform device
+  - [x] `simple-bus` 递归
+  - [x] `ranges` 地址转换
+  - [x] 使用 `<node-name>@<unit-address>` 命名
+- [x] `platform_device` 改为 resource 数组
+- [x] 新增 `platform_get_resource()` / `platform_get_irq()`
+- [x] 串口迁移
+  - [x] 删除 `dt_init_scan_serial()`
+  - [x] `ns16550a` 使用 platform resource 和 `of_node`
+  - [x] console 注册时机保持可用
+- [x] 验证串口、early printk、rootfs
 
 ## Phase 3 — 设备核心生命周期
 
