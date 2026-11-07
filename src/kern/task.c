@@ -29,6 +29,7 @@
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
+#include <brk/timekeeper.h>
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
@@ -133,6 +134,8 @@ struct task *task_create(struct task_create_args *args)
 	task->cap_effective = CAP_FULL_SET;
 	task->cap_permitted = CAP_FULL_SET;
 	task->cap_inheritable = 0;
+	task->utime = jiffies_get();
+	task->ktime = task->utime;
 
 	task->kstack_base = kstack_alloc();
 	if (!task->kstack_base) {
