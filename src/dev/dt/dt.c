@@ -13,7 +13,6 @@
 #include <brk/printk.h>
 #include <brk/string.h>
 #include <brk/types.h>
-#include <brk/uart.h>
 #include <libfdt.h>
 #include <stddef.h>
 #include <uapi/errno.h>
@@ -259,27 +258,6 @@ int dt_get_reg(int node, int index, u64 *addr, u64 *size)
 		*addr = (*addr << 32) | fdt32_to_cpu(*reg++);
 	for (int i = 0; i < size_cells; ++i)
 		*size = (*size << 32) | fdt32_to_cpu(*reg++);
-
-	return 0;
-}
-
-int dt_parse_rtc(struct rtc_device *rtc)
-{
-	int node;
-	int err;
-	u64 addr = 0;
-	u64 size = 0;
-
-	node = fdt_node_offset_by_compatible(fdt, -1, "google,goldfish-rtc");
-	if (node < 0)
-		return __fdt_err_to_errno(node);
-
-	err = dt_get_reg(node, 0, &addr, &size);
-	if (err)
-		return err;
-
-	rtc->phys_base = addr;
-	rtc->size = size;
 
 	return 0;
 }

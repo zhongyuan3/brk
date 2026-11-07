@@ -1,9 +1,7 @@
 #ifndef BRK_DT_H
 #define BRK_DT_H
 
-#include <brk/rtc.h>
 #include <brk/types.h>
-#include <brk/uart.h>
 
 void dt_set_fdt(unsigned long addr);
 void *dt_get_fdt(void);
@@ -12,8 +10,6 @@ int dt_init_scan_mem(void);
 int dt_init_scan_rsvd_mem(void);
 
 int dt_init_scan_cpu(void);
-
-int dt_parse_rtc(struct rtc_device *rtc);
 
 int dt_setup_timebase_freq(void);
 

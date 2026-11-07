@@ -17,13 +17,15 @@ DT 解析 → device_node / resource
 ## 当前实现的主要问题
 
 - [x] 已确认 `platform_bus`、`device`、`device_driver`、`bus_type` 已有最小模型
-- [ ] 早期 DT 扫描仍保留在 `irqchip_early_init()` 和 `rtc_init()`
+- [ ] 早期 FDT 扫描仍保留在 `irqchip_early_init()`
 - [x] 驱动内部反向调用 DT 扫描（`virtio_blk_init()` / `virtio_net_init()`）
 - [x] irqchip 绕过 device/bus，直接扫描 DT 并 probe（已评估，保留为早期例外）
-- [ ] RTC 在 initcall 之前直接解析 DT
+- [x] RTC 在 initcall 之前初始化（已评估，保留为早期例外，改用 OF API）
 - [x] `platform_device` 只有一个 MMIO 窗口和一个 IRQ
 - [ ] `dt_get_reg()` 没有 `ranges` 地址转换，也没有多 reg 支持
-- [ ] 驱动直接依赖 libfdt / `dt_get_fdt()` / `dt_get_reg()`
+- [x] 驱动直接依赖 libfdt / `dt_get_fdt()` / `dt_get_reg()`
+  - [x] 普通驱动已改用 `device_node` / `resource` / `of_*`
+  - [x] PLIC 作为 early class 例外保留 `dt_get_reg()`
 - [x] virtio-mmio transport 的逻辑在 DT 层，virtio 设备没有 parent
 - [x] virtio 设备顺序依赖反向注册 hack
 - [x] `device_snapshot()` 保存裸指针，缺少设备引用和生命周期保护
@@ -168,15 +170,29 @@ DT/OF 层
 
 ---
 
-## Phase 6 — 其余驱动迁移
+## Phase 6 — 其余驱动迁移（已完成）
 
-- [ ] `goldfish_rtc`
-  - [ ] 保留 early wall-clock provider（timekeeper 依赖）
-  - [ ] 增加 platform driver / device（供后续设备模型使用）
-- [ ] `ns16550a` 完全迁移到 platform bus
-- [ ] `plic` 迁移或明确 early class
-- [ ] `genhd` / `devtmpfs` 设备注册路径检查
-- [ ] 删除 DT 层所有驱动专属 compatible 字符串
+- [x] `goldfish_rtc`
+  - [x] 保留 early wall-clock provider（timekeeper 依赖）
+  - [x] 早期路径改用 `of_init()` / `of_find_compatible_node()` / `of_address_to_resource()`
+  - [x] 删除 DT 层的 `dt_parse_rtc()`
+  - [x] 增加 platform driver / device（匹配 `google,goldfish-rtc`）
+  - [x] platform probe 复用早期已建立的 MMIO 映射
+  - [x] 启动日志确认 `rtc: bound rtc@101000 at 0x101000`
+  - [x] `date` 输出正确的 wall-clock 时间
+- [x] `ns16550a` 完全迁移到 platform bus
+  - [x] 仅使用 `platform_get_resource()` / `platform_get_irq()` / `of_property_read_u32()`
+- [x] `plic` 迁移或明确 early class
+  - [x] 明确保留为 `irqchip_early_init()` 早期例外
+- [x] `genhd` / `devtmpfs` 设备注册路径检查
+  - [x] `devtmpfs_populate()` 使用带引用的设备快照
+  - [x] 磁盘、分区在 `device_register()` 前设置 `devt` / `mode`
+  - [x] `del_gendisk()` 先注销分区和磁盘设备，再释放容器
+  - [x] 启动验证 `/dev/virtio_blk0` 与分区节点存在
+- [x] 删除 DT 层所有驱动专属 compatible 字符串
+  - [x] `google,goldfish-rtc` 已移入 RTC 驱动
+  - [x] `virtio,mmio` 已在 Phase 4 移入 transport driver
+  - [x] DT 层仅保留通用的 `simple-bus` 判断
 
 ---
 
