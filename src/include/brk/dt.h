@@ -11,6 +11,6 @@ int dt_init_scan_rsvd_mem(void);
 
 int dt_init_scan_cpu(void);
 
-int dt_setup_timebase_freq(void);
+int dt_get_timebase_freq(u32 *freq_out);
 
 #endif

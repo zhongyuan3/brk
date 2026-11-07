@@ -9,6 +9,7 @@
 #include <brk/kmalloc.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
+#include <brk/panic.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/task.h>
@@ -33,7 +34,9 @@ void start_kernel(void)
 	arch_init();
 	mm_core_init();
 
-	clocksource_init();
+	timer_clocksource_init();
+	if (clocksource_init())
+		panic("clocksource: initialization failed\n");
 	timekeeper_init();
 	timer_init();
 

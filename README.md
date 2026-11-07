@@ -128,8 +128,10 @@ code:
 - **RTC** is a normal platform driver. It registers a `wall_clock` provider
   when it probes; timekeeper starts with a zero wall offset and applies the
   RTC's time once the provider is registered.
-- **clocksource/timebase** and early memory/CPU discovery happen before
-  initcalls because the rest of the boot path depends on them.
+- **clocksource/timebase**: the RISC-V time CSR is registered as a
+  `clocksource` before initcalls; the selected source feeds timekeeper and
+  timer tick programming.  Early memory/CPU discovery stays before initcalls
+  because the rest of the boot path depends on it.
 - **UART/console** is registered from the platform probe; messages produced
   before that are buffered by printk.
 

@@ -3,6 +3,7 @@
 
 #include <brk/types.h>
 
+void timer_clocksource_init(void);
 void timer_init(void);
 u64 timer_read(void);
 
