@@ -283,6 +283,14 @@ static ssize_t pipe_read(struct fs_file *file, char *buf, size_t size,
 	while (size > 0) {
 		flags = spin_lock_irqsave(&pipe->lock);
 		while (pipe->count == 0) {
+			/*
+			 * A read returns as soon as any data is available.
+			 * Do not wait for the caller's full buffer to fill.
+			 */
+			if (total) {
+				spin_unlock_irqrestore(&pipe->lock, flags);
+				return total;
+			}
 			if (pipe->writers == 0) {
 				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total;
