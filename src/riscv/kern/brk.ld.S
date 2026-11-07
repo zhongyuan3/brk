@@ -34,6 +34,7 @@ SECTIONS
     KEEP(*(.initcall1))
     KEEP(*(.initcall2))
     KEEP(*(.initcall3))
+    KEEP(*(.initcall4))
     __initcall_end = .;
 
     . = ALIGN(PAGE_SIZE);

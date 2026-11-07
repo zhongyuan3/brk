@@ -15,6 +15,7 @@ typedef void (*initcall_t)(void);
 #define postcore_initcall(fn) __define_initcall(fn, 1)
 #define subsys_initcall(fn) __define_initcall(fn, 2)
 #define device_initcall(fn) __define_initcall(fn, 3)
+#define late_initcall(fn) __define_initcall(fn, 4)
 
 void do_initcalls(void);
 

@@ -124,7 +124,7 @@ int devtmpfs_populate(void)
 			first_err = err;
 	}
 
-	device_snapshot_free(devices);
+	device_snapshot_free(devices, count);
 	return first_err;
 }
 
