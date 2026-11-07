@@ -1,4 +1,5 @@
 #include <arch/pgtable.h>
+#include <brk/clocksource.h>
 #include <brk/ktime.h>
 #include <brk/permission.h>
 #include <brk/syscall.h>
@@ -37,7 +38,8 @@ u64 sys_settimeofday(void)
 		return 0;
 	if (copy_from_user(&tv, utv, sizeof(tv)))
 		return -EFAULT;
-	if (tv.tv_usec < 0 || tv.tv_usec >= (__kernel_suseconds_t)US_PER_SEC)
+	if (tv.tv_sec < 0 || tv.tv_usec < 0 ||
+	    tv.tv_usec >= (__kernel_suseconds_t)US_PER_SEC)
 		return -EINVAL;
 
 	ktime_t t = ktime_from_timeval(&tv);
@@ -53,6 +55,7 @@ u64 sys_times(void)
 	err = task_get_times(current_task(), buf);
 	if (err)
 		return -1;
+	/* USER_HZ is defined as HZ, so jiffies are already user clock ticks. */
 	return jiffies_get();
 }
 
@@ -101,13 +104,14 @@ static int clock_now(int clockid, ktime_t *now)
 		*now = ktime_get_real();
 		return 0;
 	case CLOCK_MONOTONIC:
+	case CLOCK_BOOTTIME:
 		*now = (ktime_t)ktime_get_boot_ns();
 		return 0;
 	case CLOCK_PROCESS_CPUTIME_ID:
 	case CLOCK_THREAD_CPUTIME_ID:
 		*now = (ktime_t)(task_get_user_time(task) +
 				 task_get_system_time(task)) *
-		       (ktime_t)NS_PER_MS;
+		       (ktime_t)TICK_NS;
 		return 0;
 	default:
 		return -EINVAL;
@@ -139,18 +143,24 @@ u64 sys_clock_getres(void)
 {
 	int clockid = syscall_arg_int(0);
 	struct timespec *ut = syscall_arg_ptr(1);
-	struct timespec ts = { .tv_sec = 0, .tv_nsec = NS_PER_MS };
+	struct timespec ts;
+	u64 res_ns;
 
 	switch (clockid) {
 	case CLOCK_REALTIME:
 	case CLOCK_MONOTONIC:
+	case CLOCK_BOOTTIME:
+		res_ns = clocksource_get_resolution_ns();
+		break;
 	case CLOCK_PROCESS_CPUTIME_ID:
 	case CLOCK_THREAD_CPUTIME_ID:
+		res_ns = TICK_NS;
 		break;
 	default:
 		return -EINVAL;
 	}
 
+	ktime_to_timespec((ktime_t)res_ns, &ts);
 	if (ut && copy_to_user(ut, &ts, sizeof(ts)))
 		return -EFAULT;
 	return 0;
@@ -190,7 +200,8 @@ u64 sys_clock_nanosleep(void)
 
 	if (flags & ~TIMER_ABSTIME)
 		return -EINVAL;
-	if (clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC)
+	if (clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC &&
+	    clockid != CLOCK_BOOTTIME)
 		return -EINVAL;
 	if (!ureq)
 		return -EFAULT;

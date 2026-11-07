@@ -243,7 +243,7 @@ DT/OF 层
 
 ---
 
-# 时间子系统重构方案（T1/T2/T3 已完成，T4–T5 待实施）
+# 时间子系统重构方案（T1–T4 已完成，T5 待实施）
 
 ## 现有问题
 
@@ -459,17 +459,33 @@ struct clocksource {
   - [x] `date`、`/proc/uptime` 正常
   - [x] `brktest all` 通过
 
-## Phase T4 — POSIX 时间语义与错误传播
+## Phase T4 — POSIX 时间语义与错误传播（已完成）
 
-- `timekeeper_set_real()` / `ktime_set_real()` 返回错误码
-- `settimeofday()` / `clock_settime()` 传播 RTC 写失败
-- `clock_getres()` 使用 clocksource / wall clock 的实际分辨率
-- 明确：
-  - `CLOCK_REALTIME` = monotonic + wall offset
-  - `CLOCK_MONOTONIC` = 不受 wall 调整影响
-  - `CLOCK_PROCESS_CPUTIME_ID` / `CLOCK_THREAD_CPUTIME_ID`
-- 评估是否增加 `CLOCK_BOOTTIME`
-- 检查 `sys_times()` 的 `USER_HZ` 与内核 `HZ` 关系
+实施状态：
+
+- [x] `timekeeper_set_real()` / `ktime_set_real()` 返回错误码
+- [x] `settimeofday()` / `clock_settime()` 传播 RTC 写失败
+- [x] `settimeofday()` 增加负 `tv_sec` 校验
+- [x] `clock_getres()` 使用实际分辨率：
+  - [x] `CLOCK_REALTIME` / `CLOCK_MONOTONIC` / `CLOCK_BOOTTIME`：clocksource 分辨率（QEMU 为 100ns）
+  - [x] `CLOCK_PROCESS_CPUTIME_ID` / `CLOCK_THREAD_CPUTIME_ID`：tick 分辨率（1ms）
+- [x] 明确语义：
+  - [x] `CLOCK_REALTIME` = monotonic + wall offset
+  - [x] `CLOCK_MONOTONIC` / `CLOCK_BOOTTIME` 不受 wall 调整影响
+  - [x] CPU time 使用 `TICK_NS` 换算
+- [x] 增加 `CLOCK_BOOTTIME`（无 suspend 支持，当前等同于 `CLOCK_MONOTONIC`）
+- [x] `clock_nanosleep()` 支持 `CLOCK_BOOTTIME`
+- [x] `sys_times()` 与 `USER_HZ == HZ` 一致，不需要额外缩放
+- [x] 验证：
+  - [x] `clock_getres(CLOCK_MONOTONIC)` = 100ns
+  - [x] `clock_getres(CLOCK_PROCESS_CPUTIME_ID)` = 1ms
+  - [x] `settimeofday(+10s)` 后 realtime 增加约 10s
+  - [x] 同一次 wall 调整中 monotonic / boottime 只前进约 0.5ms
+  - [x] `brktest all` 通过
+
+已知限制：
+
+- `CLOCK_PROCESS_CPUTIME_ID` 与 `CLOCK_THREAD_CPUTIME_ID` 目前使用同一份当前任务时间，进程级聚合后续再完善。
 
 ## Phase T5 — 文档与回归
 

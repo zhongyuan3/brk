@@ -19,5 +19,6 @@ int clocksource_init(void);
 /* Monotonic nanoseconds from the selected clocksource. */
 u64 clocksource_read_ns(void);
 u32 clocksource_get_frequency(void);
+u64 clocksource_get_resolution_ns(void);
 
 #endif

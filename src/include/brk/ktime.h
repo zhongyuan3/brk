@@ -56,6 +56,10 @@ ktime_t ktime_get_real(void);
 int ktime_set_real(ktime_t t);
 time_t ktime_get_real_sec(void);
 
+/*
+ * Monotonic nanoseconds since timekeeper initialization.  This is used for
+ * CLOCK_MONOTONIC/CLOCK_BOOTTIME and is not affected by wall-clock changes.
+ */
 u64 ktime_get_boot_ns(void);
 
 /*
