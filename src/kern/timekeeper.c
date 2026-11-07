@@ -1,4 +1,5 @@
 #include <brk/clocksource.h>
+#include <brk/initcall.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
 #include <brk/task.h>
@@ -219,3 +220,151 @@ int timekeeper_nanosleep(ktime_t dur, ktime_t *rem)
 		*rem = 0;
 	return 0;
 }
+
+#ifndef NDEBUG
+struct timekeeper_test_state {
+	struct wall_clock *wall_clock;
+	bool wall_valid;
+	s64 wall_offset_ns;
+};
+
+static unsigned int timekeeper_test_failures;
+static u64 timekeeper_mock_wall_ns;
+static unsigned int timekeeper_mock_reads;
+static unsigned int timekeeper_mock_sets;
+
+#define TIMEKEEPER_CHECK(cond, name)                                      \
+	do {                                                              \
+		if (!(cond)) {                                            \
+			pr_err("timekeeper-selftest: %s failed\n", name); \
+			timekeeper_test_failures++;                       \
+		}                                                         \
+	} while (0)
+
+static u64 timekeeper_test_abs_diff(u64 a, u64 b)
+{
+	return a > b ? a - b : b - a;
+}
+
+static int timekeeper_mock_read(struct wall_clock *wc, u64 *ns)
+{
+	(void)wc;
+
+	timekeeper_mock_reads++;
+	*ns = timekeeper_mock_wall_ns;
+	return 0;
+}
+
+static int timekeeper_mock_set(struct wall_clock *wc, u64 ns)
+{
+	(void)wc;
+
+	timekeeper_mock_sets++;
+	timekeeper_mock_wall_ns = ns;
+	return 0;
+}
+
+static const struct wall_clock_ops timekeeper_mock_ops = {
+	.read_ns = timekeeper_mock_read,
+	.set_ns = timekeeper_mock_set,
+};
+
+static struct wall_clock timekeeper_mock = {
+	.name = "timekeeper-selftest",
+	.ops = &timekeeper_mock_ops,
+};
+
+static void timekeeper_test_save(struct timekeeper_test_state *saved)
+{
+	irqstate_t flags = spin_lock_irqsave(&tk_lock);
+
+	saved->wall_clock = wall_clock;
+	saved->wall_valid = wall_valid;
+	saved->wall_offset_ns = wall_offset_ns;
+	spin_unlock_irqrestore(&tk_lock, flags);
+}
+
+static void timekeeper_test_clear(void)
+{
+	irqstate_t flags = spin_lock_irqsave(&tk_lock);
+
+	wall_clock = NULL;
+	wall_valid = false;
+	wall_offset_ns = 0;
+	spin_unlock_irqrestore(&tk_lock, flags);
+}
+
+static void timekeeper_test_restore(const struct timekeeper_test_state *saved)
+{
+	irqstate_t flags = spin_lock_irqsave(&tk_lock);
+
+	wall_clock = saved->wall_clock;
+	wall_valid = saved->wall_valid;
+	wall_offset_ns = saved->wall_offset_ns;
+	spin_unlock_irqrestore(&tk_lock, flags);
+}
+
+static void timekeeper_selftest_init(void)
+{
+	struct timekeeper_test_state saved;
+	u64 before, after, expected;
+	u64 set_ns;
+	int err;
+
+	timekeeper_test_save(&saved);
+
+	before = timekeeper_mono_ns();
+	for (volatile int i = 0; i < 100000; i++)
+		;
+	after = timekeeper_mono_ns();
+	TIMEKEEPER_CHECK(after >= before, "monotonic nondecreasing");
+
+	/* Provider registration applies its wall time. */
+	timekeeper_test_clear();
+	timekeeper_mock_wall_ns = 1700000000ULL * NS_PER_SEC;
+	timekeeper_mock_reads = 0;
+	timekeeper_mock_sets = 0;
+
+	err = timekeeper_register_wall_clock(&timekeeper_mock);
+	TIMEKEEPER_CHECK(err == 0, "provider register");
+	TIMEKEEPER_CHECK(timekeeper_mock_reads == 1, "provider read");
+	TIMEKEEPER_CHECK(timekeeper_test_abs_diff((u64)timekeeper_real(),
+						  timekeeper_mock_wall_ns) <
+				 50 * NS_PER_MS,
+			 "wall time applied");
+
+	set_ns = timekeeper_mock_wall_ns + 5 * NS_PER_SEC;
+	err = timekeeper_set_real((ktime_t)set_ns);
+	TIMEKEEPER_CHECK(err == 0, "set_real with provider");
+	TIMEKEEPER_CHECK(timekeeper_mock_sets == 1, "provider set");
+	TIMEKEEPER_CHECK(timekeeper_real() >= (ktime_t)(set_ns - NS_PER_SEC),
+			 "set_real applied");
+
+	timekeeper_unregister_wall_clock(&timekeeper_mock);
+
+	/* User-set wall time must not be overwritten by a later provider. */
+	timekeeper_test_clear();
+	expected = 1800000000ULL * NS_PER_SEC;
+	err = timekeeper_set_real((ktime_t)expected);
+	TIMEKEEPER_CHECK(err == 0, "set_real without provider");
+
+	timekeeper_mock_wall_ns = 1600000000ULL * NS_PER_SEC;
+	timekeeper_mock_reads = 0;
+	timekeeper_mock_sets = 0;
+	err = timekeeper_register_wall_clock(&timekeeper_mock);
+	TIMEKEEPER_CHECK(err == 0, "late provider register");
+	TIMEKEEPER_CHECK(timekeeper_test_abs_diff((u64)timekeeper_real(),
+						  expected) < 50 * NS_PER_MS,
+			 "user time preserved");
+	timekeeper_unregister_wall_clock(&timekeeper_mock);
+
+	timekeeper_test_restore(&saved);
+
+	if (timekeeper_test_failures)
+		pr_err("timekeeper-selftest: %u failure(s)\n",
+		       timekeeper_test_failures);
+	else
+		pr_info("timekeeper-selftest: all tests passed\n");
+}
+late_initcall(timekeeper_selftest_init);
+#endif

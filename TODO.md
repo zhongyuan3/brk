@@ -243,7 +243,7 @@ DT/OF 层
 
 ---
 
-# 时间子系统重构方案（T1–T4 已完成，T5 待实施）
+# 时间子系统重构方案（T1–T5 已完成）
 
 ## 现有问题
 
@@ -487,25 +487,43 @@ struct clocksource {
 
 - `CLOCK_PROCESS_CPUTIME_ID` 与 `CLOCK_THREAD_CPUTIME_ID` 目前使用同一份当前任务时间，进程级聚合后续再完善。
 
-## Phase T5 — 文档与回归
+## Phase T5 — 文档与回归（已完成）
 
-- README 增加时间子系统分层图
-- 增加时间 selftest（建议覆盖）：
-  - monotonic 单调性
-  - wall clock 注册/注销
-  - 用户 set time 不被后注册的 RTC 覆盖
-  - 无 wall clock 时的行为
-  - provider read/set 回调调用次数
-- 全量回归：
-  - debug / release 编译
-  - QEMU 起机
-  - 串口、RTC、块设备、网络、rootfs
-  - `brktest all`
+实施状态：
 
-## 待决策
+- [x] README 增加时间子系统分层说明
+  - [x] `clocksource` → `timekeeper` → `wall_clock`
+  - [x] boot hart tick / tick handler / secondary hart 关系
+  - [x] `CLOCK_REALTIME` / `CLOCK_MONOTONIC` / `CLOCK_BOOTTIME`
+  - [x] `clock_getres()` 分辨率
+- [x] 增加 debug 构建时间 selftest
+  - [x] monotonic 单调性
+  - [x] wall clock 注册/注销
+  - [x] provider read/set 回调调用次数
+  - [x] provider 注册时应用 wall time
+  - [x] `settimeofday()` 写回 provider
+  - [x] 用户设置时间不被后注册 provider 覆盖
+  - [x] 无 provider 时软件 wall time 正常工作
+- [x] 全量回归：
+  - [x] debug / release 编译
+  - [x] QEMU 起机
+  - [x] 串口、RTC、块设备、网络、rootfs
+  - [x] 无 RTC DTB 启动
+  - [x] `brktest all`: 10 suite(s), 0 failed
 
-- 多个 RTC/wall clock 的优先级：第一个注册者优先，还是按 rating 选择？
-- `settimeofday()` 时 provider 写失败是否返回错误，还是只告警？
-- wall clock 注册是否总是覆盖 boot 初始值，还是只在用户未设置时覆盖？
-- clocksource 是否引入 `mult/shift`，还是继续使用整数 frequency？
-- timebase-frequency 继续作为早期 DT 例外，还是迁移到 clocksource driver？
+## 已确定的决策
+
+- 当前只允许一个 active wall clock provider；第一个注册者生效，后续返回 `-EBUSY`
+- `settimeofday()` 时 provider 写失败会把错误返回给用户态，但软件 wall offset 已经更新
+- provider 注册时只在用户尚未设置 wall time 的情况下应用 RTC 时间
+- clocksource 当前使用整数 `frequency`，暂不引入 `mult/shift`
+- timebase-frequency 暂时保留为早期 DT 例外，通过 `dt_get_timebase_freq()` 提供
+- `CLOCK_BOOTTIME` 当前等同 `CLOCK_MONOTONIC`，因为尚无 suspend 支持
+
+## 后续可选
+
+- 多个 wall clock 的 rating / 自动选优
+- `CLOCK_PROCESS_CPUTIME_ID` 的进程级时间聚合
+- 引入 clocksource `mult/shift` 和更高精度换算
+- 将 timebase-frequency 迁移到 clocksource driver
+- suspend/resume 与 `CLOCK_BOOTTIME` 的真实语义
