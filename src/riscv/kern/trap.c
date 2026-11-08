@@ -16,7 +16,7 @@
 #include <brk/signal.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
-#include <brk/timekeeper.h>
+#include <brk/tick.h>
 #include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>
@@ -288,7 +288,7 @@ void trap_handler(struct trap_frame *frame)
 
 	if (from_user) {
 		write_sstatus(read_sstatus() | SSTATUS_SUM);
-		jiffies = timekeeper_get_jiffies();
+		jiffies = tick_get_jiffies();
 		task_add_user_time(task, jiffies - task->utime);
 		task->ktime = jiffies;
 	}
@@ -301,7 +301,7 @@ void trap_handler(struct trap_frame *frame)
 	if (from_user) {
 		prepare_to_ret_to_user(frame);
 		signal_deliver_pending(task);
-		jiffies = timekeeper_get_jiffies();
+		jiffies = tick_get_jiffies();
 		task_add_system_time(task, jiffies - task->ktime);
 		task->utime = jiffies;
 	}

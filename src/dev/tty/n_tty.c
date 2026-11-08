@@ -4,7 +4,6 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
-#include <brk/timekeeper.h>
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
@@ -443,10 +442,19 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 								&tty->read_lock);
 							return (ssize_t)total;
 						}
-					} else {
-						task_sleep(
-							timekeeper_wait_chan(),
+					} else if (timed) {
+						task_arm_sleep_timer(
+							&port->lock, deadline);
+						task_sleep_interruptible(
+							&tty->rx_r,
 							&port->lock);
+						spin_unlock_irqrestore(
+							&port->lock, flags);
+						task_disarm_sleep_timer();
+						continue;
+					} else {
+						task_sleep(&tty->rx_r,
+							   &port->lock);
 						spin_unlock_irqrestore(
 							&port->lock, flags);
 						continue;

@@ -1,6 +1,7 @@
 #define pr_fmt(fmt) "clocksource: " fmt
 #include <brk/clocksource.h>
 #include <brk/printk.h>
+#include <brk/sched_clock.h>
 #include <brk/spinlock.h>
 #include <brk/timeconst.h>
 #include <brk/types.h>
@@ -40,7 +41,7 @@ struct clocksource *clocksource_select(void)
 		if (!best || cs->rating > best->rating)
 			best = cs;
 	}
-	current_clocksource = best;
+	__atomic_store_n(&current_clocksource, best, __ATOMIC_RELEASE);
 	spin_unlock_irqrestore(&clocksource_lock, flags);
 	return best;
 }
@@ -54,35 +55,33 @@ int clocksource_init(void)
 		return -ENODEV;
 	}
 
+	/*
+	 * Establish the boot-clock epoch before the first timestamped message
+	 * below.  This clock is independent from CLOCK_MONOTONIC's epoch,
+	 * which timekeeper_init() establishes later.
+	 */
+	sched_clock_init(cs);
+
 	pr_debug("selected %s (%u Hz, rating %u)\n", cs->name, cs->frequency,
 		 cs->rating);
 	return 0;
 }
 
-u64 clocksource_read_ns(void)
+struct clocksource *clocksource_get_current(void)
 {
-	struct clocksource *cs = current_clocksource;
-	u64 cycles;
-	u64 sec;
-	u64 rem;
-
-	if (!cs || !cs->frequency)
-		return 0;
-
-	cycles = cs->read();
-	sec = cycles / cs->frequency;
-	rem = cycles % cs->frequency;
-	return sec * NS_PER_SEC + rem * NS_PER_SEC / cs->frequency;
+	return __atomic_load_n(&current_clocksource, __ATOMIC_ACQUIRE);
 }
 
 u32 clocksource_get_frequency(void)
 {
-	return current_clocksource ? current_clocksource->frequency : 0;
+	struct clocksource *cs = clocksource_get_current();
+
+	return cs ? cs->frequency : 0;
 }
 
 u64 clocksource_get_resolution_ns(void)
 {
-	struct clocksource *cs = current_clocksource;
+	struct clocksource *cs = clocksource_get_current();
 	u64 res;
 
 	if (!cs || !cs->frequency)

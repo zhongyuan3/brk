@@ -16,7 +16,7 @@
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
-#include <brk/timekeeper.h>
+#include <brk/tick.h>
 #include <brk/types.h>
 #include <uapi/capability.h>
 #include <uapi/errno.h>
@@ -220,7 +220,7 @@ void task_scheduler(void)
 	user_access_disable();
 
 	init->time_slice = TIME_SLICE_MAX;
-	init->ktime = timekeeper_get_jiffies();
+	init->ktime = tick_get_jiffies();
 
 	/*
 	 * Publish this CPU as online only after current is the boot task.  An
@@ -284,7 +284,7 @@ static void task_sched(void)
 		return;
 	}
 
-	task_add_system_time(curr, timekeeper_get_jiffies() - curr->ktime);
+	task_add_system_time(curr, tick_get_jiffies() - curr->ktime);
 	cpu->handoff = curr;
 
 	raw_spin_lock(&next->lock);
@@ -300,7 +300,7 @@ static void task_sched(void)
 		user_access_disable();
 	}
 	next->time_slice = TIME_SLICE_MAX;
-	next->ktime = timekeeper_get_jiffies();
+	next->ktime = tick_get_jiffies();
 	/*
 	 * curr->oncpu is cleared by task_sched_resume() in the next task's
 	 * context, i.e. only after this CPU has completely left curr.  This
@@ -325,12 +325,7 @@ void task_yield(void)
 	local_irq_restore(flags);
 }
 
-/*
- * Callers must hold @lock and run with interrupts disabled. The interrupt
- * state stays disabled across the switch and is restored by the caller's
- * irqrestore once it drops @lock.
- */
-void task_sleep(void *chan, spinlock_t *lock)
+static void task_sleep_common(void *chan, spinlock_t *lock, bool interruptible)
 {
 	struct task *task = current_task();
 
@@ -352,11 +347,52 @@ void task_sleep(void *chan, spinlock_t *lock)
 	list_add_tail(&task->queue, &sleep_queue);
 	spin_unlock_irqrestore(&sleep_queue_lock, sflags);
 
+	/*
+	 * A signal sent between the caller's condition check and the queue
+	 * publication above could not find us through task_wake_spec().  For
+	 * interruptible callers, recheck after publication and abort before
+	 * scheduling.  Such callers must return to user space promptly so the
+	 * signal can actually be delivered.
+	 */
+	if (interruptible && task->sigactions && signal_pending(task)) {
+		sflags = spin_lock_irqsave(&sleep_queue_lock);
+		task->state = TASK_STATE_RUNNING;
+		task->chan = NULL;
+		list_del_init(&task->queue);
+		spin_unlock_irqrestore(&sleep_queue_lock, sflags);
+
+		raw_spin_unlock(&task->lock);
+		raw_spin_unlock(lock);
+		raw_spin_lock(lock);
+		return;
+	}
+
 	raw_spin_unlock(lock);
 	task_sched();
 	task->chan = NULL;
 	raw_spin_unlock(&task->lock);
 	raw_spin_lock(lock);
+}
+
+/*
+ * Callers must hold @lock and run with interrupts disabled. The interrupt
+ * state stays disabled across the switch and is restored by the caller's
+ * irqrestore once it drops @lock.
+ */
+void task_sleep(void *chan, spinlock_t *lock)
+{
+	task_sleep_common(chan, lock, false);
+}
+
+/*
+ * Like task_sleep(), but abort the sleep if a signal is already pending once
+ * the task becomes visible on the sleep queue.  The caller must check for a
+ * pending signal before calling this again, otherwise the syscall could spin
+ * in kernel space and never deliver the signal.
+ */
+void task_sleep_interruptible(void *chan, spinlock_t *lock)
+{
+	task_sleep_common(chan, lock, true);
 }
 
 void task_wake_all(void *chan)

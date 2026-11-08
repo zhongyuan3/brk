@@ -1,12 +1,11 @@
 #include <brk/align.h>
 #include <brk/console.h>
-#include <brk/ktime.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
 #include <brk/printk_log.h>
+#include <brk/sched_clock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
-#include <brk/timekeeper.h>
 #include <uapi/errno.h>
 
 static struct printk_ring_buffer printk_ring = {
@@ -40,7 +39,12 @@ static inline u32 printk_record_total(u32 len)
 
 static u64 printk_now_nsec(void)
 {
-	return timekeeper_mono_ns();
+	/*
+	 * Use the boot clock, not CLOCK_MONOTONIC.  printk is available before
+	 * timekeeper_init() establishes the monotonic epoch, so binding log
+	 * timestamps to it would make them jump backwards during boot.
+	 */
+	return local_clock();
 }
 
 static bool printk_header_valid(const struct printk_log_header *h)

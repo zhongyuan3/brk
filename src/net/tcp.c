@@ -15,7 +15,7 @@
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/tcp.h>
-#include <brk/timekeeper.h>
+#include <brk/tick.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
 #include <uapi/errno.h>
@@ -1348,7 +1348,7 @@ static struct tick_handler tcp_tick_handler = {
 
 void tcp_init(void)
 {
-	int err = timekeeper_register_tick_handler(&tcp_tick_handler);
+	int err = tick_register_handler(&tcp_tick_handler);
 
 	if (err)
 		panic("tcp: tick handler registration failed: %d\n", err);

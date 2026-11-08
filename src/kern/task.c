@@ -5,6 +5,7 @@
 #include <brk/asm/cpu.h>
 #include <brk/assert.h>
 #include <brk/console.h>
+#include <brk/container_of.h>
 #include <brk/cpu.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
@@ -29,7 +30,7 @@
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
-#include <brk/timekeeper.h>
+#include <brk/tick.h>
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
@@ -96,6 +97,41 @@ static void task_free(struct task *task)
 	slab_free(&task_cache, task);
 }
 
+static void task_sleep_timeout(struct timer_list *timer)
+{
+	struct task *task = container_of(timer, struct task, sleep_timer);
+	spinlock_t *lock = __atomic_load_n(&task->sleep_lock, __ATOMIC_ACQUIRE);
+
+	if (lock) {
+		/*
+		 * Taking the sleeper's condition lock orders this wakeup after
+		 * task_sleep() has published the task on the sleep queue.
+		 */
+		irqstate_t flags = spin_lock_irqsave(lock);
+
+		spin_unlock_irqrestore(lock, flags);
+	}
+	task_wake_spec(task);
+}
+
+void task_arm_sleep_timer(spinlock_t *lock, u64 expires_ns)
+{
+	struct task *task = current_task();
+
+	timer_setup(&task->sleep_timer, task_sleep_timeout);
+	timer_set_expires(&task->sleep_timer, expires_ns);
+	__atomic_store_n(&task->sleep_lock, lock, __ATOMIC_RELEASE);
+	(void)timer_add(&task->sleep_timer);
+}
+
+void task_disarm_sleep_timer(void)
+{
+	struct task *task = current_task();
+
+	timer_del_sync(&task->sleep_timer);
+	__atomic_store_n(&task->sleep_lock, NULL, __ATOMIC_RELEASE);
+}
+
 static void default_new_task_entry(void)
 {
 	task_exit_normal(0);
@@ -134,7 +170,7 @@ struct task *task_create(struct task_create_args *args)
 	task->cap_effective = CAP_FULL_SET;
 	task->cap_permitted = CAP_FULL_SET;
 	task->cap_inheritable = 0;
-	task->utime = timekeeper_get_jiffies();
+	task->utime = tick_get_jiffies();
 	task->ktime = task->utime;
 
 	task->kstack_base = kstack_alloc();
@@ -233,6 +269,9 @@ void task_destroy(struct task *task)
 {
 	if (task->is_init_task)
 		panic("attempt to destroy init task for cpu %d\n", task->cpu);
+
+	timer_del_sync(&task->sleep_timer);
+	__atomic_store_n(&task->sleep_lock, NULL, __ATOMIC_RELEASE);
 
 	irqstate_t flags = spin_lock_irqsave(&tasks_lock);
 	list_del_init(&task->list);

@@ -4,6 +4,7 @@
 #include <brk/permission.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
+#include <brk/tick.h>
 #include <brk/timeconst.h>
 #include <brk/timekeeper.h>
 #include <brk/types.h>
@@ -56,7 +57,7 @@ u64 sys_times(void)
 	if (err)
 		return -1;
 	/* USER_HZ is defined as HZ, so jiffies are already user clock ticks. */
-	return timekeeper_get_jiffies();
+	return tick_get_jiffies();
 }
 
 u64 sys_nanosleep(void)

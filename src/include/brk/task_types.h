@@ -4,6 +4,7 @@
 #include <arch/context.h>
 #include <arch/trapframe.h>
 #include <brk/spinlock_types.h>
+#include <brk/timer_list.h>
 #include <brk/types.h>
 #include <stdbool.h>
 #include <uapi/times.h>
@@ -124,6 +125,15 @@ struct task {
 	u64 ktime; /* no lock protection */
 	u64 utime; /* no lock protection */
 	int time_slice; /* no lock protection */
+
+	/*
+	 * Sleep timeout owned by the task, so a fatal signal that exits the
+	 * task from the trap path cannot leave a timer pointing at a freed
+	 * kernel stack.  task_destroy() cancels it before freeing the task.
+	 */
+	struct timer_list sleep_timer; /* no lock protection */
+	spinlock_t *sleep_lock; /* published before timer_add() */
+
 	char name[TASK_NAME_MAX]; /* no lock protection */
 	bool newly_forked; /* no lock protection */
 	bool is_init_task; /* static boot/idle task, never destroyed */

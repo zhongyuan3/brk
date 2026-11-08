@@ -62,7 +62,16 @@ void task_dump(void);
 
 void task_yield(void);
 void task_sleep(void *chan, spinlock_t *lock);
+void task_sleep_interruptible(void *chan, spinlock_t *lock);
 void task_wake_all(void *chan);
+
+/*
+ * Arm/disarm the current task's one-shot sleep timeout.  The timer is owned
+ * by struct task, so it remains valid until task_destroy() cancels it.  The
+ * caller must disarm a previous timeout before arming a new one.
+ */
+void task_arm_sleep_timer(spinlock_t *lock, u64 expires_ns);
+void task_disarm_sleep_timer(void);
 pid_t task_wait(pid_t cpid, int *status, int options, struct rusage *rus,
 		kuid_t *uid);
 void task_wake_spec(struct task *task);

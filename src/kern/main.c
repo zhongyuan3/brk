@@ -14,6 +14,7 @@
 #include <brk/printk.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
+#include <brk/tick.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
 #include <brk/trap.h>
@@ -50,6 +51,7 @@ void start_kernel(void)
 		panic("clocksource: initialization failed: err=%d\n", err);
 
 	timekeeper_init();
+	tick_init();
 
 	trap_init();
 

@@ -124,7 +124,7 @@ static u64 random_ustack(void)
 {
 	uintptr_t ustack_top = USER_SPACE_SIZE_MAX;
 
-	rand_seed(timekeeper_mono_ns());
+	rand_seed(ktime_get_mono_ns());
 	ustack_top -= (rand_u32() % 32 + 1) * PAGE_SIZE;
 	ustack_top -= USTACK_SIZE;
 	return ustack_top;

@@ -67,12 +67,12 @@ static inline time_t ktime_realtime_sec(void)
 }
 
 /*
- * Monotonic nanoseconds since timekeeper initialization.  This is used for
- * CLOCK_MONOTONIC/CLOCK_BOOTTIME and is not affected by wall-clock changes.
+ * CLOCK_BOOTTIME nanoseconds.  With no suspend support this equals
+ * CLOCK_MONOTONIC and is not affected by wall-clock changes.
  */
 static inline u64 ktime_boottime_ns(void)
 {
-	return timekeeper_mono_ns();
+	return ktime_get_boottime_ns();
 }
 
 /*
