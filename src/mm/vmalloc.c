@@ -1,4 +1,3 @@
-#include <arch/asm/large_page.h>
 #include <arch/pgtable.h>
 #include <brk/align.h>
 #include <brk/assert.h>
@@ -6,7 +5,6 @@
 #include <brk/list.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
-#include <brk/panic.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/slab.h>
@@ -14,7 +12,6 @@
 #include <brk/string.h>
 #include <brk/vmalloc.h>
 #include <stdalign.h>
-#include <uapi/errno.h>
 
 struct vmalloc_region {
 	struct list_head list;

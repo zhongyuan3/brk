@@ -1,5 +1,5 @@
 #define pr_fmt(fmt) "mm: " fmt
-#include <arch/asm/large_page.h>
+#include <arch/asm/huge_page.h>
 #include <arch/asm/mm.h>
 #include <arch/asm/page.h>
 #include <arch/asm/vmlayout.h>
@@ -10,7 +10,6 @@
 #include <arch/pgtable_types.h>
 #include <arch/sbi.h>
 #include <brk/align.h>
-#include <brk/asm/cpu.h>
 #include <brk/assert.h>
 #include <brk/dt.h>
 #include <brk/memblock.h>

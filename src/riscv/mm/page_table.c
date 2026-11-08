@@ -1,4 +1,4 @@
-#include <arch/asm/large_page.h>
+#include <arch/asm/huge_page.h>
 #include <arch/asm/page.h>
 #include <arch/csr.h>
 #include <arch/pgtable.h>
