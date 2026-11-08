@@ -1,5 +1,4 @@
 #include <brk/assert.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/skbuff.h>
 #include <brk/string.h>

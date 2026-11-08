@@ -1,6 +1,7 @@
 #ifndef BRK_VIRTIO_NET_H
 #define BRK_VIRTIO_NET_H
 
+#include <brk/compiler_attr.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <brk/virtio.h>
@@ -50,7 +51,7 @@ struct virtio_net_hdr {
 	u16 gso_size;
 	u16 csum_start;
 	u16 csum_offset;
-} __attribute__((packed));
+} __packed;
 
 struct virtio_net_dev;
 struct net_device;

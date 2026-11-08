@@ -6,7 +6,6 @@
 #include <brk/irqchip.h>
 #include <brk/irqdesc.h>
 #include <brk/irqdomain.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/mmio.h>
 #include <brk/of.h>

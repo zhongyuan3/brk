@@ -3,9 +3,9 @@
 
 typedef void (*initcall_t)(void);
 
-#define __define_initcall(fn, id)             \
-	static initcall_t __initcall_##fn##id \
-		__attribute__((__used__, __section__(".initcall" #id))) = fn
+#define __define_initcall(fn, id)                               \
+	static initcall_t __initcall_##fn##id __used __section( \
+		".initcall" #id) = fn
 
 /*
  * Initcall phases.  They run in order in do_initcalls().

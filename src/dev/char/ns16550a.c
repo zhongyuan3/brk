@@ -5,7 +5,6 @@
 #include <brk/initcall.h>
 #include <brk/ioremap.h>
 #include <brk/irq.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/mm.h>

@@ -1,8 +1,8 @@
 #include "brkfs.h"
 #include <brk/dcache.h>
+#include <brk/div.h>
 #include <brk/error.h>
 #include <brk/fs.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/pagecache.h>
@@ -356,7 +356,7 @@ static int brkfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	}
 
 	fs_dentry_instantiate(dentry, inode);
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
 		goto out;
@@ -395,7 +395,7 @@ static int brkfs_link(struct fs_dentry *old_dentry, struct fs_inode *dir,
 		goto out;
 	fs_inode_get(old_inode);
 	old_inode->nlink++;
-	inode_touch_ctime(old_inode);
+	fs_inode_touch_ctime(old_inode);
 	err = brkfs_inode_write(sbi, old_inode);
 	if (err) {
 		(void)brkfs_dir_remove(dir, new_dentry->name.name,
@@ -405,7 +405,7 @@ static int brkfs_link(struct fs_dentry *old_dentry, struct fs_inode *dir,
 		goto out;
 	}
 	fs_dentry_instantiate(new_dentry, old_inode);
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 out:
 	return err;
@@ -432,8 +432,8 @@ static int brkfs_unlink(struct fs_inode *dir, struct fs_dentry *dentry)
 		goto out;
 
 	inode->nlink--;
-	inode_touch_ctime(inode);
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_ctime(inode);
+	fs_inode_touch_mtime_ctime(dir);
 	if (inode->nlink == 0)
 		brkfs_orphan_add(sbi, inode);
 
@@ -511,7 +511,7 @@ static int brkfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	err = brkfs_inode_write(sbi, inode);
 	if (err)
 		goto out;
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	goto out;
 
@@ -596,7 +596,7 @@ static int brkfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 	}
 
 	dir->nlink++;
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err) {
 		dir->nlink--;
@@ -643,14 +643,14 @@ static int brkfs_rmdir(struct fs_inode *dir, struct fs_dentry *dentry)
 		goto out;
 
 	dir->nlink--;
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
 		goto out;
 
 	inode->nlink = 0;
 	brkfs_orphan_add(sbi, inode);
-	inode_touch_ctime(inode);
+	fs_inode_touch_ctime(inode);
 	err = brkfs_inode_write(sbi, inode);
 out:
 	sleeplock_release(&inode->rwsem);
@@ -764,35 +764,35 @@ static int brkfs_rename(struct fs_inode *old_dir, struct fs_dentry *old_dentry,
 		if (S_ISDIR(target->mode)) {
 			target->nlink = 0;
 			brkfs_orphan_add(sbi, target);
-			inode_touch_ctime(target);
+			fs_inode_touch_ctime(target);
 			err = brkfs_inode_write(sbi, target);
 			if (!err) {
 				new_dir->nlink--;
-				inode_touch_mtime_ctime(new_dir);
+				fs_inode_touch_mtime_ctime(new_dir);
 			}
 		} else {
 			target->nlink--;
 			if (target->nlink == 0)
 				brkfs_orphan_add(sbi, target);
-			inode_touch_ctime(target);
+			fs_inode_touch_ctime(target);
 			err = brkfs_inode_write(sbi, target);
 		}
 		if (err)
 			goto out_unlock;
 	}
 
-	inode_touch_ctime(inode);
+	fs_inode_touch_ctime(inode);
 	err = brkfs_inode_write(sbi, inode);
 	if (err)
 		goto out_unlock;
 
-	inode_touch_mtime_ctime(old_dir);
+	fs_inode_touch_mtime_ctime(old_dir);
 	err = brkfs_inode_write(sbi, old_dir);
 	if (err)
 		goto out_unlock;
 
 	if (new_dir != old_dir) {
-		inode_touch_mtime_ctime(new_dir);
+		fs_inode_touch_mtime_ctime(new_dir);
 		err = brkfs_inode_write(sbi, new_dir);
 	}
 
@@ -862,7 +862,7 @@ static int brkfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 	}
 
 	fs_dentry_instantiate(dentry, inode);
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_mtime_ctime(dir);
 	err = brkfs_inode_write(sbi, dir);
 	if (err)
 		goto out;
@@ -900,7 +900,7 @@ static int brkfs_getattr(const struct fs_path *path, struct kstat *stat,
 	if (blocks == 0 && inode->size > 0)
 		blocks = div_ceil(inode->size, inode->sb->block_size);
 	stat->blocks = (loff_t)div_ceil(blocks * inode->sb->block_size, 512);
-	inode_times_to_kstat(inode, stat);
+	fs_inode_times_to_kstat(inode, stat);
 
 	sleeplock_release(&inode->rwsem);
 	return 0;
@@ -921,7 +921,7 @@ static int brkfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 
 	if (attr->valid & ATTR_MODE) {
 		inode->mode = (inode->mode & S_IFMT) | (attr->mode & 07777);
-		inode_touch_ctime(inode);
+		fs_inode_touch_ctime(inode);
 	}
 	if (attr->valid & (ATTR_UID | ATTR_GID)) {
 		if (attr->valid & ATTR_UID)
@@ -929,13 +929,13 @@ static int brkfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 		if (attr->valid & ATTR_GID)
 			inode->gid = attr->gid;
 		inode->mode &= ~(S_ISUID | S_ISGID);
-		inode_touch_ctime(inode);
+		fs_inode_touch_ctime(inode);
 	}
 	if (attr->valid & (ATTR_ATIME | ATTR_MTIME | ATTR_CTIME)) {
-		inode_times_set(
+		fs_inode_times_set(
 			inode, (attr->valid & ATTR_ATIME) ? &attr->atime : NULL,
 			(attr->valid & ATTR_MTIME) ? &attr->mtime : NULL);
-		inode_touch_ctime(inode);
+		fs_inode_touch_ctime(inode);
 	}
 	if (attr->valid & ATTR_SIZE) {
 		/*
@@ -951,7 +951,7 @@ static int brkfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 			err = brkfs_truncate_inode_blocks(inode, attr->size);
 		if (err)
 			goto out;
-		inode_touch_mtime_ctime(inode);
+		fs_inode_touch_mtime_ctime(inode);
 	}
 	err = brkfs_inode_write(sbi, inode);
 out:
@@ -1134,7 +1134,7 @@ int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, u32 ino, umode_t mode,
 	stub.uid = uid;
 	stub.gid = gid;
 	stub.private_data = &info;
-	inode_times_set_all_now(&stub);
+	fs_inode_times_set_all_now(&stub);
 	return brkfs_inode_write(sbi, &stub);
 }
 

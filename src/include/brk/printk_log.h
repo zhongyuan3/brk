@@ -28,8 +28,8 @@ struct printk_log_header {
 };
 
 struct printk_ring_buffer {
-	char buf[PRINTK_RING_BUFFER_SIZE]
-		__attribute__((aligned(alignof(struct printk_log_header))));
+	alignas(alignof(
+		struct printk_log_header)) char buf[PRINTK_RING_BUFFER_SIZE];
 	u64 head;
 	u64 tail;
 	spinlock_t lock;

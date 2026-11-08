@@ -1,3 +1,4 @@
+#define pr_fmt(fmt) "clocksource: " fmt
 #include <brk/clocksource.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
@@ -49,12 +50,12 @@ int clocksource_init(void)
 	struct clocksource *cs = clocksource_select();
 
 	if (!cs) {
-		pr_err("clocksource: no source registered\n");
+		pr_err("no source registered\n");
 		return -ENODEV;
 	}
 
-	pr_debug("clocksource: selected %s (%u Hz, rating %u)\n", cs->name,
-		 cs->frequency, cs->rating);
+	pr_debug("selected %s (%u Hz, rating %u)\n", cs->name, cs->frequency,
+		 cs->rating);
 	return 0;
 }
 

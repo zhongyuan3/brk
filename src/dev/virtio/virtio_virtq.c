@@ -1,5 +1,4 @@
 #include <brk/assert.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/virtio_queue.h>
 #include <uapi/errno.h>

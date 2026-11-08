@@ -2,14 +2,15 @@
 #include <brk/assert.h>
 #include <brk/bio.h>
 #include <brk/blkdev.h>
+#include <brk/container_of.h>
 #include <brk/device.h>
 #include <brk/fs.h>
 #include <brk/genhd.h>
 #include <brk/initcall.h>
 #include <brk/irq.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
+#include <brk/log2.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/printf.h>
@@ -326,7 +327,7 @@ static int virtio_blk_setup(struct virtio_blk_dev *vblk,
 	if (!vblk || !vdev)
 		return -EINVAL;
 
-	if (!is_power_of_two(vblk->queue_size))
+	if (!is_power_of_2(vblk->queue_size))
 		return -EINVAL;
 
 	err = virtio_blk_validate_dev(vdev);
@@ -380,7 +381,7 @@ struct virtio_blk_dev *virtio_blk_create(struct virtio_device *vdev,
 	struct virtio_blk_dev *vblk;
 	int err;
 
-	if (!is_power_of_two(queue_size))
+	if (!is_power_of_2(queue_size))
 		return NULL;
 
 	vblk = virtio_blk_alloc(queue_size);

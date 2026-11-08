@@ -13,10 +13,10 @@
 #include <brk/fsinfo.h>
 #include <brk/init.h>
 #include <brk/initcall.h>
-#include <brk/kernel.h>
 #include <brk/klog.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
+#include <brk/lengthof.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
@@ -134,7 +134,7 @@ struct task *task_create(struct task_create_args *args)
 	task->cap_effective = CAP_FULL_SET;
 	task->cap_permitted = CAP_FULL_SET;
 	task->cap_inheritable = 0;
-	task->utime = jiffies_get();
+	task->utime = timekeeper_get_jiffies();
 	task->ktime = task->utime;
 
 	task->kstack_base = kstack_alloc();
@@ -603,7 +603,7 @@ void task_dump(void)
 	irqstate_t flags = spin_lock_irqsave(&tasks_lock);
 	printk("\n");
 	list_for_each_entry(task, &tasks, list) {
-		if (task->state >= 0 && task->state < countof(state_strs) &&
+		if (task->state >= 0 && task->state < lengthof(state_strs) &&
 		    state_strs[task->state])
 			state = state_strs[task->state];
 		else

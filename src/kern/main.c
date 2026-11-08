@@ -31,14 +31,25 @@ extern initcall_t __initcall_end[];
  */
 void start_kernel(void)
 {
-	arch_init();
-	mm_core_init();
+	int err;
 
-	timer_clocksource_init();
-	if (clocksource_init())
-		panic("clocksource: initialization failed\n");
+	err = arch_init();
+	if (err)
+		panic("arch: initialization failed: err=%d\n", err);
+
+	err = mm_init();
+	if (err)
+		panic("mm: initialization failed: err=%d\n", err);
+
+	err = timer_init();
+	if (err)
+		panic("timer: initialization failed: err=%d\n", err);
+
+	err = clocksource_init();
+	if (err)
+		panic("clocksource: initialization failed: err=%d\n", err);
+
 	timekeeper_init();
-	timer_init();
 
 	trap_init();
 

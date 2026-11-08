@@ -1,7 +1,7 @@
 #ifndef BRK_LIST_H
 #define BRK_LIST_H
 
-#include <brk/kernel.h>
+#include <brk/container_of.h>
 #include <brk/types.h>
 #include <stdbool.h>
 #include <stddef.h>

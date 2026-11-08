@@ -1,6 +1,7 @@
 #ifndef BRK_VIRTIO_BLK_H
 #define BRK_VIRTIO_BLK_H
 
+#include <brk/compiler_attr.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <brk/virtio_queue.h>
@@ -134,7 +135,7 @@ struct virtio_blk_config {
 		u8 model;
 		u8 unused2[3];
 	} zoned;
-} __attribute__((packed));
+} __packed;
 
 #define VIRTIO_BLK_SECTOR_SIZE 512
 #define VIRTIO_BLK_DEFAULT_QUEUE_SIZE 16

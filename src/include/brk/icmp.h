@@ -1,6 +1,7 @@
 #ifndef BRK_ICMP_H
 #define BRK_ICMP_H
 
+#include <brk/compiler_attr.h>
 #include <brk/skbuff.h>
 #include <brk/types.h>
 #include <stddef.h>
@@ -15,7 +16,7 @@ struct icmphdr {
 	u16 checksum;
 	u16 id;
 	u16 sequence;
-} __attribute__((packed));
+} __packed;
 
 int icmp_rcv(struct sk_buff *skb);
 

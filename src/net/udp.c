@@ -1,6 +1,6 @@
 #include <brk/ip.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
+#include <brk/min_max.h>
 #include <brk/net.h>
 #include <brk/netdevice.h>
 #include <brk/route.h>

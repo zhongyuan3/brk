@@ -52,6 +52,7 @@
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
+#include <brk/lengthof.h>
 #include <brk/list.h>
 #include <brk/net.h>
 #include <brk/netirqtest.h>
@@ -205,7 +206,7 @@ static const struct procfs_entry procfs_root_entries[] = {
 	  .show = procfs_show_irqtest,
 	  .write = procfs_write_irqtest },
 };
-#define PROCFS_ROOT_ENTRIES_NR countof(procfs_root_entries)
+#define PROCFS_ROOT_ENTRIES_NR lengthof(procfs_root_entries)
 
 static const struct procfs_entry procfs_pid_entries[] = {
 	{ .name = "status",
@@ -227,7 +228,7 @@ static const struct procfs_entry procfs_pid_entries[] = {
 	  .mode = S_IFREG | 0444,
 	  .show = procfs_show_pid_cmdline },
 };
-#define PROCFS_PID_ENTRIES_NR countof(procfs_pid_entries)
+#define PROCFS_PID_ENTRIES_NR lengthof(procfs_pid_entries)
 
 static inline enum proc_kind procfs_ino_kind(unsigned long ino)
 {
@@ -334,7 +335,7 @@ static int procfs_show_uptime(const struct procfs_entry *e, pid_t pid,
 {
 	(void)e;
 	(void)pid;
-	u64 boot_ns = ktime_get_boot_ns();
+	u64 boot_ns = ktime_boottime_ns();
 
 	/*
 	 * Two fields, mirroring Linux's /proc/uptime: total wall time and
@@ -638,7 +639,7 @@ static void procfs_init_inode(struct fs_inode *inode, umode_t mode,
 	inode->gid = 0;
 	inode->size = 0;
 	inode->rdev = 0;
-	inode_times_set_all_now(inode);
+	fs_inode_times_set_all_now(inode);
 }
 
 static struct fs_inode *procfs_iget(struct fs_super_block *sb,
@@ -809,7 +810,7 @@ static int procfs_getattr(const struct fs_path *path, struct kstat *stat,
 	stat->size = inode->size;
 	stat->blksize = PAGE_SIZE;
 	stat->blocks = 0;
-	inode_times_to_kstat(inode, stat);
+	fs_inode_times_to_kstat(inode, stat);
 	return 0;
 }
 

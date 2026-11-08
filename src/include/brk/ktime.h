@@ -3,10 +3,9 @@
 
 #include <brk/stat_types.h>
 #include <brk/timeconst.h>
+#include <brk/timekeeper.h>
 #include <brk/types.h>
 #include <uapi/time.h>
-
-struct fs_inode;
 
 /*
  * ktime_t is signed nanoseconds internally.  struct timespec/timeval only
@@ -52,29 +51,37 @@ static inline ktime_t ktime_from_sec_nsec(__s64 sec, long nsec)
 	return (ktime_t)sec * (ktime_t)NS_PER_SEC + (ktime_t)nsec;
 }
 
-ktime_t ktime_get_real(void);
-int ktime_set_real(ktime_t t);
-time_t ktime_get_real_sec(void);
+static inline ktime_t ktime_realtime(void)
+{
+	return timekeeper_real();
+}
+
+static inline int ktime_set_realtime(ktime_t t)
+{
+	return timekeeper_set_real(t);
+}
+
+static inline time_t ktime_realtime_sec(void)
+{
+	return (time_t)(ktime_realtime() / (ktime_t)NS_PER_SEC);
+}
 
 /*
  * Monotonic nanoseconds since timekeeper initialization.  This is used for
  * CLOCK_MONOTONIC/CLOCK_BOOTTIME and is not affected by wall-clock changes.
  */
-u64 ktime_get_boot_ns(void);
+static inline u64 ktime_boottime_ns(void)
+{
+	return timekeeper_mono_ns();
+}
 
 /*
  * Sleep for @dur nanoseconds.  On -EINTR, @rem receives the remaining time
  * when non-NULL.  @rem is also zeroed on success.
  */
-int ktime_nanosleep(ktime_t dur, ktime_t *rem);
-
-void inode_times_set_all_now(struct fs_inode *inode);
-void inode_times_set(struct fs_inode *inode, const ktime_t *atime,
-		     const ktime_t *mtime);
-void inode_touch_mtime(struct fs_inode *inode);
-void inode_touch_ctime(struct fs_inode *inode);
-void inode_touch_mtime_ctime(struct fs_inode *inode);
-
-void inode_times_to_kstat(struct fs_inode *inode, struct kstat *ks);
+static inline int ktime_nanosleep(ktime_t dur, ktime_t *rem)
+{
+	return timekeeper_nanosleep(dur, rem);
+}
 
 #endif

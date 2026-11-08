@@ -2,6 +2,7 @@
 #include <arch/csr.h>
 #include <arch/pgtable.h>
 #include <arch/pgtable_types.h>
+#include <brk/align.h>
 #include <brk/assert.h>
 #include <brk/error.h>
 #include <brk/fs.h>
@@ -623,15 +624,15 @@ int map_pages(const struct map_pages_context *ctx)
 		    is_aligned(paddr, PAGE_SIZE_1G) &&
 		    rem_size >= PAGE_SIZE_1G) {
 			page_size = PAGE_SIZE_1G;
-			rem_size = round_down(rem_size, PAGE_SIZE_1G);
+			rem_size = align_down(rem_size, PAGE_SIZE_1G);
 		} else if (is_aligned(addr, PAGE_SIZE_2M) &&
 			   is_aligned(paddr, PAGE_SIZE_2M) &&
 			   rem_size >= PAGE_SIZE_2M) {
 			page_size = PAGE_SIZE_2M;
-			rem_size = round_down(rem_size, PAGE_SIZE_2M);
+			rem_size = align_down(rem_size, PAGE_SIZE_2M);
 		} else {
 			page_size = PAGE_SIZE;
-			rem_size = round_down(rem_size, PAGE_SIZE);
+			rem_size = align_down(rem_size, PAGE_SIZE);
 		}
 
 		err = map_fixed_size_pages(addr, paddr, rem_size, page_size,
@@ -695,7 +696,7 @@ int map_kernel_pages(unsigned long addr, size_t size, unsigned long paddr,
 {
 	int err;
 
-	size = round_up(size, PAGE_SIZE);
+	size = align_up(size, PAGE_SIZE);
 	spin_lock(&kernel_pgdir_lock);
 	err = map_pages_final(kernel_pgdir, addr, size, paddr, flags);
 	spin_unlock(&kernel_pgdir_lock);
@@ -712,7 +713,7 @@ void unmap_kernel_pages(unsigned long addr, size_t size)
 int map_user_pages(pgd_t *root, unsigned long addr, size_t size,
 		   unsigned long paddr, unsigned int flags)
 {
-	size = round_up(size, PAGE_SIZE);
+	size = align_up(size, PAGE_SIZE);
 	return map_pages_final(root, addr, size, paddr, flags | PTE_U);
 }
 
@@ -721,7 +722,7 @@ void unmap_user_pages(pgd_t *root, unsigned long addr, size_t size)
 	unmap_pages(root, (void *)addr, size);
 }
 
-int mm_core_init(void)
+int mm_init(void)
 {
 	page_alloc_init();
 	memblock_free_all();

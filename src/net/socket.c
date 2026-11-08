@@ -1,5 +1,4 @@
 #include <brk/fs.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/socket.h>
 #include <brk/string.h>

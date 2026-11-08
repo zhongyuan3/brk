@@ -1,6 +1,7 @@
+#include <brk/align.h>
 #include <brk/assert.h>
-#include <brk/kernel.h>
 #include <brk/list.h>
+#include <brk/log2.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
@@ -47,7 +48,7 @@ static int slab_add_page(struct slab_allocator *allocator)
 	u64 end_addr = addr + (1 << (PAGE_SHIFT + allocator->page_order));
 
 	if (!is_aligned(addr, align))
-		addr = round_up(addr, align);
+		addr = align_up(addr, align);
 
 	pg->slab_free_objs = (void *)(uintptr_t)addr;
 
@@ -86,11 +87,11 @@ int slab_init(struct slab_allocator *allocator, size_t size, size_t align,
 	if (size < sizeof(void *))
 		size = sizeof(void *);
 
-	if (!is_power_of_two(align))
-		align = round_up_to_pow_of_two(align);
+	if (!is_power_of_2(align))
+		align = round_up_pow_of_2(align);
 
 	if (!is_aligned(size, align))
-		size = round_up(size, align);
+		size = align_up(size, align);
 
 	allocator->size = size;
 	allocator->align = align;

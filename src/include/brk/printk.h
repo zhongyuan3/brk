@@ -1,6 +1,7 @@
 #ifndef BRK_PRINTK_H
 #define BRK_PRINTK_H
 
+#include <brk/compiler_attr.h>
 #include <brk/types.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -19,10 +20,9 @@
 
 #define KERN_DEFAULT KERN_WARN
 
-void printk(char const *fmt, ...) __attribute__((format(printf, 1, 2)));
+void printk(char const *fmt, ...) __printf(1, 2);
 void vprintk(char const *fmt, va_list ap);
-void _printk(int level, const char *fmt, ...)
-	__attribute__((format(printf, 2, 3)));
+void _printk(int level, const char *fmt, ...) __printf(2, 3);
 
 /* Drain pending records to all active consoles.  Returns true if a progress
  * was made (a record or a lost notification was consumed). */

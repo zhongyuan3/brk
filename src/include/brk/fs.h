@@ -208,6 +208,13 @@ void fs_inode_clear(struct fs_inode *inode);
 void fs_inode_cache_init(void);
 int fs_inode_attach_page_cache(struct fs_inode *inode,
 			       const struct page_cache_ops *ops);
+void fs_inode_times_set_all_now(struct fs_inode *inode);
+void fs_inode_times_set(struct fs_inode *inode, const ktime_t *atime,
+			const ktime_t *mtime);
+void fs_inode_touch_mtime(struct fs_inode *inode);
+void fs_inode_touch_ctime(struct fs_inode *inode);
+void fs_inode_touch_mtime_ctime(struct fs_inode *inode);
+void fs_inode_times_to_kstat(struct fs_inode *inode, struct kstat *ks);
 
 struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode);
 struct fs_file *fs_file_alloc_anon(const struct fs_file_ops *ops,

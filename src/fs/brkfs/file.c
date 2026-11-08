@@ -3,7 +3,6 @@
 #include <brk/blkdev.h>
 #include <brk/error.h>
 #include <brk/fs.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/pagecache.h>
@@ -308,7 +307,7 @@ int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
 		inode->size = off;
 		fs_inode_mark_dirty(inode);
 	}
-	inode_touch_mtime(inode);
+	fs_inode_touch_mtime(inode);
 
 	return err;
 }
@@ -364,7 +363,7 @@ static int brkfs_file_fallocate(struct fs_file *file, int mode, loff_t offset,
 
 	if (!err && !(mode & FALLOC_FL_KEEP_SIZE) && end > inode->size) {
 		inode->size = end;
-		inode_touch_mtime_ctime(inode);
+		fs_inode_touch_mtime_ctime(inode);
 	}
 
 	if (!err)

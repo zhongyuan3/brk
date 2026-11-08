@@ -237,7 +237,7 @@ int arp_output(struct sk_buff *skb, struct net_device *dev, u32 next_hop)
 		skb_free(skb_dequeue(&e->pending));
 	skb_queue_tail(&e->pending, skb);
 
-	now = ktime_get_boot_ns();
+	now = ktime_boottime_ns();
 	if (e->last_request_ns == 0 ||
 	    now - e->last_request_ns >= ARP_REQUEST_INTERVAL_NS) {
 		e->last_request_ns = now;

@@ -20,7 +20,7 @@ u64 sys_gettimeofday(void)
 	if (!utv)
 		return 0;
 
-	ktime_to_timeval(ktime_get_real(), &tv);
+	ktime_to_timeval(ktime_realtime(), &tv);
 	if (copy_to_user(utv, &tv, sizeof(tv)))
 		return -EFAULT;
 	return 0;
@@ -43,7 +43,7 @@ u64 sys_settimeofday(void)
 		return -EINVAL;
 
 	ktime_t t = ktime_from_timeval(&tv);
-	return (u64)(long)ktime_set_real(t);
+	return (u64)(long)ktime_set_realtime(t);
 }
 
 u64 sys_times(void)
@@ -56,7 +56,7 @@ u64 sys_times(void)
 	if (err)
 		return -1;
 	/* USER_HZ is defined as HZ, so jiffies are already user clock ticks. */
-	return jiffies_get();
+	return timekeeper_get_jiffies();
 }
 
 u64 sys_nanosleep(void)
@@ -88,7 +88,7 @@ u64 sys_nanosleep(void)
 u64 sys_time(void)
 {
 	time_t *ut = syscall_arg_ptr(0);
-	time_t now = ktime_get_real_sec();
+	time_t now = ktime_realtime_sec();
 
 	if (ut && copy_to_user(ut, &now, sizeof(now)))
 		return -EFAULT;
@@ -101,11 +101,11 @@ static int clock_now(int clockid, ktime_t *now)
 
 	switch (clockid) {
 	case CLOCK_REALTIME:
-		*now = ktime_get_real();
+		*now = ktime_realtime();
 		return 0;
 	case CLOCK_MONOTONIC:
 	case CLOCK_BOOTTIME:
-		*now = (ktime_t)ktime_get_boot_ns();
+		*now = (ktime_t)ktime_boottime_ns();
 		return 0;
 	case CLOCK_PROCESS_CPUTIME_ID:
 	case CLOCK_THREAD_CPUTIME_ID:
@@ -185,7 +185,7 @@ u64 sys_clock_settime(void)
 		return -EINVAL;
 
 	ktime_t t = ktime_from_timespec(&ts);
-	return (u64)(long)ktime_set_real(t);
+	return (u64)(long)ktime_set_realtime(t);
 }
 
 u64 sys_clock_nanosleep(void)
@@ -214,9 +214,9 @@ u64 sys_clock_nanosleep(void)
 	target = ktime_from_timespec(&req);
 	if (flags & TIMER_ABSTIME) {
 		if (clockid == CLOCK_REALTIME)
-			now = ktime_get_real();
+			now = ktime_realtime();
 		else
-			now = (ktime_t)ktime_get_boot_ns();
+			now = (ktime_t)ktime_boottime_ns();
 		duration = target - now;
 		if (duration <= 0)
 			return 0;

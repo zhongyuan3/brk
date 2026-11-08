@@ -1,4 +1,3 @@
-#include <brk/kernel.h>
 #include <brk/string.h>
 #include <stdbool.h>
 #include <uapi/errno.h>

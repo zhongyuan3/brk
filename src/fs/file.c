@@ -2,7 +2,6 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/initcall.h>
-#include <brk/kernel.h>
 #include <brk/path.h>
 #include <brk/permission.h>
 #include <brk/refcnt.h>

@@ -1,6 +1,7 @@
 #include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/list.h>
+#include <brk/min_max.h>
 #include <brk/mm_types.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>

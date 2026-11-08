@@ -256,7 +256,7 @@ int brkfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 
 	sb_info->s_sb.s_state = BRKFS_STATE_DIRTY;
 	sb_info->s_sb.s_mnt_count++;
-	sb_info->s_sb.s_mtime = (u32)ktime_get_real_sec();
+	sb_info->s_sb.s_mtime = (u32)ktime_realtime_sec();
 	sb_info->s_super_dirty = true;
 	err = brkfs_super_write(sb_info);
 	if (err) {

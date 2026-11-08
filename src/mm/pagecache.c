@@ -2,7 +2,6 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/initcall.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
@@ -707,7 +706,7 @@ ssize_t generic_file_write(struct fs_file *file, const char *buf, size_t size,
 	}
 
 	if (total > 0) {
-		inode_touch_mtime(inode);
+		fs_inode_touch_mtime(inode);
 		fs_inode_mark_dirty(inode);
 	}
 

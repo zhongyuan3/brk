@@ -9,7 +9,7 @@
 #include <brk/bits.h>
 #include <brk/cpu.h>
 #include <brk/irq.h>
-#include <brk/kernel.h>
+#include <brk/lengthof.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
@@ -54,7 +54,7 @@ static const char *const reg_names[] = {
 
 static const char *exception_name(unsigned long code)
 {
-	if (code > countof(exception_names) || !exception_names[code])
+	if (code > lengthof(exception_names) || !exception_names[code])
 		return "Unexpected exception";
 	else
 		return exception_names[code];
@@ -62,7 +62,7 @@ static const char *exception_name(unsigned long code)
 
 static const char *interrupt_name(unsigned long code)
 {
-	if (code > countof(interrupt_names) || !interrupt_names[code])
+	if (code > lengthof(interrupt_names) || !interrupt_names[code])
 		return "Unexpected interrupt";
 	else
 		return interrupt_names[code];
@@ -177,7 +177,7 @@ static void handle_interrupt(unsigned long code, struct trap_frame *frame,
 			task_yield();
 		break;
 	case INTERRUPT_SUPERVISOR_TIMER:
-		handle_tick();
+		timer_handle_tick();
 		if (from_user)
 			signal_deliver_pending(task);
 		if (task && --task->time_slice <= 0) {
@@ -288,7 +288,7 @@ void trap_handler(struct trap_frame *frame)
 
 	if (from_user) {
 		write_sstatus(read_sstatus() | SSTATUS_SUM);
-		jiffies = jiffies_get();
+		jiffies = timekeeper_get_jiffies();
 		task_add_user_time(task, jiffies - task->utime);
 		task->ktime = jiffies;
 	}
@@ -301,7 +301,7 @@ void trap_handler(struct trap_frame *frame)
 	if (from_user) {
 		prepare_to_ret_to_user(frame);
 		signal_deliver_pending(task);
-		jiffies = jiffies_get();
+		jiffies = timekeeper_get_jiffies();
 		task_add_system_time(task, jiffies - task->ktime);
 		task->utime = jiffies;
 	}

@@ -1,3 +1,4 @@
+#include <brk/container_of.h>
 #include <brk/device.h>
 #include <brk/initcall.h>
 #include <brk/kmalloc.h>

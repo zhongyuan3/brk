@@ -1,8 +1,8 @@
 #include <arch/pgtable.h>
+#include <brk/container_of.h>
 #include <brk/device.h>
 #include <brk/initcall.h>
 #include <brk/ioremap.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/mmio.h>

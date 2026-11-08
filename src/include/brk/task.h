@@ -6,7 +6,6 @@
 #include <brk/cpu.h>
 #include <brk/fdtable.h>
 #include <brk/fs_types.h>
-#include <brk/kernel.h>
 #include <brk/mm_types.h>
 #include <brk/path.h>
 #include <brk/signal_types.h>

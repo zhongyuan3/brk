@@ -1,4 +1,5 @@
 #include <brk/blkdev.h>
+#include <brk/compiler_attr.h>
 #include <brk/device.h>
 #include <brk/genhd.h>
 #include <brk/kmalloc.h>
@@ -26,13 +27,13 @@ struct mbr_partition {
 	u8 chs_last[3];
 	u32 start_lba;
 	u32 nr_sectors;
-} __attribute__((packed));
+} __packed;
 
 struct mbr_sector {
 	u8 bootstrap[446];
 	struct mbr_partition parts[MBR_PART_COUNT];
 	u16 signature;
-} __attribute__((packed));
+} __packed;
 
 static LIST_DEFINE(disk_list);
 static SPINLOCK_DEFINE(disk_list_lock);

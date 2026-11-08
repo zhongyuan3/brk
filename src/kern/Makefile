@@ -9,7 +9,6 @@ obj-y += printk.o
 obj-y += klog.o
 obj-y += clocksource.o
 obj-y += timekeeper.o
-obj-y += ktime.o
 obj-y += systime.o
 obj-y += sleeplock.o
 obj-y += spinlock.o

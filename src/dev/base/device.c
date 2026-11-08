@@ -1,9 +1,7 @@
 #define pr_fmt(fmt) "device: " fmt
-
 #include <brk/device.h>
 #include <brk/devtmpfs.h>
 #include <brk/initcall.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/of.h>

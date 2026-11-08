@@ -220,7 +220,7 @@ void task_scheduler(void)
 	user_access_disable();
 
 	init->time_slice = TIME_SLICE_MAX;
-	init->ktime = jiffies_get();
+	init->ktime = timekeeper_get_jiffies();
 
 	/*
 	 * Publish this CPU as online only after current is the boot task.  An
@@ -284,7 +284,7 @@ static void task_sched(void)
 		return;
 	}
 
-	task_add_system_time(curr, jiffies_get() - curr->ktime);
+	task_add_system_time(curr, timekeeper_get_jiffies() - curr->ktime);
 	cpu->handoff = curr;
 
 	raw_spin_lock(&next->lock);
@@ -300,7 +300,7 @@ static void task_sched(void)
 		user_access_disable();
 	}
 	next->time_slice = TIME_SLICE_MAX;
-	next->ktime = jiffies_get();
+	next->ktime = timekeeper_get_jiffies();
 	/*
 	 * curr->oncpu is cleared by task_sched_resume() in the next task's
 	 * context, i.e. only after this CPU has completely left curr.  This

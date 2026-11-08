@@ -1,6 +1,6 @@
 #include <arch/trapframe.h>
 #include <brk/cpu.h>
-#include <brk/kernel.h>
+#include <brk/lengthof.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/syscall.h>
@@ -145,7 +145,7 @@ void syscall(void)
 	u64 num = trap_frame_get_syscall_no(task->frame);
 	u64 ret;
 
-	if (num < countof(systable) && systable[num])
+	if (num < lengthof(systable) && systable[num])
 		ret = systable[num]();
 	else
 		ret = -ENOSYS;

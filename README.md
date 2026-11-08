@@ -23,7 +23,6 @@
     - [Quick Start](#quick-start)
     - [Useful Helpers](#useful-helpers)
     - [Useful Variables](#useful-variables)
-  - [Kernel Architecture](#kernel-architecture)
   - [License](#license)
 
 ---
@@ -85,73 +84,6 @@ make disasm         # disassemble the kernel
 | `V=1`                                    | Show full compiler/linker commands                        |
 | `EXTRA_CFLAGS=...` / `EXTRA_LDFLAGS=...` | Temporarily append compile/link flags                     |
 | `WERROR=0`                               | Keep warnings non-fatal while bringing up a new toolchain |
-
-## Kernel Architecture
-
-BRK follows a small, Linux-inspired device model:
-
-```text
-FDT
- └─ device_node / struct resource
-     └─ platform device
-         └─ bus match
-             └─ driver probe
-```
-
-The virtio stack uses the same path one level deeper:
-
-```text
-virtio,mmio platform device
- └─ virtio-mmio transport driver
-     └─ virtio device (child, on virtio_bus)
-         └─ virtio-blk / virtio-net driver probe
-```
-
-Boot is split into explicit stages:
-
-| Stage | Contents |
-| ----- | -------- |
-| before initcalls | paging, memory, CPU discovery, timebase |
-| `core` | device/bus/driver/IRQ core, slab caches, network core |
-| `postcore` | OF `device_node` tree, IRQ domains, platform device population |
-| `subsys` | platform and transport drivers (`ns16550a`, goldfish RTC, virtio-mmio) |
-| `device` | leaf drivers (`virtio-blk`, `virtio-net`) |
-| `late` | deferred-probe retry and self-tests |
-
-Filesystems start after `do_initcalls()`, from task context.
-
-A few dependencies are deliberately handled early and are documented in the
-code:
-
-- **IRQ controllers** probe at `postcore` so IRQ domains exist before normal
-  devices resolve their interrupts in probe context.
-- **RTC** is a normal platform driver. It registers a `wall_clock` provider
-  when it probes; timekeeper starts with a zero wall offset and applies the
-  RTC's time once the provider is registered.
-- **clocksource/timebase**: the RISC-V time CSR is registered as a
-  `clocksource` before initcalls; the selected source feeds timekeeper and
-  timer tick programming.  Early memory/CPU discovery stays before initcalls
-  because the rest of the boot path depends on it.
-- **UART/console** is registered from the platform probe; messages produced
-  before that are buffered by printk.
-
-### Timekeeping
-
-Time is layered as `clocksource` → `timekeeper` → `wall_clock`:
-
-- `clocksource` provides the monotonic cycle counter selected at boot.
-- `timekeeper` owns monotonic nanoseconds, the wall-clock offset and jiffies.
-- `wall_clock` is registered by a normal RTC platform driver.
-
-The boot hart's timer tick calls `timekeeper_tick()`, which advances jiffies,
-runs registered tick handlers (for example TCP retransmission timers), and
-wakes sleepers. Secondary harts only reprogram their timer.
-
-`CLOCK_REALTIME` is monotonic time plus the wall offset; wall-clock changes do
-not affect `CLOCK_MONOTONIC` or `CLOCK_BOOTTIME`. `clock_getres()` reports the
-clocksource resolution for monotonic clocks and the tick resolution for CPU
-clocks.  Since BRK has no suspend support yet, `CLOCK_BOOTTIME` is currently
-equivalent to `CLOCK_MONOTONIC`.
 
 ## License
 

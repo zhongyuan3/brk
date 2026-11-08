@@ -3,7 +3,6 @@
 #include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/initcall.h>
-#include <brk/kernel.h>
 #include <brk/panic.h>
 #include <brk/spinlock.h>
 #include <brk/types.h>

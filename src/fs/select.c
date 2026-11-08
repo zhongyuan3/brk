@@ -1,7 +1,6 @@
 #include <brk/error.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/signal.h>
@@ -26,7 +25,7 @@ static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 	u64 deadline = 0;
 
 	if (!infinite)
-		deadline = ktime_get_boot_ns() + (u64)timeout_ms * 1000000ULL;
+		deadline = ktime_boottime_ns() + (u64)timeout_ms * 1000000ULL;
 
 	for (;;) {
 		unsigned int ready = 0;
@@ -59,7 +58,7 @@ static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 
 		if (ready)
 			return (int)ready;
-		if (!infinite && ktime_get_boot_ns() >= deadline)
+		if (!infinite && ktime_boottime_ns() >= deadline)
 			return 0;
 		if (task_is_killed(current_task()))
 			return -EINTR;

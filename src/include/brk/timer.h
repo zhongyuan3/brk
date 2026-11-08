@@ -1,10 +1,8 @@
 #ifndef BRK_TIMER_H
 #define BRK_TIMER_H
 
-#include <brk/types.h>
+#include <brk/compiler_attr.h>
 
-void timer_clocksource_init(void);
-void timer_init(void);
-u64 timer_read(void);
+__result(int) timer_init(void);
 
 #endif

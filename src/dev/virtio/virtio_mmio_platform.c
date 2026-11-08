@@ -1,6 +1,5 @@
 #include <brk/device.h>
 #include <brk/initcall.h>
-#include <brk/kernel.h>
 #include <brk/panic.h>
 #include <brk/platform.h>
 #include <brk/printk.h>

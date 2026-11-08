@@ -1,6 +1,5 @@
 #include <arch/asm/vmlayout.h>
 #include <arch/trapframe.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>

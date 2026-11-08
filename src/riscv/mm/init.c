@@ -9,11 +9,12 @@
 #include <arch/pgtable.h>
 #include <arch/pgtable_types.h>
 #include <arch/sbi.h>
+#include <brk/align.h>
 #include <brk/asm/cpu.h>
 #include <brk/assert.h>
 #include <brk/dt.h>
-#include <brk/kernel.h>
 #include <brk/memblock.h>
+#include <brk/min_max.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
 #include <brk/panic.h>
@@ -83,7 +84,7 @@ static void __setup_vm_early(unsigned long dtb_pa)
 	early_pgdir_rsvd_page_next =
 		(unsigned long)early_pgdir_rsvd_pages + PAGE_SIZE;
 
-	kern_end = round_up(_EKERNEL, PAGE_SIZE_2M);
+	kern_end = align_up(_EKERNEL, PAGE_SIZE_2M);
 	size = kern_end - _SKERNEL;
 	flags = PTE_R | PTE_W | PTE_X;
 
@@ -101,8 +102,8 @@ static void __setup_vm_early(unsigned long dtb_pa)
 	else
 		dtb_pa = max(dtb_pa, kern_end);
 
-	unsigned long map_start = round_down(dtb_pa, PAGE_SIZE_2M);
-	unsigned long map_end = round_up(dtb_end, PAGE_SIZE_2M);
+	unsigned long map_start = align_down(dtb_pa, PAGE_SIZE_2M);
+	unsigned long map_end = align_up(dtb_end, PAGE_SIZE_2M);
 	size = map_end - map_start;
 	flags = PTE_R | PTE_W;
 	map_early(map_start, map_start, size, flags);
@@ -180,7 +181,7 @@ static void final_pgtable_init(void)
 	rngs_cnt += 7;
 
 	rngs_size = sizeof(struct mapping_region) * rngs_cnt;
-	rngs_size = round_up(rngs_size, PAGE_SIZE);
+	rngs_size = align_up(rngs_size, PAGE_SIZE);
 	rngs = (void *)memblock_alloc(rngs_size, _EKERNEL_PHYS, PAGE_SIZE);
 	if (rngs == NULL) {
 		sbi_console_putstr("rngs == NULL!\n");
@@ -238,11 +239,11 @@ static void final_pgtable_init(void)
 		i += 1;
 	}
 	for (i = 5; i < rngs_cnt; ++i) {
-		unsigned long aligned_addr = round_up(rngs[i].addr, PAGE_SIZE);
+		unsigned long aligned_addr = align_up(rngs[i].addr, PAGE_SIZE);
 		unsigned long aligned_paddr =
-			round_up(rngs[i].paddr, PAGE_SIZE);
+			align_up(rngs[i].paddr, PAGE_SIZE);
 		unsigned long aligned_end_addr =
-			round_up(rngs[i].addr + rngs[i].size, PAGE_SIZE);
+			align_up(rngs[i].addr + rngs[i].size, PAGE_SIZE);
 		rngs[i].addr = aligned_addr;
 		rngs[i].paddr = aligned_paddr;
 		rngs[i].size = aligned_end_addr - aligned_addr;
@@ -287,7 +288,7 @@ static void vmemmap_init(void)
 	unsigned long vaddr;
 
 	for_each_mem_pfn_range(idx, start, end) {
-		sz = round_up((end - start) * sizeof(struct page), PAGE_SIZE);
+		sz = align_up((end - start) * sizeof(struct page), PAGE_SIZE);
 		paddr = memblock_alloc(sz, 0, PAGE_SIZE);
 		assert(paddr);
 		memset((void *)phys_to_virt(paddr), 0, sz);

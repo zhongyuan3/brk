@@ -2,10 +2,10 @@
 #include <arch/asm/vmlayout.h>
 #include <arch/pgtable.h>
 #include <arch/trapframe.h>
+#include <brk/align.h>
 #include <brk/assert.h>
 #include <brk/error.h>
 #include <brk/fs.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/mm.h>
@@ -18,6 +18,7 @@
 #include <brk/signal.h>
 #include <brk/string.h>
 #include <brk/task.h>
+#include <brk/timekeeper.h>
 #include <brk/timer.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
@@ -123,7 +124,7 @@ static u64 random_ustack(void)
 {
 	uintptr_t ustack_top = USER_SPACE_SIZE_MAX;
 
-	rand_seed(timer_read());
+	rand_seed(timekeeper_mono_ns());
 	ustack_top -= (rand_u32() % 32 + 1) * PAGE_SIZE;
 	ustack_top -= USTACK_SIZE;
 	return ustack_top;
@@ -134,9 +135,9 @@ static uintptr_t stack_push_ptr_slots(uintptr_t *ksp, uintptr_t *sp, int nptr)
 	size_t n = (size_t)(nptr + 1) * sizeof(char *);
 
 	*ksp -= n;
-	*ksp = round_down(*ksp, sizeof(char *));
+	*ksp = align_down(*ksp, sizeof(char *));
 	*sp -= n;
-	*sp = round_down(*sp, sizeof(char *));
+	*sp = align_down(*sp, sizeof(char *));
 	return *sp;
 }
 
@@ -189,8 +190,8 @@ static void push_args(struct exec_args *args, uintptr_t *psp,
 	sp -= sizeof(int);
 	*(int *)ksp = args->argc;
 
-	ksp = round_down(ksp, 16);
-	sp = round_down(sp, 16);
+	ksp = align_down(ksp, 16);
+	sp = align_down(sp, 16);
 
 	*psp = sp;
 }
@@ -283,8 +284,8 @@ static int load_seg(struct uvm_space *mm, struct elf_phdr *ph,
 	struct uvm_region *vma;
 	int err;
 
-	start = round_down(ph->p_vaddr, PAGE_SIZE);
-	end = round_up(ph->p_vaddr + ph->p_memsz, PAGE_SIZE);
+	start = align_down(ph->p_vaddr, PAGE_SIZE);
+	end = align_up(ph->p_vaddr + ph->p_memsz, PAGE_SIZE);
 	if (end == start)
 		return 0;
 

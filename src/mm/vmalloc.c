@@ -1,7 +1,7 @@
 #include <arch/asm/large_page.h>
 #include <arch/pgtable.h>
+#include <brk/align.h>
 #include <brk/assert.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/memblock.h>
@@ -75,7 +75,7 @@ static struct vmalloc_region *find_free_vm_area(size_t size)
 	struct vmalloc_region *area;
 	struct vmalloc_region *new_area;
 
-	size = round_up(size, PAGE_SIZE);
+	size = align_up(size, PAGE_SIZE);
 
 	list_for_each_entry(area, &vma, list) {
 		if (!area->is_free)
@@ -125,7 +125,7 @@ void *vmalloc(size_t size)
 {
 	spin_lock(&vma_lock);
 
-	size = round_up(size, PAGE_SIZE);
+	size = align_up(size, PAGE_SIZE);
 
 	struct vmalloc_region *area = find_free_vm_area(size);
 	if (!area) {
@@ -199,7 +199,7 @@ void *vmalloc_nomap(size_t size)
 	struct vmalloc_region *area;
 
 	spin_lock(&vma_lock);
-	area = find_free_vm_area(round_up(size, PAGE_SIZE));
+	area = find_free_vm_area(align_up(size, PAGE_SIZE));
 	spin_unlock(&vma_lock);
 	if (!area)
 		return NULL;

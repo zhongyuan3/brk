@@ -1,7 +1,7 @@
 #include <brk/error.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
-#include <brk/kernel.h>
+#include <brk/min_max.h>
 #include <brk/socket.h>
 #include <brk/syscall.h>
 #include <brk/task.h>

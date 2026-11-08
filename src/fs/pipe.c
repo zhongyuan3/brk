@@ -64,7 +64,7 @@ static int pipefs_dir_getattr(const struct fs_path *path, struct kstat *st,
 	st->mode = inode->mode;
 	st->nlink = inode->nlink;
 	st->blksize = PIPE_BUF;
-	inode_times_to_kstat(inode, st);
+	fs_inode_times_to_kstat(inode, st);
 	return 0;
 }
 
@@ -194,7 +194,7 @@ int pipefs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 		root_inode->ops = &pipefs_dir_iops;
 		root_inode->fops = &pipefs_dir_fops;
 		root_inode->nlink = 1;
-		inode_times_set_all_now(root_inode);
+		fs_inode_times_set_all_now(root_inode);
 		fs_inode_unlock_new(root_inode);
 	}
 
@@ -230,7 +230,7 @@ static int pipe_getattr(const struct fs_path *path, struct kstat *st, u32 mask,
 	st->nlink = inode->nlink;
 	st->size = 0;
 	st->blksize = PIPE_BUF;
-	inode_times_to_kstat(inode, st);
+	fs_inode_times_to_kstat(inode, st);
 	return 0;
 }
 
@@ -491,7 +491,7 @@ int anon_pipe_create(struct fs_file **read_file, struct fs_file **write_file,
 	inode->fops = &pipe_fifo_fops;
 	inode->nlink = 1;
 	inode->private_data = pipe;
-	inode_times_set_all_now(inode);
+	fs_inode_times_set_all_now(inode);
 	fs_inode_unlock_new(inode);
 
 	d = fs_dentry_alloc_anon(inode, &pipe_d_name);

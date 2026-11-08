@@ -2,7 +2,6 @@
 #include <brk/irq.h>
 #include <brk/irqchip.h>
 #include <brk/irqdesc.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/printf.h>
 #include <brk/spinlock.h>

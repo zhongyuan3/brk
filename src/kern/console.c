@@ -1,5 +1,4 @@
 #include <brk/console.h>
-#include <brk/kernel.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/printf.h>
@@ -94,12 +93,9 @@ int console_set_log_level(struct console *console, u8 level)
 static int console_format_prefix(char *prefix, size_t size, u8 level,
 				 u64 ts_nsec)
 {
-	if (ts_nsec > 0)
-		return snprintf(prefix, size,
-				"<%u>[%5" PRIu64 ".%06" PRIu64 "] ", level,
-				(u64)(ts_nsec / NS_PER_SEC),
-				(u64)((ts_nsec % NS_PER_SEC) / NS_PER_US));
-	return snprintf(prefix, size, "<%u>[            ] ", level);
+	return snprintf(prefix, size, "<%u>[%5" PRIu64 ".%06" PRIu64 "] ",
+			level, (u64)(ts_nsec / NS_PER_SEC),
+			(u64)((ts_nsec % NS_PER_SEC) / NS_PER_US));
 }
 
 static bool console_write_one_locked(struct console *con, u8 level, u64 ts_nsec,

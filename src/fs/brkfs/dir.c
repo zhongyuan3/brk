@@ -1,4 +1,5 @@
 #include "brkfs.h"
+#include <brk/align.h>
 #include <brk/blkdev.h>
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
@@ -213,7 +214,7 @@ static u8 brkfs_mode_to_dt(umode_t mode)
 
 static size_t brkfs_dirent_reclen(unsigned int name_len)
 {
-	return round_up(offsetof(struct brkfs_dir_entry, name) + name_len, 4u);
+	return align_up(offsetof(struct brkfs_dir_entry, name) + name_len, 4u);
 }
 
 static int brkfs_dir_ensure_first_block(struct fs_inode *dir)

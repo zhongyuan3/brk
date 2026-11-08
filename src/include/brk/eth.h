@@ -1,6 +1,7 @@
 #ifndef BRK_ETH_H
 #define BRK_ETH_H
 
+#include <brk/compiler_attr.h>
 #include <brk/netdevice.h>
 #include <brk/skbuff.h>
 #include <brk/types.h>
@@ -17,7 +18,7 @@ struct ethhdr {
 	u8 h_dest[ETH_ALEN];
 	u8 h_source[ETH_ALEN];
 	u16 h_proto;
-} __attribute__((packed));
+} __packed;
 
 /* Pull the Ethernet header and return the protocol in host byte order. */
 u16 eth_type_trans(struct sk_buff *skb, struct net_device *dev);

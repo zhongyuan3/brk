@@ -414,7 +414,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 					return (ssize_t)total;
 				}
 
-				now = ktime_get_boot_ns();
+				now = ktime_boottime_ns();
 				if (vtime > 0) {
 					if (min == 0 && !timed) {
 						timed = true;

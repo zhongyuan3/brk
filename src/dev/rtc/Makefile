@@ -1,1 +1,1 @@
-obj-y += google_goldfish_rtc.o
+obj-y += goldfish_rtc.o

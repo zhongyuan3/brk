@@ -1,5 +1,6 @@
 #include "brkfs.h"
 #include <brk/bitmap.h>
+#include <brk/div.h>
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/pagecache.h>

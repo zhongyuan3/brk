@@ -1,6 +1,7 @@
 #ifndef BRK_TCP_H
 #define BRK_TCP_H
 
+#include <brk/compiler_attr.h>
 #include <brk/skbuff.h>
 #include <brk/types.h>
 
@@ -29,7 +30,7 @@ struct tcphdr {
 	u16 window;
 	u16 check;
 	u16 urg_ptr;
-} __attribute__((packed));
+} __packed;
 
 int tcp_rcv(struct sk_buff *skb);
 int tcp_sock_create(struct socket *sock, int protocol);

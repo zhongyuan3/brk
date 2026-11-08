@@ -1,3 +1,4 @@
+#include <brk/align.h>
 #include <brk/cpu.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
@@ -799,7 +800,7 @@ static bool posix_getdents_filldir(struct fs_dir_iterator *ctx,
 		return false;
 
 	size_t len = offsetof(struct posix_dent, d_name) + namelen + 1;
-	len = round_up(len, alignof(struct posix_dent));
+	len = align_up(len, alignof(struct posix_dent));
 
 	if (len > gctx->size - gctx->pos)
 		return false;
@@ -1050,7 +1051,7 @@ static int times_from_user_timespec(struct fs_iattr *attr,
 				    const struct timespec times[2])
 {
 	if (!times) {
-		ktime_t now = ktime_get_real();
+		ktime_t now = ktime_realtime();
 
 		attr->valid |= ATTR_ATIME | ATTR_MTIME;
 		attr->atime = now;
@@ -1065,7 +1066,7 @@ static int times_from_user_timespec(struct fs_iattr *attr,
 		if (ts->tv_nsec == UTIME_OMIT)
 			continue;
 		if (ts->tv_nsec == UTIME_NOW) {
-			t = ktime_get_real();
+			t = ktime_realtime();
 		} else {
 			if (ts->tv_nsec < 0 || ts->tv_nsec >= 1000000000L)
 				return -EINVAL;

@@ -1,6 +1,7 @@
 #ifndef BRK_IP_H
 #define BRK_IP_H
 
+#include <brk/compiler_attr.h>
 #include <brk/net.h>
 #include <brk/netdevice.h>
 #include <brk/skbuff.h>
@@ -26,7 +27,7 @@ struct iphdr {
 	u16 check;
 	u32 saddr;
 	u32 daddr;
-} __attribute__((packed));
+} __packed;
 
 #define IP_VERSION(h) ((h)->version_ihl >> 4)
 #define IP_IHL(h) ((h)->version_ihl & 0x0f)

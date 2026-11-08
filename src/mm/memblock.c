@@ -1,7 +1,9 @@
 #include <arch/asm/page.h>
+#include <brk/align.h>
 #include <brk/assert.h>
-#include <brk/kernel.h>
+#include <brk/log2.h>
 #include <brk/memblock.h>
+#include <brk/min_max.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
@@ -142,13 +144,13 @@ u64 memblock_alloc(size_t size, u64 min_addr, size_t align)
 	u64 start, end;
 	u64 idx;
 
-	assert(is_power_of_two(align));
+	assert(is_power_of_2(align));
 
 	for_each_mem_range(idx, start, end) {
 		if (start < min_addr)
 			continue;
 
-		u64 aligned_start = round_up(max(start, min_addr), align);
+		u64 aligned_start = align_up(max(start, min_addr), align);
 		if (aligned_start + size > end)
 			continue;
 
@@ -309,9 +311,9 @@ void __next_mem_pfn_range(u32 *pidx, u64 *pstart, u64 *pend)
 	while (*pidx < mem->cnt) {
 		struct memblock_region *rgn = &mem->regions[*pidx];
 		*pidx += 1;
-		*pstart = phys_to_pfn(round_up(rgn->base, PAGE_SIZE));
+		*pstart = phys_to_pfn(align_up(rgn->base, PAGE_SIZE));
 		*pend = phys_to_pfn(
-			round_down(rgn->base + rgn->size, PAGE_SIZE));
+			align_down(rgn->base + rgn->size, PAGE_SIZE));
 		if (*pstart < *pend)
 			return;
 	}
@@ -324,8 +326,8 @@ static void memblock_free_range(u64 start, u64 end)
 	unsigned int order;
 	size_t npgs;
 
-	start = round_up(start, PAGE_SIZE);
-	end = round_down(end, PAGE_SIZE);
+	start = align_up(start, PAGE_SIZE);
+	end = align_down(end, PAGE_SIZE);
 
 	memblock_reserve(start, end - start);
 

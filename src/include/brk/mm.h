@@ -2,6 +2,7 @@
 #define BRK_MM_H
 
 #include <arch/pgtable_types.h>
+#include <brk/compiler_attr.h>
 #include <brk/mm_types.h>
 #include <stdbool.h>
 
@@ -73,6 +74,6 @@ int map_user_pages(pgd_t *root, unsigned long addr, size_t size,
 		   unsigned long paddr, unsigned int flags);
 void unmap_user_pages(pgd_t *root, unsigned long addr, size_t size);
 
-int mm_core_init(void);
+__result(int) mm_init(void);
 
 #endif

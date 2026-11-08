@@ -1,7 +1,8 @@
+#include <brk/container_of.h>
 #include <brk/ip.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
+#include <brk/min_max.h>
 #include <brk/net.h>
 #include <brk/netdevice.h>
 #include <brk/panic.h>
@@ -119,7 +120,7 @@ static u32 tcp_isn(void)
 	static u32 counter;
 
 	counter += 0x9e3779b9;
-	return (u32)ktime_get_boot_ns() + counter;
+	return (u32)ktime_boottime_ns() + counter;
 }
 
 static void tcp_clear_tx_locked(struct tcp_sock *tsk)
@@ -390,7 +391,7 @@ static struct tcp_sock *tcp_create_child(struct tcp_sock *listener, u32 saddr,
 	tsk->snd_nxt = tsk->iss + 1;
 	tsk->snd_wnd = window;
 	tsk->mss = mss ? min(mss, (u16)TCP_MSS) : TCP_DEFAULT_MSS;
-	tsk->created_ns = ktime_get_boot_ns();
+	tsk->created_ns = ktime_boottime_ns();
 
 	list_add_tail(&tsk->sk.node, &tcp_socks);
 	return tsk;
@@ -604,7 +605,7 @@ int tcp_rcv(struct sk_buff *skb)
 			case TCP_FIN_WAIT_2:
 				tsk->state = TCP_TIME_WAIT;
 				tsk->time_wait_deadline_ns =
-					ktime_get_boot_ns() + TCP_TIME_WAIT_NS;
+					ktime_boottime_ns() + TCP_TIME_WAIT_NS;
 				break;
 			default:
 				break;
@@ -630,7 +631,7 @@ int tcp_rcv(struct sk_buff *skb)
 	    ack == tsk->snd_nxt) {
 		tsk->state = TCP_FIN_WAIT_2;
 		tsk->fin_wait2_deadline_ns =
-			ktime_get_boot_ns() + TCP_FIN_WAIT2_NS;
+			ktime_boottime_ns() + TCP_FIN_WAIT2_NS;
 	}
 	if (tsk->state == TCP_LAST_ACK && (tflags & TCP_ACK) &&
 	    ack == tsk->snd_nxt)
@@ -741,7 +742,7 @@ static int tcp_connect(struct socket *sock, const struct sockaddr *addr,
 	tsk->tx_seq = tsk->iss;
 	tsk->tx_len = 0;
 	tsk->tx_retries = 0;
-	tsk->rto_deadline_ns = ktime_get_boot_ns() + TCP_RTO_NS;
+	tsk->rto_deadline_ns = ktime_boottime_ns() + TCP_RTO_NS;
 	spin_unlock_irqrestore(&tcp_lock, flags);
 
 	err = tcp_send_segment(tsk, tsk->iss, 0, TCP_SYN, NULL, 0, true);
@@ -904,7 +905,7 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 		tsk->tx_len = (u16)n;
 		tsk->tx_seq = seq;
 		tsk->tx_retries = 0;
-		tsk->rto_deadline_ns = ktime_get_boot_ns() + TCP_RTO_NS;
+		tsk->rto_deadline_ns = ktime_boottime_ns() + TCP_RTO_NS;
 		spin_unlock_irqrestore(&tcp_lock, flags);
 
 		err = tcp_send_segment(tsk, seq, ack, TCP_ACK | TCP_PSH, copy,
@@ -1021,7 +1022,7 @@ static int tcp_shutdown(struct socket *sock, int how)
 		tsk->tx_seq = seq;
 		tsk->tx_len = 0;
 		tsk->tx_retries = 0;
-		tsk->rto_deadline_ns = ktime_get_boot_ns() + TCP_RTO_NS;
+		tsk->rto_deadline_ns = ktime_boottime_ns() + TCP_RTO_NS;
 		tsk->state = tsk->state == TCP_CLOSE_WAIT ? TCP_LAST_ACK :
 							    TCP_FIN_WAIT_1;
 		send_fin = true;
@@ -1111,7 +1112,7 @@ static int tcp_release(struct socket *sock)
 		tsk->tx_seq = seq;
 		tsk->tx_len = 0;
 		tsk->tx_retries = 0;
-		tsk->rto_deadline_ns = ktime_get_boot_ns() + TCP_RTO_NS;
+		tsk->rto_deadline_ns = ktime_boottime_ns() + TCP_RTO_NS;
 		tsk->state = tsk->state == TCP_CLOSE_WAIT ? TCP_LAST_ACK :
 							    TCP_FIN_WAIT_1;
 		tsk->orphan = true;
@@ -1122,10 +1123,10 @@ static int tcp_release(struct socket *sock)
 		tsk->orphan = true;
 		if (tsk->state == TCP_TIME_WAIT && !tsk->time_wait_deadline_ns)
 			tsk->time_wait_deadline_ns =
-				ktime_get_boot_ns() + TCP_TIME_WAIT_NS;
+				ktime_boottime_ns() + TCP_TIME_WAIT_NS;
 		if (tsk->state == TCP_FIN_WAIT_2 && !tsk->fin_wait2_deadline_ns)
 			tsk->fin_wait2_deadline_ns =
-				ktime_get_boot_ns() + TCP_FIN_WAIT2_NS;
+				ktime_boottime_ns() + TCP_FIN_WAIT2_NS;
 	} else {
 		/* CLOSE / SYN_SENT / SYN_RECV / LISTEN: no linger. */
 		free_now = true;
@@ -1227,7 +1228,7 @@ static void tcp_timer_tick(void)
 	struct tcp_timer_action actions[TCP_TIMER_BATCH];
 	unsigned int nr = 0;
 	struct tcp_sock *tsk, *tmp;
-	u64 now = ktime_get_boot_ns();
+	u64 now = ktime_boottime_ns();
 	irqstate_t flags;
 
 	if (now < next_run)

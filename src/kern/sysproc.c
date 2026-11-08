@@ -1,5 +1,4 @@
 #include <arch/pgtable.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/permission.h>
 #include <brk/pgalloc.h>

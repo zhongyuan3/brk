@@ -1,7 +1,6 @@
 #include <brk/assert.h>
 #include <brk/fs.h>
 #include <brk/initcall.h>
-#include <brk/kernel.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/pagecache.h>
@@ -329,5 +328,72 @@ void fs_inode_clear(struct fs_inode *inode)
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
 	inode->state |= I_CLEAR;
+	spin_unlock_irqrestore(&inode->lock, flags);
+}
+
+void fs_inode_times_set_all_now(struct fs_inode *inode)
+{
+	ktime_t now = ktime_realtime();
+	irqstate_t flags;
+
+	flags = spin_lock_irqsave(&inode->lock);
+	inode->atime = now;
+	inode->mtime = now;
+	inode->ctime = now;
+	spin_unlock_irqrestore(&inode->lock, flags);
+}
+
+void fs_inode_times_set(struct fs_inode *inode, const ktime_t *atime,
+			const ktime_t *mtime)
+{
+	irqstate_t flags = spin_lock_irqsave(&inode->lock);
+
+	if (atime)
+		inode->atime = *atime;
+	if (mtime)
+		inode->mtime = *mtime;
+
+	spin_unlock_irqrestore(&inode->lock, flags);
+}
+
+void fs_inode_touch_mtime(struct fs_inode *inode)
+{
+	ktime_t now = ktime_realtime();
+	irqstate_t flags;
+
+	flags = spin_lock_irqsave(&inode->lock);
+	inode->mtime = now;
+	spin_unlock_irqrestore(&inode->lock, flags);
+}
+
+void fs_inode_touch_ctime(struct fs_inode *inode)
+{
+	ktime_t now = ktime_realtime();
+	irqstate_t flags;
+
+	flags = spin_lock_irqsave(&inode->lock);
+	inode->ctime = now;
+	spin_unlock_irqrestore(&inode->lock, flags);
+}
+
+void fs_inode_touch_mtime_ctime(struct fs_inode *inode)
+{
+	ktime_t now = ktime_realtime();
+	irqstate_t flags;
+
+	flags = spin_lock_irqsave(&inode->lock);
+	inode->mtime = now;
+	inode->ctime = now;
+	spin_unlock_irqrestore(&inode->lock, flags);
+}
+
+void fs_inode_times_to_kstat(struct fs_inode *inode, struct kstat *ks)
+{
+	irqstate_t flags = spin_lock_irqsave(&inode->lock);
+
+	ks->atime = inode->atime;
+	ks->mtime = inode->mtime;
+	ks->ctime = inode->ctime;
+
 	spin_unlock_irqrestore(&inode->lock, flags);
 }

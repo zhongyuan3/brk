@@ -2,8 +2,8 @@
 #include <brk/dt.h>
 #include <brk/irqdesc.h>
 #include <brk/irqdomain.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
+#include <brk/lengthof.h>
 #include <brk/of.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
@@ -174,7 +174,7 @@ static unsigned int irq_map_spec(const struct device_node *node, int parent,
 	if (!d)
 		return 0;
 
-	if (cells <= 0 || cells > (int)countof(spec))
+	if (cells <= 0 || cells > (int)lengthof(spec))
 		return 0;
 
 	for (int i = 0; i < cells; i++)

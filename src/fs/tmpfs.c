@@ -1,9 +1,9 @@
 #include <arch/asm/page.h>
+#include <brk/align.h>
 #include <brk/assert.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fs.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
@@ -62,7 +62,7 @@ struct tmpfs_super_block {
 
 static void tmpfs_stamp_times(struct tmpfs_inode *ip)
 {
-	ktime_t now = ktime_get_real();
+	ktime_t now = ktime_realtime();
 
 	ip->i_atime = (u32)ktime_to_sec(now);
 	ip->i_atime_nsec = (u32)ktime_to_nsec(now);
@@ -274,7 +274,7 @@ static int tmpfs_dir_add_entry_to(struct tmpfs_dir_entry *entries, u32 ino,
 				  s32 *pos)
 {
 	u16 n = PAGE_SIZE;
-	u16 new_ent_min_len = round_up(20 + name_len, 4);
+	u16 new_ent_min_len = align_up(20 + name_len, 4);
 	struct tmpfs_dir_entry *new_ent;
 	struct tmpfs_dir_entry *ent = entries;
 	u16 ent_len, ent_min_len;
@@ -292,7 +292,7 @@ static int tmpfs_dir_add_entry_to(struct tmpfs_dir_entry *entries, u32 ino,
 			return 0;
 		}
 
-		ent_min_len = round_up(20 + ent->d_name_len, 4);
+		ent_min_len = align_up(20 + ent->d_name_len, 4);
 		if (ent->d_ino > 0 &&
 		    ent_len - ent_min_len >= new_ent_min_len) {
 			ent->d_entry_len = ent_min_len;
@@ -841,7 +841,7 @@ static int tmpfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	}
 
 	fs_dentry_instantiate(dentry, inode);
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_mtime_ctime(dir);
 
 	return 0;
 }
@@ -887,8 +887,8 @@ static int tmpfs_link(struct fs_dentry *old_dentry, struct fs_inode *dir,
 	 */
 	fs_inode_get(old_inode);
 	fs_dentry_instantiate(new_dentry, old_inode);
-	inode_touch_ctime(old_inode);
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_ctime(old_inode);
+	fs_inode_touch_mtime_ctime(dir);
 
 	return 0;
 }
@@ -918,8 +918,8 @@ static int tmpfs_unlink(struct fs_inode *dir, struct fs_dentry *dentry)
 		--inode->nlink;
 	sleeplock_release(&t_sb->s_lock);
 
-	inode_touch_ctime(inode);
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_ctime(inode);
+	fs_inode_touch_mtime_ctime(dir);
 
 	return 0;
 }
@@ -986,7 +986,7 @@ static int tmpfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 		goto rollback;
 	}
 	fs_dentry_instantiate(dentry, inode);
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_mtime_ctime(dir);
 
 	return 0;
 
@@ -1090,7 +1090,7 @@ static int tmpfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -EIO;
 	}
 	fs_dentry_instantiate(dentry, inode);
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_mtime_ctime(dir);
 
 	return 0;
 }
@@ -1155,8 +1155,8 @@ static int tmpfs_rmdir(struct fs_inode *dir, struct fs_dentry *dentry)
 
 	sleeplock_release(&t_sb->s_lock);
 
-	inode_touch_ctime(inode);
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_ctime(inode);
+	fs_inode_touch_mtime_ctime(dir);
 
 	return 0;
 }
@@ -1228,7 +1228,7 @@ static int tmpfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -EIO;
 	}
 	fs_dentry_instantiate(dentry, inode);
-	inode_touch_mtime_ctime(dir);
+	fs_inode_touch_mtime_ctime(dir);
 
 	return 0;
 }
@@ -1251,7 +1251,7 @@ static int tmpfs_getattr(const struct fs_path *path, struct kstat *stat,
 	stat->size = inode->size;
 	stat->blksize = PAGE_SIZE;
 	stat->blocks = (inode->size + 511) / 512;
-	inode_times_to_kstat(inode, stat);
+	fs_inode_times_to_kstat(inode, stat);
 	return 0;
 }
 
@@ -1329,7 +1329,7 @@ static int tmpfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 	if (attr->valid & ATTR_MODE) {
 		inode->mode = (inode->mode & S_IFMT) | (attr->mode & 07777);
 		t_inode->i_mode = inode->mode;
-		inode_touch_ctime(inode);
+		fs_inode_touch_ctime(inode);
 	}
 
 	if (attr->valid & (ATTR_UID | ATTR_GID)) {
@@ -1341,14 +1341,14 @@ static int tmpfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 		t_inode->i_uid = inode->uid;
 		t_inode->i_gid = inode->gid;
 		t_inode->i_mode = inode->mode;
-		inode_touch_ctime(inode);
+		fs_inode_touch_ctime(inode);
 	}
 
 	if (attr->valid & (ATTR_ATIME | ATTR_MTIME | ATTR_CTIME)) {
-		inode_times_set(
+		fs_inode_times_set(
 			inode, (attr->valid & ATTR_ATIME) ? &attr->atime : NULL,
 			(attr->valid & ATTR_MTIME) ? &attr->mtime : NULL);
-		inode_touch_ctime(inode);
+		fs_inode_touch_ctime(inode);
 		tmpfs_vfs_times_to_inode(inode, t_inode);
 	}
 
@@ -1416,7 +1416,7 @@ static ssize_t tmpfs_file_write(struct fs_file *file, const char *buf,
 	if (old_pos + (loff_t)wcnt > inode->size)
 		inode->size = old_pos + (loff_t)wcnt;
 
-	inode_touch_mtime(inode);
+	fs_inode_touch_mtime(inode);
 	sleeplock_acquire(&t_sb->s_lock);
 	t_inode->i_size = (u32)inode->size;
 	tmpfs_vfs_times_to_inode(inode, t_inode);

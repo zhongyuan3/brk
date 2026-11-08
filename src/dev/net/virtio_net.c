@@ -1,9 +1,9 @@
 #include <arch/mm.h>
+#include <brk/container_of.h>
 #include <brk/device.h>
 #include <brk/eth.h>
 #include <brk/initcall.h>
 #include <brk/irq.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/net.h>
 #include <brk/netdevice.h>

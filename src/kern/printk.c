@@ -1,5 +1,5 @@
+#include <brk/align.h>
 #include <brk/console.h>
-#include <brk/kernel.h>
 #include <brk/ktime.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
@@ -34,13 +34,13 @@ static inline u32 printk_ring_off(u64 seq)
 
 static inline u32 printk_record_total(u32 len)
 {
-	return (u32)round_up(sizeof(struct printk_log_header) + len,
+	return (u32)align_up(sizeof(struct printk_log_header) + len,
 			     alignof(struct printk_log_header));
 }
 
 static u64 printk_now_nsec(void)
 {
-	return timekeeper_initialized() ? ktime_get_boot_ns() : 0;
+	return timekeeper_mono_ns();
 }
 
 static bool printk_header_valid(const struct printk_log_header *h)

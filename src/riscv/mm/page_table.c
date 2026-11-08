@@ -3,7 +3,6 @@
 #include <arch/csr.h>
 #include <arch/pgtable.h>
 #include <brk/assert.h>
-#include <brk/kernel.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
 #include <brk/panic.h>

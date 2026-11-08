@@ -1,6 +1,7 @@
 #ifndef BRK_ARP_H
 #define BRK_ARP_H
 
+#include <brk/compiler_attr.h>
 #include <brk/netdevice.h>
 #include <brk/skbuff.h>
 #include <brk/types.h>
@@ -19,7 +20,7 @@ struct arphdr {
 	u32 ar_spa;
 	u8 ar_tha[6];
 	u32 ar_tpa;
-} __attribute__((packed));
+} __packed;
 
 void arp_init(void);
 

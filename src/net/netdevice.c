@@ -1,6 +1,5 @@
 #include <brk/assert.h>
 #include <brk/eth.h>
-#include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/netdevice.h>
 #include <brk/printk.h>
