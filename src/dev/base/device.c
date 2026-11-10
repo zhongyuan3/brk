@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #define pr_fmt(fmt) "device: " fmt
 #include <brk/device.h>
 #include <brk/devtmpfs.h>
@@ -448,30 +449,30 @@ struct bus_type platform_bus = {
 	.name = "platform",
 };
 
-static int platform_match(struct device *dev, struct device_driver *drv)
+static bool platform_match(struct device *dev, struct device_driver *drv)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	const struct device_id *id;
 
 	if (!drv->id_table)
-		return 0;
+		return false;
 
 	if (dev->of_node) {
 		for (id = drv->id_table; id->compatible; ++id) {
 			if (of_device_is_compatible(dev->of_node,
 						    id->compatible))
-				return 1;
+				return true;
 		}
 	}
 
 	if (!pdev->compatible)
-		return 0;
+		return false;
 
 	for (id = drv->id_table; id->compatible; ++id) {
 		if (!strcmp(id->compatible, pdev->compatible))
-			return 1;
+			return true;
 	}
-	return 0;
+	return false;
 }
 
 void platform_bus_init(void)

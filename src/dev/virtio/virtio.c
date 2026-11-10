@@ -10,6 +10,7 @@
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
 #include <brk/virtio_mmio.h>
+#include <stdbool.h>
 #include <uapi/errno.h>
 
 static LIST_DEFINE(vdevs);
@@ -20,20 +21,24 @@ struct bus_type virtio_bus = {
 	.name = "virtio",
 };
 
-static int virtio_match(struct device *dev, struct device_driver *drv)
+static inline struct virtio_device *to_virtio_device(struct device *dev)
 {
-	struct virtio_device *vdev =
-		container_of(dev, struct virtio_device, dev);
+	return container_of(dev, struct virtio_device, dev);
+}
+
+static bool virtio_match(struct device *dev, struct device_driver *drv)
+{
+	struct virtio_device *vdev = to_virtio_device(dev);
 	const struct device_id *id;
 
 	if (!drv->id_table)
-		return 0;
+		return false;
 
 	for (id = drv->id_table; id->device_id; ++id) {
 		if (id->device_id == vdev->id)
-			return 1;
+			return true;
 	}
-	return 0;
+	return false;
 }
 
 void virtio_bus_init(void)

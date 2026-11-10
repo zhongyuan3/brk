@@ -5,6 +5,7 @@
 #include <brk/refcnt_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <stdbool.h>
 #include <uapi/stat.h>
 
 /*
@@ -126,7 +127,7 @@ struct device_driver {
 
 struct bus_type {
 	const char *name;
-	int (*match)(struct device *dev, struct device_driver *drv);
+	bool (*match)(struct device *dev, struct device_driver *drv);
 	struct list_head devices;
 	struct list_head drivers;
 	struct list_head list;
@@ -173,6 +174,5 @@ void device_snapshot_free(struct device **devices, size_t count);
 
 /* Boot-time probe completion and device-model self-tests. */
 void device_deferred_probe_init(void);
-void device_selftest_init(void);
 
 #endif

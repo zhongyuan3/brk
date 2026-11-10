@@ -1,40 +1,31 @@
-#include <arch/irqflags.h>
 #include <brk/blkdev.h>
 #include <brk/chrdev.h>
 #include <brk/clocksource.h>
-#include <brk/console.h>
 #include <brk/cpu.h>
 #include <brk/dcache.h>
 #include <brk/device.h>
-#include <brk/dt.h>
 #include <brk/fs.h>
 #include <brk/init.h>
 #include <brk/irq.h>
 #include <brk/irqchip.h>
-#include <brk/kmalloc.h>
-#include <brk/memblock.h>
 #include <brk/mm.h>
 #include <brk/net.h>
 #include <brk/of.h>
 #include <brk/pagecache.h>
 #include <brk/panic.h>
-#include <brk/pgalloc.h>
 #include <brk/platform.h>
 #include <brk/printk.h>
 #include <brk/rtc.h>
 #include <brk/task.h>
-#include <brk/task_types.h>
 #include <brk/tick.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
 #include <brk/trap.h>
-#include <brk/types.h>
 #include <brk/uart.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
 #include <brk/virtio_mmio.h>
 #include <brk/virtio_net.h>
-#include <brk/vmalloc.h>
 
 /*
  * Every boot initializer is called explicitly here, in dependency order.
@@ -95,7 +86,6 @@ void start_kernel(void)
 		pr_warn("of: failed to build device tree: %d\n", err);
 
 	irqchip_early_init();
-	irq_selftest();
 
 	err = of_platform_populate();
 	if (err)
@@ -112,7 +102,6 @@ void start_kernel(void)
 
 	/* Finish deferred probes, then run the device-model self-tests. */
 	device_deferred_probe_init();
-	device_selftest_init();
 
 	irq_init_hart(this_cpuid());
 

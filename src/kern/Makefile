@@ -23,4 +23,3 @@ obj-y += irqdesc.o
 obj-y += irqhandle.o
 obj-y += irqdomain.o
 obj-y += irqchip.o
-obj-y += irqselftest.o
