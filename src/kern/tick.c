@@ -16,14 +16,14 @@ static LIST_DEFINE(tick_handlers);
 static SPINLOCK_DEFINE(tick_lock);
 static SPINLOCK_DEFINE(tick_handlers_lock);
 
-void tick_init(void)
+int tick_init(void)
 {
 	struct clock_event_device *dev = clockevents_get_current();
 	int err;
 
 	if (!dev) {
 		pr_err("no clock event device\n");
-		return;
+		return -ENODEV;
 	}
 
 	dev->event_handler = tick_handle_periodic;
@@ -39,6 +39,8 @@ void tick_init(void)
 		pr_err("failed to program first tick: %d\n", err);
 
 	pr_debug("started (HZ=%d)\n", HZ);
+
+	return 0;
 }
 
 void tick_handle_periodic(struct clock_event_device *dev)

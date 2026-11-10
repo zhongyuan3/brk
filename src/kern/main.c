@@ -50,10 +50,17 @@ void start_kernel(void)
 	if (err)
 		panic("clocksource: initialization failed: err=%d\n", err);
 
-	timekeeper_init();
-	tick_init();
+	err = timekeeper_init();
+	if (err)
+		panic("timekeeper: initialization failed: err=%d\n", err);
 
-	trap_init();
+	err = tick_init();
+	if (err)
+		panic("tick: initialization failed: err=%d\n", err);
+
+	err = trap_init();
+	if (err)
+		panic("trap: initialization failed: err=%d\n", err);
 
 	do_initcalls();
 

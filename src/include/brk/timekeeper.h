@@ -1,6 +1,7 @@
 #ifndef BRK_TIMEKEEPER_H
 #define BRK_TIMEKEEPER_H
 
+#include <brk/compiler_attr.h>
 #include <brk/types.h>
 
 struct wall_clock;
@@ -25,7 +26,7 @@ struct wall_clock {
 	const struct wall_clock_ops *ops;
 };
 
-void timekeeper_init(void);
+__result(int) timekeeper_init(void);
 
 /* Advance the timekeeper base; called from the periodic tick. */
 void timekeeping_advance(void);

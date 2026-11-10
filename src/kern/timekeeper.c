@@ -115,14 +115,14 @@ u64 ktime_get_boottime_ns(void)
 	return (u64)ns;
 }
 
-void timekeeper_init(void)
+int timekeeper_init(void)
 {
 	struct clocksource *cs = clocksource_get_current();
 	irqstate_t flags;
 
 	if (!cs) {
 		pr_err("no clocksource selected\n");
-		return;
+		return -ENODEV;
 	}
 
 	/*
@@ -135,7 +135,7 @@ void timekeeper_init(void)
 	if (__atomic_load_n(&tk.ready, __ATOMIC_RELAXED)) {
 		spin_unlock_irqrestore(&tk.lock, flags);
 		pr_warn("already initialized\n");
-		return;
+		return -EBUSY;
 	}
 
 	write_seqcount_begin(&tk.seq);
@@ -152,6 +152,8 @@ void timekeeper_init(void)
 	spin_unlock_irqrestore(&tk.lock, flags);
 
 	pr_debug("initialized (wall clock pending)\n");
+
+	return 0;
 }
 
 int timekeeper_register_wall_clock(struct wall_clock *wc)

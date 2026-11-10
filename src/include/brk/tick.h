@@ -1,6 +1,7 @@
 #ifndef BRK_TICK_H
 #define BRK_TICK_H
 
+#include <brk/compiler_attr.h>
 #include <brk/list.h>
 #include <brk/types.h>
 #include <stdbool.h>
@@ -18,7 +19,7 @@ struct tick_handler {
 	bool registered;
 };
 
-void tick_init(void);
+__result(int) tick_init(void);
 void tick_handle_periodic(struct clock_event_device *dev);
 
 u64 tick_get_jiffies(void);
