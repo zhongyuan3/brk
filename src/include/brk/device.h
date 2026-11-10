@@ -133,15 +133,13 @@ struct bus_type {
 	struct list_head list;
 };
 
-void device_initialize(struct device *dev);
 void device_init(struct device *dev, const char *name);
 
 /*
  * Lifecycle:
- *   device_initialize()/device_init()  -> initial reference (count 1)
- *   device_add()/device_register()     -> publish and probe
- *   device_del()                       -> unbind and unlist
- *   device_unregister()                -> device_del() + drop initial reference
+ *   device_init()       -> initial reference (count 1)
+ *   device_register()   -> publish and probe
+ *   device_unregister() -> unbind, unlist and drop initial reference
  *
  * A device with a release callback is freed by the core when the last
  * reference goes away.  Devices without one keep the historical caller-owned
@@ -152,9 +150,7 @@ void device_init(struct device *dev, const char *name);
  * finishes the unbind.  Device and driver storage must stay valid until any
  * probe that already started has returned.
  */
-int device_add(struct device *dev);
 int device_register(struct device *dev);
-void device_del(struct device *dev);
 void device_unregister(struct device *dev);
 
 struct device *device_get(struct device *dev);
