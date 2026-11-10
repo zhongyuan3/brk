@@ -1,17 +1,27 @@
 #include <arch/irqflags.h>
+#include <brk/blkdev.h>
+#include <brk/chrdev.h>
 #include <brk/clocksource.h>
 #include <brk/console.h>
 #include <brk/cpu.h>
+#include <brk/dcache.h>
+#include <brk/device.h>
 #include <brk/dt.h>
+#include <brk/fs.h>
 #include <brk/init.h>
-#include <brk/initcall.h>
 #include <brk/irq.h>
+#include <brk/irqchip.h>
 #include <brk/kmalloc.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>
+#include <brk/net.h>
+#include <brk/of.h>
+#include <brk/pagecache.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
+#include <brk/platform.h>
 #include <brk/printk.h>
+#include <brk/rtc.h>
 #include <brk/task.h>
 #include <brk/task_types.h>
 #include <brk/tick.h>
@@ -19,16 +29,17 @@
 #include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>
+#include <brk/uart.h>
+#include <brk/virtio.h>
+#include <brk/virtio_blk.h>
+#include <brk/virtio_mmio.h>
+#include <brk/virtio_net.h>
 #include <brk/vmalloc.h>
 
-extern initcall_t __initcall_start[];
-extern initcall_t __initcall_end[];
-
 /*
- * Explicit pre-initcall boot stage: paging, memory, CPU, timebase and traps.
- * These cannot move into normal initcalls because the initcall infrastructure
- * itself depends on them.  The RTC is a normal platform driver and registers
- * its wall clock later, during initcalls.
+ * Every boot initializer is called explicitly here, in dependency order.
+ * There is no linker-provided initcall table: adding initialization means
+ * adding a call to this function.
  */
 void start_kernel(void)
 {
@@ -62,19 +73,50 @@ void start_kernel(void)
 	if (err)
 		panic("trap: initialization failed: err=%d\n", err);
 
-	do_initcalls();
+	/* Core data structures, buses and registries. */
+	cpu_sched_init();
+	task_cache_init();
+	irq_init();
+	uvm_space_cache_init();
+	page_cache_init();
+	blkdev_registry_init();
+	chrdev_registry_init();
+	platform_bus_init();
+	virtio_bus_init();
+	plic_driver_register();
+	fs_dentry_cache_init();
+	fs_file_cache_init();
+	fs_inode_cache_init();
+	net_init();
+
+	/* Device tree, interrupt controllers and platform devices. */
+	err = of_init();
+	if (err)
+		pr_warn("of: failed to build device tree: %d\n", err);
+
+	irqchip_early_init();
+	irq_selftest();
+
+	err = of_platform_populate();
+	if (err)
+		pr_warn("of: platform populate failed: %d\n", err);
+
+	/* Platform and transport drivers. */
+	ns16550a_driver_init();
+	virtio_mmio_platform_init();
+	goldfish_rtc_driver_init();
+
+	/* Leaf drivers. */
+	virtio_blk_init();
+	virtio_net_init();
+
+	/* Finish deferred probes, then run the device-model self-tests. */
+	device_deferred_probe_init();
+	device_selftest_init();
 
 	irq_init_hart(this_cpuid());
 
 	local_irq_enable();
 
 	task_scheduler();
-}
-
-void do_initcalls(void)
-{
-	initcall_t *fn;
-
-	for (fn = __initcall_start; fn < __initcall_end; ++fn)
-		(*fn)();
 }

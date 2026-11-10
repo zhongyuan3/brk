@@ -18,6 +18,8 @@ struct virtio_device {
 
 extern struct bus_type virtio_bus;
 
+void virtio_bus_init(void);
+
 struct virtio_device *virtio_dev_create(u64 phys_base, size_t size, u32 irq);
 void virtio_dev_destroy(struct virtio_device *dev);
 int virtio_dev_add(struct virtio_device *dev);

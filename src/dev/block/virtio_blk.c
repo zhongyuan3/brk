@@ -6,7 +6,6 @@
 #include <brk/device.h>
 #include <brk/fs.h>
 #include <brk/genhd.h>
-#include <brk/initcall.h>
 #include <brk/irq.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -559,4 +558,3 @@ void virtio_blk_init(void)
 	if (err)
 		panic("%s(): driver_register failed\n", __func__);
 }
-device_initcall(virtio_blk_init);

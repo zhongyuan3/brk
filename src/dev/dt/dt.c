@@ -3,7 +3,6 @@
 #include <arch/mm.h>
 #include <brk/assert.h>
 #include <brk/dt.h>
-#include <brk/initcall.h>
 #include <brk/ktime.h>
 #include <brk/memblock.h>
 #include <brk/mm.h>

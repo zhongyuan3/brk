@@ -1,7 +1,6 @@
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fs.h>
-#include <brk/initcall.h>
 #include <brk/path.h>
 #include <brk/permission.h>
 #include <brk/refcnt.h>
@@ -22,7 +21,6 @@ void fs_file_cache_init(void)
 	slab_init(&file_cache, sizeof(struct fs_file), alignof(struct fs_file),
 		  "file_cache");
 }
-core_initcall(fs_file_cache_init);
 
 struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode)
 {

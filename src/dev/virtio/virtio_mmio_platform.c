@@ -1,10 +1,10 @@
 #include <brk/device.h>
-#include <brk/initcall.h>
 #include <brk/panic.h>
 #include <brk/platform.h>
 #include <brk/printk.h>
 #include <brk/resource.h>
 #include <brk/virtio.h>
+#include <brk/virtio_mmio.h>
 #include <uapi/errno.h>
 
 static int virtio_mmio_platform_probe(struct device *dev)
@@ -61,7 +61,7 @@ static struct platform_driver virtio_mmio_platform_driver = {
 	},
 };
 
-static void virtio_mmio_platform_init(void)
+void virtio_mmio_platform_init(void)
 {
 	int err = platform_driver_register(&virtio_mmio_platform_driver);
 
@@ -69,4 +69,3 @@ static void virtio_mmio_platform_init(void)
 		panic("%s(): platform_driver_register failed: %d\n", __func__,
 		      err);
 }
-subsys_initcall(virtio_mmio_platform_init);

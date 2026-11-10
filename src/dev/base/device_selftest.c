@@ -1,6 +1,5 @@
 #include <brk/container_of.h>
 #include <brk/device.h>
-#include <brk/initcall.h>
 #include <brk/kmalloc.h>
 #include <brk/printk.h>
 #include <brk/types.h>
@@ -154,7 +153,7 @@ static void test_get_put(void)
 	CHECK(release_count == base + 1, "final reference releases the device");
 }
 
-static void device_selftest_init(void)
+void device_selftest_init(void)
 {
 	struct selftest_device *defer_dev;
 
@@ -178,4 +177,3 @@ static void device_selftest_init(void)
 	else
 		pr_info("device-selftest: all tests passed\n");
 }
-late_initcall(device_selftest_init);

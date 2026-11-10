@@ -2,7 +2,6 @@
 #include <brk/chrdev.h>
 #include <brk/console.h>
 #include <brk/dt.h>
-#include <brk/initcall.h>
 #include <brk/ioremap.h>
 #include <brk/irq.h>
 #include <brk/kmalloc.h>
@@ -351,7 +350,6 @@ void ns16550a_driver_init(void)
 	if (err)
 		panic("%s(): platform_driver_register failed\n", __func__);
 }
-subsys_initcall(ns16550a_driver_init);
 
 int ns16550a_add_device(struct ns16550a_device *dev)
 {

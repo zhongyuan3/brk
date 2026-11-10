@@ -1,5 +1,4 @@
 #include <brk/cpu.h>
-#include <brk/initcall.h>
 #include <brk/irq.h>
 #include <brk/irqchip.h>
 #include <brk/irqdomain.h>
@@ -118,8 +117,8 @@ static void irqchip_probe_node(const struct device_node *node)
 /*
  * Early irqchip exception.
  *
- * Interrupt controllers are discovered from the OF tree and probed at
- * postcore_initcall, before ordinary platform drivers register.  Platform
+ * Interrupt controllers are discovered from the OF tree and probed during
+ * early boot, before ordinary platform drivers register.  Platform
  * devices are populated in the same early phase, but consumers resolve their
  * IRQs later, from probe context, through platform_get_irq()/of_irq_get(),
  * so every domain they need is already registered.
@@ -139,4 +138,3 @@ void irqchip_early_init(void)
 	irqchip_probe_node(root);
 	irq_init_hart_all(this_cpuid());
 }
-postcore_initcall(irqchip_early_init);

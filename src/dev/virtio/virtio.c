@@ -1,7 +1,6 @@
 #include <arch/pgtable.h>
 #include <brk/container_of.h>
 #include <brk/device.h>
-#include <brk/initcall.h>
 #include <brk/ioremap.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -37,12 +36,11 @@ static int virtio_match(struct device *dev, struct device_driver *drv)
 	return 0;
 }
 
-static void virtio_bus_init(void)
+void virtio_bus_init(void)
 {
 	virtio_bus.match = virtio_match;
 	bus_register(&virtio_bus);
 }
-core_initcall(virtio_bus_init);
 
 struct virtio_device *virtio_dev_create(u64 phys_base, size_t size, u32 irq)
 {

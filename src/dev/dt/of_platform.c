@@ -1,4 +1,3 @@
-#include <brk/initcall.h>
 #include <brk/kmalloc.h>
 #include <brk/of.h>
 #include <brk/platform.h>
@@ -171,12 +170,3 @@ int of_platform_populate(void)
 		return -ENODEV;
 	return of_platform_populate_children(root);
 }
-
-static void of_platform_populate_init(void)
-{
-	int err = of_platform_populate();
-
-	if (err)
-		pr_warn("of: platform populate failed: %d\n", err);
-}
-postcore_initcall(of_platform_populate_init);

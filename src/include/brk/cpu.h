@@ -27,6 +27,7 @@ struct cpu {
 };
 
 int cpu_init(cpuid_t cpuid);
+void cpu_sched_init(void);
 struct cpu *this_cpu(void);
 cpuid_t this_cpuid(void);
 cpuid_t this_cpuid_safe(void);

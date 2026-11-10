@@ -6,7 +6,6 @@
 #include <brk/devno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
-#include <brk/initcall.h>
 #include <brk/kmalloc.h>
 #include <brk/mm.h>
 #include <brk/pagecache.h>
@@ -29,7 +28,6 @@ void blkdev_registry_init(void)
 {
 	devno_allocator_init(&bd_devno, FIRST_DYNAMIC_BLKDEV_MAJOR);
 }
-core_initcall(blkdev_registry_init);
 
 int blkdev_register(struct block_dev *bd)
 {

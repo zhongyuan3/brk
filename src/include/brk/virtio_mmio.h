@@ -5,6 +5,8 @@
 #include <brk/virtio.h>
 #include <brk/virtio_queue.h>
 
+void virtio_mmio_platform_init(void);
+
 int virtio_mmio_probe(struct virtio_device *dev);
 void virtio_mmio_reset(struct virtio_device *dev);
 int virtio_mmio_start_driver(struct virtio_device *dev);

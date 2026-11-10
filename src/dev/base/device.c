@@ -1,7 +1,6 @@
 #define pr_fmt(fmt) "device: " fmt
 #include <brk/device.h>
 #include <brk/devtmpfs.h>
-#include <brk/initcall.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/of.h>
@@ -438,11 +437,10 @@ void driver_unregister(struct device_driver *drv)
 	device_snapshot_free(devices, count);
 }
 
-static void device_deferred_probe_init(void)
+void device_deferred_probe_init(void)
 {
 	device_probe_deferred(NULL);
 }
-late_initcall(device_deferred_probe_init);
 
 /* ---- platform bus ---- */
 
@@ -476,12 +474,11 @@ static int platform_match(struct device *dev, struct device_driver *drv)
 	return 0;
 }
 
-static void platform_bus_init(void)
+void platform_bus_init(void)
 {
 	platform_bus.match = platform_match;
 	bus_register(&platform_bus);
 }
-core_initcall(platform_bus_init);
 
 void platform_device_release(struct device *dev)
 {

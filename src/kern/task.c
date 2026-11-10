@@ -13,7 +13,6 @@
 #include <brk/fs.h>
 #include <brk/fsinfo.h>
 #include <brk/init.h>
-#include <brk/initcall.h>
 #include <brk/klog.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
@@ -70,7 +69,6 @@ void task_cache_init(void)
 	slab_init(&task_cache, sizeof(struct task), alignof(struct task),
 		  "task_cache");
 }
-core_initcall(task_cache_init);
 
 static u64 kstack_alloc(void)
 {

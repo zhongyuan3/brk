@@ -117,4 +117,6 @@ const u8 *virtio_net_get_mac(struct virtio_net_dev *vnet);
 /* Return the virq of the first probed virtio-net device (0 if none). */
 unsigned int virtio_net_first_irq(void);
 
+void virtio_net_init(void);
+
 #endif

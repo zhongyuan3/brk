@@ -1,5 +1,4 @@
 #include <brk/dt.h>
-#include <brk/initcall.h>
 #include <brk/irqdomain.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -151,15 +150,6 @@ int of_init(void)
 	pr_debug("of: root=%s\n", of_root_node->full_name);
 	return 0;
 }
-
-static void of_initcall(void)
-{
-	int err = of_init();
-
-	if (err)
-		pr_warn("of: failed to build device tree: %d\n", err);
-}
-postcore_initcall(of_initcall);
 
 static int of_ensure_init(void)
 {

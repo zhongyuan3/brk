@@ -21,6 +21,8 @@ struct platform_driver {
 
 extern struct bus_type platform_bus;
 
+void platform_bus_init(void);
+
 static inline struct platform_device *to_platform_device(struct device *dev)
 {
 	return container_of(dev, struct platform_device, dev);

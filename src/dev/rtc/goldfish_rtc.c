@@ -2,7 +2,6 @@
 #include <arch/pgtable.h>
 #include <brk/container_of.h>
 #include <brk/device.h>
-#include <brk/initcall.h>
 #include <brk/ioremap.h>
 #include <brk/kmalloc.h>
 #include <brk/mm.h>
@@ -11,6 +10,7 @@
 #include <brk/platform.h>
 #include <brk/printk.h>
 #include <brk/resource.h>
+#include <brk/rtc.h>
 #include <brk/spinlock.h>
 #include <brk/timekeeper.h>
 #include <brk/types.h>
@@ -150,7 +150,7 @@ static struct platform_driver goldfish_rtc_platform_driver = {
 	},
 };
 
-static void goldfish_rtc_driver_init(void)
+void goldfish_rtc_driver_init(void)
 {
 	int err = platform_driver_register(&goldfish_rtc_platform_driver);
 
@@ -158,4 +158,3 @@ static void goldfish_rtc_driver_init(void)
 		panic("%s(): platform_driver_register failed: %d\n", __func__,
 		      err);
 }
-subsys_initcall(goldfish_rtc_driver_init);

@@ -60,4 +60,7 @@ int net_parse_ipv4(const char *buf, size_t len, u32 *addr);
 /* Send one ICMP echo request to @daddr (host byte order). */
 int net_ping(u32 daddr);
 
+/* Bring up the IPv4 stack during boot. */
+void net_init(void);
+
 #endif

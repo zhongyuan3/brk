@@ -11,6 +11,7 @@
 #include <brk/dt.h>
 #include <brk/init.h>
 #include <brk/irq.h>
+#include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/task.h>
 #include <brk/timer.h>
@@ -43,7 +44,8 @@ void secondary_entry(unsigned long hart_id)
 
 	timer_init_hart();
 
-	trap_init();
+	if (trap_init())
+		panic("trap: initialization failed on hart %lu\n", hart_id);
 
 	irq_init_hart(hart_id);
 

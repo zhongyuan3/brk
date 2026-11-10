@@ -1,6 +1,5 @@
 #include <arch/hart.h>
 #include <arch/pgtable.h>
-#include <brk/initcall.h>
 #include <brk/ioremap.h>
 #include <brk/irq.h>
 #include <brk/irqchip.h>
@@ -300,8 +299,7 @@ static struct irqchip_driver plic_driver = {
 	.probe = plic_probe,
 };
 
-static void plic_driver_register(void)
+void plic_driver_register(void)
 {
 	irqchip_register_driver(&plic_driver);
 }
-core_initcall(plic_driver_register);

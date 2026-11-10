@@ -1,6 +1,5 @@
 #include <brk/assert.h>
 #include <brk/fs.h>
-#include <brk/initcall.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/pagecache.h>
@@ -23,7 +22,6 @@ void fs_inode_cache_init(void)
 	slab_init(&inode_cache, sizeof(struct fs_inode),
 		  alignof(struct fs_inode), "inode_cache");
 }
-core_initcall(fs_inode_cache_init);
 
 static struct fs_inode *__inode_alloc(struct fs_super_block *sb,
 				      unsigned long ino)

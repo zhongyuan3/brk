@@ -4,7 +4,6 @@
 #include <brk/devno.h>
 #include <brk/error.h>
 #include <brk/fs.h>
-#include <brk/initcall.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/printk.h>
@@ -22,7 +21,6 @@ void chrdev_registry_init(void)
 {
 	devno_allocator_init(&cd_devno, FIRST_DYNAMIC_CHRDEV_MAJOR);
 }
-core_initcall(chrdev_registry_init);
 
 struct char_dev *chrdev_alloc(void)
 {

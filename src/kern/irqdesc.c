@@ -1,4 +1,3 @@
-#include <brk/initcall.h>
 #include <brk/irq.h>
 #include <brk/irqchip.h>
 #include <brk/irqdesc.h>
@@ -26,7 +25,6 @@ void irq_init(void)
 	}
 	spin_unlock(&irq_desc_init_lock);
 }
-core_initcall(irq_init);
 
 struct irq_desc *irq_to_desc(unsigned int irq)
 {

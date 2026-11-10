@@ -1,7 +1,7 @@
 #include <brk/arp.h>
 #include <brk/eth.h>
-#include <brk/initcall.h>
 #include <brk/ip.h>
+#include <brk/net.h>
 #include <brk/netdevice.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
@@ -18,7 +18,7 @@ static struct packet_type ip_packet_type = {
 	.func = ip_rcv,
 };
 
-static void net_init(void)
+void net_init(void)
 {
 	int err;
 
@@ -34,4 +34,3 @@ static void net_init(void)
 
 	pr_info("net: IPv4 stack initialized\n");
 }
-core_initcall(net_init);

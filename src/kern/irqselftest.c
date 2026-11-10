@@ -1,4 +1,3 @@
-#include <brk/initcall.h>
 #include <brk/irq.h>
 #include <brk/irqchip.h>
 #include <brk/irqdesc.h>
@@ -97,7 +96,7 @@ static irqreturn_t test_handler_b(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static void irq_selftest(void)
+void irq_selftest(void)
 {
 	struct irq_test_ctx a = { 0 };
 	struct irq_test_ctx b = { 0 };
@@ -200,4 +199,3 @@ static void irq_selftest(void)
 	else
 		pr_info("irq-selftest: all tests passed\n");
 }
-postcore_initcall(irq_selftest);

@@ -3,7 +3,6 @@
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fs.h>
-#include <brk/initcall.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/printk.h>
@@ -25,7 +24,6 @@ void fs_dentry_cache_init(void)
 	slab_init(&dentry_cache, sizeof(struct fs_dentry),
 		  alignof(struct fs_dentry), "dentry_cache");
 }
-core_initcall(fs_dentry_cache_init);
 
 static struct fs_dentry *__dentry_alloc(struct fs_super_block *sb,
 					const struct qstr *name)

@@ -2,7 +2,6 @@
 #include <brk/container_of.h>
 #include <brk/device.h>
 #include <brk/eth.h>
-#include <brk/initcall.h>
 #include <brk/irq.h>
 #include <brk/kmalloc.h>
 #include <brk/net.h>
@@ -628,4 +627,3 @@ void virtio_net_init(void)
 	if (err)
 		panic("%s(): driver_register failed: %d\n", __func__, err);
 }
-device_initcall(virtio_net_init);

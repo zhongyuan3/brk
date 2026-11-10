@@ -6,7 +6,6 @@
 #include <brk/assert.h>
 #include <brk/error.h>
 #include <brk/fs.h>
-#include <brk/initcall.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/memblock.h>
@@ -31,7 +30,6 @@ void uvm_space_cache_init(void)
 	slab_init(&uvms_cache, sizeof(struct uvm_space),
 		  alignof(struct uvm_space), "uvms_cache");
 }
-core_initcall(uvm_space_cache_init);
 
 struct uvm_space *uvm_space_create(void)
 {

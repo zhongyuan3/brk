@@ -39,4 +39,7 @@ void irq_register_controller(struct irq_controller *ctrl);
 void irq_init_hart_all(unsigned int hart);
 int irq_dispatch_external(unsigned int hart);
 
+/* Built-in irqchip drivers, registered explicitly during boot. */
+void plic_driver_register(void);
+
 #endif

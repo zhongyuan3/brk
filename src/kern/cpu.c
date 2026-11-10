@@ -2,7 +2,6 @@
 #include <brk/asm/cpu.h>
 #include <brk/assert.h>
 #include <brk/cpu.h>
-#include <brk/initcall.h>
 #include <brk/panic.h>
 #include <brk/spinlock.h>
 #include <brk/types.h>
@@ -28,10 +27,10 @@ int cpu_init(cpuid_t cpuid)
 
 /*
  * Tasks may be queued onto a CPU before that CPU has been brought online
- * (e.g. per-CPU kernel threads created during initcalls). Make sure every
+ * (e.g. per-CPU kernel threads created during early boot). Make sure every
  * per-CPU run queue is usable from the start.
  */
-static void cpu_sched_init(void)
+void cpu_sched_init(void)
 {
 	for (int i = 0; i < MAX_CPUS; ++i) {
 		list_init(&cpus[i].run_queue);
@@ -40,7 +39,6 @@ static void cpu_sched_init(void)
 		cpus[i].online = false;
 	}
 }
-core_initcall(cpu_sched_init);
 
 void preempt_disable(void)
 {

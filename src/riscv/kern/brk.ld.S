@@ -28,15 +28,6 @@ SECTIONS
     *(.rodata)
     *(.rodata.*)
 
-    . = ALIGN(8);
-    __initcall_start = .;
-    KEEP(*(.initcall0))
-    KEEP(*(.initcall1))
-    KEEP(*(.initcall2))
-    KEEP(*(.initcall3))
-    KEEP(*(.initcall4))
-    __initcall_end = .;
-
     . = ALIGN(PAGE_SIZE);
     _erodata = .;
   }
