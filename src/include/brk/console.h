@@ -20,6 +20,11 @@ struct console {
 
 int console_set_log_level(struct console *console, u8 level);
 
+/*
+ * @log_level filters the pending records that are flushed during
+ * registration, so pass the final level here instead of changing it after
+ * console_register() returns.
+ */
 void console_register(struct console *console, u8 log_level);
 
 /* Change the log level of consoles marked CONSOLE_FLAG_BOOT. */
