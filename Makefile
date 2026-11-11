@@ -133,7 +133,7 @@ ifeq ($(MAKECMDGOALS),)
 KERNEL_GOALS := all
 else
 KERNEL_GOALS := $(filter-out clean clean-kernel help headers-check \
-	format format-check dtb dts rootfs,$(MAKECMDGOALS))
+	format format-check dtb dts rootfs hooks,$(MAKECMDGOALS))
 endif
 
 # Fail early with a useful message instead of a wall of compiler errors.
@@ -216,7 +216,7 @@ QEMU_OPTS += $(EXTRA_QEMU_OPTS)
 
 .PHONY: all brk run gdb-server gdb-client rootfs clean clean-kernel \
 	format format-check compile_commands size disasm syncconfig \
-	distclean help FORCE
+	distclean hooks help FORCE
 
 all: brk
 
@@ -244,6 +244,10 @@ syncconfig:
 	$(Q)rm -f $(FLAGS_CONFIG) $(FLAGS_STAMP)
 	$(Q)echo "  SYNC    build flags will be regenerated on the next build"
 
+hooks:
+	$(Q)git config core.hooksPath .githooks
+	$(Q)echo "  HOOK    core.hooksPath=.githooks"
+
 help:
 	$(Q)echo "Targets:"
 	$(Q)echo "  all / brk              Build the kernel (SMP capable)"
@@ -258,6 +262,7 @@ help:
 	$(Q)echo "  dtb / dts              Dump the QEMU virt device tree"
 	$(Q)echo "  size / disasm          Show kernel size / disassembly"
 	$(Q)echo "  syncconfig             Force build-flag regeneration"
+	$(Q)echo "  hooks                  Enable the Conventional Commit hook"
 	$(Q)echo "  clean                  Remove all build outputs"
 	$(Q)echo "  distclean              clean + generated compile_commands.json"
 	$(Q)echo "  clean-kernel           Remove current variant build directory"
