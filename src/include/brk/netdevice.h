@@ -71,6 +71,13 @@ void netdev_free(struct net_device *dev);
 int netdev_register(struct net_device *dev);
 void netdev_unregister(struct net_device *dev);
 struct net_device *netdev_get_by_name(const char *name);
+struct net_device *netdev_get_broadcast_dev(void);
+
+int netdev_set_up(struct net_device *dev, bool up);
+int netdev_set_ipv4(struct net_device *dev, u32 addr, u32 mask, u32 broadcast);
+
+/* Handle SIOC* network configuration ioctls from a user pointer. */
+int netdev_ioctl(unsigned int cmd, unsigned long arg);
 
 static inline void *netdev_priv(const struct net_device *dev)
 {

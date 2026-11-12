@@ -26,6 +26,7 @@ struct cap_data {
 #define CAP_SETUID 7
 #define CAP_SETPCAP 8
 #define CAP_NET_BIND_SERVICE 10
+#define CAP_NET_ADMIN 12
 #define CAP_NET_RAW 13
 #define CAP_SYS_CHROOT 18
 #define CAP_SYS_ADMIN 21

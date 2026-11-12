@@ -20,6 +20,16 @@ int route_add(u32 dst, u32 mask, u32 gw, struct net_device *dev)
 
 	flags = spin_lock_irqsave(&rt_lock);
 	for (unsigned int i = 0; i < RT_TABLE_SIZE; i++) {
+		if (!rt_table[i].dev)
+			continue;
+		if (rt_table[i].dst == dst && rt_table[i].mask == mask &&
+		    rt_table[i].gw == gw && rt_table[i].dev == dev) {
+			spin_unlock_irqrestore(&rt_lock, flags);
+			return 0;
+		}
+	}
+
+	for (unsigned int i = 0; i < RT_TABLE_SIZE; i++) {
 		if (rt_table[i].dev)
 			continue;
 		rt_table[i].dst = dst;
@@ -34,10 +44,41 @@ int route_add(u32 dst, u32 mask, u32 gw, struct net_device *dev)
 	return ret;
 }
 
+int route_del(u32 dst, u32 mask, u32 gw)
+{
+	irqstate_t flags;
+	int ret = -ENOENT;
+
+	flags = spin_lock_irqsave(&rt_lock);
+	for (unsigned int i = 0; i < RT_TABLE_SIZE; i++) {
+		if (!rt_table[i].dev)
+			continue;
+		if (rt_table[i].dst != dst || rt_table[i].mask != mask ||
+		    rt_table[i].gw != gw)
+			continue;
+		rt_table[i].dev = NULL;
+		ret = 0;
+		break;
+	}
+	spin_unlock_irqrestore(&rt_lock, flags);
+
+	return ret;
+}
+
 int ip_route_output(u32 daddr, u32 *nexthop, struct net_device **dev)
 {
 	struct rt_entry *best = NULL;
 	irqstate_t flags;
+
+	if (daddr == 0xffffffffU) {
+		struct net_device *bdev = netdev_get_broadcast_dev();
+
+		if (!bdev)
+			return -ENETUNREACH;
+		*nexthop = daddr;
+		*dev = bdev;
+		return 0;
+	}
 
 	flags = spin_lock_irqsave(&rt_lock);
 	for (unsigned int i = 0; i < RT_TABLE_SIZE; i++) {

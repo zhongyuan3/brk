@@ -1,5 +1,6 @@
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
+#include <brk/netdevice.h>
 #include <brk/socket.h>
 #include <brk/string.h>
 #include <brk/tcp.h>
@@ -105,10 +106,11 @@ static loff_t socket_llseek(struct fs_file *file, loff_t offset, int whence)
 static long socket_ioctl(struct fs_file *file, unsigned int cmd,
 			 unsigned long arg)
 {
+	long err;
+
 	(void)file;
-	(void)cmd;
-	(void)arg;
-	return -ENOTTY;
+	err = netdev_ioctl(cmd, arg);
+	return err == -EOPNOTSUPP ? -ENOTTY : err;
 }
 
 static unsigned int socket_file_poll(struct fs_file *file, unsigned int events)

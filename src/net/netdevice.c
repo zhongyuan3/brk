@@ -2,12 +2,17 @@
 #include <brk/eth.h>
 #include <brk/kmalloc.h>
 #include <brk/netdevice.h>
+#include <brk/permission.h>
 #include <brk/printk.h>
+#include <brk/route.h>
 #include <brk/skbuff.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <brk/uaccess.h>
+#include <uapi/capability.h>
 #include <uapi/errno.h>
+#include <uapi/net.h>
 
 static LIST_DEFINE(netdev_list);
 static SPINLOCK_DEFINE(netdev_lock);
@@ -118,6 +123,190 @@ struct net_device *netdev_get_by_name(const char *name)
 	dev = netdev_lookup_locked(name);
 	spin_unlock_irqrestore(&netdev_lock, flags);
 	return dev;
+}
+
+struct net_device *netdev_get_broadcast_dev(void)
+{
+	struct net_device *dev;
+	struct net_device *found = NULL;
+	irqstate_t flags;
+
+	flags = spin_lock_irqsave(&netdev_lock);
+	list_for_each_entry(dev, &netdev_list, dev_list) {
+		if ((dev->flags & IFF_UP) && !(dev->flags & IFF_LOOPBACK)) {
+			found = dev;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&netdev_lock, flags);
+	return found;
+}
+
+int netdev_set_up(struct net_device *dev, bool up)
+{
+	int err;
+
+	if (!dev)
+		return -EINVAL;
+	if (up == !!(dev->flags & IFF_UP))
+		return 0;
+
+	if (up) {
+		if (dev->netdev_ops && dev->netdev_ops->ndo_open) {
+			err = dev->netdev_ops->ndo_open(dev);
+			if (err)
+				return err;
+		}
+		dev->flags |= IFF_UP;
+	} else {
+		if (dev->netdev_ops && dev->netdev_ops->ndo_stop)
+			dev->netdev_ops->ndo_stop(dev);
+		dev->flags &= ~IFF_UP;
+	}
+	return 0;
+}
+
+int netdev_set_ipv4(struct net_device *dev, u32 addr, u32 mask, u32 broadcast)
+{
+	if (!dev)
+		return -EINVAL;
+
+	dev->ip_addr = addr;
+	dev->netmask = mask;
+	if (!broadcast && addr && mask)
+		broadcast = addr | ~mask;
+	dev->broadcast = broadcast;
+	return 0;
+}
+
+static int ifreq_get_addr(const struct ifreq *ifr, u32 *addr)
+{
+	const struct sockaddr_in *sin =
+		(const struct sockaddr_in *)&ifr->ifr_addr;
+
+	if (sin->sin_family != AF_INET)
+		return -EINVAL;
+	*addr = sin->sin_addr.s_addr;
+	return 0;
+}
+
+static void ifreq_set_addr(struct ifreq *ifr, u32 addr)
+{
+	struct sockaddr_in *sin = (struct sockaddr_in *)&ifr->ifr_addr;
+
+	memset(sin, 0, sizeof(*sin));
+	sin->sin_family = AF_INET;
+	sin->sin_addr.s_addr = addr;
+}
+
+static int sockaddr_to_ipv4(const struct sockaddr *sa, u32 *addr)
+{
+	const struct sockaddr_in *sin = (const struct sockaddr_in *)sa;
+
+	if (sin->sin_family != AF_INET)
+		return -EINVAL;
+	*addr = sin->sin_addr.s_addr;
+	return 0;
+}
+
+int netdev_ioctl(unsigned int cmd, unsigned long arg)
+{
+	struct ifreq ifr;
+	struct rtentry rt;
+	struct net_device *dev;
+	u32 addr, mask, gw;
+	bool set_cmd;
+	bool copy_ifr = false;
+	int err;
+
+	if (!arg)
+		return -EINVAL;
+
+	set_cmd = cmd == SIOCSIFFLAGS || cmd == SIOCSIFADDR ||
+		  cmd == SIOCSIFNETMASK || cmd == SIOCSIFBRDADDR ||
+		  cmd == SIOCSIFMTU || cmd == SIOCADDRT || cmd == SIOCDELRT;
+	if (set_cmd && !capable(CAP_NET_ADMIN))
+		return -EPERM;
+
+	if (cmd == SIOCADDRT || cmd == SIOCDELRT) {
+		if (copy_from_user(&rt, (void *)arg, sizeof(rt)))
+			return -EFAULT;
+		if (!rt.rt_dev[0])
+			return -EINVAL;
+		dev = netdev_get_by_name(rt.rt_dev);
+		if (!dev)
+			return -ENODEV;
+		if (sockaddr_to_ipv4(&rt.rt_dst, &addr) ||
+		    sockaddr_to_ipv4(&rt.rt_genmask, &mask) ||
+		    sockaddr_to_ipv4(&rt.rt_gateway, &gw))
+			return -EINVAL;
+		if (cmd == SIOCADDRT)
+			return route_add(addr, mask, gw, dev);
+		return route_del(addr, mask, gw);
+	}
+
+	if (copy_from_user(&ifr, (void *)arg, sizeof(ifr)))
+		return -EFAULT;
+	ifr.ifr_name[IFNAMSIZ - 1] = '\0';
+	dev = netdev_get_by_name(ifr.ifr_name);
+	if (!dev)
+		return -ENODEV;
+
+	switch (cmd) {
+	case SIOCGIFADDR:
+		ifreq_set_addr(&ifr, dev->ip_addr);
+		copy_ifr = true;
+		break;
+	case SIOCSIFADDR:
+		err = ifreq_get_addr(&ifr, &addr);
+		if (err)
+			return err;
+		return netdev_set_ipv4(dev, addr, dev->netmask, 0);
+	case SIOCGIFNETMASK:
+		ifreq_set_addr(&ifr, dev->netmask);
+		copy_ifr = true;
+		break;
+	case SIOCSIFNETMASK:
+		err = ifreq_get_addr(&ifr, &mask);
+		if (err)
+			return err;
+		return netdev_set_ipv4(dev, dev->ip_addr, mask, 0);
+	case SIOCGIFBRDADDR:
+		ifreq_set_addr(&ifr, dev->broadcast);
+		copy_ifr = true;
+		break;
+	case SIOCSIFBRDADDR:
+		err = ifreq_get_addr(&ifr, &addr);
+		if (err)
+			return err;
+		return netdev_set_ipv4(dev, dev->ip_addr, dev->netmask, addr);
+	case SIOCGIFFLAGS:
+		ifr.ifr_flags = (short)dev->flags;
+		copy_ifr = true;
+		break;
+	case SIOCSIFFLAGS:
+		return netdev_set_up(dev, (ifr.ifr_flags & IFF_UP) != 0);
+	case SIOCGIFHWADDR:
+		ifr.ifr_hwaddr.sa_family = ARPHRD_ETHER;
+		memcpy(ifr.ifr_hwaddr.sa_data, dev->dev_addr, ETH_ALEN);
+		copy_ifr = true;
+		break;
+	case SIOCGIFMTU:
+		ifr.ifr_mtu = (int)dev->mtu;
+		copy_ifr = true;
+		break;
+	case SIOCSIFMTU:
+		if (ifr.ifr_mtu < 68 || ifr.ifr_mtu > 65535)
+			return -EINVAL;
+		dev->mtu = (unsigned int)ifr.ifr_mtu;
+		break;
+	default:
+		return -EOPNOTSUPP;
+	}
+
+	if (copy_ifr && copy_to_user((void *)arg, &ifr, sizeof(ifr)))
+		return -EFAULT;
+	return 0;
 }
 
 void dev_add_pack(struct packet_type *pt)

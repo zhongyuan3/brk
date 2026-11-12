@@ -4,12 +4,10 @@
 #include <brk/eth.h>
 #include <brk/irq.h>
 #include <brk/kmalloc.h>
-#include <brk/net.h>
 #include <brk/netdevice.h>
 #include <brk/panic.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
-#include <brk/route.h>
 #include <brk/skbuff.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
@@ -341,9 +339,6 @@ static struct net_device *vnet_netdev_create(struct virtio_net_dev *vnet)
 	dev->flags = IFF_UP | IFF_BROADCAST;
 	dev->netdev_ops = &vnet_netdev_ops;
 	dev->priv = vnet;
-	dev->ip_addr = NET_DEFAULT_IP;
-	dev->netmask = NET_DEFAULT_NETMASK;
-	dev->broadcast = NET_DEFAULT_IP | ~NET_DEFAULT_NETMASK;
 	vnet->ndev = dev;
 	return dev;
 }
@@ -424,10 +419,6 @@ struct virtio_net_dev *virtio_net_create(struct virtio_device *vdev)
 		vnet->ndev = NULL;
 		goto err_reset;
 	}
-
-	route_add(NET_DEFAULT_IP & NET_DEFAULT_NETMASK, NET_DEFAULT_NETMASK, 0,
-		  vnet->ndev);
-	route_add(0, 0, NET_DEFAULT_GW, vnet->ndev);
 
 	virtio_net_set_rx_callback(vnet, vnet_rx_to_stack, vnet->ndev);
 

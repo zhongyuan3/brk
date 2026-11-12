@@ -12,6 +12,7 @@ struct rt_entry {
 };
 
 int route_add(u32 dst, u32 mask, u32 gw, struct net_device *dev);
+int route_del(u32 dst, u32 mask, u32 gw);
 
 /*
  * Resolve @daddr to an output device and next hop.  @nexthop is the gateway

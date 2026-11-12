@@ -109,6 +109,15 @@ int ip_output(struct sk_buff *skb, u32 saddr, u32 daddr, u8 protocol, u8 ttl)
 	skb->dev = dev;
 	skb->protocol = ETH_P_IP;
 
+	if (daddr == 0xffffffffU ||
+	    (dev->broadcast && daddr == dev->broadcast)) {
+		if (eth_header(skb, dev, ETH_P_IP, NULL)) {
+			skb_free(skb);
+			return -ENOSPC;
+		}
+		return netdev_start_xmit(skb);
+	}
+
 	if (dev->flags & IFF_LOOPBACK)
 		return netdev_start_xmit(skb);
 
