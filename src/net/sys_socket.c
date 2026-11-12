@@ -3,6 +3,7 @@
 #include <brk/fs.h>
 #include <brk/min_max.h>
 #include <brk/socket.h>
+#include <brk/spinlock.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/types.h>
@@ -363,36 +364,101 @@ u64 sys_setsockopt(void)
 	int fd = syscall_arg_int(0);
 	int level = syscall_arg_int(1);
 	int optname = syscall_arg_int(2);
+	const void *optval = syscall_arg_ptr(3);
+	int optlen = syscall_arg_int(4);
 	struct fs_file *file;
 	struct socket *sock;
+	int value;
 	int err;
+
+	if (optlen < (int)sizeof(value) || !optval)
+		return -EINVAL;
+	if (copy_from_user(&value, optval, sizeof(value)))
+		return -EFAULT;
 
 	err = socket_from_fd(fd, &file, &sock);
 	if (err)
 		return err;
+
+	err = 0;
+	if (level == SOL_SOCKET) {
+		switch (optname) {
+		case SO_REUSEADDR:
+			if (sock->sk)
+				sock->sk->reuseaddr = value != 0;
+			break;
+		case SO_RCVBUF:
+		case SO_SNDBUF:
+			break;
+		default:
+			err = -ENOPROTOOPT;
+			break;
+		}
+	} else {
+		err = -ENOPROTOOPT;
+	}
 	fs_file_put(file);
-	(void)sock;
-
-	if (level == SOL_SOCKET &&
-	    (optname == SO_REUSEADDR || optname == SO_RCVBUF ||
-	     optname == SO_SNDBUF))
-		return 0;
-
-	return -ENOPROTOOPT;
+	return err;
 }
 
 u64 sys_getsockopt(void)
 {
 	int fd = syscall_arg_int(0);
+	int level = syscall_arg_int(1);
+	int optname = syscall_arg_int(2);
+	void *optval = syscall_arg_ptr(3);
+	int *optlen = syscall_arg_ptr(4);
 	struct fs_file *file;
 	struct socket *sock;
+	irqstate_t flags;
+	int value;
+	int len;
 	int err;
+
+	if (!optval || !optlen)
+		return -EINVAL;
+	if (copy_from_user(&len, optlen, sizeof(len)))
+		return -EFAULT;
+	if (len < 0)
+		len = 0;
 
 	err = socket_from_fd(fd, &file, &sock);
 	if (err)
 		return err;
-	fs_file_put(file);
-	(void)sock;
 
-	return -ENOPROTOOPT;
+	if (level != SOL_SOCKET) {
+		fs_file_put(file);
+		return -ENOPROTOOPT;
+	}
+
+	switch (optname) {
+	case SO_ERROR:
+		if (sock->sk) {
+			flags = spin_lock_irqsave(&sock->sk->lock);
+			value = sock->sk->err;
+			sock->sk->err = 0;
+			spin_unlock_irqrestore(&sock->sk->lock, flags);
+		} else {
+			value = 0;
+		}
+		break;
+	case SO_TYPE:
+		value = sock->type;
+		break;
+	case SO_RCVBUF:
+	case SO_SNDBUF:
+		value = 4096;
+		break;
+	default:
+		fs_file_put(file);
+		return -ENOPROTOOPT;
+	}
+
+	if (len > (int)sizeof(value))
+		len = (int)sizeof(value);
+	if (copy_to_user(optval, &value, len) ||
+	    copy_to_user(optlen, &len, sizeof(len)))
+		err = -EFAULT;
+	fs_file_put(file);
+	return err;
 }

@@ -29,6 +29,7 @@ struct sock {
 	bool connected;
 	bool shutdown;
 	bool eof;
+	bool reuseaddr;
 	int err;
 
 	struct sk_buff_head rcv_queue;

@@ -207,12 +207,14 @@ static struct tcp_sock *tcp_lookup_listener_locked(u32 daddr, u16 dport)
 	return NULL;
 }
 
-static bool tcp_port_in_use_locked(u32 laddr, u16 lport)
+static bool tcp_port_in_use_locked(u32 laddr, u16 lport, bool reuseaddr)
 {
 	struct tcp_sock *tsk;
 
 	list_for_each_entry(tsk, &tcp_socks, sk.node) {
 		if (tsk->sk.sport != lport)
+			continue;
+		if (reuseaddr && tsk->state == TCP_TIME_WAIT)
 			continue;
 		if (!laddr || !tsk->sk.saddr || tsk->sk.saddr == laddr)
 			return true;
@@ -220,7 +222,7 @@ static bool tcp_port_in_use_locked(u32 laddr, u16 lport)
 	return false;
 }
 
-static u16 tcp_alloc_port_locked(u32 laddr)
+static u16 tcp_alloc_port_locked(u32 laddr, bool reuseaddr)
 {
 	for (unsigned int i = 0; i <= TCP_EPHEMERAL_END - TCP_EPHEMERAL_START;
 	     i++) {
@@ -228,7 +230,7 @@ static u16 tcp_alloc_port_locked(u32 laddr)
 
 		if (tcp_ephemeral < TCP_EPHEMERAL_START)
 			tcp_ephemeral = TCP_EPHEMERAL_START;
-		if (!tcp_port_in_use_locked(laddr, port))
+		if (!tcp_port_in_use_locked(laddr, port, reuseaddr))
 			return port;
 	}
 	return 0;
@@ -241,7 +243,7 @@ static int tcp_autobind(struct tcp_sock *tsk)
 
 	flags = spin_lock_irqsave(&tcp_lock);
 	if (!tsk->sk.bound) {
-		port = tcp_alloc_port_locked(tsk->sk.saddr);
+		port = tcp_alloc_port_locked(tsk->sk.saddr, tsk->sk.reuseaddr);
 		if (!port) {
 			spin_unlock_irqrestore(&tcp_lock, flags);
 			return -EADDRINUSE;
@@ -350,6 +352,31 @@ static int tcp_xmit_skb(struct sk_buff *skb, u32 saddr, u32 daddr)
 	return err == -EAGAIN ? 0 : err;
 }
 
+static int tcp_send_reset(u32 saddr, u32 daddr, u16 sport, u16 dport, u32 seq,
+			  u32 ack, u8 flags)
+{
+	struct sk_buff *skb;
+	struct tcphdr *th;
+
+	skb = skb_alloc(sizeof(*th));
+	if (!skb)
+		return -ENOMEM;
+
+	th = (struct tcphdr *)skb_put(skb, sizeof(*th));
+	memset(th, 0, sizeof(*th));
+	th->source = htons(sport);
+	th->dest = htons(dport);
+	th->seq = htonl(seq);
+	th->ack_seq = htonl(ack);
+	th->doff_reserved = 5 << 4;
+	th->flags = flags;
+	th->check = tcp_checksum(saddr, daddr, th, sizeof(*th));
+	if (!th->check)
+		th->check = htons(0xffff);
+
+	return tcp_xmit_skb(skb, saddr, daddr);
+}
+
 static int tcp_send_segment(struct tcp_sock *tsk, u32 seq, u32 ack, u8 flags,
 			    const void *data, size_t len, bool with_mss)
 {
@@ -408,8 +435,11 @@ int tcp_rcv(struct sk_buff *skb)
 	u8 tflags;
 	irqstate_t flags;
 	bool wake_child = false, wake_listener = false, need_tx = false;
+	bool send_reset = false;
 	u32 tx_seq = 0, tx_ack = 0;
-	u8 tx_flags = 0;
+	u32 reset_seq = 0, reset_ack = 0;
+	u16 reset_sport = 0, reset_dport = 0;
+	u8 tx_flags = 0, reset_flags = 0;
 	bool tx_mss = false;
 
 	if (skb->len < sizeof(*th))
@@ -476,8 +506,25 @@ int tcp_rcv(struct sk_buff *skb)
 			need_tx = true;
 		}
 	}
-	if (!tsk)
+	if (!tsk) {
+		if (!(tflags & TCP_RST)) {
+			send_reset = true;
+			reset_sport = dport;
+			reset_dport = sport;
+			if (tflags & TCP_ACK) {
+				reset_seq = ack;
+				reset_ack = 0;
+				reset_flags = TCP_RST;
+			} else {
+				reset_seq = 0;
+				reset_ack = seq + payload_len +
+					    ((tflags & TCP_SYN) ? 1 : 0) +
+					    ((tflags & TCP_FIN) ? 1 : 0);
+				reset_flags = TCP_RST | TCP_ACK;
+			}
+		}
 		goto unlock_drop;
+	}
 	if (tsk->state == TCP_LISTEN)
 		goto unlock_drop;
 
@@ -652,9 +699,12 @@ out_unlock:
 
 unlock_drop:
 	spin_unlock_irqrestore(&tcp_lock, flags);
+	if (send_reset)
+		(void)tcp_send_reset(daddr, saddr, reset_sport, reset_dport,
+				     reset_seq, reset_ack, reset_flags);
 drop:
 	skb_free(skb);
-	return -EINVAL;
+	return send_reset ? 0 : -EINVAL;
 }
 
 static int tcp_bind(struct socket *sock, const struct sockaddr *addr,
@@ -678,12 +728,12 @@ static int tcp_bind(struct socket *sock, const struct sockaddr *addr,
 		return -EINVAL;
 	}
 	if (!lport) {
-		lport = tcp_alloc_port_locked(laddr);
+		lport = tcp_alloc_port_locked(laddr, tsk->sk.reuseaddr);
 		if (!lport) {
 			spin_unlock_irqrestore(&tcp_lock, flags);
 			return -EADDRINUSE;
 		}
-	} else if (tcp_port_in_use_locked(laddr, lport)) {
+	} else if (tcp_port_in_use_locked(laddr, lport, tsk->sk.reuseaddr)) {
 		spin_unlock_irqrestore(&tcp_lock, flags);
 		return -EADDRINUSE;
 	}
@@ -755,6 +805,15 @@ static int tcp_connect(struct socket *sock, const struct sockaddr *addr,
 	}
 
 	flags = spin_lock_irqsave(&tcp_lock);
+	if (sock->nonblock) {
+		st = tsk->state;
+		err = tsk->err;
+		spin_unlock_irqrestore(&tcp_lock, flags);
+		if (err)
+			return err;
+		return st == TCP_ESTABLISHED ? 0 : -EINPROGRESS;
+	}
+
 	while (tsk->state == TCP_SYN_SENT && !tsk->err)
 		task_sleep(&tsk->sk, &tcp_lock);
 	st = tsk->state;
@@ -810,6 +869,10 @@ static int tcp_accept(struct socket *sock, struct socket **newsock)
 			spin_unlock_irqrestore(&tcp_lock, flags);
 			return err;
 		}
+		if (sock->nonblock) {
+			spin_unlock_irqrestore(&tcp_lock, flags);
+			return -EAGAIN;
+		}
 		task_sleep(&tsk->sk, &tcp_lock);
 	}
 
@@ -842,6 +905,7 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 		       const struct sockaddr *addr, int addrlen)
 {
 	struct tcp_sock *tsk = tcp_from_sock(sock);
+	bool nonblock = sock->nonblock;
 	size_t off = 0;
 
 	(void)addr;
@@ -881,8 +945,14 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 			kfree(copy);
 			return -ENOTCONN;
 		}
-		while (!tsk->err && tsk->tx_kind != TCP_TX_NONE)
+		while (!tsk->err && tsk->tx_kind != TCP_TX_NONE) {
+			if (nonblock) {
+				spin_unlock_irqrestore(&tcp_lock, flags);
+				kfree(copy);
+				return off ? (int)off : -EAGAIN;
+			}
 			task_sleep(&tsk->sk, &tcp_lock);
+		}
 
 		if (tsk->err) {
 			err = tsk->err;
@@ -919,6 +989,15 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 			}
 			spin_unlock_irqrestore(&tcp_lock, flags);
 			return err;
+		}
+
+		if (nonblock) {
+			flags = spin_lock_irqsave(&tcp_lock);
+			err = tsk->err;
+			spin_unlock_irqrestore(&tcp_lock, flags);
+			if (err)
+				return err;
+			return (int)(off + n);
 		}
 
 		flags = spin_lock_irqsave(&tcp_lock);
@@ -1058,6 +1137,8 @@ static unsigned int tcp_poll(struct socket *sock, unsigned int events)
 	flags = spin_lock_irqsave(&tcp_lock);
 	if ((tsk->state == TCP_ESTABLISHED || tsk->state == TCP_CLOSE_WAIT) &&
 	    tsk->snd_una == tsk->snd_nxt)
+		rev |= POLLOUT | POLLWRNORM;
+	if (tsk->err)
 		rev |= POLLOUT | POLLWRNORM;
 	if (tsk->state == TCP_LISTEN && !list_empty(&tsk->accept_queue))
 		rev |= POLLIN | POLLRDNORM;
