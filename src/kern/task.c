@@ -12,6 +12,7 @@
 #include <brk/fdtable.h>
 #include <brk/fs.h>
 #include <brk/fsinfo.h>
+#include <brk/genhd.h>
 #include <brk/init.h>
 #include <brk/klog.h>
 #include <brk/kmalloc.h>
@@ -409,6 +410,9 @@ void task_init_main(void)
 	 * runnable.
 	 */
 	struct task *init = task_create_user_init();
+
+	/* Block probing issues real I/O and must precede the rootfs mount. */
+	gendisk_scan_partitions();
 
 	int err = fs_init();
 	if (err)

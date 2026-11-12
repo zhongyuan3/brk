@@ -33,9 +33,6 @@ int fs_init(void)
 
 	register_builtin_filesystems();
 
-	/* Probing issues real I/O, so it runs here rather than at add_disk(). */
-	gendisk_scan_partitions();
-
 	mnt = kernel_mount(&tmpfs_fs_type, 0, NULL, NULL);
 	if (IS_ERR(mnt))
 		return PTR_ERR(mnt);
