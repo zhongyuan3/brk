@@ -68,7 +68,7 @@ static ssize_t socket_read(struct fs_file *file, char *buf, size_t size,
 	if (!sock || !sock->ops || !sock->ops->recvmsg)
 		return -ENOTSOCK;
 
-	return sock->ops->recvmsg(sock, buf, size, NULL, NULL);
+	return sock->ops->recvmsg(sock, buf, size, NULL, NULL, 0);
 }
 
 static ssize_t socket_write(struct fs_file *file, const char *buf, size_t size,
@@ -81,7 +81,7 @@ static ssize_t socket_write(struct fs_file *file, const char *buf, size_t size,
 	if (!sock || !sock->ops || !sock->ops->sendmsg)
 		return -ENOTSOCK;
 
-	return sock->ops->sendmsg(sock, buf, size, NULL, 0);
+	return sock->ops->sendmsg(sock, buf, size, NULL, 0, 0);
 }
 
 static int socket_file_release(struct fs_inode *inode, struct fs_file *file)

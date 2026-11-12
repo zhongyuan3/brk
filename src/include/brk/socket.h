@@ -7,6 +7,9 @@
 #include <brk/types.h>
 #include <uapi/socket.h>
 
+#define SOCK_DEFAULT_RCVBUF 4096
+#define SOCK_DEFAULT_SNDBUF 4096
+
 struct fs_file_ops;
 struct socket;
 
@@ -30,6 +33,9 @@ struct sock {
 	bool shutdown;
 	bool eof;
 	bool reuseaddr;
+	bool broadcast;
+	unsigned int rcvbuf;
+	unsigned int sndbuf;
 	int err;
 
 	struct sk_buff_head rcv_queue;
@@ -45,9 +51,9 @@ struct proto_ops {
 	int (*listen)(struct socket *sock, int backlog);
 	int (*accept)(struct socket *sock, struct socket **newsock);
 	int (*sendmsg)(struct socket *sock, const void *buf, size_t len,
-		       const struct sockaddr *addr, int addrlen);
+		       const struct sockaddr *addr, int addrlen, int flags);
 	int (*recvmsg)(struct socket *sock, void *buf, size_t len,
-		       struct sockaddr *addr, int *addrlen);
+		       struct sockaddr *addr, int *addrlen, int flags);
 	int (*shutdown)(struct socket *sock, int how);
 	int (*getname)(struct socket *sock, struct sockaddr *addr, int *addrlen,
 		       bool peer);

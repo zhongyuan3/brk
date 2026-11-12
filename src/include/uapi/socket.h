@@ -20,8 +20,18 @@ typedef __u32 socklen_t;
 #define SO_REUSEADDR 2
 #define SO_TYPE 3
 #define SO_ERROR 4
+#define SO_BROADCAST 6
 #define SO_SNDBUF 7
 #define SO_RCVBUF 8
+
+#define MSG_OOB 0x01
+#define MSG_PEEK 0x02
+#define MSG_DONTROUTE 0x04
+#define MSG_TRUNC 0x20
+#define MSG_DONTWAIT 0x40
+#define MSG_EOR 0x80
+#define MSG_WAITALL 0x100
+#define MSG_NOSIGNAL 0x4000
 
 #define SHUT_RD 0
 #define SHUT_WR 1

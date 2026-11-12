@@ -166,6 +166,8 @@ static struct tcp_sock *tcp_alloc_sock(void)
 	tsk->state = TCP_CLOSE;
 	tsk->mss = TCP_DEFAULT_MSS;
 	tsk->rcv_wnd = TCP_RCV_WND;
+	tsk->sk.rcvbuf = SOCK_DEFAULT_RCVBUF;
+	tsk->sk.sndbuf = SOCK_DEFAULT_SNDBUF;
 	return tsk;
 }
 
@@ -902,10 +904,10 @@ static int tcp_accept(struct socket *sock, struct socket **newsock)
 }
 
 static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
-		       const struct sockaddr *addr, int addrlen)
+		       const struct sockaddr *addr, int addrlen, int flags)
 {
 	struct tcp_sock *tsk = tcp_from_sock(sock);
-	bool nonblock = sock->nonblock;
+	bool nonblock = sock->nonblock || (flags & MSG_DONTWAIT);
 	size_t off = 0;
 
 	(void)addr;
@@ -1015,60 +1017,96 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 }
 
 static int tcp_recvmsg(struct socket *sock, void *buf, size_t len,
-		       struct sockaddr *addr, int *addrlen)
+		       struct sockaddr *addr, int *addrlen, int msg_flags)
 {
 	struct tcp_sock *tsk = tcp_from_sock(sock);
 	struct sock *sk;
-	struct sk_buff *skb;
 	irqstate_t flags;
-	size_t n;
-	int err = 0;
+	bool nonblock = sock->nonblock || (msg_flags & MSG_DONTWAIT);
+	bool peek = (msg_flags & MSG_PEEK) != 0;
+	bool waitall = (msg_flags & MSG_WAITALL) != 0;
+	size_t total = 0;
+	int err;
 
 	if (!tsk)
 		return -EINVAL;
 	if (tsk->state == TCP_LISTEN)
 		return -ENOTCONN;
+	if (!len)
+		return 0;
 	sk = &tsk->sk;
 
-	flags = spin_lock_irqsave(&sk->lock);
-	while (skb_queue_empty(&sk->rcv_queue) && !sk->eof && !sk->err) {
-		if (sock->nonblock) {
-			spin_unlock_irqrestore(&sk->lock, flags);
-			return -EAGAIN;
+	for (;;) {
+		struct sk_buff *skb;
+		u8 *src;
+		size_t n;
+		bool free_skb = false;
+
+		flags = spin_lock_irqsave(&sk->lock);
+		while (skb_queue_empty(&sk->rcv_queue) && !sk->eof &&
+		       !sk->err) {
+			if (total > 0 && !waitall) {
+				spin_unlock_irqrestore(&sk->lock, flags);
+				return (int)total;
+			}
+			if (nonblock) {
+				spin_unlock_irqrestore(&sk->lock, flags);
+				return total ? (int)total : -EAGAIN;
+			}
+			task_sleep(sk, &sk->lock);
 		}
-		task_sleep(sk, &sk->lock);
-	}
-	if (sk->err) {
-		err = sk->err;
+		if (sk->err) {
+			err = sk->err;
+			spin_unlock_irqrestore(&sk->lock, flags);
+			return total ? (int)total : err;
+		}
+		if (skb_queue_empty(&sk->rcv_queue)) {
+			spin_unlock_irqrestore(&sk->lock, flags);
+			return (int)total;
+		}
+
+		skb = sk->rcv_queue.head;
+		if (addr && addrlen) {
+			struct sockaddr_in sin = { 0 };
+			int naddr;
+
+			sin.sin_family = AF_INET;
+			sin.sin_port = htons(skb->cb.ip.sport);
+			sin.sin_addr.s_addr = skb->cb.ip.saddr;
+
+			naddr = min(*addrlen, (int)sizeof(sin));
+			memcpy(addr, &sin, naddr);
+			*addrlen = sizeof(sin);
+		}
+
+		n = min(len - total, (size_t)skb->len);
+		src = skb->data;
+
+		if (!peek) {
+			if (n == skb->len) {
+				skb = skb_dequeue(&sk->rcv_queue);
+				free_skb = true;
+			} else {
+				skb->data += n;
+				skb->len -= n;
+			}
+		}
 		spin_unlock_irqrestore(&sk->lock, flags);
-		return err;
+
+		if (n && copy_to_user((u8 *)buf + total, src, n)) {
+			if (free_skb)
+				skb_free(skb);
+			return total ? (int)total : -EFAULT;
+		}
+		if (free_skb)
+			skb_free(skb);
+
+		total += n;
+		if (total == len)
+			return (int)total;
+		if (peek || !waitall)
+			return (int)total;
 	}
-	if (skb_queue_empty(&sk->rcv_queue)) {
-		spin_unlock_irqrestore(&sk->lock, flags);
-		return 0;
-	}
-	skb = skb_dequeue(&sk->rcv_queue);
-	spin_unlock_irqrestore(&sk->lock, flags);
-
-	if (addr && addrlen) {
-		struct sockaddr_in sin = { 0 };
-		int naddr;
-
-		sin.sin_family = AF_INET;
-		sin.sin_port = htons(skb->cb.ip.sport);
-		sin.sin_addr.s_addr = skb->cb.ip.saddr;
-
-		naddr = min(*addrlen, (int)sizeof(sin));
-		memcpy(addr, &sin, naddr);
-		*addrlen = sizeof(sin);
-	}
-
-	n = min(len, (size_t)skb->len);
-	if (n && copy_to_user(buf, skb->data, n))
-		err = -EFAULT;
-
-	skb_free(skb);
-	return err ? err : (int)n;
 }
 
 static int tcp_shutdown(struct socket *sock, int how)

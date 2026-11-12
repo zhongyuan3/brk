@@ -130,8 +130,6 @@ u64 sys_sendto(void)
 	struct socket *sock;
 	int err;
 
-	(void)flags;
-
 	if (uaddr) {
 		if (addrlen < (int)sizeof(sa))
 			return -EINVAL;
@@ -147,7 +145,7 @@ u64 sys_sendto(void)
 
 	err = sock->ops->sendmsg(sock, buf, len,
 				 uaddr ? (const struct sockaddr *)&sa : NULL,
-				 uaddr ? (int)sizeof(sa) : 0);
+				 uaddr ? (int)sizeof(sa) : 0, (int)flags);
 	fs_file_put(file);
 	return err;
 }
@@ -167,8 +165,6 @@ u64 sys_recvfrom(void)
 	int ulen = 0;
 	int err;
 
-	(void)flags;
-
 	if (uaddr && uaddrlen) {
 		if (copy_from_user(&ulen, uaddrlen, sizeof(ulen)))
 			return -EFAULT;
@@ -182,7 +178,7 @@ u64 sys_recvfrom(void)
 
 	err = sock->ops->recvmsg(sock, buf, len,
 				 uaddr ? (struct sockaddr *)&sa : NULL,
-				 uaddr ? &salen : NULL);
+				 uaddr ? &salen : NULL, (int)flags);
 	if (err >= 0 && uaddr && uaddrlen) {
 		int n = min(ulen, salen);
 
@@ -387,8 +383,17 @@ u64 sys_setsockopt(void)
 			if (sock->sk)
 				sock->sk->reuseaddr = value != 0;
 			break;
+		case SO_BROADCAST:
+			if (sock->sk)
+				sock->sk->broadcast = value != 0;
+			break;
 		case SO_RCVBUF:
+			if (sock->sk)
+				sock->sk->rcvbuf = value < 1024 ? 1024 : value;
+			break;
 		case SO_SNDBUF:
+			if (sock->sk)
+				sock->sk->sndbuf = value < 1024 ? 1024 : value;
 			break;
 		default:
 			err = -ENOPROTOOPT;
@@ -445,9 +450,14 @@ u64 sys_getsockopt(void)
 	case SO_TYPE:
 		value = sock->type;
 		break;
+	case SO_BROADCAST:
+		value = sock->sk ? sock->sk->broadcast : 0;
+		break;
 	case SO_RCVBUF:
+		value = sock->sk ? (int)sock->sk->rcvbuf : 0;
+		break;
 	case SO_SNDBUF:
-		value = 4096;
+		value = sock->sk ? (int)sock->sk->sndbuf : 0;
 		break;
 	default:
 		fs_file_put(file);

@@ -136,7 +136,7 @@ static int udp_connect(struct socket *sock, const struct sockaddr *addr,
 }
 
 static int udp_sendmsg(struct socket *sock, const void *buf, size_t len,
-		       const struct sockaddr *addr, int addrlen)
+		       const struct sockaddr *addr, int addrlen, int flags)
 {
 	struct sock *sk = sock->sk;
 	struct net_device *dev;
@@ -148,6 +148,8 @@ static int udp_sendmsg(struct socket *sock, const void *buf, size_t len,
 	u32 sum;
 	u8 pseudo[4];
 	int err;
+
+	(void)flags;
 
 	if (!sk)
 		return -EINVAL;
@@ -301,11 +303,14 @@ drop:
 }
 
 static int udp_recvmsg(struct socket *sock, void *buf, size_t len,
-		       struct sockaddr *addr, int *addrlen)
+		       struct sockaddr *addr, int *addrlen, int msg_flags)
 {
 	struct sock *sk = sock->sk;
 	struct sk_buff *skb;
 	irqstate_t flags;
+	bool nonblock = sock->nonblock || (msg_flags & MSG_DONTWAIT);
+	bool peek = (msg_flags & MSG_PEEK) != 0;
+	size_t datagram_len;
 	size_t n;
 	int err = 0;
 
@@ -318,13 +323,16 @@ static int udp_recvmsg(struct socket *sock, void *buf, size_t len,
 			spin_unlock_irqrestore(&sk->lock, flags);
 			return 0;
 		}
-		if (sock->nonblock) {
+		if (nonblock) {
 			spin_unlock_irqrestore(&sk->lock, flags);
 			return -EAGAIN;
 		}
 		task_sleep(sk, &sk->lock);
 	}
-	skb = skb_dequeue(&sk->rcv_queue);
+	if (peek)
+		skb = sk->rcv_queue.head;
+	else
+		skb = skb_dequeue(&sk->rcv_queue);
 	spin_unlock_irqrestore(&sk->lock, flags);
 
 	if (addr && addrlen) {
@@ -340,12 +348,17 @@ static int udp_recvmsg(struct socket *sock, void *buf, size_t len,
 		*addrlen = sizeof(sin);
 	}
 
-	n = min(len, (size_t)skb->len);
+	datagram_len = skb->len;
+	n = min(len, datagram_len);
 	if (n && copy_to_user(buf, skb->data, n))
 		err = -EFAULT;
 
-	skb_free(skb);
-	return err ? err : (int)n;
+	if (!peek)
+		skb_free(skb);
+
+	if (err)
+		return err;
+	return (msg_flags & MSG_TRUNC) ? (int)datagram_len : (int)n;
 }
 
 static int udp_shutdown(struct socket *sock, int how)
@@ -459,6 +472,8 @@ int udp_sock_create(struct socket *sock, int protocol)
 	sk->family = AF_INET;
 	sk->type = SOCK_DGRAM;
 	sk->protocol = IPPROTO_UDP;
+	sk->rcvbuf = SOCK_DEFAULT_RCVBUF;
+	sk->sndbuf = SOCK_DEFAULT_SNDBUF;
 
 	sock->sk = sk;
 	sock->type = SOCK_DGRAM;
