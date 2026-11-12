@@ -4,15 +4,21 @@
 #include <brk/ktime.h>
 #include <brk/net.h>
 #include <brk/netdevice.h>
+#include <brk/panic.h>
 #include <brk/skbuff.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/tick.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
 
 #define ARP_TABLE_SIZE 16
 #define ARP_PENDING_MAX 4
 #define ARP_REQUEST_INTERVAL_NS 1000000000ULL
+#define ARP_REACHABLE_NS 60000000000ULL
+#define ARP_MAX_RETRIES 3
+#define ARP_TIMER_INTERVAL_NS 100000000ULL
+#define ARP_TIMER_BATCH 8
 
 enum arp_state {
 	ARP_INCOMPLETE,
@@ -21,10 +27,13 @@ enum arp_state {
 
 struct arp_entry {
 	bool in_use;
+	struct net_device *dev;
 	u32 ip;
 	u8 mac[ETH_ALEN];
 	enum arp_state state;
 	u64 last_request_ns;
+	u64 updated_ns;
+	u8 retries;
 	u64 last_used;
 	struct sk_buff_head pending;
 };
@@ -33,16 +42,17 @@ static struct arp_entry arp_table[ARP_TABLE_SIZE];
 static SPINLOCK_DEFINE(arp_lock);
 static u64 arp_generation;
 
-static struct arp_entry *arp_lookup_locked(u32 ip)
+static struct arp_entry *arp_lookup_locked(struct net_device *dev, u32 ip)
 {
 	for (unsigned int i = 0; i < ARP_TABLE_SIZE; i++) {
-		if (arp_table[i].in_use && arp_table[i].ip == ip)
+		if (arp_table[i].in_use && arp_table[i].dev == dev &&
+		    arp_table[i].ip == ip)
 			return &arp_table[i];
 	}
 	return NULL;
 }
 
-static struct arp_entry *arp_alloc_locked(u32 ip)
+static struct arp_entry *arp_alloc_locked(struct net_device *dev, u32 ip)
 {
 	struct arp_entry *victim = NULL;
 
@@ -66,11 +76,19 @@ static struct arp_entry *arp_alloc_locked(u32 ip)
 	}
 
 	victim->in_use = true;
+	victim->dev = dev;
 	victim->ip = ip;
 	victim->state = ARP_INCOMPLETE;
+	victim->retries = 0;
+	victim->last_request_ns = 0;
+	victim->updated_ns = 0;
 	victim->last_used = ++arp_generation;
 	return victim;
 }
+
+static void arp_timer_tick(void);
+
+static struct tick_handler arp_tick_handler;
 
 void arp_init(void)
 {
@@ -78,6 +96,10 @@ void arp_init(void)
 		memset(&arp_table[i], 0, sizeof(arp_table[i]));
 		skb_queue_init(&arp_table[i].pending);
 	}
+
+	arp_tick_handler.fn = arp_timer_tick;
+	if (tick_register_handler(&arp_tick_handler))
+		panic("arp: tick handler registration failed\n");
 }
 
 static int arp_send(struct net_device *dev, u16 op, const u8 *tha, u32 tpa)
@@ -129,7 +151,8 @@ static void arp_flush_pending(const u8 *mac, struct sk_buff_head *queue)
 	}
 }
 
-static void arp_update(u32 ip, const u8 *mac, bool flush)
+static void arp_update(struct net_device *dev, u32 ip, const u8 *mac,
+		       bool flush)
 {
 	struct sk_buff_head pending;
 	struct arp_entry *e;
@@ -140,13 +163,16 @@ static void arp_update(u32 ip, const u8 *mac, bool flush)
 	skb_queue_init(&pending);
 
 	flags = spin_lock_irqsave(&arp_lock);
-	e = arp_lookup_locked(ip);
+	e = arp_lookup_locked(dev, ip);
 	if (!e)
-		e = arp_alloc_locked(ip);
+		e = arp_alloc_locked(dev, ip);
 
 	if (e) {
 		memcpy(e->mac, mac, ETH_ALEN);
 		e->state = ARP_REACHABLE;
+		e->retries = 0;
+		e->last_request_ns = 0;
+		e->updated_ns = ktime_boottime_ns();
 		e->last_used = ++arp_generation;
 
 		if (flush && !skb_queue_empty(&e->pending)) {
@@ -187,7 +213,7 @@ int arp_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt)
 	memcpy(sha, arp->ar_sha, ETH_ALEN);
 
 	if (spa)
-		arp_update(spa, sha, op == ARP_OP_REPLY);
+		arp_update(dev, spa, sha, op == ARP_OP_REPLY);
 
 	if (op == ARP_OP_REQUEST && tpa == dev->ip_addr)
 		arp_send(dev, ARP_OP_REPLY, sha, spa);
@@ -208,10 +234,12 @@ int arp_output(struct sk_buff *skb, struct net_device *dev, u32 next_hop)
 	bool send_request = false;
 	u8 mac[ETH_ALEN];
 
+	now = ktime_boottime_ns();
 	flags = spin_lock_irqsave(&arp_lock);
 
-	e = arp_lookup_locked(next_hop);
-	if (e && e->state == ARP_REACHABLE) {
+	e = arp_lookup_locked(dev, next_hop);
+	if (e && e->state == ARP_REACHABLE &&
+	    now - e->updated_ns < ARP_REACHABLE_NS) {
 		memcpy(mac, e->mac, ETH_ALEN);
 		e->last_used = ++arp_generation;
 		spin_unlock_irqrestore(&arp_lock, flags);
@@ -224,8 +252,14 @@ int arp_output(struct sk_buff *skb, struct net_device *dev, u32 next_hop)
 		return netdev_start_xmit(skb);
 	}
 
+	if (e && e->state == ARP_REACHABLE) {
+		e->state = ARP_INCOMPLETE;
+		e->retries = 0;
+		e->last_request_ns = 0;
+	}
+
 	if (!e)
-		e = arp_alloc_locked(next_hop);
+		e = arp_alloc_locked(dev, next_hop);
 	if (!e) {
 		spin_unlock_irqrestore(&arp_lock, flags);
 		skb_free(skb);
@@ -237,10 +271,10 @@ int arp_output(struct sk_buff *skb, struct net_device *dev, u32 next_hop)
 		skb_free(skb_dequeue(&e->pending));
 	skb_queue_tail(&e->pending, skb);
 
-	now = ktime_boottime_ns();
 	if (e->last_request_ns == 0 ||
 	    now - e->last_request_ns >= ARP_REQUEST_INTERVAL_NS) {
 		e->last_request_ns = now;
+		e->retries = 1;
 		send_request = true;
 	}
 
@@ -250,4 +284,65 @@ int arp_output(struct sk_buff *skb, struct net_device *dev, u32 next_hop)
 		arp_send(dev, ARP_OP_REQUEST, NULL, next_hop);
 
 	return -EAGAIN;
+}
+
+struct arp_timer_action {
+	struct net_device *dev;
+	u32 ip;
+};
+
+static void arp_timer_tick(void)
+{
+	static u64 next_run;
+	struct arp_timer_action actions[ARP_TIMER_BATCH];
+	unsigned int nr = 0;
+	u64 now = ktime_boottime_ns();
+	irqstate_t flags;
+
+	if (now < next_run)
+		return;
+	next_run = now + ARP_TIMER_INTERVAL_NS;
+
+	flags = spin_lock_irqsave(&arp_lock);
+
+	for (unsigned int i = 0; i < ARP_TABLE_SIZE; i++) {
+		struct arp_entry *e = &arp_table[i];
+
+		if (!e->in_use)
+			continue;
+
+		if (e->state == ARP_REACHABLE) {
+			if (now - e->updated_ns < ARP_REACHABLE_NS)
+				continue;
+			e->state = ARP_INCOMPLETE;
+			e->retries = 0;
+			e->last_request_ns = 0;
+		}
+
+		if (skb_queue_empty(&e->pending))
+			continue;
+		if (e->last_request_ns &&
+		    now - e->last_request_ns < ARP_REQUEST_INTERVAL_NS)
+			continue;
+
+		if (e->retries >= ARP_MAX_RETRIES) {
+			skb_queue_purge(&e->pending);
+			e->in_use = false;
+			e->dev = NULL;
+			continue;
+		}
+
+		if (nr < ARP_TIMER_BATCH) {
+			actions[nr].dev = e->dev;
+			actions[nr].ip = e->ip;
+			nr++;
+		}
+		e->retries++;
+		e->last_request_ns = now;
+	}
+
+	spin_unlock_irqrestore(&arp_lock, flags);
+
+	for (unsigned int i = 0; i < nr; i++)
+		arp_send(actions[i].dev, ARP_OP_REQUEST, NULL, actions[i].ip);
 }
