@@ -35,7 +35,7 @@ int blkdev_register(struct block_dev *bd)
 
 	if (!bd)
 		return -EINVAL;
-	dev = bd->dev;
+	dev = bd->devt;
 	if (!IS_BLKDEV(dev))
 		return -EINVAL;
 	if (!devno_minor_is_allocated(&bd_devno, MAJOR(dev), MINOR(dev)))
@@ -61,7 +61,7 @@ static struct block_dev *blkdev_get_no_lock(dev_t dev)
 	struct block_dev *bd;
 
 	hlist_for_each_entry(bd, &bd_htable[MAJOR(dev)], hlist) {
-		if (bd->dev == dev)
+		if (bd->devt == dev)
 			return bd;
 	}
 

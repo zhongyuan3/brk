@@ -79,8 +79,9 @@ struct gendisk *gendisk_alloc(unsigned int major, unsigned int first_minor,
 
 	device_init(&disk->dev, disk->disk_name);
 	disk->dev.parent = parent;
+	bdev->dev = &disk->dev;
 
-	bdev->dev = MKBLKDEV(major, first_minor);
+	bdev->devt = MKBLKDEV(major, first_minor);
 	bdev->phy_bsize = MBR_SECTOR_SIZE;
 	bdev->phy_bcnt = nr_sects;
 
@@ -126,7 +127,7 @@ static int add_partition(struct gendisk *disk, unsigned int partno, u64 start,
 	if (!bdev)
 		return -ENOMEM;
 
-	bdev->dev = MKBLKDEV(disk->major, disk->first_minor + partno);
+	bdev->devt = MKBLKDEV(disk->major, disk->first_minor + partno);
 	bdev->phy_bsize = disk->bdev->phy_bsize;
 	bdev->phy_bcnt = nr_sects;
 	bdev->bd_parent = disk->bdev;
@@ -147,9 +148,10 @@ static int add_partition(struct gendisk *disk, unsigned int partno, u64 start,
 
 	gendisk_name(disk, partno, name, sizeof(name));
 	device_init(&part->dev, name);
-	part->dev.devt = bdev->dev;
+	part->dev.devt = bdev->devt;
 	part->dev.mode = S_IFBLK | 0666;
 	part->dev.parent = &disk->dev;
+	bdev->dev = &part->dev;
 	err = device_register(&part->dev);
 	if (err)
 		pr_warn("genhd: cannot register %s: %d\n", name, err);
@@ -224,7 +226,7 @@ int add_disk(struct gendisk *disk)
 	if (err)
 		return err;
 
-	disk->dev.devt = disk->bdev->dev;
+	disk->dev.devt = disk->bdev->devt;
 	disk->dev.mode = S_IFBLK | 0666;
 	err = device_register(&disk->dev);
 	if (err)

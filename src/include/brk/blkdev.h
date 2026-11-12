@@ -9,12 +9,15 @@
 #define FIRST_DYNAMIC_BLKDEV_MAJOR 16
 
 struct block_dev;
-struct page_cache;
 struct cached_page;
+struct device;
+struct page_cache;
 struct request_queue;
 
 struct block_dev {
-	dev_t dev;
+	dev_t devt;
+	/* Device-model node that owns this block device view. */
+	struct device *dev;
 	u32 phy_bsize;
 	u64 phy_bcnt;
 	struct page_cache *bd_mapping;
