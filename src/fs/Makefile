@@ -1,4 +1,5 @@
 obj-y += init.o
+obj-y += rootfs.o
 obj-y += pipe.o
 obj-y += dcache.o
 obj-y += file.o

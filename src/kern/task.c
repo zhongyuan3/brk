@@ -417,6 +417,10 @@ void task_init_main(void)
 	int err = fs_init();
 	if (err)
 		panic("failed to initialize filesystem: %s\n", strerror(err));
+
+	err = rootfs_init();
+	if (err)
+		panic("failed to initialize rootfs: %s\n", strerror(err));
 	pr_info("file system initialized\n");
 
 	task_start_user_init(init);

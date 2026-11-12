@@ -250,6 +250,7 @@ int do_renameat(int olddirfd, const char *oldpath, int newdirfd,
 int do_rmdir(const char *pathname);
 
 int fs_init(void);
+int rootfs_init(void);
 
 void pipe_fs_init(void);
 int anon_pipe_create(struct fs_file **read_file, struct fs_file **write_file,
