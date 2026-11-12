@@ -1,6 +1,7 @@
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
 #include <brk/netdevice.h>
+#include <brk/raw.h>
 #include <brk/socket.h>
 #include <brk/string.h>
 #include <brk/tcp.h>
@@ -32,6 +33,9 @@ int sock_create(int family, int type, int protocol, struct socket **res)
 		break;
 	case SOCK_STREAM:
 		err = tcp_sock_create(sock, protocol);
+		break;
+	case SOCK_RAW:
+		err = raw_sock_create(sock, protocol);
 		break;
 	default:
 		err = -ESOCKTNOSUPPORT;

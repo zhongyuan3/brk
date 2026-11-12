@@ -90,6 +90,8 @@ again:
 	case IPPROTO_TCP:
 		return tcp_rcv(skb);
 	default:
+		icmp_send_error(ICMP_DEST_UNREACH, ICMP_PROT_UNREACH, saddr,
+				daddr, protocol, skb->data, skb->len);
 		break;
 	}
 

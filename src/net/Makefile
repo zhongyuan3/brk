@@ -10,6 +10,7 @@ obj-y += ip_frag.o
 obj-y += icmp.o
 obj-y += udp.o
 obj-y += tcp.o
+obj-y += raw.o
 obj-y += socket.o
 obj-y += sys_socket.o
 obj-y += init.o

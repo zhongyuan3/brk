@@ -1,3 +1,4 @@
+#include <brk/icmp.h>
 #include <brk/ip.h>
 #include <brk/kmalloc.h>
 #include <brk/min_max.h>
@@ -230,6 +231,9 @@ int udp_rcv(struct sk_buff *skb)
 	u32 sum;
 	irqstate_t flags;
 	bool wake = false;
+	bool matched = false;
+	const u8 *orig_payload;
+	size_t orig_len;
 
 	if (skb->len < sizeof(*uh))
 		goto drop;
@@ -261,6 +265,8 @@ int udp_rcv(struct sk_buff *skb)
 			goto drop;
 	}
 
+	orig_payload = skb->data;
+	orig_len = skb->len;
 	skb_pull(skb, sizeof(*uh));
 	skb->cb.ip.sport = sport;
 	skb->cb.ip.dport = dport;
@@ -278,6 +284,7 @@ int udp_rcv(struct sk_buff *skb)
 	}
 
 	if (match) {
+		matched = true;
 		spin_lock(&match->lock);
 		if (match->rcv_queue.qlen < UDP_RCV_QUEUE_MAX) {
 			skb_queue_tail(&match->rcv_queue, skb);
@@ -288,8 +295,13 @@ int udp_rcv(struct sk_buff *skb)
 	}
 	spin_unlock_irqrestore(&udp_lock, flags);
 
-	if (skb)
+	if (skb) {
+		if (!matched)
+			icmp_send_error(ICMP_DEST_UNREACH, ICMP_PORT_UNREACH,
+					saddr, daddr, IPPROTO_UDP, orig_payload,
+					orig_len);
 		skb_free(skb);
+	}
 	if (wake)
 		task_wake_all(match);
 
