@@ -1,11 +1,13 @@
 #ifndef BRK_CHRDEV_H
 #define BRK_CHRDEV_H
 
-#include <brk/device.h>
+#include <brk/dev_t.h>
 #include <brk/refcnt_types.h>
 #include <brk/types.h>
 #include <stdbool.h>
 #include <uapi/types.h>
+
+#define FIRST_DYNAMIC_CHRDEV_MAJOR 16
 
 struct fs_file_ops;
 

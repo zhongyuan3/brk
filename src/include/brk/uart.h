@@ -1,10 +1,14 @@
 #ifndef BRK_UART_H
 #define BRK_UART_H
 
-#include <brk/device.h>
+#include <brk/dev_t.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <stddef.h>
+
+#define NS16550A_MAJOR 1
+#define NS16550A_MINOR_START 0
+#define NS16550A_MINOR_COUNT 4
 
 #define NS16550A_NUM_PORTS NS16550A_MINOR_COUNT
 

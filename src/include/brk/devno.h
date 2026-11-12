@@ -2,7 +2,7 @@
 #define BRK_DEVNO_H
 
 #include <brk/bitmap.h>
-#include <brk/device.h>
+#include <brk/dev_t.h>
 #include <brk/list.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>

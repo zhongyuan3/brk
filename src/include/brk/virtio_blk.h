@@ -8,6 +8,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#define VIRTIO_BLK_MAJOR 1
+#define VIRTIO_BLK_MINOR_START 0
+#define VIRTIO_BLK_MAX_DEVS 4
+/* Whole disk plus up to four primary partitions per device. */
+#define VIRTIO_BLK_MINORS_PER_DEV 5
+#define VIRTIO_BLK_MINOR_COUNT (VIRTIO_BLK_MAX_DEVS * VIRTIO_BLK_MINORS_PER_DEV)
+
 #define VIRTIO_BLK_F_SIZE_MAX 1
 #define VIRTIO_BLK_F_SEG_MAX 2
 #define VIRTIO_BLK_F_GEOMETRY 4

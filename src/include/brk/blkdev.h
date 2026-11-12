@@ -1,10 +1,12 @@
 #ifndef BRK_BLKDEV_H
 #define BRK_BLKDEV_H
 
-#include <brk/device.h>
+#include <brk/dev_t.h>
 #include <brk/refcnt_types.h>
 #include <brk/types.h>
 #include <stdbool.h>
+
+#define FIRST_DYNAMIC_BLKDEV_MAJOR 16
 
 struct block_dev;
 struct page_cache;
