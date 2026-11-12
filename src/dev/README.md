@@ -44,6 +44,10 @@ device model:
        virtio bus -> virtio function drivers -> block/net/tty classes
 ```
 
+Virtio function drivers use the transport-independent `virtio_ops`
+interface.  The virtio-mmio transport keeps the MMIO mapping and register
+access in its own private object.
+
 `devtmpfs` is the only component that turns a registered `struct device`
 with `devt` into a `/dev` node.
 

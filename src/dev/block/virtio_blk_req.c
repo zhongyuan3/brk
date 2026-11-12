@@ -20,7 +20,6 @@
 #include <brk/types.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
-#include <brk/virtio_mmio.h>
 #include <brk/virtio_queue.h>
 #include <inttypes.h>
 #include <uapi/errno.h>
@@ -53,7 +52,7 @@ int virtio_blk_validate_dev(struct virtio_device *vdev)
 
 u32 virtio_blk_select_features(struct virtio_device *vdev)
 {
-	u32 features = virtio_mmio_read_features(vdev);
+	u32 features = virtio_read_features(vdev);
 
 	features &= ~(1u << VIRTIO_BLK_F_RO);
 	features &= ~(1u << VIRTIO_BLK_F_SCSI);
@@ -123,7 +122,7 @@ irqreturn_t virtio_blk_irq_handler(int irq, void *dev_id)
 
 	(void)irq;
 
-	virtio_mmio_ack_interrupt(vblk->vdev);
+	virtio_ack_interrupt(vblk->vdev);
 
 	__sync_synchronize();
 
@@ -186,7 +185,7 @@ static int virtio_blk_submit_vec(struct virtio_blk_dev *vblk, u64 sector,
 
 	vblk->slots[idx[0]].trans = &trans;
 	virtq_submit(&vblk->vq, idx[0]);
-	virtio_mmio_queue_notify(vblk->vdev, 0);
+	virtio_queue_notify(vblk->vdev, 0);
 
 	while (!trans.completed)
 		task_sleep(&trans.completed, &vblk->lock);
@@ -231,7 +230,7 @@ static int virtio_blk_flush(struct virtio_blk_dev *vblk)
 
 	vblk->slots[idx[0]].trans = &trans;
 	virtq_submit(&vblk->vq, idx[0]);
-	virtio_mmio_queue_notify(vblk->vdev, 0);
+	virtio_queue_notify(vblk->vdev, 0);
 
 	while (!trans.completed)
 		task_sleep(&trans.completed, &vblk->lock);

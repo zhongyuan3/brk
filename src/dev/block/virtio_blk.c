@@ -20,7 +20,6 @@
 #include <brk/types.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
-#include <brk/virtio_mmio.h>
 #include <brk/virtio_queue.h>
 #include <inttypes.h>
 #include <uapi/errno.h>
@@ -76,31 +75,31 @@ static int virtio_blk_setup(struct virtio_blk_dev *vblk,
 	if (err)
 		return err;
 
-	virtio_mmio_reset(vdev);
-	err = virtio_mmio_start_driver(vdev);
+	virtio_reset(vdev);
+	err = virtio_start_driver(vdev);
 	if (err)
 		return err;
 
 	features = virtio_blk_select_features(vdev);
 	vblk->flush_supported = (features & (1u << VIRTIO_BLK_F_FLUSH)) != 0;
-	virtio_mmio_write_features(vdev, features);
+	virtio_write_features(vdev, features);
 
-	err = virtio_mmio_features_ok(vdev);
+	err = virtio_features_ok(vdev);
 	if (err)
 		return err;
 
-	err = virtio_mmio_setup_queue(vdev, 0, &vblk->vq, vblk->queue_size);
+	err = virtio_setup_queue(vdev, 0, &vblk->vq, vblk->queue_size);
 	if (err)
 		return err;
 
-	err = virtio_mmio_driver_ok(vdev);
+	err = virtio_driver_ok(vdev);
 	if (err)
 		return err;
 
 	vblk->vdev = vdev;
 
-	err = virtio_mmio_read(vdev, &vblk->config, sizeof(vblk->config),
-			       VIRTIO_CONFIG_OFFSET);
+	err = virtio_read_config(vdev, &vblk->config, sizeof(vblk->config),
+				 VIRTIO_CONFIG_OFFSET);
 	if (err)
 		return err;
 

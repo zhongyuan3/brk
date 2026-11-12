@@ -15,7 +15,6 @@
 #include <brk/string.h>
 #include <brk/types.h>
 #include <brk/virtio.h>
-#include <brk/virtio_mmio.h>
 #include <brk/virtio_net.h>
 #include <brk/virtio_queue.h>
 #include <uapi/errno.h>
@@ -40,7 +39,7 @@ struct vnet_rx_collect {
 
 static u32 vnet_select_features(struct virtio_device *vdev)
 {
-	u32 features = virtio_mmio_read_features(vdev);
+	u32 features = virtio_read_features(vdev);
 
 	/* No checksum/TSO/UFO offloads. */
 	features &= ~(1u << VIRTIO_NET_F_CSUM);
@@ -112,8 +111,8 @@ static void vnet_read_config(struct virtio_net_dev *vnet, u32 features)
 
 	memset(vnet->mac, 0, sizeof(vnet->mac));
 	if (features & (1u << VIRTIO_NET_F_MAC))
-		virtio_mmio_read(vnet->vdev, vnet->mac, sizeof(vnet->mac),
-				 VIRTIO_CONFIG_OFFSET);
+		virtio_read_config(vnet->vdev, vnet->mac, sizeof(vnet->mac),
+				   VIRTIO_CONFIG_OFFSET);
 
 	if (!vnet_mac_valid(vnet->mac))
 		vnet_generate_mac(vnet);
@@ -123,8 +122,8 @@ static void vnet_read_config(struct virtio_net_dev *vnet, u32 features)
 	 * mtu(u16).  mtu is only valid with VIRTIO_NET_F_MTU.
 	 */
 	if (features & (1u << VIRTIO_NET_F_MTU)) {
-		if (!virtio_mmio_read(vnet->vdev, &mtu, sizeof(mtu),
-				      VIRTIO_CONFIG_OFFSET + 10) &&
+		if (!virtio_read_config(vnet->vdev, &mtu, sizeof(mtu),
+					VIRTIO_CONFIG_OFFSET + 10) &&
 		    mtu >= 576)
 			vnet->mtu = mtu;
 	}
@@ -255,7 +254,7 @@ static irqreturn_t vnet_irq(int irq, void *dev_id)
 
 	flags = spin_lock_irqsave(&vnet->lock);
 
-	status = virtio_mmio_ack_interrupt(vnet->vdev);
+	status = virtio_ack_interrupt(vnet->vdev);
 	__sync_synchronize();
 
 	/* Bit 0 covers used-ring updates from every queue. */
@@ -366,14 +365,14 @@ struct virtio_net_dev *virtio_net_create(struct virtio_device *vdev)
 	vnet->vdev = vdev;
 	vnet->mtu = 1500;
 
-	virtio_mmio_reset(vdev);
-	err = virtio_mmio_start_driver(vdev);
+	virtio_reset(vdev);
+	err = virtio_start_driver(vdev);
 	if (err)
 		goto err_free;
 
 	features = vnet_select_features(vdev);
-	virtio_mmio_write_features(vdev, features);
-	err = virtio_mmio_features_ok(vdev);
+	virtio_write_features(vdev, features);
+	err = virtio_features_ok(vdev);
 	if (err)
 		goto err_free;
 
@@ -384,12 +383,12 @@ struct virtio_net_dev *virtio_net_create(struct virtio_device *vdev)
 	if (err)
 		goto err_free_rx_vq;
 
-	err = virtio_mmio_setup_queue(vdev, VIRTIO_NET_RX_QUEUE, &vnet->rx_vq,
-				      VIRTIO_NET_QUEUE_SIZE);
+	err = virtio_setup_queue(vdev, VIRTIO_NET_RX_QUEUE, &vnet->rx_vq,
+				 VIRTIO_NET_QUEUE_SIZE);
 	if (err)
 		goto err_free_tx_vq;
-	err = virtio_mmio_setup_queue(vdev, VIRTIO_NET_TX_QUEUE, &vnet->tx_vq,
-				      VIRTIO_NET_QUEUE_SIZE);
+	err = virtio_setup_queue(vdev, VIRTIO_NET_TX_QUEUE, &vnet->tx_vq,
+				 VIRTIO_NET_QUEUE_SIZE);
 	if (err)
 		goto err_free_tx_vq;
 
@@ -407,7 +406,7 @@ struct virtio_net_dev *virtio_net_create(struct virtio_device *vdev)
 	if (err)
 		goto err_free_bufs;
 
-	err = virtio_mmio_driver_ok(vdev);
+	err = virtio_driver_ok(vdev);
 	if (err) {
 		free_irq(vdev->irq, vnet);
 		goto err_free_bufs;
@@ -433,7 +432,7 @@ struct virtio_net_dev *virtio_net_create(struct virtio_device *vdev)
 	virtio_net_set_rx_callback(vnet, vnet_rx_to_stack, vnet->ndev);
 
 	/* Now the device may use the receive ring. */
-	virtio_mmio_queue_notify(vdev, VIRTIO_NET_RX_QUEUE);
+	virtio_queue_notify(vdev, VIRTIO_NET_RX_QUEUE);
 
 	pr_info("virtio_net: mac=%02x:%02x:%02x:%02x:%02x:%02x mtu=%u\n",
 		vnet->mac[0], vnet->mac[1], vnet->mac[2], vnet->mac[3],
@@ -441,7 +440,7 @@ struct virtio_net_dev *virtio_net_create(struct virtio_device *vdev)
 	return vnet;
 
 err_reset:
-	virtio_mmio_reset(vdev);
+	virtio_reset(vdev);
 	free_irq(vdev->irq, vnet);
 err_free_bufs:
 	vnet_free_bufs(vnet);
@@ -468,7 +467,7 @@ void virtio_net_destroy(struct virtio_net_dev *vnet)
 
 	if (vnet->vdev) {
 		/* Stop the device before its descriptor memory disappears. */
-		virtio_mmio_reset(vnet->vdev);
+		virtio_reset(vnet->vdev);
 		free_irq(vnet->vdev->irq, vnet);
 	}
 
@@ -527,7 +526,7 @@ int virtio_net_transmit(struct virtio_net_dev *vnet, const void *frame,
 	desc->next = 0;
 
 	virtq_submit(&vnet->tx_vq, idx);
-	virtio_mmio_queue_notify(vnet->vdev, VIRTIO_NET_TX_QUEUE);
+	virtio_queue_notify(vnet->vdev, VIRTIO_NET_TX_QUEUE);
 
 	vnet->tx_packets++;
 	vnet->tx_bytes += len;

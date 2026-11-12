@@ -1,12 +1,8 @@
 #include <brk/container_of.h>
 #include <brk/device.h>
-#include <brk/list.h>
-#include <brk/spinlock.h>
 #include <brk/virtio.h>
 #include <stdbool.h>
-
-static LIST_DEFINE(vdevs);
-static SPINLOCK_DEFINE(vdevs_lock);
+#include <uapi/errno.h>
 
 struct bus_type virtio_bus = {
 	.name = "virtio",
@@ -40,10 +36,6 @@ void virtio_bus_init(void)
 
 int virtio_dev_add(struct virtio_device *dev)
 {
-	spin_lock(&vdevs_lock);
-	list_add(&dev->list, &vdevs);
-	spin_unlock(&vdevs_lock);
-
 	/* On failure the caller owns cleanup via virtio_mmio_dev_destroy(). */
 	return device_register(&dev->dev);
 }
@@ -51,24 +43,94 @@ int virtio_dev_add(struct virtio_device *dev)
 void virtio_dev_remove(struct virtio_device *dev)
 {
 	device_unregister(&dev->dev);
-
-	spin_lock(&vdevs_lock);
-	list_del(&dev->list);
-	spin_unlock(&vdevs_lock);
 }
 
-struct virtio_device *virtio_dev_get(u32 id)
+void virtio_reset(struct virtio_device *vdev)
 {
-	struct virtio_device *dev;
+	if (vdev && vdev->ops && vdev->ops->set_status)
+		(void)vdev->ops->set_status(vdev, 0);
+}
 
-	spin_lock(&vdevs_lock);
-	list_for_each_entry(dev, &vdevs, list) {
-		if (dev->id == id) {
-			spin_unlock(&vdevs_lock);
-			return dev;
-		}
-	}
-	spin_unlock(&vdevs_lock);
+int virtio_start_driver(struct virtio_device *vdev)
+{
+	u32 status = VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER;
 
-	return NULL;
+	if (!vdev || !vdev->ops || !vdev->ops->set_status)
+		return -EINVAL;
+	return vdev->ops->set_status(vdev, status);
+}
+
+u32 virtio_read_features(struct virtio_device *vdev)
+{
+	if (!vdev || !vdev->ops || !vdev->ops->get_features)
+		return 0;
+	return vdev->ops->get_features(vdev);
+}
+
+int virtio_write_features(struct virtio_device *vdev, u32 features)
+{
+	if (!vdev || !vdev->ops || !vdev->ops->set_features)
+		return -EINVAL;
+	return vdev->ops->set_features(vdev, features);
+}
+
+int virtio_features_ok(struct virtio_device *vdev)
+{
+	u32 status;
+	int err;
+
+	if (!vdev || !vdev->ops || !vdev->ops->get_status ||
+	    !vdev->ops->set_status)
+		return -EINVAL;
+
+	status = vdev->ops->get_status(vdev);
+	err = vdev->ops->set_status(vdev, status | VIRTIO_STATUS_FEATURES_OK);
+	if (err)
+		return err;
+
+	status = vdev->ops->get_status(vdev);
+	if (!(status & VIRTIO_STATUS_FEATURES_OK))
+		return -EOPNOTSUPP;
+	return 0;
+}
+
+int virtio_setup_queue(struct virtio_device *vdev, u32 queue_id,
+		       struct virtq *vq, u32 queue_size)
+{
+	if (!vdev || !vdev->ops || !vdev->ops->setup_queue)
+		return -EINVAL;
+	return vdev->ops->setup_queue(vdev, queue_id, vq, queue_size);
+}
+
+int virtio_driver_ok(struct virtio_device *vdev)
+{
+	u32 status;
+
+	if (!vdev || !vdev->ops || !vdev->ops->get_status ||
+	    !vdev->ops->set_status)
+		return -EINVAL;
+
+	status = vdev->ops->get_status(vdev);
+	return vdev->ops->set_status(vdev, status | VIRTIO_STATUS_DRIVER_OK);
+}
+
+void virtio_queue_notify(struct virtio_device *vdev, u32 queue_id)
+{
+	if (vdev && vdev->ops && vdev->ops->notify)
+		vdev->ops->notify(vdev, queue_id);
+}
+
+u32 virtio_ack_interrupt(struct virtio_device *vdev)
+{
+	if (!vdev || !vdev->ops || !vdev->ops->ack_interrupt)
+		return 0;
+	return vdev->ops->ack_interrupt(vdev);
+}
+
+int virtio_read_config(struct virtio_device *vdev, void *buf, size_t size,
+		       u32 offset)
+{
+	if (!vdev || !vdev->ops || !vdev->ops->read_config)
+		return -EINVAL;
+	return vdev->ops->read_config(vdev, buf, size, offset);
 }
