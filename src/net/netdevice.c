@@ -83,10 +83,6 @@ int netdev_register(struct net_device *dev)
 		return err;
 	}
 
-	if (dev->netdev_ops && dev->netdev_ops->ndo_open)
-		dev->netdev_ops->ndo_open(dev);
-
-	dev->flags |= IFF_UP;
 	pr_info("net: registered %s\n", dev->name);
 	return 0;
 }
@@ -98,7 +94,8 @@ void netdev_unregister(struct net_device *dev)
 	if (!dev)
 		return;
 
-	if (dev->netdev_ops && dev->netdev_ops->ndo_stop)
+	if ((dev->flags & IFF_UP) && dev->netdev_ops &&
+	    dev->netdev_ops->ndo_stop)
 		dev->netdev_ops->ndo_stop(dev);
 
 	dev->flags &= ~IFF_UP;
@@ -227,6 +224,63 @@ int netdev_ioctl(unsigned int cmd, unsigned long arg)
 		  cmd == SIOCSIFMTU || cmd == SIOCADDRT || cmd == SIOCDELRT;
 	if (set_cmd && !capable(CAP_NET_ADMIN))
 		return -EPERM;
+
+	if (cmd == SIOCGIFCONF) {
+		struct ifconf ifc;
+		struct ifreq entries[8];
+		unsigned int nr = 0;
+		size_t bytes;
+		irqstate_t flags;
+
+		if (copy_from_user(&ifc, (void *)arg, sizeof(ifc)))
+			return -EFAULT;
+		if (ifc.ifc_len < 0 || !ifc.ifc_buf)
+			return -EINVAL;
+
+		flags = spin_lock_irqsave(&netdev_lock);
+		list_for_each_entry(dev, &netdev_list, dev_list) {
+			if (nr >= 8)
+				break;
+			if ((int)((nr + 1) * sizeof(struct ifreq)) >
+			    ifc.ifc_len)
+				break;
+			memset(&entries[nr], 0, sizeof(entries[nr]));
+			strlcpy(entries[nr].ifr_name, dev->name, IFNAMSIZ);
+			ifreq_set_addr(&entries[nr], dev->ip_addr);
+			nr++;
+		}
+		spin_unlock_irqrestore(&netdev_lock, flags);
+
+		bytes = nr * sizeof(struct ifreq);
+		if (bytes && copy_to_user(ifc.ifc_buf, entries, bytes))
+			return -EFAULT;
+		ifc.ifc_len = (int)bytes;
+		if (copy_to_user((void *)arg, &ifc, sizeof(ifc)))
+			return -EFAULT;
+		return 0;
+	}
+
+	if (cmd == SIOCGIFSTATS) {
+		struct ifstats stats;
+
+		if (copy_from_user(&stats, (void *)arg, sizeof(stats)))
+			return -EFAULT;
+		stats.ifs_name[IFNAMSIZ - 1] = '\0';
+		dev = netdev_get_by_name(stats.ifs_name);
+		if (!dev)
+			return -ENODEV;
+		stats.rx_packets = dev->stats.rx_packets;
+		stats.tx_packets = dev->stats.tx_packets;
+		stats.rx_bytes = dev->stats.rx_bytes;
+		stats.tx_bytes = dev->stats.tx_bytes;
+		stats.rx_errors = dev->stats.rx_errors;
+		stats.tx_errors = dev->stats.tx_errors;
+		stats.rx_dropped = dev->stats.rx_dropped;
+		stats.tx_dropped = dev->stats.tx_dropped;
+		if (copy_to_user((void *)arg, &stats, sizeof(stats)))
+			return -EFAULT;
+		return 0;
+	}
 
 	if (cmd == SIOCADDRT || cmd == SIOCDELRT) {
 		if (copy_from_user(&rt, (void *)arg, sizeof(rt)))

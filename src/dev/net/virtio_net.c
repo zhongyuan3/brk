@@ -336,7 +336,7 @@ static struct net_device *vnet_netdev_create(struct virtio_net_dev *vnet)
 	memcpy(dev->dev_addr, vnet->mac, ETH_ALEN);
 	dev->type = ARPHRD_ETHER;
 	dev->mtu = vnet->mtu;
-	dev->flags = IFF_UP | IFF_BROADCAST;
+	dev->flags = IFF_BROADCAST;
 	dev->netdev_ops = &vnet_netdev_ops;
 	dev->priv = vnet;
 	vnet->ndev = dev;

@@ -14,6 +14,7 @@
 
 #define SIOCADDRT 0x890B
 #define SIOCDELRT 0x890C
+#define SIOCGIFCONF 0x8912
 #define SIOCGIFFLAGS 0x8913
 #define SIOCSIFFLAGS 0x8914
 #define SIOCGIFADDR 0x8915
@@ -25,6 +26,7 @@
 #define SIOCGIFMTU 0x8921
 #define SIOCSIFMTU 0x8922
 #define SIOCGIFHWADDR 0x8927
+#define SIOCGIFSTATS 0x89f0
 
 #define RTF_UP 0x0001
 #define RTF_GATEWAY 0x0002
@@ -47,6 +49,29 @@ struct ifreq {
 #define ifr_hwaddr ifr_ifru.ifru_hwaddr
 #define ifr_flags ifr_ifru.ifru_flags
 #define ifr_mtu ifr_ifru.ifru_mtu
+
+struct ifconf {
+	int ifc_len;
+	union {
+		char *ifcu_buf;
+		struct ifreq *ifcu_req;
+	} ifc_ifcu;
+};
+
+#define ifc_buf ifc_ifcu.ifcu_buf
+#define ifc_req ifc_ifcu.ifcu_req
+
+struct ifstats {
+	char ifs_name[IFNAMSIZ];
+	__u64 rx_packets;
+	__u64 tx_packets;
+	__u64 rx_bytes;
+	__u64 tx_bytes;
+	__u64 rx_errors;
+	__u64 tx_errors;
+	__u64 rx_dropped;
+	__u64 tx_dropped;
+};
 
 struct rtentry {
 	struct sockaddr rt_dst;
