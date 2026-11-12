@@ -91,9 +91,6 @@ void page_cache_init(void);
  */
 unsigned long page_cache_shrink(unsigned long nr_to_reclaim);
 
-/* Return the number of pages currently tracked on the global LRU. */
-unsigned long page_cache_nr_pages(void);
-
 struct page_cache *page_cache_create(void *host,
 				     const struct page_cache_ops *ops);
 void page_cache_destroy(struct page_cache *mapping);

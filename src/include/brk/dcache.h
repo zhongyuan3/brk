@@ -87,6 +87,4 @@ extern const struct qstr dotdot_name;
 
 extern const struct fs_dentry_ops generic_dop;
 
-void fs_dcache_dump(void);
-
 #endif

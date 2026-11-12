@@ -54,12 +54,6 @@ u32 inet_csum_add(u32 sum, const void *data, size_t len);
 u16 inet_csum_fold(u32 sum);
 u16 inet_csum(const void *data, size_t len);
 
-/* Parse a dotted-quad string; returns 0 on success. */
-int net_parse_ipv4(const char *buf, size_t len, u32 *addr);
-
-/* Send one ICMP echo request to @daddr (host byte order). */
-int net_ping(u32 daddr);
-
 /* Bring up the IPv4 stack during boot. */
 void net_init(void);
 

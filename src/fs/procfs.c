@@ -12,9 +12,9 @@
  *     version          kernel build banner
  *     uptime           seconds since boot, idle (placeholder)
  *     meminfo          buddy allocator stats per order
- *     pagecache        page cache LRU size (debug)
- *     pagecache_shrink write N to manually reclaim N clean pages (debug)
  *     filesystems      one registered fs name per line
+ *     tcp              active TCP connections (temporary; see below)
+ *     interrupts       IRQ descriptor table
  *     <pid>/
  *       status         multi-line key:value process state
  *       stat           single-line ps-style summary
@@ -34,8 +34,7 @@
  *
  * Lifecycle / locking
  * -------------------
- * The filesystem is read-only for normal entries (no create / unlink).
- * A few debug control files (e.g. pagecache_shrink) accept writes.
+ * The filesystem is read-only (no create / unlink / write).
  * Snapshots taken at open() are immutable for the lifetime of the file;
  * concurrent kernel state changes do not perturb in-flight readers.
  *
@@ -54,13 +53,9 @@
 #include <brk/ktime.h>
 #include <brk/lengthof.h>
 #include <brk/list.h>
-#include <brk/net.h>
-#include <brk/netirqtest.h>
-#include <brk/pagecache.h>
 #include <brk/path.h>
 #include <brk/pgalloc.h>
 #include <brk/printf.h>
-#include <brk/printk.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
@@ -94,9 +89,6 @@ struct procfs_entry;
 typedef int (*procfs_show_fn)(const struct procfs_entry *entry, pid_t pid,
 			      char *buf, size_t size);
 
-typedef ssize_t (*procfs_write_fn)(const struct procfs_entry *entry,
-				   const char *buf, size_t size, loff_t *pos);
-
 struct procfs_entry {
 	const char *name;
 	u8 name_len;
@@ -104,7 +96,6 @@ struct procfs_entry {
 	u8 d_type;
 	umode_t mode;
 	procfs_show_fn show;
-	procfs_write_fn write;
 };
 
 static int procfs_show_version(const struct procfs_entry *e, pid_t pid,
@@ -115,25 +106,10 @@ static int procfs_show_meminfo(const struct procfs_entry *e, pid_t pid,
 			       char *buf, size_t size);
 static int procfs_show_filesystems(const struct procfs_entry *e, pid_t pid,
 				   char *buf, size_t size);
-static int procfs_show_pagecache(const struct procfs_entry *e, pid_t pid,
-				 char *buf, size_t size);
-static int procfs_show_pagecache_shrink(const struct procfs_entry *e, pid_t pid,
-					char *buf, size_t size);
-static ssize_t procfs_write_pagecache_shrink(const struct procfs_entry *e,
-					     const char *buf, size_t size,
-					     loff_t *pos);
-static int procfs_show_ping(const struct procfs_entry *e, pid_t pid, char *buf,
-			    size_t size);
-static ssize_t procfs_write_ping(const struct procfs_entry *e, const char *buf,
-				 size_t size, loff_t *pos);
 static int procfs_show_tcp(const struct procfs_entry *e, pid_t pid, char *buf,
 			   size_t size);
 static int procfs_show_interrupts(const struct procfs_entry *e, pid_t pid,
 				  char *buf, size_t size);
-static int procfs_show_irqtest(const struct procfs_entry *e, pid_t pid,
-			       char *buf, size_t size);
-static ssize_t procfs_write_irqtest(const struct procfs_entry *e,
-				    const char *buf, size_t size, loff_t *pos);
 static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
 				  char *buf, size_t size);
 static int procfs_show_pid_stat(const struct procfs_entry *e, pid_t pid,
@@ -166,45 +142,23 @@ static const struct procfs_entry procfs_root_entries[] = {
 	  .d_type = DT_REG,
 	  .mode = S_IFREG | 0444,
 	  .show = procfs_show_filesystems },
-	{ .name = "pagecache",
-	  .name_len = 9,
-	  .idx = 5,
-	  .d_type = DT_REG,
-	  .mode = S_IFREG | 0444,
-	  .show = procfs_show_pagecache },
-	{ .name = "pagecache_shrink",
-	  .name_len = 16,
-	  .idx = 6,
-	  .d_type = DT_REG,
-	  .mode = S_IFREG | 0644,
-	  .show = procfs_show_pagecache_shrink,
-	  .write = procfs_write_pagecache_shrink },
-	{ .name = "ping",
-	  .name_len = 4,
-	  .idx = 7,
-	  .d_type = DT_REG,
-	  .mode = S_IFREG | 0644,
-	  .show = procfs_show_ping,
-	  .write = procfs_write_ping },
+	/*
+	 * Temporary: netstat reads this entry today.  Remove /proc/tcp once
+	 * the net module is complete and provides a proper socket-dump
+	 * interface.
+	 */
 	{ .name = "tcp",
 	  .name_len = 3,
-	  .idx = 8,
+	  .idx = 5,
 	  .d_type = DT_REG,
 	  .mode = S_IFREG | 0444,
 	  .show = procfs_show_tcp },
 	{ .name = "interrupts",
 	  .name_len = 10,
-	  .idx = 9,
+	  .idx = 6,
 	  .d_type = DT_REG,
 	  .mode = S_IFREG | 0444,
 	  .show = procfs_show_interrupts },
-	{ .name = "irqtest",
-	  .name_len = 7,
-	  .idx = 10,
-	  .d_type = DT_REG,
-	  .mode = S_IFREG | 0644,
-	  .show = procfs_show_irqtest,
-	  .write = procfs_write_irqtest },
 };
 #define PROCFS_ROOT_ENTRIES_NR lengthof(procfs_root_entries)
 
@@ -409,108 +363,6 @@ static int procfs_show_filesystems(const struct procfs_entry *e, pid_t pid,
 	return (int)it.pos;
 }
 
-static int procfs_show_pagecache(const struct procfs_entry *e, pid_t pid,
-				 char *buf, size_t size)
-{
-	(void)e;
-	(void)pid;
-
-	return snprintf(buf, size,
-			"nrpages:\t%lu\n"
-			"reclaim:\twrite N to /proc/pagecache_shrink\n",
-			page_cache_nr_pages());
-}
-
-static int procfs_show_pagecache_shrink(const struct procfs_entry *e, pid_t pid,
-					char *buf, size_t size)
-{
-	(void)e;
-	(void)pid;
-
-	return snprintf(buf, size,
-			"# write the number of clean pages to reclaim\n"
-			"# example: echo 8 > /proc/pagecache_shrink\n");
-}
-
-static unsigned long procfs_parse_ulong(const char *buf, size_t size)
-{
-	unsigned long val = 0;
-	bool seen = false;
-
-	for (size_t i = 0; i < size; ++i) {
-		char c = buf[i];
-
-		if (c == ' ' || c == '\t' || c == '\n' || c == '\r')
-			continue;
-		if (c < '0' || c > '9')
-			break;
-		seen = true;
-		val = val * 10 + (unsigned long)(c - '0');
-	}
-	return seen ? val : 0;
-}
-
-static ssize_t procfs_write_pagecache_shrink(const struct procfs_entry *e,
-					     const char *buf, size_t size,
-					     loff_t *pos)
-{
-	unsigned long nr;
-	unsigned long freed;
-
-	(void)e;
-
-	if (*pos != 0)
-		return -EINVAL;
-	if (size == 0)
-		return -EINVAL;
-
-	nr = procfs_parse_ulong(buf, size);
-	if (nr == 0)
-		return -EINVAL;
-
-	freed = page_cache_shrink(nr);
-	pr_info("pagecache: shrink(%lu) freed %lu pages (%lu remain)\n", nr,
-		freed, page_cache_nr_pages());
-	*pos = (loff_t)size;
-	return (ssize_t)size;
-}
-
-static int procfs_show_ping(const struct procfs_entry *e, pid_t pid, char *buf,
-			    size_t size)
-{
-	(void)e;
-	(void)pid;
-
-	return snprintf(
-		buf, size,
-		"# write an IPv4 address to send one ICMP echo request\n"
-		"# example: echo 10.0.2.2 > /proc/ping\n");
-}
-
-static ssize_t procfs_write_ping(const struct procfs_entry *e, const char *buf,
-				 size_t size, loff_t *pos)
-{
-	u32 addr;
-	int err;
-
-	(void)e;
-
-	if (*pos != 0 || size == 0)
-		return -EINVAL;
-
-	err = net_parse_ipv4(buf, size, &addr);
-	if (err)
-		return err;
-
-	err = net_ping(addr);
-	/* -EAGAIN means the first packet is queued behind ARP. */
-	if (err && err != -EAGAIN)
-		return err;
-
-	*pos = (loff_t)size;
-	return (ssize_t)size;
-}
-
 static int procfs_show_tcp(const struct procfs_entry *e, pid_t pid, char *buf,
 			   size_t size)
 {
@@ -527,33 +379,6 @@ static int procfs_show_interrupts(const struct procfs_entry *e, pid_t pid,
 	(void)pid;
 
 	return irq_proc_show(buf, size);
-}
-
-static int procfs_show_irqtest(const struct procfs_entry *e, pid_t pid,
-			       char *buf, size_t size)
-{
-	(void)e;
-	(void)pid;
-
-	return irq_exttest_show(buf, size);
-}
-
-static ssize_t procfs_write_irqtest(const struct procfs_entry *e,
-				    const char *buf, size_t size, loff_t *pos)
-{
-	int err;
-
-	(void)e;
-
-	if (*pos != 0 || size == 0)
-		return -EINVAL;
-
-	err = irq_exttest_run(buf, size);
-	if (err)
-		return err;
-
-	*pos = (loff_t)size;
-	return (ssize_t)size;
 }
 
 static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
@@ -819,9 +644,8 @@ static int procfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 	(void)dentry;
 
 	/*
-	 * Debug control files are generated on open.  Ignore size/time
-	 * updates (shell redirection uses O_TRUNC) but still reject mode and
-	 * ownership changes.
+	 * Files are generated on open.  Ignore size/time updates (open with
+	 * O_TRUNC) but still reject mode and ownership changes.
 	 */
 	if (attr->valid & ~(ATTR_SIZE | ATTR_ATIME | ATTR_MTIME | ATTR_CTIME))
 		return -EROFS;
@@ -846,7 +670,6 @@ static const struct fs_inode_ops procfs_file_iops = {
 };
 
 struct procfs_file_priv {
-	const struct procfs_entry *entry;
 	char *buf;
 	size_t len; /* bytes actually generated */
 	size_t cap; /* allocation size */
@@ -895,7 +718,6 @@ static int procfs_file_open(struct fs_inode *inode, struct fs_file *file)
 	if ((size_t)n > priv->cap)
 		n = (int)priv->cap;
 	priv->len = (size_t)n;
-	priv->entry = e;
 	file->private_data = priv;
 	return 0;
 }
@@ -934,11 +756,11 @@ static ssize_t procfs_file_read(struct fs_file *file, char *buf, size_t size,
 static ssize_t procfs_file_write(struct fs_file *file, const char *buf,
 				 size_t size, loff_t *pos)
 {
-	struct procfs_file_priv *priv = file->private_data;
-
-	if (!priv || !priv->entry || !priv->entry->write)
-		return -EROFS;
-	return priv->entry->write(priv->entry, buf, size, pos);
+	(void)file;
+	(void)buf;
+	(void)size;
+	(void)pos;
+	return -EROFS;
 }
 
 static loff_t procfs_file_llseek(struct fs_file *file, loff_t offset,

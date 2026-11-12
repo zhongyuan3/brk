@@ -540,22 +540,6 @@ const u8 *virtio_net_get_mac(struct virtio_net_dev *vnet)
 	return vnet ? vnet->mac : NULL;
 }
 
-unsigned int virtio_net_first_irq(void)
-{
-	unsigned int irq = 0;
-	irqstate_t flags = spin_lock_irqsave(&vnet_registry_lock);
-
-	for (unsigned int i = 0; i < VIRTIO_NET_MAX_DEVS; i++) {
-		if (vnet_devs[i]) {
-			irq = vnet_devs[i]->vdev->irq;
-			break;
-		}
-	}
-
-	spin_unlock_irqrestore(&vnet_registry_lock, flags);
-	return irq;
-}
-
 static int virtio_net_probe(struct device *dev)
 {
 	struct virtio_device *vdev =

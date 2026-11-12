@@ -533,11 +533,6 @@ unsigned long page_cache_shrink(unsigned long nr_to_reclaim)
 	return freed;
 }
 
-unsigned long page_cache_nr_pages(void)
-{
-	return pagecache_nrpages;
-}
-
 int truncate_inode_pages(struct page_cache *m, loff_t new_size)
 {
 	pgoff_t first_full;

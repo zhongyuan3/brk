@@ -114,36 +114,3 @@ int ip_output(struct sk_buff *skb, u32 saddr, u32 daddr, u8 protocol, u8 ttl)
 
 	return arp_output(skb, dev, next_hop);
 }
-
-int net_parse_ipv4(const char *buf, size_t len, u32 *addr)
-{
-	u32 parts[4] = { 0, 0, 0, 0 };
-	int part = 0;
-	bool digit = false;
-
-	for (size_t i = 0; i < len; i++) {
-		char c = buf[i];
-
-		if (c >= '0' && c <= '9') {
-			parts[part] = parts[part] * 10 + (u32)(c - '0');
-			if (parts[part] > 255)
-				return -EINVAL;
-			digit = true;
-		} else if (c == '.') {
-			if (!digit || part >= 3)
-				return -EINVAL;
-			part++;
-			digit = false;
-		} else if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
-			break;
-		} else {
-			return -EINVAL;
-		}
-	}
-
-	if (!digit || part != 3)
-		return -EINVAL;
-
-	*addr = NET_IP4(parts[0], parts[1], parts[2], parts[3]);
-	return 0;
-}

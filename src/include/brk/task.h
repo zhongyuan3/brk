@@ -58,7 +58,6 @@ void task_exit(int status);
 void task_exit_normal(int code);
 void task_exit_signal(int sig);
 int task_fork(void);
-void task_dump(void);
 
 void task_yield(void);
 void task_sleep(void *chan, spinlock_t *lock);

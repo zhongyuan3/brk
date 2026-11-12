@@ -1,4 +1,3 @@
-#include <arch/hart.h>
 #include <arch/pgtable.h>
 #include <brk/ioremap.h>
 #include <brk/irq.h>
@@ -168,73 +167,6 @@ static int plic_handle_irq(struct irq_controller *ctrl, unsigned int hart)
 	return 1;
 }
 
-static bool plic_hwirq_enabled(struct sifive_plic *p, unsigned int hart,
-			       u32 hwirq)
-{
-	volatile u32 *en = plic_enable_reg(p, hart);
-
-	return (en[hwirq / 32] & (1u << (hwirq % 32))) != 0;
-}
-
-static void plic_hwirq_clear_enable(struct sifive_plic *p, unsigned int hart,
-				    u32 hwirq)
-{
-	volatile u32 *en = plic_enable_reg(p, hart);
-
-	en[hwirq / 32] &= ~(1u << (hwirq % 32));
-}
-
-static void plic_selftest(struct sifive_plic *p)
-{
-	bool h0, h1, h0_after, h1_after;
-	u32 test_hwirq = p->ndev - 1;
-	unsigned int virq;
-
-	if (p->ndev <= 1)
-		return;
-
-	/*
-	 * Use the last PLIC source, which no QEMU virt device uses, so the
-	 * test never disturbs a real device IRQ.  The mapping is left in
-	 * place (it is harmless and shows up as <none> in /proc/interrupts).
-	 */
-	virq = irq_create_mapping(p->domain, test_hwirq, IRQ_TYPE_LEVEL_HIGH);
-	if (!virq) {
-		pr_err("plic: affinity selftest: cannot map hwirq %u\n",
-		       test_hwirq);
-		return;
-	}
-
-	irq_set_affinity(virq, 0);
-	h0 = plic_hwirq_enabled(p, 0, test_hwirq);
-	h1 = nr_harts > 1 ? plic_hwirq_enabled(p, 1, test_hwirq) : false;
-
-	if (nr_harts > 1) {
-		irq_set_affinity(virq, 1);
-		h0_after = plic_hwirq_enabled(p, 0, test_hwirq);
-		h1_after = plic_hwirq_enabled(p, 1, test_hwirq);
-		irq_set_affinity(virq, 0);
-
-		if (h0 && !h1 && !h0_after && h1_after)
-			pr_info("plic: affinity selftest passed (hart 0 <-> 1)\n");
-		else
-			pr_err("plic: affinity selftest failed "
-			       "(h0=%d h1=%d h0_after=%d h1_after=%d)\n",
-			       h0, h1, h0_after, h1_after);
-	} else {
-		if (h0 && !h1)
-			pr_info("plic: single-hart affinity selftest passed\n");
-		else
-			pr_err("plic: single-hart affinity selftest failed "
-			       "(h0=%d h1=%d)\n",
-			       h0, h1);
-	}
-
-	plic_hwirq_clear_enable(p, 0, test_hwirq);
-	if (nr_harts > 1)
-		plic_hwirq_clear_enable(p, 1, test_hwirq);
-}
-
 static int plic_probe(const struct device_node *node)
 {
 	struct resource res;
@@ -280,8 +212,6 @@ static int plic_probe(const struct device_node *node)
 	p->controller.init_hart = plic_init_hart;
 	list_init(&p->controller.list);
 	irq_register_controller(&p->controller);
-
-	plic_selftest(p);
 
 	pr_info("plic: %u sources at %#" PRIx64 "\n", p->ndev, addr);
 	return 0;

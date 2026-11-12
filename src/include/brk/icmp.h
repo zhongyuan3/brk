@@ -20,7 +20,4 @@ struct icmphdr {
 
 int icmp_rcv(struct sk_buff *skb);
 
-int icmp_send_echo(u32 saddr, u32 daddr, u16 id, u16 seq, const void *data,
-		   size_t len);
-
 #endif

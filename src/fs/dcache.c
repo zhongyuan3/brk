@@ -461,26 +461,3 @@ static int generic_compare(const struct fs_dentry *dentry, unsigned int len,
 const struct fs_dentry_ops generic_dop = {
 	.compare = generic_compare,
 };
-
-void fs_dcache_dump(void)
-{
-	struct fs_dentry *d;
-	struct hlist_head *head;
-
-	spin_lock(&dentry_htable_lock);
-	printk("Dcache dump:\n");
-	for (size_t i = 0; i < DENTRY_HTABLE_SIZE; i++) {
-		head = &dentry_htable[i];
-		if (hlist_empty(head))
-			continue;
-		printk("Bucket %zu:\n", i);
-		hlist_for_each_entry(d, head, hash) {
-			printk("  Name: %s, Inode: %ld, Refcnt: %d, Negative: %s, Mounted: %s\n",
-			       d->name.name, d->inode ? d->inode->ino : 0,
-			       refcnt_read(&d->count),
-			       d->flags & DCACHE_NEGATIVE ? "true" : "false",
-			       d->flags & DCACHE_MOUNTED ? "true" : "false");
-		}
-	}
-	spin_unlock(&dentry_htable_lock);
-}

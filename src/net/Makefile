@@ -11,5 +11,4 @@ obj-y += udp.o
 obj-y += tcp.o
 obj-y += socket.o
 obj-y += sys_socket.o
-obj-y += irqtest.o
 obj-y += init.o

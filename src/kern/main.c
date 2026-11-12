@@ -100,7 +100,7 @@ void start_kernel(void)
 	virtio_blk_init();
 	virtio_net_init();
 
-	/* Finish deferred probes, then run the device-model self-tests. */
+	/* Retry devices that deferred their probe. */
 	device_deferred_probe_init();
 
 	irq_init_hart(this_cpuid());

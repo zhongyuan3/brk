@@ -6,8 +6,8 @@
 #include <brk/min_max.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
-#include <brk/printk.h>
 #include <brk/string.h>
+#include <stdbool.h>
 
 #define for_each_memblock_region(set, idx, rgn)               \
 	for (idx = 0, rgn = &set->regions[0]; idx < set->cnt; \
@@ -240,13 +240,6 @@ u64 memblock_start_of_dram(void)
 	return init_memblock.memory.regions[0].base;
 }
 
-void memblock_dump_all(void)
-{
-	printk("MEMBLOCK configuration:\n");
-	memblock_dump(&init_memblock.memory);
-	memblock_dump(&init_memblock.reserved);
-}
-
 void __next_mem_range(u64 *pidx, u64 *pstart, u64 *pend)
 {
 	u32 idx_mem = (*pidx >> 32) & 0xffffffffUL;
@@ -388,19 +381,4 @@ void memblock_free_all(void)
 
 	for (size_t i = 0; i < nr_ranges; ++i)
 		memblock_free_range(ranges[i].start, ranges[i].end);
-}
-
-void memblock_dump(struct memblock_region_set *set)
-{
-	size_t idx;
-	struct memblock_region *rgn;
-
-	printk(" %s.cnt=%zu\n", set->name, set->cnt);
-	for_each_memblock_region(set, idx, rgn) {
-		u64 start = rgn->base;
-		size_t size = rgn->size;
-		u64 end = start + size;
-		printk(" %s[%zu]\t[%p-%p], %zu bytes\n", set->name, idx,
-		       (void *)(uintptr_t)start, (void *)(uintptr_t)end, size);
-	}
 }

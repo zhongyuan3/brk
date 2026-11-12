@@ -3,7 +3,6 @@
 #include <brk/net.h>
 #include <brk/printk.h>
 #include <brk/skbuff.h>
-#include <brk/string.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
 
@@ -50,38 +49,4 @@ int icmp_rcv(struct sk_buff *skb)
 
 	skb_free(skb);
 	return 0;
-}
-
-int icmp_send_echo(u32 saddr, u32 daddr, u16 id, u16 seq, const void *data,
-		   size_t len)
-{
-	struct sk_buff *skb;
-	struct icmphdr *icmp;
-
-	skb = skb_alloc(sizeof(*icmp) + len);
-	if (!skb)
-		return -ENOMEM;
-
-	icmp = (struct icmphdr *)skb_put(skb, sizeof(*icmp));
-	icmp->type = ICMP_ECHO;
-	icmp->code = 0;
-	icmp->checksum = 0;
-	icmp->id = htons(id);
-	icmp->sequence = htons(seq);
-
-	if (len)
-		memcpy(skb_put(skb, len), data, len);
-
-	icmp->checksum = inet_csum(icmp, skb->len);
-	return ip_output(skb, saddr, daddr, IPPROTO_ICMP, IP_TTL_DEFAULT);
-}
-
-int net_ping(u32 daddr)
-{
-	static u16 seq;
-	u8 payload[16];
-
-	memset(payload, 0x42, sizeof(payload));
-	return icmp_send_echo(0, daddr, 0x4252, ++seq, payload,
-			      sizeof(payload));
 }

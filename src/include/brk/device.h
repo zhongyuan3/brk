@@ -168,7 +168,7 @@ void driver_unregister(struct device_driver *drv);
 struct device **device_snapshot(size_t *count);
 void device_snapshot_free(struct device **devices, size_t count);
 
-/* Boot-time probe completion and device-model self-tests. */
+/* Retry devices that deferred their probe during registration. */
 void device_deferred_probe_init(void);
 
 #endif

@@ -626,30 +626,6 @@ bool task_get_info(pid_t tgid, struct task_info *info)
 	return true;
 }
 
-void task_dump(void)
-{
-	static char *state_strs[] = {
-		[TASK_STATE_NEW] = "new    ",
-		[TASK_STATE_SLEEPING] = "sleep  ",
-		[TASK_STATE_RUNNING] = "running",
-		[TASK_STATE_ZOMBIE] = "zombie ",
-	};
-	struct task *task;
-	char *state;
-
-	irqstate_t flags = spin_lock_irqsave(&tasks_lock);
-	printk("\n");
-	list_for_each_entry(task, &tasks, list) {
-		if (task->state >= 0 && task->state < lengthof(state_strs) &&
-		    state_strs[task->state])
-			state = state_strs[task->state];
-		else
-			state = "???    ";
-		printk("%d %s %s\n", task->pid, state, task->name);
-	}
-	spin_unlock_irqrestore(&tasks_lock, flags);
-}
-
 int task_fork(void)
 {
 	int err;

@@ -30,9 +30,6 @@ u64 memblock_alloc(size_t size, u64 min_addr, size_t align);
 void memblock_free(u64 base, size_t size);
 u64 memblock_start_of_dram(void);
 void memblock_free_all(void);
-void memblock_dump(struct memblock_region_set *set);
-void memblock_dump_all(void);
-
 void __next_mem_range(u64 *pidx, u64 *pstart, u64 *pend);
 void __next_mem_pfn_range(u32 *pidx, u64 *pstart, u64 *pend);
 
