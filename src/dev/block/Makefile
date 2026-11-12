@@ -5,3 +5,4 @@ obj-y += blkdev_file.o
 obj-y += genhd.o
 obj-y += partitions.o
 obj-y += virtio_blk.o
+obj-y += virtio_blk_req.o
