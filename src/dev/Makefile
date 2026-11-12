@@ -1,9 +1,9 @@
-subdir-y += base
-subdir-y += dt
-subdir-y += block
-subdir-y += net
+subdir-y += core
+subdir-y += bus
+subdir-y += of
 subdir-y += char
 subdir-y += tty
-subdir-y += virtio
+subdir-y += block
+subdir-y += net
 subdir-y += rtc
 subdir-y += irqchip

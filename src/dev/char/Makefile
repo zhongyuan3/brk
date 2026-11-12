@@ -1,1 +1,1 @@
-obj-y += ns16550a.o
+obj-y += chrdev.o
