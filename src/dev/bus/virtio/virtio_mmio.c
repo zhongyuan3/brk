@@ -1,11 +1,19 @@
 #include <arch/mm.h>
+#include <arch/pgtable.h>
+#include <brk/device.h>
+#include <brk/ioremap.h>
+#include <brk/kmalloc.h>
+#include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mmio.h>
 #include <brk/panic.h>
+#include <brk/printf.h>
 #include <brk/virtio.h>
 #include <brk/virtio_mmio.h>
 #include <inttypes.h>
 #include <uapi/errno.h>
+
+static unsigned int virtio_dev_index;
 
 static u64 virtio_mmio_base(struct virtio_device *dev)
 {
@@ -21,7 +29,7 @@ static void virtio_mmio_write_addr(struct virtio_device *dev, u32 low_off,
 	writel(addr >> 32, base + high_off);
 }
 
-int virtio_mmio_probe(struct virtio_device *dev)
+static int virtio_mmio_probe(struct virtio_device *dev)
 {
 	u64 base = virtio_mmio_base(dev);
 
@@ -35,6 +43,52 @@ int virtio_mmio_probe(struct virtio_device *dev)
 		return -EINVAL;
 
 	return 0;
+}
+
+struct virtio_device *virtio_mmio_dev_create(u64 phys_base, size_t size,
+					     u32 irq)
+{
+	struct virtio_device *dev;
+	int err;
+
+	dev = kmalloc(sizeof(*dev));
+	if (!dev)
+		return NULL;
+
+	dev->phys_base = phys_base;
+	dev->size = size;
+	dev->irq = irq;
+
+	dev->mem_base = ioremap(phys_base, size, PTE_R | PTE_W);
+	if (!dev->mem_base) {
+		kfree(dev);
+		return NULL;
+	}
+
+	list_init(&dev->list);
+
+	err = virtio_mmio_probe(dev);
+	if (err) {
+		iounmap(dev->mem_base, dev->size);
+		kfree(dev);
+		return NULL;
+	}
+
+	dev->id = readl(dev->mem_base + VIRTIO_DEVICE_ID_OFFSET);
+
+	char name[DEVICE_NAME_LEN];
+
+	snprintf(name, sizeof(name), "virtio%u", virtio_dev_index++);
+	device_init(&dev->dev, name);
+	dev->dev.bus = &virtio_bus;
+	return dev;
+}
+
+void virtio_mmio_dev_destroy(struct virtio_device *dev)
+{
+	virtio_dev_remove(dev);
+	iounmap(dev->mem_base, dev->size);
+	kfree(dev);
 }
 
 void virtio_mmio_reset(struct virtio_device *dev)

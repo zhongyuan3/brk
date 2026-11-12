@@ -20,7 +20,7 @@ static int virtio_mmio_platform_probe(struct device *dev)
 	if (!mem || irq < 0)
 		return -ENODEV;
 
-	vdev = virtio_dev_create(mem->start, resource_size(mem), (u32)irq);
+	vdev = virtio_mmio_dev_create(mem->start, resource_size(mem), (u32)irq);
 	if (!vdev)
 		return -ENODEV;
 
@@ -28,7 +28,7 @@ static int virtio_mmio_platform_probe(struct device *dev)
 
 	err = virtio_dev_add(vdev);
 	if (err) {
-		virtio_dev_destroy(vdev);
+		virtio_mmio_dev_destroy(vdev);
 		return err;
 	}
 
@@ -44,7 +44,7 @@ static void virtio_mmio_platform_remove(struct device *dev)
 		return;
 
 	dev->driver_data = NULL;
-	virtio_dev_destroy(vdev);
+	virtio_mmio_dev_destroy(vdev);
 }
 
 static const struct device_id virtio_mmio_platform_ids[] = {

@@ -7,7 +7,10 @@
 
 void virtio_mmio_platform_init(void);
 
-int virtio_mmio_probe(struct virtio_device *dev);
+struct virtio_device *virtio_mmio_dev_create(u64 phys_base, size_t size,
+					     u32 irq);
+void virtio_mmio_dev_destroy(struct virtio_device *dev);
+
 void virtio_mmio_reset(struct virtio_device *dev);
 int virtio_mmio_start_driver(struct virtio_device *dev);
 u32 virtio_mmio_read_features(struct virtio_device *dev);

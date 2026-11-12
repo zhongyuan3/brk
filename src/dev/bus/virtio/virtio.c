@@ -1,21 +1,12 @@
-#include <arch/pgtable.h>
 #include <brk/container_of.h>
 #include <brk/device.h>
-#include <brk/ioremap.h>
-#include <brk/kmalloc.h>
 #include <brk/list.h>
-#include <brk/mmio.h>
-#include <brk/printf.h>
 #include <brk/spinlock.h>
 #include <brk/virtio.h>
-#include <brk/virtio_blk.h>
-#include <brk/virtio_mmio.h>
 #include <stdbool.h>
-#include <uapi/errno.h>
 
 static LIST_DEFINE(vdevs);
 static SPINLOCK_DEFINE(vdevs_lock);
-static unsigned int virtio_dev_index;
 
 struct bus_type virtio_bus = {
 	.name = "virtio",
@@ -47,58 +38,13 @@ void virtio_bus_init(void)
 	bus_register(&virtio_bus);
 }
 
-struct virtio_device *virtio_dev_create(u64 phys_base, size_t size, u32 irq)
-{
-	struct virtio_device *dev;
-	int err;
-
-	dev = kmalloc(sizeof(*dev));
-	if (!dev)
-		return NULL;
-
-	dev->phys_base = phys_base;
-	dev->size = size;
-	dev->irq = irq;
-
-	dev->mem_base = ioremap(phys_base, size, PTE_R | PTE_W);
-	if (!dev->mem_base) {
-		kfree(dev);
-		return NULL;
-	}
-
-	list_init(&dev->list);
-
-	err = virtio_mmio_probe(dev);
-	if (err) {
-		iounmap(dev->mem_base, dev->size);
-		kfree(dev);
-		return NULL;
-	}
-
-	dev->id = readl(dev->mem_base + VIRTIO_DEVICE_ID_OFFSET);
-
-	char name[DEVICE_NAME_LEN];
-
-	snprintf(name, sizeof(name), "virtio%u", virtio_dev_index++);
-	device_init(&dev->dev, name);
-	dev->dev.bus = &virtio_bus;
-	return dev;
-}
-
-void virtio_dev_destroy(struct virtio_device *dev)
-{
-	virtio_dev_remove(dev);
-	iounmap(dev->mem_base, dev->size);
-	kfree(dev);
-}
-
 int virtio_dev_add(struct virtio_device *dev)
 {
 	spin_lock(&vdevs_lock);
 	list_add(&dev->list, &vdevs);
 	spin_unlock(&vdevs_lock);
 
-	/* On failure the caller owns cleanup via virtio_dev_destroy(). */
+	/* On failure the caller owns cleanup via virtio_mmio_dev_destroy(). */
 	return device_register(&dev->dev);
 }
 
