@@ -12,6 +12,7 @@
 
 #define NS16550A_NUM_PORTS NS16550A_MINOR_COUNT
 
+struct device;
 struct tty_port;
 
 struct ns16550a_device {
@@ -39,6 +40,6 @@ struct ns16550a_platform_data {
 };
 
 void ns16550a_driver_init(void);
-int ns16550a_add_device(struct ns16550a_device *dev);
+int ns16550a_add_device(struct ns16550a_device *dev, struct device *parent);
 
 #endif

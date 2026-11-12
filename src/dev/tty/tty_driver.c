@@ -76,6 +76,8 @@ static void tty_driver_cleanup_port(struct tty_driver *driver, int i)
 
 	if (port) {
 		port->driver = NULL;
+		port->cdev = NULL;
+		port->dev = NULL;
 		tty_detach_port(port);
 	}
 	if (dev) {
@@ -168,7 +170,8 @@ struct tty_port *tty_lookup_port(dev_t dev)
 	return port;
 }
 
-int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port)
+int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port,
+			struct device *parent)
 {
 	struct char_dev *cd;
 	struct device *dev;
@@ -208,9 +211,12 @@ int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port)
 	cd->dev = MKCHRDEV(driver->major, driver->minor_start + slot);
 	snprintf(name, sizeof(name), "tty%u", (unsigned)slot);
 	device_init(dev, name);
+	dev->parent = parent;
 	dev->devt = cd->dev;
 	dev->mode = S_IFCHR | 0666;
 
+	port->cdev = cd;
+	port->dev = dev;
 	driver->ports[slot] = port;
 	driver->cds[slot] = cd;
 	driver->devs[slot] = dev;
@@ -239,8 +245,11 @@ int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port)
 
 err_slot:
 	spin_lock(&driver->lock);
-	if (driver->ports[slot] == port)
+	if (driver->ports[slot] == port) {
 		driver->ports[slot] = NULL;
+		port->cdev = NULL;
+		port->dev = NULL;
+	}
 	if (driver->cds[slot] == cd)
 		driver->cds[slot] = NULL;
 	if (driver->devs[slot] == dev)

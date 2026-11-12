@@ -189,7 +189,7 @@ static int ns16550a_probe(struct device *dev)
 		return err;
 	}
 
-	err = ns16550a_add_device(uart);
+	err = ns16550a_add_device(uart, dev);
 	if (err) {
 		ns16550a_device_finalize(uart);
 		ns16550a_device_free(uart);
@@ -351,7 +351,7 @@ void ns16550a_driver_init(void)
 		panic("%s(): platform_driver_register failed\n", __func__);
 }
 
-int ns16550a_add_device(struct ns16550a_device *dev)
+int ns16550a_add_device(struct ns16550a_device *dev, struct device *parent)
 {
 	struct tty_port *port;
 	int err;
@@ -368,7 +368,7 @@ int ns16550a_add_device(struct ns16550a_device *dev)
 	port->client_data = dev;
 	dev->port = port;
 
-	err = tty_driver_add_port(ns16550a_driver, port);
+	err = tty_driver_add_port(ns16550a_driver, port, parent);
 	if (err) {
 		tty_port_free(port);
 		return err;

@@ -44,6 +44,8 @@ struct tty_port {
 	struct tty_driver *driver;
 	spinlock_t lock;
 	void *client_data;
+	struct char_dev *cdev;
+	struct device *dev;
 	/* Foreground process group and owning session (job control). */
 	pid_t pgrp;
 	pid_t sid;
@@ -73,7 +75,8 @@ int tty_register_driver(struct tty_driver *driver);
 int tty_unregister_driver(struct tty_driver *driver);
 struct tty_port *tty_lookup_port(dev_t dev);
 
-int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port);
+int tty_driver_add_port(struct tty_driver *driver, struct tty_port *port,
+			struct device *parent);
 int tty_driver_remove_port(struct tty_driver *driver, struct tty_port *port);
 
 struct tty_port *tty_port_alloc(void);
