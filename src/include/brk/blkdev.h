@@ -7,6 +7,7 @@
 #include <stdbool.h>
 
 #define FIRST_DYNAMIC_BLKDEV_MAJOR 16
+#define BLOCK_SECTOR_SIZE 512
 
 struct block_dev;
 struct cached_page;
