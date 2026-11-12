@@ -335,6 +335,7 @@ static struct net_device *vnet_netdev_create(struct virtio_net_dev *vnet)
 	if (!dev)
 		return NULL;
 
+	dev->dev.parent = &vnet->vdev->dev;
 	memcpy(dev->dev_addr, vnet->mac, ETH_ALEN);
 	dev->type = ARPHRD_ETHER;
 	dev->mtu = vnet->mtu;

@@ -38,6 +38,7 @@ struct net_device *netdev_alloc(const char *name)
 		return NULL;
 
 	strlcpy(dev->name, name, sizeof(dev->name));
+	device_init(&dev->dev, name);
 	list_init(&dev->dev_list);
 	spinlock_init(&dev->tx_lock, "netdev_tx");
 	return dev;
@@ -45,12 +46,17 @@ struct net_device *netdev_alloc(const char *name)
 
 void netdev_free(struct net_device *dev)
 {
+	if (!dev)
+		return;
+	if (dev->dev.registered)
+		device_unregister(&dev->dev);
 	kfree(dev);
 }
 
 int netdev_register(struct net_device *dev)
 {
 	irqstate_t flags;
+	int err;
 
 	if (!dev || !dev->name[0])
 		return -EINVAL;
@@ -63,6 +69,14 @@ int netdev_register(struct net_device *dev)
 	dev->ifindex = ++netdev_ifindex;
 	list_add_tail(&dev->dev_list, &netdev_list);
 	spin_unlock_irqrestore(&netdev_lock, flags);
+
+	err = device_register(&dev->dev);
+	if (err) {
+		flags = spin_lock_irqsave(&netdev_lock);
+		list_del_init(&dev->dev_list);
+		spin_unlock_irqrestore(&netdev_lock, flags);
+		return err;
+	}
 
 	if (dev->netdev_ops && dev->netdev_ops->ndo_open)
 		dev->netdev_ops->ndo_open(dev);
@@ -88,6 +102,8 @@ void netdev_unregister(struct net_device *dev)
 	if (!list_empty(&dev->dev_list))
 		list_del_init(&dev->dev_list);
 	spin_unlock_irqrestore(&netdev_lock, flags);
+
+	device_unregister(&dev->dev);
 }
 
 struct net_device *netdev_get_by_name(const char *name)

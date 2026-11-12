@@ -1,6 +1,7 @@
 #ifndef BRK_NETDEVICE_H
 #define BRK_NETDEVICE_H
 
+#include <brk/device.h>
 #include <brk/list.h>
 #include <brk/skbuff.h>
 #include <brk/spinlock_types.h>
@@ -38,6 +39,7 @@ struct net_device_ops {
 
 struct net_device {
 	char name[IFNAMSIZ];
+	struct device dev;
 	u8 dev_addr[6];
 	unsigned int mtu;
 	unsigned int flags;

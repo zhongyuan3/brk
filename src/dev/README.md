@@ -65,6 +65,6 @@ with `devt` into a `/dev` node.
 - `irqchip` is probed directly from the OF tree during early boot. Interrupt
   controllers must be available before normal platform devices resolve IRQs,
   so this path intentionally bypasses the platform bus.
-- `net_device` is currently a network-class object outside the generic device
-  model. It can be integrated later if net devices need a device-model parent
-  or a `/sys`-like hierarchy.
+- `net_device` embeds a `struct device` for parent and lifecycle integration,
+  but it has no `devt`, so devtmpfs does not create `/dev` nodes for network
+  interfaces.
