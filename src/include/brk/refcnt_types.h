@@ -6,7 +6,7 @@
 
 typedef unsigned int refcnt_value_t;
 
-typedef struct __refcnt {
+typedef struct {
 	refcnt_value_t counter;
 	spinlock_t lock;
 } refcnt_t;
