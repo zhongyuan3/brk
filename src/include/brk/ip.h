@@ -35,6 +35,12 @@ struct iphdr {
 int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt);
 
 /*
+ * Consume an IPv4 fragment.  Returns a complete IPv4 packet when the final
+ * fragment completes the datagram, otherwise NULL.
+ */
+struct sk_buff *ip_defrag(struct sk_buff *skb);
+
+/*
  * Build and transmit an IPv4 packet.  @skb->data points at the transport
  * header and is consumed.  A zero @saddr selects the output device address.
  */

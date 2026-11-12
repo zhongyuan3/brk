@@ -6,6 +6,7 @@ obj-y += loopback.o
 obj-y += route.o
 obj-y += arp.o
 obj-y += ip.o
+obj-y += ip_frag.o
 obj-y += icmp.o
 obj-y += udp.o
 obj-y += tcp.o

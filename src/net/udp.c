@@ -179,9 +179,7 @@ static int udp_sendmsg(struct socket *sock, const void *buf, size_t len,
 	if (err)
 		return err;
 
-	/* No IP fragmentation yet: reject datagrams larger than the MTU. */
-	if (dev->mtu <= sizeof(struct iphdr) + sizeof(*uh) ||
-	    len > dev->mtu - sizeof(struct iphdr) - sizeof(*uh))
+	if (len > 65535U - sizeof(struct iphdr) - sizeof(*uh))
 		return -EMSGSIZE;
 
 	saddr = sk->saddr ? sk->saddr : dev->ip_addr;
