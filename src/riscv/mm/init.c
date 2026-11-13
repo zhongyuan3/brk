@@ -131,6 +131,18 @@ static int phys_mem_init(void)
 	if (err)
 		return err;
 
+	/*
+	 * Keep the firmware/bootloader area below the kernel image out of the
+	 * allocator.  Older code used a min_addr on every allocation; reserving
+	 * the range makes the Linux-style memblock_phys_alloc() safe.
+	 */
+	u64 dram_start = memblock_start_of_dram();
+	if (dram_start < _SKERNEL_PHYS) {
+		err = memblock_reserve(dram_start, _SKERNEL_PHYS - dram_start);
+		if (err)
+			return err;
+	}
+
 	err = memblock_reserve(_SKERNEL_PHYS, _KERNEL_SIZE);
 	if (err)
 		return err;
@@ -156,8 +168,8 @@ struct mapping_region {
 
 static unsigned long alloc_frame_before_final(void)
 {
-	unsigned long addr =
-		memblock_alloc(PAGE_SIZE, _EKERNEL_PHYS, PAGE_SIZE);
+	unsigned long addr = memblock_phys_alloc(PAGE_SIZE, PAGE_SIZE);
+
 	return addr;
 }
 
@@ -174,14 +186,15 @@ static void final_pgtable_init(void)
 	size_t rngs_size;
 	unsigned long start, end;
 
-	for_each_mem_range(idx, start, end) {
+	for_each_free_mem_range(idx, start, end)
+	{
 		rngs_cnt += 1;
 	}
 	rngs_cnt += 7;
 
 	rngs_size = sizeof(struct mapping_region) * rngs_cnt;
 	rngs_size = align_up(rngs_size, PAGE_SIZE);
-	rngs = (void *)memblock_alloc(rngs_size, _EKERNEL_PHYS, PAGE_SIZE);
+	rngs = (void *)memblock_phys_alloc(rngs_size, PAGE_SIZE);
 	if (rngs == NULL) {
 		sbi_console_putstr("rngs == NULL!\n");
 		while (1) {
@@ -227,7 +240,8 @@ static void final_pgtable_init(void)
 	rngs[5].flags = PTE_R | PTE_W;
 	rngs[5].do_map = true;
 	size_t i = 6;
-	for_each_mem_range(idx, start, end) {
+	for_each_free_mem_range(idx, start, end)
+	{
 		pr_debug("start=%#lx,end=%#lx\n", start, end);
 		rngs[i].name = "free_memory";
 		rngs[i].addr = phys_to_virt(start);
@@ -270,7 +284,7 @@ static void final_pgtable_init(void)
 
 static unsigned long alloc_frame_after_final(void)
 {
-	return memblock_alloc(PAGE_SIZE, _EKERNEL_PHYS, PAGE_SIZE);
+	return memblock_phys_alloc(PAGE_SIZE, PAGE_SIZE);
 }
 
 static void *phys_to_virt_after_final(unsigned long paddr)
@@ -280,7 +294,7 @@ static void *phys_to_virt_after_final(unsigned long paddr)
 
 static void vmemmap_init(void)
 {
-	u32 idx;
+	u64 idx;
 	unsigned long start, end;
 	size_t sz;
 	unsigned long paddr;
@@ -288,7 +302,7 @@ static void vmemmap_init(void)
 
 	for_each_mem_pfn_range(idx, start, end) {
 		sz = align_up((end - start) * sizeof(struct page), PAGE_SIZE);
-		paddr = memblock_alloc(sz, 0, PAGE_SIZE);
+		paddr = memblock_phys_alloc(sz, PAGE_SIZE);
 		assert(paddr);
 		memset((void *)phys_to_virt(paddr), 0, sz);
 		vaddr = (unsigned long)pfn_to_page(start);

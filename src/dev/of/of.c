@@ -58,7 +58,7 @@ static void *of_memblock_alloc(size_t size)
 	if (!size)
 		return NULL;
 
-	pa = memblock_alloc(size, 0, OF_MEMBLOCK_ALIGN);
+	pa = memblock_phys_alloc(size, OF_MEMBLOCK_ALIGN);
 	if (!pa)
 		return NULL;
 
