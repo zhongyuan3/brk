@@ -84,8 +84,12 @@ static inline void *netdev_priv(const struct net_device *dev)
 	return dev->priv;
 }
 
-/* Hand a received frame to the protocol handlers.  Consumes @skb. */
+/* Queue a received frame for deferred protocol processing.  Consumes @skb. */
 int netif_rx(struct sk_buff *skb);
+
+/* Initialize and start the deferred RX worker. */
+void netif_rx_init(void);
+int netif_rx_start(void);
 
 /* Transmit @skb through skb->dev.  Consumes @skb. */
 int netdev_start_xmit(struct sk_buff *skb);

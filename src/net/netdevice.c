@@ -8,17 +8,25 @@
 #include <brk/skbuff.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <brk/task.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
 #include <uapi/capability.h>
 #include <uapi/errno.h>
 #include <uapi/net.h>
 
+#define NET_RX_QUEUE_MAX 128
+
 static LIST_DEFINE(netdev_list);
 static SPINLOCK_DEFINE(netdev_lock);
 static LIST_DEFINE(ptype_list);
 static SPINLOCK_DEFINE(ptype_lock);
 static unsigned int netdev_ifindex;
+
+static struct sk_buff_head net_rx_queue;
+static SPINLOCK_DEFINE(net_rx_queue_lock);
+static int net_rx_wait;
+static bool net_rx_started;
 
 static struct net_device *netdev_lookup_locked(const char *name)
 {
@@ -388,7 +396,7 @@ void dev_remove_pack(struct packet_type *pt)
 	spin_unlock_irqrestore(&ptype_lock, flags);
 }
 
-int netif_rx(struct sk_buff *skb)
+static int netif_rx_deliver(struct sk_buff *skb)
 {
 	struct packet_type *pt;
 	struct packet_type *match = NULL;
@@ -427,6 +435,69 @@ int netif_rx(struct sk_buff *skb)
 	if (err)
 		dev->stats.rx_dropped++;
 	return err;
+}
+
+void netif_rx_init(void)
+{
+	skb_queue_init(&net_rx_queue);
+}
+
+static void net_rx_thread(void *arg)
+{
+	(void)arg;
+
+	for (;;) {
+		struct sk_buff *skb;
+		irqstate_t flags;
+
+		flags = spin_lock_irqsave(&net_rx_queue_lock);
+		while (skb_queue_empty(&net_rx_queue))
+			task_sleep(&net_rx_wait, &net_rx_queue_lock);
+		skb = skb_dequeue(&net_rx_queue);
+		spin_unlock_irqrestore(&net_rx_queue_lock, flags);
+
+		if (skb)
+			netif_rx_deliver(skb);
+	}
+}
+
+int netif_rx_start(void)
+{
+	struct task *task;
+
+	if (net_rx_started)
+		return 0;
+
+	task = kthread_create(net_rx_thread, NULL);
+	if (!task)
+		return -ENOMEM;
+
+	strlcpy(task->name, "net-rx", sizeof(task->name));
+	kthread_join(task);
+	net_rx_started = true;
+	return 0;
+}
+
+int netif_rx(struct sk_buff *skb)
+{
+	irqstate_t flags;
+
+	if (!skb || !skb->dev) {
+		skb_free(skb);
+		return -EINVAL;
+	}
+
+	flags = spin_lock_irqsave(&net_rx_queue_lock);
+	if (net_rx_queue.qlen >= NET_RX_QUEUE_MAX) {
+		skb->dev->stats.rx_dropped++;
+		spin_unlock_irqrestore(&net_rx_queue_lock, flags);
+		skb_free(skb);
+		return -ENOBUFS;
+	}
+	skb_queue_tail(&net_rx_queue, skb);
+	task_wake_all(&net_rx_wait);
+	spin_unlock_irqrestore(&net_rx_queue_lock, flags);
+	return 0;
 }
 
 int netdev_start_xmit(struct sk_buff *skb)

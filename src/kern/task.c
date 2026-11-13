@@ -21,6 +21,7 @@
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
+#include <brk/netdevice.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
@@ -421,6 +422,10 @@ void task_init_main(void)
 	err = rootfs_init();
 	if (err)
 		panic("failed to initialize rootfs: %s\n", strerror(err));
+
+	err = netif_rx_start();
+	if (err)
+		panic("failed to start network RX worker: %s\n", strerror(err));
 	pr_info("file system initialized\n");
 
 	task_start_user_init(init);

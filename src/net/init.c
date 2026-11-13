@@ -22,6 +22,7 @@ void net_init(void)
 {
 	int err;
 
+	netif_rx_init();
 	arp_init();
 	tcp_init();
 
