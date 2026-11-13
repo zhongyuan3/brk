@@ -1,7 +1,6 @@
 #include <arch/pgtable.h>
 #include <brk/chrdev.h>
 #include <brk/console.h>
-#include <brk/dt.h>
 #include <brk/ioremap.h>
 #include <brk/irq.h>
 #include <brk/kmalloc.h>
@@ -383,7 +382,7 @@ int ns16550a_add_device(struct ns16550a_device *dev, struct device *parent)
 
 	if (first) {
 		ns16550a_console.client_data = dev;
-		console_register(&ns16550a_console, KERN_DEFAULT);
+		console_register(&ns16550a_console, KERN_DEBUG);
 	}
 
 	return 0;

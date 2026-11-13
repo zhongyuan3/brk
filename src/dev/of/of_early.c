@@ -1,23 +1,38 @@
-#define pr_fmt(fmt) "dt: " fmt
-#include <arch/hart.h>
-#include <arch/mm.h>
-#include <brk/assert.h>
-#include <brk/dt.h>
-#include <brk/ktime.h>
+#define pr_fmt(fmt) "of: " fmt
 #include <brk/memblock.h>
-#include <brk/mm.h>
-#include <brk/panic.h>
-#include <brk/printf.h>
 #include <brk/printk.h>
-#include <brk/string.h>
 #include <brk/types.h>
 #include <libfdt.h>
 #include <stddef.h>
 #include <uapi/errno.h>
 
+#include "of_internal.h"
+
+/*
+ * Raw FDT access for the early boot phase.
+ *
+ * The device tree is unflattened into device_node before the slab allocator
+ * comes up.  The two physical-memory scans below run before that tree exists;
+ * after of_init(), all device-tree access goes through the of_* node helpers.
+ */
 static void *fdt;
 
-static int __fdt_err_to_errno(int err)
+void of_set_fdt(unsigned long addr)
+{
+	fdt = (void *)addr;
+}
+
+size_t of_get_fdt_size(unsigned long addr)
+{
+	return fdt_totalsize((const void *)addr);
+}
+
+void *of_early_fdt(void)
+{
+	return fdt;
+}
+
+int of_fdt_errno(int err)
 {
 	int code;
 
@@ -63,12 +78,12 @@ static int get_addr_cells(int node, int *addr_cells, int *size_cells)
 
 	ret = fdt_address_cells(fdt, node);
 	if (ret < 0)
-		return __fdt_err_to_errno(ret);
+		return of_fdt_errno(ret);
 	*addr_cells = ret;
 
 	ret = fdt_size_cells(fdt, node);
 	if (ret < 0)
-		return __fdt_err_to_errno(ret);
+		return of_fdt_errno(ret);
 	*size_cells = ret;
 
 	return 0;
@@ -77,8 +92,9 @@ static int get_addr_cells(int node, int *addr_cells, int *size_cells)
 static int get_parent_addr_cells(int node, int *addr_cells, int *size_cells)
 {
 	int ret = fdt_parent_offset(fdt, node);
+
 	if (ret < 0)
-		return __fdt_err_to_errno(ret);
+		return of_fdt_errno(ret);
 	return get_addr_cells(ret, addr_cells, size_cells);
 }
 
@@ -93,8 +109,8 @@ static int for_each_reg(int node, int addr_cells, int size_cells,
 
 	reg = fdt_getprop(fdt, node, "reg", &len);
 	if (!reg)
-		return __fdt_err_to_errno(len);
-	if (len < reg_bytes || len % reg_bytes != 0)
+		return of_fdt_errno(len);
+	if (reg_bytes <= 0 || len < reg_bytes || len % reg_bytes != 0)
 		return -EINVAL;
 
 	for (int i = 0, nr = len / reg_bytes; i < nr; ++i) {
@@ -115,12 +131,7 @@ static int for_each_reg(int node, int addr_cells, int size_cells,
 	return 0;
 }
 
-void dt_set_fdt(unsigned long addr)
-{
-	fdt = (void *)addr;
-}
-
-static int __memblock_add_or_reserve(u64 addr, size_t size, void *add)
+static int of_memblock_add_or_reserve(u64 addr, size_t size, void *add)
 {
 	if (!add)
 		return memblock_reserve(addr, size);
@@ -128,7 +139,7 @@ static int __memblock_add_or_reserve(u64 addr, size_t size, void *add)
 		return memblock_add(addr, size);
 }
 
-int dt_init_scan_mem(void)
+int of_scan_memory(void)
 {
 	int err;
 	int node;
@@ -136,21 +147,17 @@ int dt_init_scan_mem(void)
 
 	node = fdt_path_offset(fdt, "/memory");
 	if (node < 0)
-		return __fdt_err_to_errno(node);
+		return of_fdt_errno(node);
 
 	err = get_parent_addr_cells(node, &addr_cells, &size_cells);
 	if (err)
 		return err;
 
-	err = for_each_reg(node, addr_cells, size_cells,
-			   __memblock_add_or_reserve, (void *)1);
-	if (err)
-		return err;
-
-	return 0;
+	return for_each_reg(node, addr_cells, size_cells,
+			    of_memblock_add_or_reserve, (void *)1);
 }
 
-int dt_init_scan_rsvd_mem(void)
+int of_scan_reserved_memory(void)
 {
 	int err;
 	int node, subnode;
@@ -168,60 +175,12 @@ int dt_init_scan_rsvd_mem(void)
 
 	fdt_for_each_subnode(subnode, fdt, node) {
 		err = for_each_reg(subnode, addr_cells, size_cells,
-				   __memblock_add_or_reserve, (void *)0);
+				   of_memblock_add_or_reserve, (void *)0);
 		if (err)
 			return err;
 	}
+	if (subnode != -FDT_ERR_NOTFOUND)
+		return of_fdt_errno(subnode);
 
 	return 0;
-}
-
-int dt_get_timebase_freq(u32 *freq_out)
-{
-	int node;
-	const u32 *freq;
-	int len;
-
-	if (!freq_out)
-		return -EINVAL;
-
-	node = fdt_path_offset(fdt, "/cpus");
-	if (node < 0) {
-		pr_err("no cpus node in the DT\n");
-		return __fdt_err_to_errno(node);
-	}
-
-	freq = fdt_getprop(fdt, node, "timebase-frequency", &len);
-	if (!freq)
-		return __fdt_err_to_errno(len);
-	if (len != sizeof(u32))
-		return -EINVAL;
-
-	*freq_out = fdt32_to_cpu(*freq);
-	return 0;
-}
-
-int dt_init_scan_cpu(void)
-{
-	int node, subnode;
-	int len;
-	const char *type;
-
-	node = fdt_path_offset(fdt, "/cpus");
-	if (node < 0)
-		return __fdt_err_to_errno(node);
-
-	fdt_for_each_subnode(subnode, fdt, node) {
-		len = 0;
-		type = fdt_getprop(fdt, subnode, "device_type", &len);
-		if (type && !strncmp(type, "cpu", len))
-			nr_harts += 1;
-	}
-
-	return 0;
-}
-
-void *dt_get_fdt(void)
-{
-	return fdt;
 }

@@ -80,11 +80,7 @@ void start_kernel(void)
 	fs_inode_cache_init();
 	net_init();
 
-	/* Device tree, interrupt controllers and platform devices. */
-	err = of_init();
-	if (err)
-		pr_warn("of: failed to build device tree: %d\n", err);
-
+	/* Device tree was built in arch_init(). */
 	irqchip_early_init();
 
 	err = of_platform_populate();

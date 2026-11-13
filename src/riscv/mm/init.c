@@ -11,17 +11,17 @@
 #include <arch/sbi.h>
 #include <brk/align.h>
 #include <brk/assert.h>
-#include <brk/dt.h>
 #include <brk/memblock.h>
 #include <brk/min_max.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
+#include <brk/of.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/types.h>
-#include <libfdt.h>
 #include <stddef.h>
+#include <string.h>
 
 unsigned long phys_offset;
 
@@ -92,7 +92,7 @@ static void __setup_vm_early(unsigned long dtb_pa)
 	/* Map the kernel link address to the physical load address. */
 	map_early(KERNEL_LINK_ADDR, _SKERNEL, size, flags);
 
-	unsigned long dtb_end = dtb_pa + fdt_totalsize(dtb_pa);
+	unsigned long dtb_end = dtb_pa + of_get_fdt_size(dtb_pa);
 	if (dtb_pa >= _SKERNEL && dtb_end <= kern_end)
 		return;
 
@@ -123,11 +123,11 @@ static int phys_mem_init(void)
 {
 	int err;
 
-	err = dt_init_scan_mem();
+	err = of_scan_memory();
 	if (err)
 		return err;
 
-	err = dt_init_scan_rsvd_mem();
+	err = of_scan_reserved_memory();
 	if (err)
 		return err;
 
@@ -136,7 +136,7 @@ static int phys_mem_init(void)
 		return err;
 
 	err = memblock_reserve(boot_info.dtb_pa,
-			       fdt_totalsize(boot_info.dtb_pa));
+			       of_get_fdt_size(boot_info.dtb_pa));
 	if (err)
 		return err;
 
@@ -223,7 +223,7 @@ static void final_pgtable_init(void)
 	rngs[5].name = "dtb";
 	rngs[5].addr = phys_to_virt(boot_info.dtb_pa);
 	rngs[5].paddr = boot_info.dtb_pa;
-	rngs[5].size = fdt_totalsize(boot_info.dtb_pa);
+	rngs[5].size = of_get_fdt_size(boot_info.dtb_pa);
 	rngs[5].flags = PTE_R | PTE_W;
 	rngs[5].do_map = true;
 	size_t i = 6;
@@ -324,7 +324,7 @@ int paging_init(void)
 
 	final_pgtable_init();
 	load_final_page_table();
-	dt_set_fdt(phys_to_virt(boot_info.dtb_pa));
+	of_set_fdt(phys_to_virt(boot_info.dtb_pa));
 	vmemmap_init();
 
 	return 0;

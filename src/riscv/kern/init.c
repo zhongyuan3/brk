@@ -8,9 +8,9 @@
 #include <brk/asm/cpu.h>
 #include <brk/console.h>
 #include <brk/cpu.h>
-#include <brk/dt.h>
 #include <brk/init.h>
 #include <brk/irq.h>
+#include <brk/of.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/task.h>
@@ -26,7 +26,7 @@ void primary_entry(unsigned long hart_id, unsigned long dtb_pa,
 	cpu_init(hart_id);
 	setup_trap_entry();
 
-	dt_set_fdt(dtb_pa);
+	of_set_fdt(dtb_pa);
 
 	boot_info.boot_hart_id = hart_id;
 	boot_info.dtb_pa = dtb_pa;
@@ -64,7 +64,11 @@ int arch_init(void)
 	if (err)
 		return err;
 
-	err = dt_init_scan_cpu();
+	err = of_init();
+	if (err)
+		return err;
+
+	err = of_scan_cpu();
 	if (err)
 		return err;
 

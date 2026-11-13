@@ -6,7 +6,7 @@
 #include <brk/clockevent.h>
 #include <brk/clocksource.h>
 #include <brk/cpu.h>
-#include <brk/dt.h>
+#include <brk/of.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/timeconst.h>
@@ -56,7 +56,7 @@ int timer_init(void)
 	u64 resolution_ns;
 	int err;
 
-	err = dt_get_timebase_freq(&freq);
+	err = of_get_timebase_freq(&freq);
 	if (err) {
 		freq = DEFAULT_TIMEBASE_FREQ;
 		pr_warn("timebase-frequency unavailable (%d), using %u Hz\n",

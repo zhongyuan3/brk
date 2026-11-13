@@ -1,5 +1,4 @@
 #include <brk/cpu.h>
-#include <brk/dt.h>
 #include <brk/irqdesc.h>
 #include <brk/irqdomain.h>
 #include <brk/kmalloc.h>
@@ -8,7 +7,6 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
-#include <libfdt.h>
 #include <uapi/errno.h>
 
 static LIST_DEFINE(irq_domains);
@@ -64,14 +62,14 @@ void irq_domain_remove(struct irq_domain *d)
 	kfree(d);
 }
 
-static struct irq_domain *irq_find_host_by_offset(int fdt_node)
+static struct irq_domain *irq_find_host_by_node(const struct device_node *node)
 {
 	struct irq_domain *d, *found = NULL;
 	irqstate_t flags;
 
 	flags = spin_lock_irqsave(&irq_domain_lock);
 	list_for_each_entry(d, &irq_domains, list) {
-		if (d->of_node && d->of_node->fdt_offset == fdt_node) {
+		if (d->of_node == node) {
 			found = d;
 			break;
 		}
@@ -84,7 +82,7 @@ struct irq_domain *irq_find_host(const struct device_node *node)
 {
 	if (!node)
 		return NULL;
-	return irq_find_host_by_offset(node->fdt_offset);
+	return irq_find_host_by_node(node);
 }
 
 unsigned int irq_create_mapping(struct irq_domain *d, irq_hw_number_t hwirq,
@@ -131,38 +129,39 @@ unsigned int irq_find_mapping(struct irq_domain *d, irq_hw_number_t hwirq)
 	return d->revmap[hwirq];
 }
 
-static int irq_parent_cells(const void *fdt, int parent)
+static int irq_parent_cells(const struct device_node *parent)
 {
-	const u32 *prop;
-	int len;
-	int cells;
+	const struct property *prop;
+	u32 cells;
 
-	prop = fdt_getprop(fdt, parent, "#interrupt-cells", &len);
-	if (!prop || len != sizeof(u32))
+	prop = of_find_property(parent, "#interrupt-cells", NULL);
+	if (!prop || prop->length != (int)sizeof(u32))
 		return -EINVAL;
 
-	cells = fdt32_to_cpu(*prop);
-	if (cells <= 0 || cells > 4)
+	cells = of_read_be32(prop->value);
+	if (cells == 0 || cells > 4)
 		return -EINVAL;
-	return cells;
+	return (int)cells;
 }
 
-static int irq_find_parent(const void *fdt, int fdt_node)
+static struct device_node *irq_find_parent(const struct device_node *node)
 {
-	const u32 *prop;
+	const struct device_node *cur;
+	const struct property *prop;
 	int len;
 
 	/* interrupt-parent is inherited from the closest ancestor. */
-	for (int n = fdt_node; n >= 0; n = fdt_parent_offset(fdt, n)) {
-		prop = fdt_getprop(fdt, n, "interrupt-parent", &len);
-		if (prop && len == sizeof(u32))
-			return fdt_node_offset_by_phandle(fdt,
-							  fdt32_to_cpu(*prop));
+	for (cur = node; cur; cur = cur->parent) {
+		prop = of_find_property(cur, "interrupt-parent", &len);
+		if (prop && len == (int)sizeof(u32))
+			return of_find_node_by_phandle(
+				of_read_be32(prop->value));
 	}
-	return -1;
+	return NULL;
 }
 
-static unsigned int irq_map_spec(const struct device_node *node, int parent,
+static unsigned int irq_map_spec(const struct device_node *node,
+				 const struct device_node *parent,
 				 const u32 *intspec, int cells)
 {
 	struct irq_domain *d;
@@ -170,7 +169,7 @@ static unsigned int irq_map_spec(const struct device_node *node, int parent,
 	unsigned int type = 0;
 	u32 spec[4];
 
-	d = irq_find_host_by_offset(parent);
+	d = irq_find_host_by_node(parent);
 	if (!d)
 		return 0;
 
@@ -178,7 +177,7 @@ static unsigned int irq_map_spec(const struct device_node *node, int parent,
 		return 0;
 
 	for (int i = 0; i < cells; i++)
-		spec[i] = fdt32_to_cpu(intspec[i]);
+		spec[i] = of_read_be32(&intspec[i]);
 
 	if (d->ops->xlate && d->ops->xlate(d, node, spec, cells, &hwirq, &type))
 		return 0;
@@ -186,8 +185,8 @@ static unsigned int irq_map_spec(const struct device_node *node, int parent,
 	return irq_create_mapping(d, hwirq, type);
 }
 
-static unsigned int
-irq_parse_extended(const void *fdt, const struct device_node *node, int index)
+static unsigned int irq_parse_extended(const struct device_node *node,
+				       int index)
 {
 	const u32 *ext;
 	const u32 *p;
@@ -195,7 +194,7 @@ irq_parse_extended(const void *fdt, const struct device_node *node, int index)
 	int entry = 0;
 	int remaining;
 
-	ext = fdt_getprop(fdt, node->fdt_offset, "interrupts-extended", &len);
+	ext = of_get_property(node, "interrupts-extended", &len);
 	if (!ext || len < (int)sizeof(u32) || len % sizeof(u32))
 		return 0;
 
@@ -207,19 +206,19 @@ irq_parse_extended(const void *fdt, const struct device_node *node, int index)
 	 * cells depends on that parent, so walk entries sequentially.
 	 */
 	while (remaining > 0) {
-		u32 phandle = fdt32_to_cpu(*p++);
-		int parent;
+		struct device_node *parent;
+		u32 phandle = of_read_be32(p++);
 		int cells;
 
 		remaining--;
 		if (!phandle)
 			return 0;
 
-		parent = fdt_node_offset_by_phandle(fdt, phandle);
-		if (parent < 0)
+		parent = of_find_node_by_phandle(phandle);
+		if (!parent)
 			return 0;
 
-		cells = irq_parent_cells(fdt, parent);
+		cells = irq_parent_cells(parent);
 		if (cells < 0 || remaining < cells)
 			return 0;
 
@@ -236,28 +235,26 @@ irq_parse_extended(const void *fdt, const struct device_node *node, int index)
 
 unsigned int irq_of_parse_and_map(const struct device_node *node, int index)
 {
-	void *fdt = dt_get_fdt();
 	const u32 *ints, *ext;
-	int fdt_node, parent, cells, len;
+	struct device_node *parent;
+	int cells, len;
 
-	if (!fdt || !node || index < 0)
+	if (!node || index < 0)
 		return 0;
 
-	fdt_node = node->fdt_offset;
-
-	ext = fdt_getprop(fdt, fdt_node, "interrupts-extended", &len);
+	ext = of_get_property(node, "interrupts-extended", &len);
 	if (ext && len > 0)
-		return irq_parse_extended(fdt, node, index);
+		return irq_parse_extended(node, index);
 
-	parent = irq_find_parent(fdt, fdt_node);
-	if (parent < 0)
+	parent = irq_find_parent(node);
+	if (!parent)
 		return 0;
 
-	cells = irq_parent_cells(fdt, parent);
+	cells = irq_parent_cells(parent);
 	if (cells < 0)
 		return 0;
 
-	ints = fdt_getprop(fdt, fdt_node, "interrupts", &len);
+	ints = of_get_property(node, "interrupts", &len);
 	if (!ints || len < (index + 1) * cells * (int)sizeof(u32))
 		return 0;
 
