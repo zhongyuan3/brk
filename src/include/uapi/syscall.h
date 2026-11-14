@@ -91,7 +91,7 @@
 #define SYS_pipe2 80
 #define SYS_posix_fallocate 81
 #define SYS_getdents 82
-#define SYS_statvfs 83
-#define SYS_fstatvfs 84
+#define SYS_statfs 83
+#define SYS_fstatfs 84
 
 #endif

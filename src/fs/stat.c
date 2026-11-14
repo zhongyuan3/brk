@@ -20,25 +20,17 @@ void kstat_to_statx(const struct kstat *ks, struct statx *stx)
 	stx->stx_blksize = (__s32)ks->blksize;
 }
 
-void kstatfs_to_statvfs(const struct kstatfs *ks, struct statvfs *st)
+void kstatfs_to_statfs(const struct kstatfs *ks, struct brk_statfs *st)
 {
-	memset(st, 0, sizeof(*st));
-
-	st->f_bsize = ks->bsize;
-	st->f_frsize = ks->frsize;
-	st->f_blocks = ks->blocks;
-	st->f_bfree = ks->bfree;
-	st->f_bavail = ks->bavail;
-	st->f_files = ks->files;
-	st->f_ffree = ks->ffree;
-	st->f_favail = ks->ffree;
-	st->f_fsid = ks->fsid;
-	st->f_namemax = ks->namelen;
-
-	/* The internal mount flags use the MS_* numbering, whose low bits
-	 * coincide with ST_RDONLY and ST_NOSUID. */
-	if (ks->flags & 0x1)
-		st->f_flag |= ST_RDONLY;
-	if (ks->flags & 0x2)
-		st->f_flag |= ST_NOSUID;
+	st->type = ks->type;
+	st->bsize = ks->bsize;
+	st->frsize = ks->frsize;
+	st->blocks = ks->blocks;
+	st->bfree = ks->bfree;
+	st->bavail = ks->bavail;
+	st->files = ks->files;
+	st->ffree = ks->ffree;
+	st->fsid = ks->fsid;
+	st->namelen = ks->namelen;
+	st->flags = ks->flags;
 }

@@ -305,11 +305,11 @@ u64 sys_faccessat(void)
 	return access_path_at(dirfd, path, mode, lookup_flags);
 }
 
-u64 sys_fstatvfs(void)
+u64 sys_fstatfs(void)
 {
 	int fd = syscall_arg_int(0);
-	struct statvfs *ubuf = syscall_arg_ptr(1);
-	struct statvfs st;
+	struct brk_statfs *ubuf = syscall_arg_ptr(1);
+	struct brk_statfs st;
 	struct kstatfs ks;
 	struct task *task = current_task();
 	struct fs_file *fp;
@@ -328,17 +328,17 @@ u64 sys_fstatvfs(void)
 	if (ret)
 		return ret;
 
-	kstatfs_to_statvfs(&ks, &st);
+	kstatfs_to_statfs(&ks, &st);
 	if (copy_to_user(ubuf, &st, sizeof(st)))
 		return -EFAULT;
 	return 0;
 }
 
-u64 sys_statvfs(void)
+u64 sys_statfs(void)
 {
 	const char *path = syscall_arg_ptr(0);
-	struct statvfs *ubuf = syscall_arg_ptr(1);
-	struct statvfs st;
+	struct brk_statfs *ubuf = syscall_arg_ptr(1);
+	struct brk_statfs st;
 	struct kstatfs ks;
 	struct fs_path p = { 0 };
 	struct fs_inode *inode;
@@ -362,7 +362,7 @@ u64 sys_statvfs(void)
 	if (ret)
 		return ret;
 
-	kstatfs_to_statvfs(&ks, &st);
+	kstatfs_to_statfs(&ks, &st);
 	if (copy_to_user(ubuf, &st, sizeof(st)))
 		return -EFAULT;
 	return 0;

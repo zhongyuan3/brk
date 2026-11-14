@@ -7,6 +7,24 @@
 #define ST_RDONLY 0x0001
 #define ST_NOSUID 0x0002
 
+/*
+ * Kernel-side filesystem statistics primitive.  libc converts it into the
+ * POSIX struct statvfs layout.
+ */
+struct brk_statfs {
+	__s64 type;
+	__s64 bsize;
+	__s64 frsize;
+	__s64 blocks;
+	__s64 bfree;
+	__s64 bavail;
+	__s64 files;
+	__s64 ffree;
+	__s64 fsid;
+	__s64 namelen;
+	__s64 flags;
+};
+
 struct statvfs {
 	__kernel_ulong_t f_bsize; /* Filesystem block size */
 	__kernel_ulong_t f_frsize; /* Fragment size */

@@ -10,6 +10,6 @@
  * only places where struct kstat/kstatfs and struct stat/statvfs meet.
  */
 void kstat_to_statx(const struct kstat *ks, struct statx *stx);
-void kstatfs_to_statvfs(const struct kstatfs *ks, struct statvfs *st);
+void kstatfs_to_statfs(const struct kstatfs *ks, struct brk_statfs *st);
 
 #endif
