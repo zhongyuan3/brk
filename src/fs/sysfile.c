@@ -620,35 +620,35 @@ u64 sys_lseek(void)
 	return ret;
 }
 
-struct posix_getdents_context {
+struct getdents_context {
 	struct fs_dir_iterator ctx;
 	u8 *buf;
 	size_t size;
 	size_t pos;
 };
 
-static bool posix_getdents_filldir(struct fs_dir_iterator *ctx,
-				   const char *name, int namelen, loff_t offset,
-				   u64 ino, unsigned int d_type)
+static bool getdents_filldir(struct fs_dir_iterator *ctx, const char *name,
+			     int namelen, loff_t offset, u64 ino,
+			     unsigned int d_type)
 {
-	struct posix_getdents_context *gctx;
-	struct posix_dent *de;
+	struct getdents_context *gctx;
+	struct brk_dirent *de;
 
 	(void)offset;
 
-	gctx = container_of(ctx, struct posix_getdents_context, ctx);
+	gctx = container_of(ctx, struct getdents_context, ctx);
 	if (gctx->pos > gctx->size)
 		return false;
 
-	size_t len = offsetof(struct posix_dent, d_name) + namelen + 1;
-	len = align_up(len, alignof(struct posix_dent));
+	size_t len = offsetof(struct brk_dirent, d_name) + namelen + 1;
+	len = align_up(len, alignof(struct brk_dirent));
 
-	if (len > gctx->size - gctx->pos)
+	if (len > gctx->size - gctx->pos || len > 0xffffffffu)
 		return false;
 
-	de = (struct posix_dent *)(gctx->buf + gctx->pos);
+	de = (struct brk_dirent *)(gctx->buf + gctx->pos);
 	de->d_ino = ino;
-	de->d_reclen = len;
+	de->d_reclen = (u32)len;
 	de->d_type = d_type;
 	memcpy(de->d_name, name, namelen);
 	de->d_name[namelen] = '\0';
@@ -657,7 +657,7 @@ static bool posix_getdents_filldir(struct fs_dir_iterator *ctx,
 	return true;
 }
 
-u64 sys_posix_getdents(void)
+u64 sys_getdents(void)
 {
 	int fd = -1;
 	struct fs_file *fp = NULL;
@@ -697,8 +697,8 @@ u64 sys_posix_getdents(void)
 
 	sleeplock_acquire(&fp->pos_lock);
 
-	struct posix_getdents_context ctx = {
-		.ctx.actor = posix_getdents_filldir,
+	struct getdents_context ctx = {
+		.ctx.actor = getdents_filldir,
 		.ctx.pos = fp->pos,
 		.buf = buf,
 		.size = size,

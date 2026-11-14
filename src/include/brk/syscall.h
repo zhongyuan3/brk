@@ -45,7 +45,7 @@ u64 sys_unlinkat(void);
 u64 sys_rmdir(void);
 u64 sys_pipe2(void);
 u64 sys_uname(void);
-u64 sys_posix_getdents(void);
+u64 sys_getdents(void);
 u64 sys_waitid(void);
 u64 sys_fork(void);
 u64 sys_lseek(void);
