@@ -1,4 +1,6 @@
+#include <arch/asm/page.h>
 #include <brk/align.h>
+#include <brk/clocksource.h>
 #include <brk/cpu.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
@@ -19,6 +21,7 @@
 #include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
+#include <brk/timeconst.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
 #include <stdalign.h>
@@ -28,10 +31,10 @@
 #include <uapi/limits.h>
 #include <uapi/stat.h>
 #include <uapi/statvfs.h>
+#include <uapi/sysinfo.h>
 #include <uapi/time.h>
 #include <uapi/types.h>
 #include <uapi/uio.h>
-#include <uapi/utsname.h>
 
 u64 sys_read(void)
 {
@@ -412,22 +415,24 @@ u64 sys_unlinkat(void)
 	return do_unlinkat(dirfd, path, flags);
 }
 
-u64 sys_uname(void)
+u64 sys_sysinfo(void)
 {
-	struct utsname name = {
-		.sysname = "BRK",
-		.nodename = "none",
-		.release = BRK_VERSION,
-		.version = BRK_VERSION,
-		.domainname = "none",
-	};
-	struct utsname *buf = syscall_arg_ptr(0);
+	struct brk_sysinfo *ubuf = syscall_arg_ptr(0);
+	struct brk_sysinfo info = { 0 };
 
-	if (!buf)
+	if (!ubuf)
 		return -EFAULT;
 
-	strlcpy(name.machine, uname_machine(), sizeof(name.machine));
-	*buf = name;
+	strlcpy(info.sysname, "BRK", sizeof(info.sysname));
+	strlcpy(info.release, BRK_VERSION, sizeof(info.release));
+	strlcpy(info.machine, uname_machine(), sizeof(info.machine));
+	info.page_size = PAGE_SIZE;
+	info.hz = HZ;
+	info.mono_resolution_ns = clocksource_get_resolution_ns();
+	info.cpu_resolution_ns = TICK_NS;
+
+	if (copy_to_user(ubuf, &info, sizeof(info)))
+		return -EFAULT;
 	return 0;
 }
 

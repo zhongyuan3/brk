@@ -57,33 +57,6 @@ u64 sys_clock_gettime(void)
 	return 0;
 }
 
-u64 sys_clock_getres(void)
-{
-	int clockid = syscall_arg_int(0);
-	struct timespec *ut = syscall_arg_ptr(1);
-	struct timespec ts;
-	u64 res_ns;
-
-	switch (clockid) {
-	case CLOCK_REALTIME:
-	case CLOCK_MONOTONIC:
-	case CLOCK_BOOTTIME:
-		res_ns = clocksource_get_resolution_ns();
-		break;
-	case CLOCK_PROCESS_CPUTIME_ID:
-	case CLOCK_THREAD_CPUTIME_ID:
-		res_ns = TICK_NS;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	ktime_to_timespec((ktime_t)res_ns, &ts);
-	if (ut && copy_to_user(ut, &ts, sizeof(ts)))
-		return -EFAULT;
-	return 0;
-}
-
 u64 sys_clock_settime(void)
 {
 	int clockid = syscall_arg_int(0);

@@ -7,11 +7,13 @@
 #include <uapi/elf.h>
 #include <uapi/ioctl.h>
 #include <uapi/poll.h>
+#include <uapi/proc.h>
 #include <uapi/resource.h>
 #include <uapi/signal.h>
 #include <uapi/socket.h>
 #include <uapi/stat.h>
 #include <uapi/statvfs.h>
+#include <uapi/sysinfo.h>
 #include <uapi/termios.h>
 #include <uapi/time.h>
 #include <uapi/times.h>
@@ -59,6 +61,19 @@ _Static_assert(sizeof(struct brk_dirent) == 16,
 	       "struct brk_dirent ABI changed");
 _Static_assert(offsetof(struct brk_dirent, d_name) == 13,
 	       "struct brk_dirent ABI changed");
+
+_Static_assert(sizeof(struct brk_proc) == 40, "struct brk_proc ABI changed");
+_Static_assert(offsetof(struct brk_proc, suid) == 24,
+	       "struct brk_proc ABI changed");
+_Static_assert(offsetof(struct brk_proc, sgid) == 36,
+	       "struct brk_proc ABI changed");
+
+_Static_assert(sizeof(struct brk_sysinfo) == 224,
+	       "struct brk_sysinfo ABI changed");
+_Static_assert(offsetof(struct brk_sysinfo, page_size) == 196,
+	       "struct brk_sysinfo ABI changed");
+_Static_assert(offsetof(struct brk_sysinfo, mono_resolution_ns) == 208,
+	       "struct brk_sysinfo ABI changed");
 
 _Static_assert(sizeof(struct elf_hdr) == 64, "struct elf_hdr ABI changed");
 _Static_assert(sizeof(struct elf_phdr) == 56, "struct elf_phdr ABI changed");

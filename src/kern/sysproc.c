@@ -10,6 +10,7 @@
 #include <brk/uaccess.h>
 #include <brk/vmalloc.h>
 #include <uapi/errno.h>
+#include <uapi/proc.h>
 #include <uapi/resource.h>
 #include <uapi/time.h>
 
@@ -100,16 +101,28 @@ u64 sys_sched_yield(void)
 	return 0;
 }
 
-u64 sys_getpid(void)
+u64 sys_getproc(void)
 {
-	return current_task()->tgid;
-}
+	struct task *task = current_task();
+	struct brk_proc *ubuf = syscall_arg_ptr(0);
+	struct brk_proc proc = {
+		.pid = task->tgid,
+		.ppid = task->parent ? task->parent->tgid : 0,
+		.pgid = task->pgid,
+		.sid = task->sid,
+		.uid = task->uid,
+		.euid = task->euid,
+		.suid = task->suid,
+		.gid = task->gid,
+		.egid = task->egid,
+		.sgid = task->sgid,
+	};
 
-u64 sys_getppid(void)
-{
-	struct task *par = current_task()->parent;
-
-	return par ? par->tgid : 0;
+	if (!ubuf)
+		return -EFAULT;
+	if (copy_to_user(ubuf, &proc, sizeof(proc)))
+		return -EFAULT;
+	return 0;
 }
 
 static void update_caps_after_setuid(struct task *task, kuid_t old_euid)
@@ -256,26 +269,6 @@ u64 sys_setresuid(void)
 	return 0;
 }
 
-u64 sys_getresuid(void)
-{
-	struct task *task = current_task();
-	u32 *ruid = syscall_arg_ptr(0);
-	u32 *euid = syscall_arg_ptr(1);
-	u32 *suid = syscall_arg_ptr(2);
-	u32 id;
-
-	id = task->uid;
-	if (ruid && copy_to_user(ruid, &id, sizeof(id)))
-		return -EFAULT;
-	id = task->euid;
-	if (euid && copy_to_user(euid, &id, sizeof(id)))
-		return -EFAULT;
-	id = task->suid;
-	if (suid && copy_to_user(suid, &id, sizeof(id)))
-		return -EFAULT;
-	return 0;
-}
-
 static bool resgid_valid(struct task *task, int rgid, int egid, int sgid)
 {
 	if (capable(CAP_SETGID))
@@ -312,26 +305,6 @@ u64 sys_setresgid(void)
 	if (sgid != -1)
 		task->sgid = (kgid_t)sgid;
 	task->fsgid = task->egid;
-	return 0;
-}
-
-u64 sys_getresgid(void)
-{
-	struct task *task = current_task();
-	u32 *rgid = syscall_arg_ptr(0);
-	u32 *egid = syscall_arg_ptr(1);
-	u32 *sgid = syscall_arg_ptr(2);
-	u32 id;
-
-	id = task->gid;
-	if (rgid && copy_to_user(rgid, &id, sizeof(id)))
-		return -EFAULT;
-	id = task->egid;
-	if (egid && copy_to_user(egid, &id, sizeof(id)))
-		return -EFAULT;
-	id = task->sgid;
-	if (sgid && copy_to_user(sgid, &id, sizeof(id)))
-		return -EFAULT;
 	return 0;
 }
 

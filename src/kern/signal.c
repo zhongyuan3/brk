@@ -552,10 +552,134 @@ u64 sys_sigpending(void)
 	return 0;
 }
 
+u64 sys_sigtimedwait(void)
+{
+	const sigset_t *uset = syscall_arg_ptr(0);
+	const struct timespec *utimeout = syscall_arg_ptr(1);
+	siginfo_t *uinfo = syscall_arg_ptr(2);
+	struct task *task = current_task();
+	sigset_t set;
+	struct timespec req;
+	s64 deadline = 0;
+	bool timed = false;
+	irqstate_t flags;
+	int sig;
+
+	if (!uset)
+		return -EFAULT;
+	if (copy_from_user(&set, uset, sizeof(set)))
+		return -EFAULT;
+	if (set & ~(((u64)1 << NSIG) - 1))
+		return -EINVAL;
+
+	if (utimeout) {
+		if (copy_from_user(&req, utimeout, sizeof(req)))
+			return -EFAULT;
+		if (req.tv_sec < 0 || req.tv_nsec < 0 ||
+		    req.tv_nsec >= (__kernel_long_t)NS_PER_SEC)
+			return -EINVAL;
+		deadline = (s64)ktime_get_mono_ns() + ktime_from_timespec(&req);
+		timed = true;
+	}
+
+	for (;;) {
+		flags = spin_lock_irqsave(&task->sigactions->lock);
+		for (sig = 1; sig < NSIG; sig++) {
+			if ((set & (1ULL << sig)) &&
+			    (task->pending & (1ULL << sig)))
+				break;
+		}
+
+		if (sig < NSIG) {
+			/*
+			 * Validate the info destination before consuming the
+			 * signal so an EFAULT does not lose it.
+			 */
+			if (uinfo && !user_range_ok((u64)(uintptr_t)uinfo,
+						    sizeof(siginfo_t))) {
+				spin_unlock_irqrestore(&task->sigactions->lock,
+						       flags);
+				return -EFAULT;
+			}
+			task->pending &= ~(1ULL << sig);
+			spin_unlock_irqrestore(&task->sigactions->lock, flags);
+			break;
+		}
+
+		/*
+		 * Deliver unrelated pending signals instead of consuming them.
+		 * Return to the trap path so signal_deliver_pending() runs.
+		 */
+		if (task->pending & ~task->blocked & ~set) {
+			spin_unlock_irqrestore(&task->sigactions->lock, flags);
+			return -EINTR;
+		}
+
+		if (timed && (s64)ktime_get_mono_ns() >= deadline) {
+			spin_unlock_irqrestore(&task->sigactions->lock, flags);
+			return -EAGAIN;
+		}
+
+		spin_unlock_irqrestore(&task->sigactions->lock, flags);
+		(void)ktime_nanosleep(NS_PER_MS, NULL);
+	}
+
+	if (uinfo) {
+		siginfo_t info = { 0 };
+
+		info.si_signo = sig;
+		if (copy_to_user(uinfo, &info, sizeof(info)))
+			return -EFAULT;
+	}
+
+	return (u64)sig;
+}
+
 u64 sys_pause(void)
 {
 	struct task *task = current_task();
 
+	while (!signal_pending(task))
+		ktime_nanosleep(NS_PER_MS, NULL);
+
+	return -EINTR;
+}
+
+u64 sys_sigsuspend(void)
+{
+	const sigset_t *uset = syscall_arg_ptr(0);
+	sigset_t *uoldset = syscall_arg_ptr(1);
+	struct task *task = current_task();
+	sigset_t set;
+	sigset_t oldset;
+	irqstate_t flags;
+
+	if (!uset)
+		return -EFAULT;
+	if (copy_from_user(&set, uset, sizeof(set)))
+		return -EFAULT;
+	if (set & ~(((u64)1 << NSIG) - 1))
+		return -EINVAL;
+
+	flags = spin_lock_irqsave(&task->sigactions->lock);
+	oldset = task->blocked;
+	spin_unlock_irqrestore(&task->sigactions->lock, flags);
+
+	if (uoldset && copy_to_user(uoldset, &oldset, sizeof(oldset)))
+		return -EFAULT;
+
+	set &= ~(1ULL << SIGKILL);
+	set &= ~(1ULL << SIGSTOP);
+
+	flags = spin_lock_irqsave(&task->sigactions->lock);
+	task->blocked = set;
+	spin_unlock_irqrestore(&task->sigactions->lock, flags);
+
+	/*
+	 * Leave the temporary mask installed on return: the trap path delivers
+	 * the signal handler with this mask, and libc restores @oldset after
+	 * the handler returns.
+	 */
 	while (!signal_pending(task))
 		ktime_nanosleep(NS_PER_MS, NULL);
 
