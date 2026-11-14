@@ -9,7 +9,7 @@
  * Convert kernel-internal status into the user ABI layouts.  These are the
  * only places where struct kstat/kstatfs and struct stat/statvfs meet.
  */
-void kstat_to_stat(const struct kstat *ks, struct stat *st);
+void kstat_to_statx(const struct kstat *ks, struct statx *stx);
 void kstatfs_to_statvfs(const struct kstatfs *ks, struct statvfs *st);
 
 #endif

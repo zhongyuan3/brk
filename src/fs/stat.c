@@ -1,35 +1,23 @@
-#include <brk/ktime.h>
 #include <brk/stat.h>
 #include <brk/string.h>
 
-void kstat_to_stat(const struct kstat *ks, struct stat *st)
+void kstat_to_statx(const struct kstat *ks, struct statx *stx)
 {
-	struct timespec ts;
+	memset(stx, 0, sizeof(*stx));
 
-	memset(st, 0, sizeof(*st));
-
-	st->st_dev = (__u64)ks->dev;
-	st->st_ino = ks->ino;
-	st->st_mode = ks->mode;
-	st->st_nlink = ks->nlink;
-	st->st_uid = ks->uid;
-	st->st_gid = ks->gid;
-	st->st_rdev = (__u64)ks->rdev;
-	st->st_size = ks->size;
-	st->st_blksize = (__s32)ks->blksize;
-	st->st_blocks = ks->blocks;
-
-	ktime_to_timespec(ks->atime, &ts);
-	st->st_atime = ts.tv_sec;
-	st->st_atime_nsec = (__u64)ts.tv_nsec;
-
-	ktime_to_timespec(ks->mtime, &ts);
-	st->st_mtime = ts.tv_sec;
-	st->st_mtime_nsec = (__u64)ts.tv_nsec;
-
-	ktime_to_timespec(ks->ctime, &ts);
-	st->st_ctime = ts.tv_sec;
-	st->st_ctime_nsec = (__u64)ts.tv_nsec;
+	stx->stx_dev = (__u64)ks->dev;
+	stx->stx_ino = ks->ino;
+	stx->stx_rdev = (__u64)ks->rdev;
+	stx->stx_size = ks->size;
+	stx->stx_blocks = ks->blocks;
+	stx->stx_atime_ns = ks->atime;
+	stx->stx_mtime_ns = ks->mtime;
+	stx->stx_ctime_ns = ks->ctime;
+	stx->stx_mode = ks->mode;
+	stx->stx_nlink = ks->nlink;
+	stx->stx_uid = ks->uid;
+	stx->stx_gid = ks->gid;
+	stx->stx_blksize = (__s32)ks->blksize;
 }
 
 void kstatfs_to_statvfs(const struct kstatfs *ks, struct statvfs *st)

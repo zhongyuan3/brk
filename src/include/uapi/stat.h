@@ -65,4 +65,26 @@ struct stat {
 	__u32 __unused5;
 };
 
+/*
+ * Kernel-side status primitive.  POSIX struct stat is built by libc from
+ * this layout so the kernel does not have to track POSIX structure versions.
+ * Timestamps are nanoseconds since the realtime epoch.
+ */
+struct statx {
+	__u64 stx_dev;
+	__u64 stx_ino;
+	__u64 stx_rdev;
+	__s64 stx_size;
+	__s64 stx_blocks;
+	__s64 stx_atime_ns;
+	__s64 stx_mtime_ns;
+	__s64 stx_ctime_ns;
+	__u32 stx_mode;
+	__u32 stx_nlink;
+	__u32 stx_uid;
+	__u32 stx_gid;
+	__s32 stx_blksize;
+	__u32 __spare;
+};
+
 #endif

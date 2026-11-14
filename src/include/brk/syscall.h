@@ -22,7 +22,7 @@ u64 sys_ftruncate(void);
 u64 sys_fchmod(void);
 u64 sys_fchmodat(void);
 u64 sys_utimensat(void);
-u64 sys_fstat(void);
+u64 sys_statx(void);
 u64 sys_openat(void);
 u64 sys_faccessat(void);
 u64 sys_statvfs(void);
@@ -101,7 +101,6 @@ u64 sys_clock_settime(void);
 u64 sys_clock_nanosleep(void);
 u64 sys_getrusage(void);
 
-u64 sys_fstatat(void);
 u64 sys_readv(void);
 u64 sys_writev(void);
 u64 sys_dup3(void);

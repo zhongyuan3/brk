@@ -194,36 +194,6 @@ u64 sys_execve(void)
 	return do_execve(path, argv, envp);
 }
 
-u64 sys_fstat(void)
-{
-	struct fs_file *fp = NULL;
-	struct stat *ubuf;
-	struct kstat ks;
-	struct stat st;
-	int ret;
-	int fd;
-	struct task *task = current_task();
-
-	fd = syscall_arg_int(0);
-	fp = fdtable_get_file(task->fdtable, fd);
-	if (IS_ERR(fp))
-		return PTR_ERR(fp);
-	ubuf = syscall_arg_ptr(1);
-	if (!ubuf) {
-		fs_file_put(fp);
-		return -EFAULT;
-	}
-	ret = fs_file_stat(fp, &ks);
-	fs_file_put(fp);
-	if (ret)
-		return ret;
-
-	kstat_to_stat(&ks, &st);
-	if (copy_to_user(ubuf, &st, sizeof(st)))
-		return -EFAULT;
-	return 0;
-}
-
 static u64 stat_path_at(int dirfd, const char *path, struct kstat *buf,
 			unsigned int flags)
 {
@@ -250,39 +220,49 @@ static u64 stat_path_at(int dirfd, const char *path, struct kstat *buf,
 	return ret;
 }
 
-static u64 stat_path_at_to_user(int dirfd, const char *path, struct stat *ubuf,
-				unsigned int flags)
+static u64 stat_fd(struct task *task, int fd, struct kstat *ks)
 {
+	struct fs_file *fp;
+	int ret;
+
+	fp = fdtable_get_file(task->fdtable, fd);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
+	ret = fs_file_stat(fp, ks);
+	fs_file_put(fp);
+	return ret;
+}
+
+u64 sys_statx(void)
+{
+	int dirfd = syscall_arg_int(0);
+	const char *path = syscall_arg_ptr(1);
+	int flags = syscall_arg_int(2);
+	struct statx *ubuf = syscall_arg_ptr(3);
+	struct statx stx;
 	struct kstat ks;
-	struct stat st;
 	int ret;
 
 	if (!ubuf)
 		return -EFAULT;
+	if (flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH))
+		return -EINVAL;
 
-	ret = stat_path_at(dirfd, path, &ks, flags);
+	if ((flags & AT_EMPTY_PATH) && (!path || path[0] == '\0')) {
+		ret = stat_fd(current_task(), dirfd, &ks);
+	} else {
+		unsigned int lookup_flags =
+			(flags & AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW;
+
+		ret = stat_path_at(dirfd, path, &ks, lookup_flags);
+	}
 	if (ret)
 		return ret;
 
-	kstat_to_stat(&ks, &st);
-	if (copy_to_user(ubuf, &st, sizeof(st)))
+	kstat_to_statx(&ks, &stx);
+	if (copy_to_user(ubuf, &stx, sizeof(stx)))
 		return -EFAULT;
 	return 0;
-}
-
-u64 sys_fstatat(void)
-{
-	int dirfd = syscall_arg_int(0);
-	const char *path = syscall_arg_ptr(1);
-	struct stat *buf = syscall_arg_ptr(2);
-	int flags = syscall_arg_int(3);
-	unsigned int lookup_flags;
-
-	if (flags & ~AT_SYMLINK_NOFOLLOW)
-		return -EINVAL;
-
-	lookup_flags = (flags & AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW;
-	return stat_path_at_to_user(dirfd, path, buf, lookup_flags);
 }
 
 static u64 access_path_at(int dirfd, const char *path, int mode,

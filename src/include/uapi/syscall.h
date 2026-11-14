@@ -13,7 +13,7 @@
 #define SYS_read 0
 #define SYS_write 1
 #define SYS_close 3
-#define SYS_fstat 5
+#define SYS_statx 4
 #define SYS_poll 7
 #define SYS_lseek 8
 #define SYS_mmap 9
@@ -81,7 +81,6 @@
 #define SYS_mkdirat 144
 #define SYS_mknodat 145
 #define SYS_fchownat 146
-#define SYS_fstatat 147
 #define SYS_unlinkat 148
 #define SYS_renameat 149
 #define SYS_linkat 150
