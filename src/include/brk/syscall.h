@@ -90,9 +90,6 @@ u64 sys_getpeername(void);
 u64 sys_setsockopt(void);
 u64 sys_getsockopt(void);
 
-u64 sys_poll(void);
-u64 sys_select(void);
-u64 sys_pselect(void);
 u64 sys_ppoll(void);
 
 u64 sys_clock_gettime(void);

@@ -95,9 +95,6 @@ static u64 (*systable[])(void) = {
 	[SYS_getpeername] = sys_getpeername,
 	[SYS_setsockopt] = sys_setsockopt,
 	[SYS_getsockopt] = sys_getsockopt,
-	[SYS_poll] = sys_poll,
-	[SYS_select] = sys_select,
-	[SYS_pselect] = sys_pselect,
 	[SYS_ppoll] = sys_ppoll,
 };
 

@@ -14,7 +14,6 @@
 #define SYS_write 1
 #define SYS_close 3
 #define SYS_statx 4
-#define SYS_poll 7
 #define SYS_lseek 8
 #define SYS_mmap 9
 #define SYS_mprotect 10
@@ -23,7 +22,6 @@
 #define SYS_sigprocmask 13
 #define SYS_readv 16
 #define SYS_writev 17
-#define SYS_select 20
 #define SYS_sched_yield 21
 #define SYS_msync 22
 #define SYS_dup 26
@@ -88,7 +86,6 @@
 #define SYS_readlinkat 152
 #define SYS_fchmodat 153
 #define SYS_faccessat 154
-#define SYS_pselect 155
 #define SYS_ppoll 156
 #define SYS_utimensat 157
 #define SYS_accept4 158
