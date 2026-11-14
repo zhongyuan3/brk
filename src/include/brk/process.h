@@ -42,6 +42,7 @@ struct process *process_create_idle(cpuid_t cpuid);
 void process_destroy(struct process *process);
 
 int process_fork(void);
+void process_exit_group(int status);
 pid_t process_wait(pid_t pid, int *status, int options, struct rusage *rus,
 		   kuid_t *uid);
 
@@ -76,6 +77,16 @@ static inline bool process_is_kthread(const struct process *process)
 static inline struct process *current_process(void)
 {
 	return current_thread()->process;
+}
+
+static inline bool process_group_exiting(struct process *process)
+{
+	return __atomic_load_n(&process->group_exiting, __ATOMIC_ACQUIRE);
+}
+
+static inline int process_group_exit_status(struct process *process)
+{
+	return __atomic_load_n(&process->group_exit_status, __ATOMIC_RELAXED);
 }
 
 extern struct process *init_reaper;

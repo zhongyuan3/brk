@@ -361,6 +361,11 @@ static void thread_sleep_common(void *chan, spinlock_t *lock,
 	assert(lock->locked);
 	assert(preempt_count() == 0);
 
+	if (process_group_exiting(thread->process)) {
+		raw_spin_unlock(lock);
+		thread_exit(process_group_exit_status(thread->process));
+	}
+
 	raw_spin_lock(&thread->lock);
 	thread->state = THREAD_STATE_SLEEPING;
 	thread->chan = chan;
@@ -531,7 +536,9 @@ void thread_exit(int status)
 	last = process->nr_live == 0;
 	if (last) {
 		process->exited = true;
-		process->exit_status = status;
+		process->exit_status = process->group_exiting ?
+					       process->group_exit_status :
+					       status;
 		process->last_thread = thread;
 	}
 	spin_unlock_irqrestore(&process->lock, flags);

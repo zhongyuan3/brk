@@ -88,6 +88,19 @@ u64 sys_exit(void)
 	return 0;
 }
 
+u64 sys_exit_group(void)
+{
+	int status = syscall_arg_raw(0);
+
+	process_exit_group(status);
+	return 0;
+}
+
+u64 sys_gettid(void)
+{
+	return current_thread()->tid;
+}
+
 u64 sys_kill(void)
 {
 	pid_t pid = syscall_arg_int(0);

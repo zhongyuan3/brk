@@ -212,7 +212,7 @@ static struct thread *thread_create_in(struct process *process,
 	thread->kernel_sp = kernel_sp;
 
 	irqstate_t flags = spin_lock_irqsave(&process->lock);
-	if (!main && process->exited) {
+	if (!main && (process->exited || process->group_exiting)) {
 		spin_unlock_irqrestore(&process->lock, flags);
 		kstack_free(thread->kstack_base);
 		thread_free(thread);
@@ -242,7 +242,7 @@ struct thread *thread_create(struct process *process, void (*fn)(void *),
 		return ERR_PTR(-EINVAL);
 
 	irqstate_t flags = spin_lock_irqsave(&process->lock);
-	dead = process->exited;
+	dead = process->exited || process->group_exiting;
 	spin_unlock_irqrestore(&process->lock, flags);
 	if (dead)
 		return ERR_PTR(-EINVAL);
@@ -802,6 +802,39 @@ bool process_get_info(pid_t pid, struct process_info *info)
 
 	spin_unlock_irqrestore(&process_list_lock, lflags);
 	return true;
+}
+
+void process_exit_group(int status)
+{
+	struct process *process = current_process();
+	struct thread *thread;
+	int exit_status;
+	irqstate_t flags;
+
+	flags = spin_lock_irqsave(&process->lock);
+	if (!process->group_exiting) {
+		process->group_exiting = true;
+		process->group_exit_status = status;
+		__atomic_store_n(&process->group_exit_status, status,
+				 __ATOMIC_RELAXED);
+		__atomic_store_n(&process->group_exiting, true,
+				 __ATOMIC_RELEASE);
+	}
+	exit_status = process->group_exit_status;
+	spin_unlock_irqrestore(&process->lock, flags);
+
+	/*
+	 * The current thread keeps the process alive, so sibling thread
+	 * objects cannot be freed while we walk the list.  Woken sleepers
+	 * re-check group_exiting in thread_sleep_common(); running threads
+	 * observe it on their next return to user mode.
+	 */
+	list_for_each_entry(thread, &process->threads, proc_threads) {
+		if (thread != current_thread())
+			thread_wake(thread);
+	}
+
+	thread_exit(exit_status);
 }
 
 int process_fork(void)

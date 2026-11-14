@@ -74,6 +74,10 @@ struct process {
 	/* protected by @lock */
 	int exit_status;
 	/* protected by @lock */
+	bool group_exiting;
+	/* protected by @lock */
+	int group_exit_status;
+	/* protected by @lock */
 	struct thread *last_thread;
 	/* Immutable after creation; may point at a zombie. */
 	struct thread *leader;

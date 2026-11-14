@@ -305,6 +305,9 @@ void trap_handler(struct trap_frame *frame)
 		jiffies = tick_get_jiffies();
 		process_add_system_time(task->process, jiffies - task->ktime);
 		task->utime = jiffies;
+
+		if (process_group_exiting(task->process))
+			thread_exit(process_group_exit_status(task->process));
 	}
 }
 

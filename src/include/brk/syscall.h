@@ -14,6 +14,8 @@ int syscall_arg_int(int argno);
 u64 sys_read(void);
 u64 sys_write(void);
 u64 sys_exit(void);
+u64 sys_exit_group(void);
+u64 sys_gettid(void);
 u64 sys_close(void);
 u64 sys_ioctl(void);
 u64 sys_truncate(void);
