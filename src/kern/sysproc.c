@@ -1,5 +1,6 @@
 #include <arch/pgtable.h>
 #include <brk/kmalloc.h>
+#include <brk/error.h>
 #include <brk/permission.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
@@ -93,13 +94,47 @@ u64 sys_exit_group(void)
 {
 	int status = syscall_arg_raw(0);
 
-	process_exit_group(status);
+	process_exit_group((status & 0xff) << 8);
 	return 0;
 }
 
 u64 sys_gettid(void)
 {
 	return current_thread()->tid;
+}
+
+u64 sys_thread_create(void)
+{
+	struct brk_thread_create_args args;
+	struct thread *thread;
+	void *uargs = syscall_arg_ptr(0);
+
+	if (!uargs || !user_range_ok((u64)(uintptr_t)uargs, sizeof(args)))
+		return -EFAULT;
+	if (copy_from_user(&args, uargs, sizeof(args)))
+		return -EFAULT;
+
+	if (args.flags)
+		return -EINVAL;
+	if (!args.stack || (args.stack & 0xF) || args.stack < 16 ||
+	    args.stack > USER_SPACE_SIZE_MAX)
+		return -EINVAL;
+	if (!args.entry || (args.entry & 1) || !user_range_ok(args.entry, 4))
+		return -EINVAL;
+	if (args.tls > USER_SPACE_SIZE_MAX)
+		return -EINVAL;
+	if (args.clear_tid) {
+		if ((args.clear_tid & (sizeof(int) - 1)) ||
+		    !user_range_ok(args.clear_tid, sizeof(int)))
+			return -EINVAL;
+	}
+
+	thread = thread_create_user(current_process(), args.stack, args.entry,
+				    args.arg, args.tls,
+				    (int *)(uintptr_t)args.clear_tid);
+	if (IS_ERR(thread))
+		return PTR_ERR(thread);
+	return (u64)thread->tid;
 }
 
 u64 sys_kill(void)

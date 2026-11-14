@@ -475,7 +475,7 @@ err:
 	return err;
 }
 
-int do_execve(const char *path, char **argv, char **envp)
+static int do_execve_common(const char *path, char **argv, char **envp)
 {
 	struct exec_args args;
 	struct exec_strings_acc argv_acc;
@@ -529,4 +529,27 @@ int do_execve(const char *path, char **argv, char **envp)
 		return -E2BIG;
 
 	return __do_execve(path, &args);
+}
+
+int do_execve(const char *path, char **argv, char **envp)
+{
+	struct process *process = current_process();
+	bool busy;
+	int ret;
+	irqstate_t flags;
+
+	flags = spin_lock_irqsave(&process->lock);
+	busy = process->nr_live != 1 || process->exec_in_progress;
+	if (!busy)
+		process->exec_in_progress = true;
+	spin_unlock_irqrestore(&process->lock, flags);
+	if (busy)
+		return -EBUSY;
+
+	ret = do_execve_common(path, argv, envp);
+
+	flags = spin_lock_irqsave(&process->lock);
+	process->exec_in_progress = false;
+	spin_unlock_irqrestore(&process->lock, flags);
+	return ret;
 }

@@ -19,6 +19,7 @@
 #include <brk/thread.h>
 #include <brk/tick.h>
 #include <brk/types.h>
+#include <brk/uaccess.h>
 #include <uapi/capability.h>
 #include <uapi/errno.h>
 #include <uapi/limits.h>
@@ -526,6 +527,18 @@ void thread_exit(int status)
 	irqstate_t flags;
 	bool last;
 	bool reparented = false;
+
+	/*
+	 * pthread_join-style wakeup: clear the user TID slot before this thread
+	 * leaves the CPU.  Futex wake is not implemented yet; the clearing is
+	 * still useful for polling join implementations.
+	 */
+	if (thread->clear_tid) {
+		int zero = 0;
+
+		(void)copy_to_user(thread->clear_tid, &zero, sizeof(zero));
+		thread->clear_tid = NULL;
+	}
 
 	/*
 	 * Only the process-wide exit path releases filesystem state.  With a

@@ -153,6 +153,7 @@ void thread_disarm_sleep_timer(void)
 }
 
 static void complete_thread_switch(void);
+static void thread_destroy(struct thread *thread);
 static void kthread_return(void);
 
 static void default_new_thread_entry(void)
@@ -243,7 +244,8 @@ struct thread *thread_create(struct process *process, void (*fn)(void *),
 		return ERR_PTR(-EINVAL);
 
 	irqstate_t flags = spin_lock_irqsave(&process->lock);
-	dead = process->exited || process->group_exiting;
+	dead = process->exited || process->group_exiting ||
+	       process->exec_in_progress;
 	spin_unlock_irqrestore(&process->lock, flags);
 	if (dead)
 		return ERR_PTR(-EINVAL);
@@ -255,6 +257,51 @@ struct thread *thread_create(struct process *process, void (*fn)(void *),
 	thread->kthrd_fn = fn;
 	thread->kthrd_data = data;
 	signal_thread_init(process, thread, 0);
+	return thread;
+}
+
+struct thread *thread_create_user(struct process *process, u64 stack, u64 entry,
+				  u64 arg, u64 tls, int *clear_tid)
+{
+	struct thread *thread;
+	struct thread *current = current_thread();
+	u64 blocked = 0;
+
+	if (!process || process != current->process)
+		return ERR_PTR(-EINVAL);
+
+	thread = thread_create_in(process, ret_from_fork, false);
+	if (IS_ERR(thread))
+		return thread;
+
+	thread->newly_forked = true;
+	thread->clear_tid = clear_tid;
+
+	if (process->sigactions) {
+		irqstate_t flags =
+			spin_lock_irqsave(&process->sigactions->lock);
+
+		blocked = current->blocked;
+		spin_unlock_irqrestore(&process->sigactions->lock, flags);
+	}
+	signal_thread_init(process, thread, blocked);
+
+	thread->frame->sp = stack;
+	thread->frame->sepc = entry;
+	thread->frame->a0 = arg;
+	thread->frame->gp = current->frame->gp;
+	thread->frame->tp = tls ? tls : current->frame->tp;
+	prepare_to_ret_to_user(thread->frame);
+
+	irqstate_t flags = spin_lock_irqsave(&process->lock);
+	bool dying = process->exited || process->group_exiting;
+	spin_unlock_irqrestore(&process->lock, flags);
+	if (dying) {
+		thread_destroy(thread);
+		return ERR_PTR(-EINVAL);
+	}
+
+	thread_start(thread);
 	return thread;
 }
 
@@ -344,6 +391,7 @@ static void thread_destroy(struct thread *thread)
 	flags = spin_lock_irqsave(&process->lock);
 	list_del_init(&thread->proc_threads);
 	process->nr_threads--;
+	process->nr_live--;
 	spin_unlock_irqrestore(&process->lock, flags);
 
 	kstack_free(thread->kstack_base);

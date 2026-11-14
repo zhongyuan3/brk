@@ -20,6 +20,8 @@ struct process;
 void thread_cache_init(void);
 struct thread *thread_create(struct process *process, void (*fn)(void *),
 			     void *data);
+struct thread *thread_create_user(struct process *process, u64 stack, u64 entry,
+				  u64 arg, u64 tls, int *clear_tid);
 void thread_start(struct thread *thread);
 
 void thread_exit(int status);

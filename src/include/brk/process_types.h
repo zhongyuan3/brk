@@ -74,6 +74,8 @@ struct process {
 	/* protected by @lock */
 	int exit_status;
 	/* protected by @lock */
+	bool exec_in_progress;
+	/* protected by @lock */
 	bool group_exiting;
 	/* protected by @lock */
 	int group_exit_status;

@@ -33,6 +33,8 @@ struct thread {
 	struct process *process;
 	/* Immutable after creation; leader tid == process->pid. */
 	pid_t tid;
+	/* User address cleared on exit (no futex wake yet). */
+	int *clear_tid;
 
 	/* protected by run_queue_lock/sleep_queue_lock */
 	struct list_head queue;

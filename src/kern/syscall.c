@@ -16,6 +16,7 @@ static u64 (*systable[])(void) = {
 	[SYS_exit] = sys_exit,
 	[SYS_exit_group] = sys_exit_group,
 	[SYS_gettid] = sys_gettid,
+	[SYS_thread_create] = sys_thread_create,
 	[SYS_close] = sys_close,
 	[SYS_sigaction] = sys_sigaction,
 	[SYS_sigprocmask] = sys_sigprocmask,
