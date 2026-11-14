@@ -8,6 +8,7 @@
 #include <brk/fdtable.h>
 #include <brk/fs.h>
 #include <brk/fsinfo.h>
+#include <brk/futex.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
@@ -22,6 +23,7 @@
 #include <brk/uaccess.h>
 #include <uapi/capability.h>
 #include <uapi/errno.h>
+#include <uapi/futex.h>
 #include <uapi/limits.h>
 
 SPINLOCK_DEFINE(wait_lock);
@@ -528,15 +530,21 @@ void thread_exit(int status)
 	bool last;
 	bool reparented = false;
 
+	futex_cleanup_thread(thread);
+
 	/*
 	 * pthread_join-style wakeup: clear the user TID slot before this thread
-	 * leaves the CPU.  Futex wake is not implemented yet; the clearing is
-	 * still useful for polling join implementations.
+	 * leaves the CPU, then wake futex waiters blocked on that address.
 	 */
 	if (thread->clear_tid) {
 		int zero = 0;
 
-		(void)copy_to_user(thread->clear_tid, &zero, sizeof(zero));
+		if (copy_to_user(thread->clear_tid, &zero, sizeof(zero)) == 0 &&
+		    process->mm)
+			(void)futex_wake_user(process->mm,
+					      (u32 *)thread->clear_tid,
+					      FUTEX_BITSET_MATCH_ANY,
+					      0x7fffffff);
 		thread->clear_tid = NULL;
 	}
 

@@ -4,6 +4,7 @@ obj-y += cpu.o
 obj-y += panic.o
 obj-y += signal.o
 obj-y += syscall.o
+obj-y += futex.o
 obj-y += console.o
 obj-y += printk.o
 obj-y += klog.o

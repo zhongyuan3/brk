@@ -98,5 +98,6 @@
 #define SYS_gettid 83
 #define SYS_exit_group 84
 #define SYS_thread_create 85
+#define SYS_futex 86
 
 #endif

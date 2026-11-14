@@ -5,6 +5,7 @@
 #include <brk/dcache.h>
 #include <brk/device.h>
 #include <brk/fs.h>
+#include <brk/futex.h>
 #include <brk/init.h>
 #include <brk/irq.h>
 #include <brk/irqchip.h>
@@ -66,6 +67,7 @@ void start_kernel(void)
 
 	/* Core data structures, buses and registries. */
 	cpu_sched_init();
+	futex_init();
 	process_cache_init();
 	thread_cache_init();
 	irq_init();

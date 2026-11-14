@@ -3,6 +3,7 @@
 
 #include <arch/context.h>
 #include <arch/trapframe.h>
+#include <brk/list.h>
 #include <brk/spinlock_types.h>
 #include <brk/timer_list.h>
 #include <brk/types.h>
@@ -10,6 +11,19 @@
 #include <uapi/types.h>
 
 struct process;
+struct futex_bucket;
+struct uvm_space;
+
+struct futex_waiter {
+	struct list_head node;
+	struct futex_bucket *bucket;
+	struct uvm_space *mm;
+	struct thread *thread;
+	u32 *uaddr;
+	u32 bitset;
+	bool queued;
+	bool woken;
+};
 
 enum thread_state {
 	THREAD_STATE_NEW,
@@ -33,8 +47,11 @@ struct thread {
 	struct process *process;
 	/* Immutable after creation; leader tid == process->pid. */
 	pid_t tid;
-	/* User address cleared on exit (no futex wake yet). */
+	/* User address cleared and futex-woken on exit. */
 	int *clear_tid;
+
+	/* Embedded waiter, so a thread can never leave a stale stack pointer. */
+	struct futex_waiter futex;
 
 	/* protected by run_queue_lock/sleep_queue_lock */
 	struct list_head queue;
