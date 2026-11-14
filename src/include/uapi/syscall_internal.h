@@ -9,7 +9,7 @@
  * but must not be used by applications.
  */
 
-#define SYS_sigreturn 85
-#define SYS_ioctl 86
+#define SYS_sigreturn 83
+#define SYS_ioctl 84
 
 #endif
