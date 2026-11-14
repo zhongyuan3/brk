@@ -85,7 +85,7 @@
 #define SYS_accept4 72
 #define SYS_dup3 73
 #define SYS_pipe2 74
-#define SYS_posix_fallocate 75
+#define SYS_fallocate 75
 #define SYS_getdents 76
 #define SYS_statfs 77
 #define SYS_fstatfs 78

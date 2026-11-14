@@ -90,4 +90,7 @@
 #define AT_NO_AUTOMOUNT 0x800
 #define AT_EMPTY_PATH 0x1000
 
+/* fallocate() mode flags. */
+#define FALLOC_FL_KEEP_SIZE 0x01
+
 #endif

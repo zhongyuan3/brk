@@ -7,6 +7,7 @@
 #include <brk/sleeplock_types.h>
 #include <brk/stat_types.h>
 #include <brk/types.h>
+#include <uapi/fcntl.h>
 
 #define SEEK_SET 0
 #define SEEK_CUR 1
@@ -16,9 +17,6 @@
 #define RENAME_NOREPLACE (1 << 0)
 #define RENAME_EXCHANGE (1 << 1)
 #define RENAME_WHITEOUT (1 << 2)
-
-/* Internal fallocate mode bits; POSIX posix_fallocate() implies mode 0. */
-#define FALLOC_FL_KEEP_SIZE 0x01
 
 #define FS_REQUIRES_DEV 1
 #define FS_BINARY_MOUNTDATA 2

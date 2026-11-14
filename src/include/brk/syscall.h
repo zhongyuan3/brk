@@ -25,7 +25,7 @@ u64 sys_openat(void);
 u64 sys_faccessat(void);
 u64 sys_statfs(void);
 u64 sys_fstatfs(void);
-u64 sys_posix_fallocate(void);
+u64 sys_fallocate(void);
 u64 sys_dup(void);
 u64 sys_execve(void);
 u64 sys_setpgid(void);

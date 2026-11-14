@@ -371,11 +371,12 @@ u64 sys_statfs(void)
 	return 0;
 }
 
-u64 sys_posix_fallocate(void)
+u64 sys_fallocate(void)
 {
 	int fd = syscall_arg_int(0);
-	loff_t offset = (loff_t)syscall_arg_raw(1);
-	loff_t len = (loff_t)syscall_arg_raw(2);
+	int mode = syscall_arg_int(1);
+	loff_t offset = (loff_t)syscall_arg_raw(2);
+	loff_t len = (loff_t)syscall_arg_raw(3);
 	struct task *task = current_task();
 	struct fs_file *fp;
 	int ret;
@@ -392,7 +393,7 @@ u64 sys_posix_fallocate(void)
 		return -EINVAL;
 	}
 
-	ret = fs_file_fallocate(fp, 0, offset, len);
+	ret = fs_file_fallocate(fp, mode, offset, len);
 	fs_file_put(fp);
 	return ret;
 }
