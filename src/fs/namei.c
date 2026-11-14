@@ -351,12 +351,54 @@ out_paths:
 	return err;
 }
 
+static int do_rmdirat(int dirfd, const char *pathname)
+{
+	int err;
+	struct fs_path path;
+
+	err = fs_path_lookup_at(dirfd, pathname, 0, &path);
+	if (err)
+		return err;
+
+	spin_lock(&path.dentry->lock);
+	if (path.dentry->flags & DCACHE_NEGATIVE) {
+		spin_unlock(&path.dentry->lock);
+		fs_path_put(&path);
+		return -ENOENT;
+	}
+	spin_unlock(&path.dentry->lock);
+
+	struct fs_path parent_path;
+	err = fs_path_dot_dot(&path, &parent_path);
+	if (err) {
+		fs_path_put(&path);
+		return err;
+	}
+	struct fs_inode *inode = parent_path.dentry->inode;
+	err = may_delete(inode, path.dentry);
+	if (err) {
+		fs_path_put(&parent_path);
+		fs_path_put(&path);
+		return err;
+	}
+	sleeplock_acquire(&inode->rwsem);
+	err = inode->ops->rmdir(inode, path.dentry);
+	sleeplock_release(&inode->rwsem);
+
+	fs_path_put(&parent_path);
+	fs_path_put(&path);
+	return err;
+}
+
 int do_unlinkat(int dirfd, const char *pathname, int flags)
 {
 	int err;
 	struct fs_path path;
 
-	(void)flags;
+	if (flags & ~AT_REMOVEDIR)
+		return -EINVAL;
+	if (flags & AT_REMOVEDIR)
+		return do_rmdirat(dirfd, pathname);
 
 	err = fs_path_lookup_at(dirfd, pathname, 0, &path);
 	if (err)
@@ -635,44 +677,5 @@ out_old_parent:
 out_both:
 	fs_path_put(&oldpath);
 	fs_path_put(&newpath);
-	return err;
-}
-
-int do_rmdir(const char *pathname)
-{
-	int err;
-	struct fs_path path;
-
-	err = fs_path_lookup_at(AT_FDCWD, pathname, 0, &path);
-	if (err)
-		return err;
-
-	spin_lock(&path.dentry->lock);
-	if (path.dentry->flags & DCACHE_NEGATIVE) {
-		spin_unlock(&path.dentry->lock);
-		fs_path_put(&path);
-		return -ENOENT;
-	}
-	spin_unlock(&path.dentry->lock);
-
-	struct fs_path parent_path;
-	err = fs_path_dot_dot(&path, &parent_path);
-	if (err) {
-		fs_path_put(&path);
-		return err;
-	}
-	struct fs_inode *inode = parent_path.dentry->inode;
-	err = may_delete(inode, path.dentry);
-	if (err) {
-		fs_path_put(&parent_path);
-		fs_path_put(&path);
-		return err;
-	}
-	sleeplock_acquire(&inode->rwsem);
-	err = inode->ops->rmdir(inode, path.dentry);
-	sleeplock_release(&inode->rwsem);
-
-	fs_path_put(&parent_path);
-	fs_path_put(&path);
 	return err;
 }

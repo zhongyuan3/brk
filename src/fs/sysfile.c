@@ -412,12 +412,6 @@ u64 sys_unlinkat(void)
 	return do_unlinkat(dirfd, path, flags);
 }
 
-u64 sys_rmdir(void)
-{
-	const char *pathname = syscall_arg_ptr(0);
-	return do_rmdir(pathname);
-}
-
 u64 sys_uname(void)
 {
 	struct utsname name = {
@@ -951,29 +945,25 @@ static int set_times_fd(int fd, const struct timespec times[2])
 	return setattr_fd(fd, &attr);
 }
 
-u64 sys_fchmod(void)
-{
-	int fd = syscall_arg_int(0);
-	umode_t mode = syscall_arg_raw(1);
-	struct fs_iattr attr = {
-		.valid = ATTR_MODE,
-		.mode = mode & 07777,
-	};
-
-	return setattr_fd(fd, &attr);
-}
-
 u64 sys_fchmodat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	const char *path = syscall_arg_ptr(1);
 	umode_t mode = syscall_arg_raw(2);
+	int flags = syscall_arg_int(3);
+	unsigned int lookup_flags;
 	struct fs_iattr attr = {
 		.valid = ATTR_MODE,
 		.mode = mode & 07777,
 	};
 
-	return setattr_path_at(dirfd, path, &attr, LOOKUP_FOLLOW);
+	if (flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH))
+		return -EINVAL;
+	if ((flags & AT_EMPTY_PATH) && (!path || path[0] == '\0'))
+		return setattr_fd(dirfd, &attr);
+
+	lookup_flags = (flags & AT_SYMLINK_NOFOLLOW) ? 0 : LOOKUP_FOLLOW;
+	return setattr_path_at(dirfd, path, &attr, lookup_flags);
 }
 
 static void chown_attr_init(struct fs_iattr *attr, long uid, long gid)

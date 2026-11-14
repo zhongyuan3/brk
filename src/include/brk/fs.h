@@ -246,7 +246,6 @@ int do_symlinkat(int dirfd, const char *pathname, const char *target);
 int do_readlinkat(int dirfd, const char *path, char *buf, size_t bufsiz);
 int do_renameat(int olddirfd, const char *oldpath, int newdirfd,
 		const char *newpath, unsigned int flags);
-int do_rmdir(const char *pathname);
 
 int fs_init(void);
 int rootfs_init(void);

@@ -50,8 +50,6 @@
 #define SYS_getcwd 37
 #define SYS_chdir 38
 #define SYS_fchdir 39
-#define SYS_rmdir 40
-#define SYS_fchmod 41
 #define SYS_umask 42
 #define SYS_get_times 43
 #define SYS_setuid 44
