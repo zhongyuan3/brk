@@ -152,40 +152,20 @@ u64 sys_clock_nanosleep(void)
 	return (u64)(long)ret;
 }
 
-static void jiffies_to_timeval(u64 ticks, struct timeval *tv)
+u64 sys_get_times(void)
 {
-	tv->tv_sec = (__kernel_time_t)(ticks / USER_HZ);
-	tv->tv_usec = (__kernel_suseconds_t)((ticks % USER_HZ) *
-					     (US_PER_SEC / USER_HZ));
-}
-
-u64 sys_getrusage(void)
-{
-	int who = syscall_arg_int(0);
-	struct rusage *uru = syscall_arg_ptr(1);
-	struct rusage ru = { 0 };
 	struct task *task = current_task();
-	u64 utime, stime;
+	struct brk_times *ubuf = syscall_arg_ptr(0);
+	struct brk_times times = {
+		.user_ns = task_get_user_time(task) * TICK_NS,
+		.system_ns = task_get_system_time(task) * TICK_NS,
+		.child_user_ns = task_get_child_user_time(task) * TICK_NS,
+		.child_system_ns = task_get_child_system_time(task) * TICK_NS,
+	};
 
-	switch (who) {
-	case RUSAGE_SELF:
-		utime = task_get_user_time(task);
-		stime = task_get_system_time(task);
-		break;
-	case RUSAGE_CHILDREN:
-		utime = task_get_child_user_time(task);
-		stime = task_get_child_system_time(task);
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	jiffies_to_timeval(utime, &ru.ru_utime);
-	jiffies_to_timeval(stime, &ru.ru_stime);
-
-	if (!uru)
+	if (!ubuf)
 		return -EFAULT;
-	if (copy_to_user(uru, &ru, sizeof(ru)))
+	if (copy_to_user(ubuf, &times, sizeof(times)))
 		return -EFAULT;
 	return 0;
 }

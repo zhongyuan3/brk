@@ -96,7 +96,7 @@ u64 sys_clock_gettime(void);
 u64 sys_clock_getres(void);
 u64 sys_clock_settime(void);
 u64 sys_clock_nanosleep(void);
-u64 sys_getrusage(void);
+u64 sys_get_times(void);
 
 u64 sys_readv(void);
 u64 sys_writev(void);

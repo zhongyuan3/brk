@@ -53,7 +53,7 @@
 #define SYS_rmdir 40
 #define SYS_fchmod 41
 #define SYS_umask 42
-#define SYS_getrusage 43
+#define SYS_get_times 43
 #define SYS_setuid 44
 #define SYS_setgid 45
 #define SYS_setpgid 46
