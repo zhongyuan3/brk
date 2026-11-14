@@ -12,6 +12,7 @@
 #include <brk/mm_types.h>
 #include <brk/pagecache.h>
 #include <brk/pgalloc.h>
+#include <brk/sleeplock.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
@@ -1072,7 +1073,7 @@ int uvm_msync(struct uvm_space *mm, u64 addr, size_t len, int flags)
 
 u64 sys_mmap(void)
 {
-	struct thread *task = current_thread();
+	struct uvm_space *mm = current_process()->mm;
 	u64 hint = syscall_arg_raw(0);
 	size_t len = (size_t)syscall_arg_raw(1);
 	int prot = syscall_arg_int(2);
@@ -1082,20 +1083,26 @@ u64 sys_mmap(void)
 	u64 addr = 0;
 	int err;
 
-	if (!task || !task->process->mm)
+	if (!mm)
 		return -EFAULT;
 
 	if (flags & MAP_ANONYMOUS) {
 		if (flags & MAP_SHARED)
 			return -EOPNOTSUPP;
-		err = uvm_mmap_anon(task->process->mm, hint, len, prot, flags,
-				    fd, offset, &addr);
+		sleeplock_acquire(&mm->lock);
+		err = uvm_mmap_anon(mm, hint, len, prot, flags, fd, offset,
+				    &addr);
+		sleeplock_release(&mm->lock);
 	} else if (flags & MAP_SHARED) {
-		err = uvm_mmap_file_shared(task->process->mm, hint, len, prot,
-					   flags, fd, offset, &addr);
+		sleeplock_acquire(&mm->lock);
+		err = uvm_mmap_file_shared(mm, hint, len, prot, flags, fd,
+					   offset, &addr);
+		sleeplock_release(&mm->lock);
 	} else {
-		err = uvm_mmap_file_private(task->process->mm, hint, len, prot,
-					    flags, fd, offset, &addr);
+		sleeplock_acquire(&mm->lock);
+		err = uvm_mmap_file_private(mm, hint, len, prot, flags, fd,
+					    offset, &addr);
+		sleeplock_release(&mm->lock);
 	}
 	if (err)
 		return (u64)(long)err;
@@ -1104,35 +1111,50 @@ u64 sys_mmap(void)
 
 u64 sys_munmap(void)
 {
-	struct thread *task = current_thread();
+	struct uvm_space *mm = current_process()->mm;
 	u64 addr = syscall_arg_raw(0);
 	size_t len = (size_t)syscall_arg_raw(1);
+	int err;
 
-	if (!task || !task->process->mm)
+	if (!mm)
 		return -EFAULT;
-	return (u64)(long)uvm_munmap(task->process->mm, addr, len);
+
+	sleeplock_acquire(&mm->lock);
+	err = uvm_munmap(mm, addr, len);
+	sleeplock_release(&mm->lock);
+	return (u64)(long)err;
 }
 
 u64 sys_mprotect(void)
 {
-	struct thread *task = current_thread();
+	struct uvm_space *mm = current_process()->mm;
 	u64 addr = syscall_arg_raw(0);
 	size_t len = (size_t)syscall_arg_raw(1);
 	int prot = syscall_arg_int(2);
+	int err;
 
-	if (!task || !task->process->mm)
+	if (!mm)
 		return -EFAULT;
-	return (u64)(long)uvm_mprotect(task->process->mm, addr, len, prot);
+
+	sleeplock_acquire(&mm->lock);
+	err = uvm_mprotect(mm, addr, len, prot);
+	sleeplock_release(&mm->lock);
+	return (u64)(long)err;
 }
 
 u64 sys_msync(void)
 {
-	struct thread *task = current_thread();
+	struct uvm_space *mm = current_process()->mm;
 	u64 addr = syscall_arg_raw(0);
 	size_t len = (size_t)syscall_arg_raw(1);
 	int flags = syscall_arg_int(2);
+	int err;
 
-	if (!task || !task->process->mm)
+	if (!mm)
 		return -EFAULT;
-	return (u64)(long)uvm_msync(task->process->mm, addr, len, flags);
+
+	sleeplock_acquire(&mm->lock);
+	err = uvm_msync(mm, addr, len, flags);
+	sleeplock_release(&mm->lock);
+	return (u64)(long)err;
 }

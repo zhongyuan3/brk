@@ -304,6 +304,7 @@ static int brkfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct fs_super_block *sb = dir->sb;
 	struct fs_inode *inode = NULL;
+	struct process_fsids ids = process_current_fsids();
 	u32 ino = 0;
 	int err;
 
@@ -331,9 +332,8 @@ static int brkfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	err = brkfs_inode_alloc(sbi, &ino);
 	if (err)
 		goto out;
-	err = brkfs_disk_inode_init(sbi, ino, S_IFREG | mode, 1, 0,
-				    current_process()->cred.fsuid,
-				    current_process()->cred.fsgid);
+	err = brkfs_disk_inode_init(sbi, ino, S_IFREG | mode, 1, 0, ids.fsuid,
+				    ids.fsgid);
 	if (err)
 		goto undo_alloc;
 
@@ -458,6 +458,7 @@ static int brkfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct fs_super_block *sb = dir->sb;
 	struct fs_inode *inode = NULL;
+	struct process_fsids ids = process_current_fsids();
 	u32 ino = 0;
 	size_t len = strlen(symname);
 	loff_t pos = 0;
@@ -476,9 +477,8 @@ static int brkfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	err = brkfs_inode_alloc(sbi, &ino);
 	if (err)
 		goto out;
-	err = brkfs_disk_inode_init(sbi, ino, S_IFLNK | 0777, 1, 0,
-				    current_process()->cred.fsuid,
-				    current_process()->cred.fsgid);
+	err = brkfs_disk_inode_init(sbi, ino, S_IFLNK | 0777, 1, 0, ids.fsuid,
+				    ids.fsgid);
 	if (err)
 		goto undo_alloc;
 
@@ -545,6 +545,7 @@ static int brkfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct fs_super_block *sb = dir->sb;
 	struct fs_inode *inode = NULL;
+	struct process_fsids ids = process_current_fsids();
 	u32 ino = 0;
 	int err;
 
@@ -561,8 +562,7 @@ static int brkfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 	if (err)
 		goto out;
 	err = brkfs_disk_inode_init(sbi, ino, (umode_t)(S_IFDIR | mode), 2, 0,
-				    current_process()->cred.fsuid,
-				    current_process()->cred.fsgid);
+				    ids.fsuid, ids.fsgid);
 	if (err)
 		goto undo_alloc;
 
@@ -822,6 +822,7 @@ static int brkfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct fs_super_block *sb = dir->sb;
 	struct fs_inode *inode;
+	struct process_fsids ids = process_current_fsids();
 	u32 ino;
 	int err;
 
@@ -837,9 +838,8 @@ static int brkfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 	err = brkfs_inode_alloc(sbi, &ino);
 	if (err)
 		goto out;
-	err = brkfs_disk_inode_init(sbi, ino, mode, 1, dev,
-				    current_process()->cred.fsuid,
-				    current_process()->cred.fsgid);
+	err = brkfs_disk_inode_init(sbi, ino, mode, 1, dev, ids.fsuid,
+				    ids.fsgid);
 	if (err)
 		goto undo_alloc;
 

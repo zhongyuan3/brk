@@ -16,6 +16,7 @@
 #include <brk/printk.h>
 #include <brk/rand.h>
 #include <brk/signal.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/timekeeper.h>
@@ -442,6 +443,8 @@ static int __do_execve(const char *path, struct exec_args *args)
 		trap_frame_set_pc(task->frame, elf_hdr.e_entry);
 		trap_frame_set_sp(task->frame, sp);
 
+		irqstate_t cred_flags = spin_lock_irqsave(&process->cred_lock);
+
 		if (file_mode & S_ISUID) {
 			process->cred.euid = file_uid;
 			process->cred.suid = file_uid;
@@ -459,6 +462,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 			process->cred.sgid = file_gid;
 			process->cred.fsgid = file_gid;
 		}
+		spin_unlock_irqrestore(&process->cred_lock, cred_flags);
 	}
 
 	return args->argc;

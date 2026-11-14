@@ -3,6 +3,7 @@
 
 #include <arch/pgtable_types.h>
 #include <brk/refcnt_types.h>
+#include <brk/sleeplock_types.h>
 #include <brk/types.h>
 #include <stddef.h>
 
@@ -66,6 +67,8 @@ struct uvm_space {
 	/* Top-down mmap allocation cursor, below the user stack. */
 	u64 mmap_top;
 	refcnt_t refcnt;
+	/* Serializes all address-space mutations across threads. */
+	sleeplock_t lock;
 };
 
 #endif

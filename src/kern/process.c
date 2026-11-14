@@ -28,6 +28,7 @@
 #include <brk/process.h>
 #include <brk/signal.h>
 #include <brk/slab.h>
+#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/thread.h>
@@ -364,6 +365,7 @@ struct process *process_create(struct process_create_args *args)
 	list_init(&process->sibling);
 	list_init(&process->threads);
 	spinlock_init(&process->lock, "process");
+	spinlock_init(&process->cred_lock, "cred");
 	process->pid = pid_alloc();
 	if (process->pid < 0) {
 		err = -ENOMEM;
@@ -506,6 +508,7 @@ struct process *process_create_idle(cpuid_t cpuid)
 	list_init(&process->sibling);
 	list_init(&process->threads);
 	spinlock_init(&process->lock, "idle_process");
+	spinlock_init(&process->cred_lock, "idle_cred");
 	process->pid = 0;
 	process->pgid = 0;
 	process->sid = 0;
@@ -724,6 +727,79 @@ pid_t process_get_sid(pid_t pid)
 	return sid;
 }
 
+kuid_t process_get_uid(struct process *process)
+{
+	kuid_t uid;
+	irqstate_t flags = spin_lock_irqsave(&process->cred_lock);
+
+	uid = process->cred.uid;
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+	return uid;
+}
+
+kuid_t process_get_euid(struct process *process)
+{
+	kuid_t euid;
+	irqstate_t flags = spin_lock_irqsave(&process->cred_lock);
+
+	euid = process->cred.euid;
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+	return euid;
+}
+
+kuid_t process_get_fsuid(struct process *process)
+{
+	kuid_t fsuid;
+	irqstate_t flags = spin_lock_irqsave(&process->cred_lock);
+
+	fsuid = process->cred.fsuid;
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+	return fsuid;
+}
+
+kgid_t process_get_fsgid(struct process *process)
+{
+	kgid_t fsgid;
+	irqstate_t flags = spin_lock_irqsave(&process->cred_lock);
+
+	fsgid = process->cred.fsgid;
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+	return fsgid;
+}
+
+void process_get_fsids(struct process *process, kuid_t *fsuid, kgid_t *fsgid)
+{
+	irqstate_t flags = spin_lock_irqsave(&process->cred_lock);
+
+	*fsuid = process->cred.fsuid;
+	*fsgid = process->cred.fsgid;
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+}
+
+umode_t process_get_umask(struct process *process)
+{
+	umode_t umask;
+	irqstate_t flags = spin_lock_irqsave(&process->cred_lock);
+
+	umask = process->cred.umask;
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+	return umask;
+}
+
+bool process_has_cap(struct process *process, int cap)
+{
+	bool has;
+	irqstate_t flags;
+
+	if (cap < 0 || cap > CAP_LAST_CAP)
+		return false;
+
+	flags = spin_lock_irqsave(&process->cred_lock);
+	has = (process->cred.cap_effective & (1ULL << cap)) != 0;
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+	return has;
+}
+
 static enum thread_state process_state_locked(struct process *process)
 {
 	struct thread *thread;
@@ -776,7 +852,8 @@ bool process_get_info(pid_t pid, struct process_info *info)
 	info->pid = target->pid;
 	exit_status = target->exit_status;
 	nr_threads = target->nr_live;
-	brk = target->mm ? target->mm->brk : 0;
+	brk = target->mm ? __atomic_load_n(&target->mm->brk, __ATOMIC_RELAXED) :
+			   0;
 	state = process_state_locked(target);
 	for (size_t i = 0; i < PROCESS_NAME_MAX; ++i) {
 		name[i] = target->name[i];
@@ -854,11 +931,16 @@ int process_fork(void)
 	if (IS_ERR(child))
 		return PTR_ERR(child);
 
+	sleeplock_acquire(&parent->mm->lock);
 	err = uvm_space_copy(child->mm, parent->mm);
+	sleeplock_release(&parent->mm->lock);
 	if (err)
 		goto failed;
 
+	irqstate_t cred_flags = spin_lock_irqsave(&parent->cred_lock);
+
 	child->cred = parent->cred;
+	spin_unlock_irqrestore(&parent->cred_lock, cred_flags);
 
 	fdtable_copy(child->fdtable, parent->fdtable);
 	fsinfo_copy(child->fsinfo, parent->fsinfo);

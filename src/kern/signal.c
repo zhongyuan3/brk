@@ -23,13 +23,13 @@ static bool sig_valid(int sig)
 	return sig > 0 && sig < NSIG;
 }
 
-static bool signal_may_send(const struct process *target)
+static bool signal_may_send(struct process *target)
 {
 	struct process *current = current_process();
 
 	if (capable(CAP_KILL))
 		return true;
-	return target->cred.euid == current->cred.euid;
+	return process_get_euid(target) == process_get_euid(current);
 }
 
 static bool sig_default_terminate(int sig)

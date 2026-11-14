@@ -14,6 +14,7 @@
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/signal.h>
+#include <brk/sleeplock.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/tick.h>
@@ -229,9 +230,13 @@ static bool handle_page_fault(unsigned long code, struct trap_frame *frame,
 	if (!from_user && !(frame->sstatus & SSTATUS_SUM))
 		return false;
 
-	if (task && task->process->mm)
-		err = uvm_handle_fault(task->process->mm, frame->stval, write,
-				       instr);
+	if (task && task->process->mm) {
+		struct uvm_space *mm = task->process->mm;
+
+		sleeplock_acquire(&mm->lock);
+		err = uvm_handle_fault(mm, frame->stval, write, instr);
+		sleeplock_release(&mm->lock);
+	}
 	if (!err)
 		return true;
 

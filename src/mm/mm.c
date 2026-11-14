@@ -15,6 +15,7 @@
 #include <brk/pgalloc.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
+#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
@@ -39,6 +40,7 @@ struct uvm_space *uvm_space_create(void)
 	if (!mm)
 		return ERR_PTR(-ENOMEM);
 	refcnt_init(&mm->refcnt, 1);
+	sleeplock_init(&mm->lock, "uvm_space");
 
 	mm->pgd = create_user_pgtable();
 	if (!mm->pgd) {
@@ -462,6 +464,10 @@ static int uvm_space_copy_heap(struct uvm_space *dst, struct uvm_space *src)
 	return uvm_space_copy_region(dst->heap, src->heap, dst, src);
 }
 
+/*
+ * The caller must hold @src->lock: copying walks and COW-protects the source
+ * page tables while other threads may be faulting on them.
+ */
 int uvm_space_copy(struct uvm_space *dst, struct uvm_space *src)
 {
 	int err;

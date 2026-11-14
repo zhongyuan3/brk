@@ -1,27 +1,13 @@
 #include <brk/fs.h>
 #include <brk/permission.h>
+#include <brk/spinlock.h>
 #include <brk/task.h>
 #include <uapi/errno.h>
 #include <uapi/stat.h>
 
-/*
- * Minimal DAC model: CAP_DAC_OVERRIDE bypasses permission checks, but a
- * regular file still needs at least one execute bit to be executable.
- */
-static bool process_in_group(const struct process *process, kgid_t gid)
-{
-	for (int i = 0; i < process->cred.ngroups; i++) {
-		if (process->cred.groups[i] == gid)
-			return true;
-	}
-	return false;
-}
-
 bool capable(int cap)
 {
-	if (cap < 0 || cap > CAP_LAST_CAP)
-		return false;
-	return (current_process()->cred.cap_effective & (1ULL << cap)) != 0;
+	return process_has_cap(current_process(), cap);
 }
 
 int inode_permission(const struct fs_inode *inode, int mask)
@@ -29,6 +15,11 @@ int inode_permission(const struct fs_inode *inode, int mask)
 	struct process *process = current_process();
 	umode_t mode;
 	umode_t perm;
+	bool cap_override;
+	kuid_t fsuid;
+	kgid_t fsgid;
+	bool in_group = false;
+	irqstate_t flags;
 
 	if (!inode)
 		return -ENOENT;
@@ -37,16 +28,28 @@ int inode_permission(const struct fs_inode *inode, int mask)
 
 	mode = inode->mode;
 
-	if (capable(CAP_DAC_OVERRIDE)) {
+	flags = spin_lock_irqsave(&process->cred_lock);
+	cap_override =
+		(process->cred.cap_effective & (1ULL << CAP_DAC_OVERRIDE)) != 0;
+	fsuid = process->cred.fsuid;
+	fsgid = process->cred.fsgid;
+	for (int i = 0; i < process->cred.ngroups; i++) {
+		if (process->cred.groups[i] == inode->gid) {
+			in_group = true;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+
+	if (cap_override) {
 		if (mask == MAY_EXEC && S_ISREG(mode) && !(mode & 0111))
 			return -EACCES;
 		return 0;
 	}
 
-	if (inode->uid == process->cred.fsuid)
+	if (inode->uid == fsuid)
 		perm = (mode >> 6) & 7;
-	else if (inode->gid == process->cred.fsgid ||
-		 process_in_group(process, inode->gid))
+	else if (inode->gid == fsgid || in_group)
 		perm = (mode >> 3) & 7;
 	else
 		perm = mode & 7;
@@ -57,8 +60,17 @@ int inode_permission(const struct fs_inode *inode, int mask)
 bool inode_owner_or_capable(const struct fs_inode *inode)
 {
 	struct process *process = current_process();
+	bool cap_owner;
+	kuid_t fsuid;
+	irqstate_t flags;
 
 	if (!inode)
 		return false;
-	return capable(CAP_FOWNER) || inode->uid == process->cred.fsuid;
+
+	flags = spin_lock_irqsave(&process->cred_lock);
+	cap_owner = (process->cred.cap_effective & (1ULL << CAP_FOWNER)) != 0;
+	fsuid = process->cred.fsuid;
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+
+	return cap_owner || inode->uid == fsuid;
 }

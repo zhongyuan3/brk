@@ -170,6 +170,7 @@ static void init_unit_setup(struct init_unit *unit, cpuid_t cpuid)
 	list_init(&process->sibling);
 	list_init(&process->threads);
 	spinlock_init(&process->lock, "init_process");
+	spinlock_init(&process->cred_lock, "init_cred");
 	process->pid = 0;
 	process->pgid = 0;
 	process->sid = 0;
@@ -630,7 +631,7 @@ again:
 		if (status)
 			*status = child->exit_status;
 		if (uid)
-			*uid = child->cred.uid;
+			*uid = process_get_uid(child);
 		retpid = child->pid;
 		spin_unlock_irqrestore(&child->lock, cflags);
 

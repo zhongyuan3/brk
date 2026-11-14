@@ -53,6 +53,14 @@ bool process_pid_exists(pid_t pid);
 bool process_get_info(pid_t pid, struct process_info *info);
 int process_snapshot_pids(pid_t *out, int max);
 
+kuid_t process_get_uid(struct process *process);
+kuid_t process_get_euid(struct process *process);
+kuid_t process_get_fsuid(struct process *process);
+kgid_t process_get_fsgid(struct process *process);
+void process_get_fsids(struct process *process, kuid_t *fsuid, kgid_t *fsgid);
+umode_t process_get_umask(struct process *process);
+bool process_has_cap(struct process *process, int cap);
+
 int process_get_times(struct process *process, struct tms *times);
 void process_add_system_time(struct process *process, u64 time);
 void process_add_user_time(struct process *process, u64 time);
@@ -87,6 +95,19 @@ static inline bool process_group_exiting(struct process *process)
 static inline int process_group_exit_status(struct process *process)
 {
 	return __atomic_load_n(&process->group_exit_status, __ATOMIC_RELAXED);
+}
+
+struct process_fsids {
+	kuid_t fsuid;
+	kgid_t fsgid;
+};
+
+static inline struct process_fsids process_current_fsids(void)
+{
+	struct process_fsids ids;
+
+	process_get_fsids(current_process(), &ids.fsuid, &ids.fsgid);
+	return ids;
 }
 
 extern struct process *init_reaper;

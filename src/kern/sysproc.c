@@ -5,6 +5,7 @@
 #include <brk/printk.h>
 #include <brk/process.h>
 #include <brk/signal.h>
+#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/thread.h>
@@ -119,18 +120,21 @@ u64 sys_getproc(void)
 {
 	struct process *process = current_process();
 	struct brk_proc *ubuf = syscall_arg_ptr(0);
-	struct brk_proc proc = {
-		.pid = process->pid,
-		.ppid = process->parent ? process->parent->pid : 0,
-		.pgid = process->pgid,
-		.sid = process->sid,
-		.uid = process->cred.uid,
-		.euid = process->cred.euid,
-		.suid = process->cred.suid,
-		.gid = process->cred.gid,
-		.egid = process->cred.egid,
-		.sgid = process->cred.sgid,
-	};
+	struct brk_proc proc;
+	irqstate_t flags;
+
+	flags = spin_lock_irqsave(&process->cred_lock);
+	proc.pid = process->pid;
+	proc.ppid = process->parent ? process->parent->pid : 0;
+	proc.pgid = process->pgid;
+	proc.sid = process->sid;
+	proc.uid = process->cred.uid;
+	proc.euid = process->cred.euid;
+	proc.suid = process->cred.suid;
+	proc.gid = process->cred.gid;
+	proc.egid = process->cred.egid;
+	proc.sgid = process->cred.sgid;
+	spin_unlock_irqrestore(&process->cred_lock, flags);
 
 	if (!ubuf)
 		return -EFAULT;
@@ -139,7 +143,15 @@ u64 sys_getproc(void)
 	return 0;
 }
 
-static void update_caps_after_setuid(struct process *process, kuid_t old_euid)
+static bool cred_capable_locked(const struct cred *cred, int cap)
+{
+	if (cap < 0 || cap > CAP_LAST_CAP)
+		return false;
+	return (cred->cap_effective & (1ULL << cap)) != 0;
+}
+
+static void update_caps_after_setuid_locked(struct process *process,
+					    kuid_t old_euid)
 {
 	if (old_euid != 0 && process->cred.euid == 0) {
 		process->cred.cap_effective = CAP_FULL_SET;
@@ -154,12 +166,16 @@ u64 sys_setuid(void)
 {
 	struct process *process = current_process();
 	int uid = syscall_arg_int(0);
-	kuid_t old_euid = process->cred.euid;
+	irqstate_t flags;
+	kuid_t old_euid;
+	int ret = 0;
 
 	if (uid < 0)
 		return -EINVAL;
 
-	if (capable(CAP_SETUID)) {
+	flags = spin_lock_irqsave(&process->cred_lock);
+	old_euid = process->cred.euid;
+	if (cred_capable_locked(&process->cred, CAP_SETUID)) {
 		process->cred.uid = process->cred.euid = process->cred.suid =
 			(kuid_t)uid;
 		process->cred.fsuid = (kuid_t)uid;
@@ -168,21 +184,26 @@ u64 sys_setuid(void)
 		process->cred.euid = (kuid_t)uid;
 		process->cred.fsuid = (kuid_t)uid;
 	} else {
-		return -EPERM;
+		ret = -EPERM;
 	}
-	update_caps_after_setuid(process, old_euid);
-	return 0;
+	if (!ret)
+		update_caps_after_setuid_locked(process, old_euid);
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+	return (u64)ret;
 }
 
 u64 sys_setgid(void)
 {
 	struct process *process = current_process();
 	int gid = syscall_arg_int(0);
+	irqstate_t flags;
+	int ret = 0;
 
 	if (gid < 0)
 		return -EINVAL;
 
-	if (capable(CAP_SETGID)) {
+	flags = spin_lock_irqsave(&process->cred_lock);
+	if (cred_capable_locked(&process->cred, CAP_SETGID)) {
 		process->cred.gid = process->cred.egid = process->cred.sgid =
 			(kgid_t)gid;
 		process->cred.fsgid = (kgid_t)gid;
@@ -191,9 +212,10 @@ u64 sys_setgid(void)
 		process->cred.egid = (kgid_t)gid;
 		process->cred.fsgid = (kgid_t)gid;
 	} else {
-		return -EPERM;
+		ret = -EPERM;
 	}
-	return 0;
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+	return (u64)ret;
 }
 
 u64 sys_setreuid(void)
@@ -201,15 +223,23 @@ u64 sys_setreuid(void)
 	struct process *process = current_process();
 	int ruid = syscall_arg_int(0);
 	int euid = syscall_arg_int(1);
-	kuid_t old_euid = process->cred.euid;
+	irqstate_t flags;
+	kuid_t old_euid;
+	int ret = 0;
 
 	if (ruid < -1 || euid < -1)
 		return -EINVAL;
-	if (!capable(CAP_SETUID)) {
+
+	flags = spin_lock_irqsave(&process->cred_lock);
+	old_euid = process->cred.euid;
+
+	if (!cred_capable_locked(&process->cred, CAP_SETUID)) {
 		if ((ruid != -1 && (kuid_t)ruid != process->cred.uid) ||
 		    (euid != -1 && (kuid_t)euid != process->cred.uid &&
-		     (kuid_t)euid != process->cred.suid))
-			return -EPERM;
+		     (kuid_t)euid != process->cred.suid)) {
+			ret = -EPERM;
+			goto out;
+		}
 	}
 
 	if (ruid != -1)
@@ -218,8 +248,10 @@ u64 sys_setreuid(void)
 		process->cred.euid = (kuid_t)euid;
 		process->cred.fsuid = (kuid_t)euid;
 	}
-	update_caps_after_setuid(process, old_euid);
-	return 0;
+	update_caps_after_setuid_locked(process, old_euid);
+out:
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+	return (u64)ret;
 }
 
 u64 sys_setregid(void)
@@ -227,14 +259,20 @@ u64 sys_setregid(void)
 	struct process *process = current_process();
 	int rgid = syscall_arg_int(0);
 	int egid = syscall_arg_int(1);
+	irqstate_t flags;
+	int ret = 0;
 
 	if (rgid < -1 || egid < -1)
 		return -EINVAL;
-	if (!capable(CAP_SETGID)) {
+
+	flags = spin_lock_irqsave(&process->cred_lock);
+	if (!cred_capable_locked(&process->cred, CAP_SETGID)) {
 		if ((rgid != -1 && (kgid_t)rgid != process->cred.gid) ||
 		    (egid != -1 && (kgid_t)egid != process->cred.gid &&
-		     (kgid_t)egid != process->cred.sgid))
-			return -EPERM;
+		     (kgid_t)egid != process->cred.sgid)) {
+			ret = -EPERM;
+			goto out;
+		}
 	}
 
 	if (rgid != -1)
@@ -243,12 +281,15 @@ u64 sys_setregid(void)
 		process->cred.egid = (kgid_t)egid;
 		process->cred.fsgid = (kgid_t)egid;
 	}
-	return 0;
+out:
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+	return (u64)ret;
 }
 
-static bool resuid_valid(struct process *process, int ruid, int euid, int suid)
+static bool resuid_valid_locked(struct process *process, int ruid, int euid,
+				int suid)
 {
-	if (capable(CAP_SETUID))
+	if (cred_capable_locked(&process->cred, CAP_SETUID))
 		return true;
 
 	if (ruid != -1 && (kuid_t)ruid != process->cred.uid &&
@@ -272,12 +313,19 @@ u64 sys_setresuid(void)
 	int ruid = syscall_arg_int(0);
 	int euid = syscall_arg_int(1);
 	int suid = syscall_arg_int(2);
-	kuid_t old_euid = process->cred.euid;
+	irqstate_t flags;
+	kuid_t old_euid;
+	int ret = 0;
 
 	if (ruid < -1 || euid < -1 || suid < -1)
 		return -EINVAL;
-	if (!resuid_valid(process, ruid, euid, suid))
-		return -EPERM;
+
+	flags = spin_lock_irqsave(&process->cred_lock);
+	old_euid = process->cred.euid;
+	if (!resuid_valid_locked(process, ruid, euid, suid)) {
+		ret = -EPERM;
+		goto out;
+	}
 
 	if (ruid != -1)
 		process->cred.uid = (kuid_t)ruid;
@@ -286,13 +334,16 @@ u64 sys_setresuid(void)
 	if (suid != -1)
 		process->cred.suid = (kuid_t)suid;
 	process->cred.fsuid = process->cred.euid;
-	update_caps_after_setuid(process, old_euid);
-	return 0;
+	update_caps_after_setuid_locked(process, old_euid);
+out:
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+	return (u64)ret;
 }
 
-static bool resgid_valid(struct process *process, int rgid, int egid, int sgid)
+static bool resgid_valid_locked(struct process *process, int rgid, int egid,
+				int sgid)
 {
-	if (capable(CAP_SETGID))
+	if (cred_capable_locked(&process->cred, CAP_SETGID))
 		return true;
 
 	if (rgid != -1 && (kgid_t)rgid != process->cred.gid &&
@@ -316,11 +367,17 @@ u64 sys_setresgid(void)
 	int rgid = syscall_arg_int(0);
 	int egid = syscall_arg_int(1);
 	int sgid = syscall_arg_int(2);
+	irqstate_t flags;
+	int ret = 0;
 
 	if (rgid < -1 || egid < -1 || sgid < -1)
 		return -EINVAL;
-	if (!resgid_valid(process, rgid, egid, sgid))
-		return -EPERM;
+
+	flags = spin_lock_irqsave(&process->cred_lock);
+	if (!resgid_valid_locked(process, rgid, egid, sgid)) {
+		ret = -EPERM;
+		goto out;
+	}
 
 	if (rgid != -1)
 		process->cred.gid = (kgid_t)rgid;
@@ -329,7 +386,9 @@ u64 sys_setresgid(void)
 	if (sgid != -1)
 		process->cred.sgid = (kgid_t)sgid;
 	process->cred.fsgid = process->cred.egid;
-	return 0;
+out:
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+	return (u64)ret;
 }
 
 u64 sys_getgroups(void)
@@ -337,31 +396,45 @@ u64 sys_getgroups(void)
 	struct process *process = current_process();
 	int size = syscall_arg_int(0);
 	u32 *list = syscall_arg_ptr(1);
+	kgid_t groups[NGROUPS_MAX];
+	int ngroups;
+	irqstate_t flags;
 
 	if (size < 0)
 		return -EINVAL;
+
+	flags = spin_lock_irqsave(&process->cred_lock);
+	ngroups = process->cred.ngroups;
+	if (ngroups > 0)
+		memcpy(groups, process->cred.groups,
+		       sizeof(groups[0]) * (size_t)ngroups);
+	spin_unlock_irqrestore(&process->cred_lock, flags);
+
 	if (size == 0)
-		return process->cred.ngroups;
-	if (size < process->cred.ngroups)
+		return ngroups;
+	if (size < ngroups)
 		return -EINVAL;
 	if (!list)
 		return -EFAULT;
 
-	for (int i = 0; i < process->cred.ngroups; i++) {
-		u32 gid = process->cred.groups[i];
+	for (int i = 0; i < ngroups; i++) {
+		u32 gid = groups[i];
 
 		if (copy_to_user(&list[i], &gid, sizeof(gid)))
 			return -EFAULT;
 	}
-	return process->cred.ngroups;
+	return ngroups;
 }
 
 u64 sys_umask(void)
 {
 	struct process *process = current_process();
-	umode_t old = process->cred.umask;
+	umode_t old;
+	irqstate_t flags = spin_lock_irqsave(&process->cred_lock);
 
+	old = process->cred.umask;
 	process->cred.umask = syscall_arg_raw(0) & 0777;
+	spin_unlock_irqrestore(&process->cred_lock, flags);
 	return old;
 }
 

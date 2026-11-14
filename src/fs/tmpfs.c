@@ -784,6 +784,7 @@ static int tmpfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct tmpfs_inode *t_new_inode, *t_dir;
 	struct tmpfs_super_block *t_sb;
 	struct fs_super_block *sb;
+	struct process_fsids ids = process_current_fsids();
 	int err;
 
 	t_dir = dir->private_data;
@@ -806,9 +807,7 @@ static int tmpfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -EEXIST;
 	}
 	mode |= S_IFREG;
-	t_new_inode = tmpfs_inode_alloc(t_sb, mode, 0,
-					current_process()->cred.fsuid,
-					current_process()->cred.fsgid);
+	t_new_inode = tmpfs_inode_alloc(t_sb, mode, 0, ids.fsuid, ids.fsgid);
 	if (!t_new_inode) {
 		sleeplock_release(&t_sb->s_lock);
 		return -ENOMEM;
@@ -931,6 +930,7 @@ static int tmpfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct fs_inode *inode;
 	struct tmpfs_inode *t_inode, *t_dir;
 	struct tmpfs_super_block *t_sb;
+	struct process_fsids ids = process_current_fsids();
 	off_t pos = 0;
 	size_t len, wcnt;
 	u32 ino;
@@ -953,9 +953,8 @@ static int tmpfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -EEXIST;
 	}
 
-	t_inode = tmpfs_inode_alloc(t_sb, S_IFLNK | 0777, 0,
-				    current_process()->cred.fsuid,
-				    current_process()->cred.fsgid);
+	t_inode = tmpfs_inode_alloc(t_sb, S_IFLNK | 0777, 0, ids.fsuid,
+				    ids.fsgid);
 	if (!t_inode) {
 		sleeplock_release(&t_sb->s_lock);
 		return -ENOMEM;
@@ -1031,6 +1030,7 @@ static int tmpfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct fs_super_block *sb;
 	struct tmpfs_inode *t_inode, *t_dir;
 	struct tmpfs_super_block *t_sb;
+	struct process_fsids ids = process_current_fsids();
 	int err;
 
 	t_dir = dir->private_data;
@@ -1046,9 +1046,7 @@ static int tmpfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 		sleeplock_release(&t_sb->s_lock);
 		return -EEXIST;
 	}
-	t_inode = tmpfs_inode_alloc_dir(t_sb, mode,
-					current_process()->cred.fsuid,
-					current_process()->cred.fsgid);
+	t_inode = tmpfs_inode_alloc_dir(t_sb, mode, ids.fsuid, ids.fsgid);
 	if (!t_inode) {
 		sleeplock_release(&t_sb->s_lock);
 		return -ENOMEM;
@@ -1181,6 +1179,7 @@ static int tmpfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 	struct fs_inode *inode;
 	struct tmpfs_inode *t_inode, *t_dir;
 	struct tmpfs_super_block *t_sb;
+	struct process_fsids ids = process_current_fsids();
 	int err;
 
 	t_dir = dir->private_data;
@@ -1196,9 +1195,7 @@ static int tmpfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -EEXIST;
 	}
 
-	t_inode = tmpfs_inode_alloc(t_sb, mode, dev,
-				    current_process()->cred.fsuid,
-				    current_process()->cred.fsgid);
+	t_inode = tmpfs_inode_alloc(t_sb, mode, dev, ids.fsuid, ids.fsgid);
 	if (!t_inode) {
 		sleeplock_release(&t_sb->s_lock);
 		return -ENOMEM;

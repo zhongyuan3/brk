@@ -11,7 +11,7 @@
 
 static umode_t apply_umask(umode_t mode)
 {
-	return mode & ~current_process()->cred.umask;
+	return mode & ~process_get_umask(current_process());
 }
 
 static int may_create_in(struct fs_inode *dir)
@@ -21,8 +21,8 @@ static int may_create_in(struct fs_inode *dir)
 
 static int may_delete(struct fs_inode *dir, struct fs_dentry *victim)
 {
-	struct thread *task = current_thread();
 	struct fs_inode *inode = victim ? victim->inode : NULL;
+	kuid_t fsuid = process_get_fsuid(current_process());
 	int err;
 
 	err = inode_permission(dir, MAY_WRITE | MAY_EXEC);
@@ -30,9 +30,8 @@ static int may_delete(struct fs_inode *dir, struct fs_dentry *victim)
 		return err;
 
 	if (dir->mode & S_ISVTX) {
-		if (!capable(CAP_FOWNER) &&
-		    task->process->cred.fsuid != dir->uid &&
-		    (!inode || task->process->cred.fsuid != inode->uid))
+		if (!capable(CAP_FOWNER) && fsuid != dir->uid &&
+		    (!inode || fsuid != inode->uid))
 			return -EPERM;
 	}
 

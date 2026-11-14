@@ -99,6 +99,8 @@ struct process {
 	struct process_resource_usage *rsrc_usage;
 
 	struct cred cred;
+	/* protects @cred */
+	spinlock_t cred_lock;
 
 	/* protected by @sigactions->lock */
 	u64 shared_pending;
