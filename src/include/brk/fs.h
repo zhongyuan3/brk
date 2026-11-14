@@ -244,7 +244,6 @@ int do_linkat(int olddirfd, const char *oldpath, int newdirfd,
 int do_unlinkat(int dirfd, const char *path, int flags);
 int do_symlinkat(int dirfd, const char *pathname, const char *target);
 int do_readlinkat(int dirfd, const char *path, char *buf, size_t bufsiz);
-int do_creat(const char *pathname, umode_t mode);
 int do_renameat(int olddirfd, const char *oldpath, int newdirfd,
 		const char *newpath, unsigned int flags);
 int do_rmdir(const char *pathname);

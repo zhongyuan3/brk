@@ -2,19 +2,18 @@
 #define UAPI_SYSCALL_H
 
 /*
- * POSIX.1-2024 system call numbers.
+ * BRK kernel system-call ABI.
  *
- * Only interfaces defined by POSIX.1-2024 are listed here.  BRK-internal
- * ABI extensions live in <uapi/syscall_internal.h>.
+ * This is the low-level primitive ABI consumed by libc.  POSIX entry points
+ * that can be composed from these primitives belong in the C library rather
+ * than in this table.  BRK-internal extensions live in
+ * <uapi/syscall_internal.h>.
  */
 
 #define SYS_read 0
 #define SYS_write 1
-#define SYS_open 2
 #define SYS_close 3
-#define SYS_stat 4
 #define SYS_fstat 5
-#define SYS_lstat 6
 #define SYS_poll 7
 #define SYS_lseek 8
 #define SYS_mmap 9
@@ -22,37 +21,23 @@
 #define SYS_munmap 11
 #define SYS_sigaction 12
 #define SYS_sigprocmask 13
-#define SYS_pread 14
-#define SYS_pwrite 15
 #define SYS_readv 16
 #define SYS_writev 17
-#define SYS_access 18
-#define SYS_pipe 19
 #define SYS_select 20
 #define SYS_sched_yield 21
 #define SYS_msync 22
-#define SYS_shmget 23
-#define SYS_shmat 24
-#define SYS_shmctl 25
 #define SYS_dup 26
-#define SYS_dup2 27
 #define SYS_pause 28
-#define SYS_nanosleep 29
-#define SYS_alarm 30
 #define SYS_getpid 31
 #define SYS_socket 32
 #define SYS_connect 33
-#define SYS_accept 34
 #define SYS_sendto 35
 #define SYS_recvfrom 36
-#define SYS_sendmsg 37
-#define SYS_recvmsg 38
 #define SYS_shutdown 39
 #define SYS_bind 40
 #define SYS_listen 41
 #define SYS_getsockname 42
 #define SYS_getpeername 43
-#define SYS_socketpair 44
 #define SYS_setsockopt 45
 #define SYS_getsockopt 46
 #define SYS_fork 47
@@ -60,15 +45,6 @@
 #define SYS_exit 49
 #define SYS_kill 50
 #define SYS_uname 51
-#define SYS_semget 52
-#define SYS_semop 53
-#define SYS_semctl 54
-#define SYS_shmdt 55
-#define SYS_msgget 56
-#define SYS_msgsnd 57
-#define SYS_msgrcv 58
-#define SYS_msgctl 59
-#define SYS_fcntl 60
 #define SYS_fsync 61
 #define SYS_fdatasync 62
 #define SYS_truncate 63
@@ -76,32 +52,14 @@
 #define SYS_getcwd 65
 #define SYS_chdir 66
 #define SYS_fchdir 67
-#define SYS_rename 68
-#define SYS_mkdir 69
 #define SYS_rmdir 70
-#define SYS_creat 71
-#define SYS_link 72
-#define SYS_unlink 73
-#define SYS_symlink 74
-#define SYS_readlink 75
-#define SYS_chmod 76
 #define SYS_fchmod 77
-#define SYS_chown 78
-#define SYS_fchown 79
-#define SYS_lchown 80
 #define SYS_umask 81
-#define SYS_getrlimit 82
 #define SYS_getrusage 83
-#define SYS_times 84
-#define SYS_getuid 85
-#define SYS_getgid 86
 #define SYS_setuid 87
 #define SYS_setgid 88
-#define SYS_geteuid 89
-#define SYS_getegid 90
 #define SYS_setpgid 91
 #define SYS_getppid 92
-#define SYS_getpgrp 93
 #define SYS_setsid 94
 #define SYS_setreuid 95
 #define SYS_setregid 96
@@ -113,43 +71,11 @@
 #define SYS_getpgid 102
 #define SYS_getsid 103
 #define SYS_sigpending 104
-#define SYS_sigtimedwait 105
-#define SYS_sigqueue 106
-#define SYS_sigsuspend 107
-#define SYS_sigaltstack 108
-#define SYS_mknod 109
-#define SYS_getpriority 110
-#define SYS_setpriority 111
-#define SYS_sched_setparam 112
-#define SYS_sched_getparam 113
-#define SYS_sched_setscheduler 114
-#define SYS_sched_getscheduler 115
-#define SYS_sched_get_priority_max 116
-#define SYS_sched_get_priority_min 117
-#define SYS_sched_rr_get_interval 118
-#define SYS_mlock 119
-#define SYS_munlock 120
-#define SYS_mlockall 121
-#define SYS_munlockall 122
-#define SYS_setrlimit 123
 #define SYS_sync 124
-#define SYS_time 125
-#define SYS_posix_fadvise 126
-#define SYS_timer_create 127
-#define SYS_timer_settime 128
-#define SYS_timer_gettime 129
-#define SYS_timer_getoverrun 130
-#define SYS_timer_delete 131
 #define SYS_clock_settime 132
 #define SYS_clock_gettime 133
 #define SYS_clock_getres 134
 #define SYS_clock_nanosleep 135
-#define SYS_utimes 136
-#define SYS_mq_open 137
-#define SYS_mq_unlink 138
-#define SYS_mq_timedsend 139
-#define SYS_mq_timedreceive 140
-#define SYS_mq_notify 141
 #define SYS_waitid 142
 #define SYS_openat 143
 #define SYS_mkdirat 144
@@ -173,31 +99,5 @@
 #define SYS_posix_getdents 162
 #define SYS_statvfs 163
 #define SYS_fstatvfs 164
-#define SYS_futimens 165
-#define SYS_mkfifo 166
-#define SYS_nice 167
-#define SYS_killpg 168
-#define SYS_gethostname 169
-#define SYS_sockatmark 170
-#define SYS_tcgetpgrp 171
-#define SYS_tcsetpgrp 172
-#define SYS_tcgetsid 173
-#define SYS_tcgetwinsize 174
-#define SYS_tcsetwinsize 175
-#define SYS_posix_openpt 176
-#define SYS_grantpt 177
-#define SYS_unlockpt 178
-#define SYS_ptsname 179
-#define SYS_posix_devctl 180
-#define SYS_getentropy 181
-#define SYS_posix_madvise 182
-#define SYS_lockf 183
-#define SYS_mq_close 184
-#define SYS_mq_getattr 185
-#define SYS_mq_receive 186
-#define SYS_mq_send 187
-#define SYS_mq_setattr 188
-#define SYS_sigwait 189
-#define SYS_sigwaitinfo 190
 
 #endif

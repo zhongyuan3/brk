@@ -472,39 +472,6 @@ int do_readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz)
 	return err;
 }
 
-int do_creat(const char *pathname, umode_t mode)
-{
-	int err;
-	struct fs_path path;
-
-	err = fs_path_lookup(pathname, 0, &path);
-	if (err)
-		return err;
-
-	spin_lock(&path.dentry->lock);
-	if (!(path.dentry->flags & DCACHE_NEGATIVE)) {
-		spin_unlock(&path.dentry->lock);
-		fs_path_put(&path);
-		return -EEXIST;
-	}
-	spin_unlock(&path.dentry->lock);
-
-	struct fs_path parent_path;
-	err = fs_path_dot_dot(&path, &parent_path);
-	if (err) {
-		fs_path_put(&path);
-		return err;
-	}
-	struct fs_inode *inode = parent_path.dentry->inode;
-	sleeplock_acquire(&inode->rwsem);
-	err = inode->ops->create(inode, path.dentry, mode, true);
-	sleeplock_release(&inode->rwsem);
-
-	fs_path_put(&parent_path);
-	fs_path_put(&path);
-	return err;
-}
-
 static bool rename_dentry_is_ancestor(struct fs_dentry *dentry,
 				      struct fs_inode *inode)
 {

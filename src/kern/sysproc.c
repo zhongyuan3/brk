@@ -112,26 +112,6 @@ u64 sys_getppid(void)
 	return par ? par->tgid : 0;
 }
 
-u64 sys_getuid(void)
-{
-	return current_task()->uid;
-}
-
-u64 sys_geteuid(void)
-{
-	return current_task()->euid;
-}
-
-u64 sys_getgid(void)
-{
-	return current_task()->gid;
-}
-
-u64 sys_getegid(void)
-{
-	return current_task()->egid;
-}
-
 static void update_caps_after_setuid(struct task *task, kuid_t old_euid)
 {
 	if (old_euid != 0 && task->euid == 0) {
@@ -409,11 +389,6 @@ u64 sys_setpgid(void)
 
 	task->pgid = pgid;
 	return 0;
-}
-
-u64 sys_getpgrp(void)
-{
-	return current_task()->pgid;
 }
 
 u64 sys_setsid(void)

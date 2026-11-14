@@ -294,11 +294,6 @@ static u64 sys_accept_common(unsigned int flags)
 	return nfd;
 }
 
-u64 sys_accept(void)
-{
-	return sys_accept_common(0);
-}
-
 u64 sys_accept4(void)
 {
 	return sys_accept_common((unsigned int)syscall_arg_int(3));
