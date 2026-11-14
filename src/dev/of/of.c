@@ -85,11 +85,15 @@ static int of_count_node(const void *fdt, int offset,
 	info->nr_nodes += 1;
 	info->text_size += (size_t)name_len + 1;
 
+	/*
+	 * fdt_get_path() returns 0 on success, not the path length.  Count the
+	 * NUL-terminated path that of_build_node() will copy.
+	 */
 	path_len = fdt_get_path(fdt, offset, path, sizeof(path));
 	if (path_len < 0)
 		info->text_size += (size_t)name_len + 1;
 	else
-		info->text_size += (size_t)path_len + 1;
+		info->text_size += strlen(path) + 1;
 
 	for (prop_offset = fdt_first_property_offset(fdt, offset);
 	     prop_offset >= 0;
