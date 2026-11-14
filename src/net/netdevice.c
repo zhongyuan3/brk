@@ -452,7 +452,7 @@ static void net_rx_thread(void *arg)
 
 		flags = spin_lock_irqsave(&net_rx_queue_lock);
 		while (skb_queue_empty(&net_rx_queue))
-			task_sleep(&net_rx_wait, &net_rx_queue_lock);
+			thread_sleep(&net_rx_wait, &net_rx_queue_lock);
 		skb = skb_dequeue(&net_rx_queue);
 		spin_unlock_irqrestore(&net_rx_queue_lock, flags);
 
@@ -463,7 +463,7 @@ static void net_rx_thread(void *arg)
 
 int netif_rx_start(void)
 {
-	struct task *task;
+	struct thread *task;
 
 	if (net_rx_started)
 		return 0;
@@ -472,8 +472,8 @@ int netif_rx_start(void)
 	if (!task)
 		return -ENOMEM;
 
-	strlcpy(task->name, "net-rx", sizeof(task->name));
-	kthread_join(task);
+	strlcpy(task->process->name, "net-rx", sizeof(task->process->name));
+	thread_start(task);
 	net_rx_started = true;
 	return 0;
 }
@@ -495,7 +495,7 @@ int netif_rx(struct sk_buff *skb)
 		return -ENOBUFS;
 	}
 	skb_queue_tail(&net_rx_queue, skb);
-	task_wake_all(&net_rx_wait);
+	thread_wake_all(&net_rx_wait);
 	spin_unlock_irqrestore(&net_rx_queue_lock, flags);
 	return 0;
 }

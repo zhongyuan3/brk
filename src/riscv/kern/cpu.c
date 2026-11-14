@@ -7,7 +7,7 @@
 #include <brk/cpu.h>
 #include <brk/panic.h>
 #include <brk/task.h>
-#include <brk/task_types.h>
+#include <brk/thread_types.h>
 
 unsigned long nr_harts = 0;
 
@@ -28,7 +28,7 @@ unsigned long arch_boot_stack_top(cpuid_t cpuid)
 		       (PAGE_SIZE << INIT_STACK_PAGE_ORDER);
 }
 
-void context_switch(struct task *prev, struct task *next)
+void context_switch(struct thread *prev, struct thread *next)
 {
 	assert(prev != NULL);
 	assert(prev != next);

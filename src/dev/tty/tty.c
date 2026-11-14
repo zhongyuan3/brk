@@ -94,7 +94,7 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 {
 	struct tty_port *port;
 	struct winsize ws;
-	struct task *task;
+	struct thread *task;
 	pid_t pgrp;
 	irqstate_t flags;
 	long ret;
@@ -111,10 +111,10 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 	 * this also makes TIOCSWINSZ and the line discipline's signal keys
 	 * target the right process group.
 	 */
-	task = current_task();
+	task = current_thread();
 	flags = spin_lock_irqsave(&port->lock);
-	if (port->pgrp <= 0 && task && task->pgid > 0)
-		port->pgrp = task->pgid;
+	if (port->pgrp <= 0 && task && task->process->pgid > 0)
+		port->pgrp = task->process->pgid;
 	spin_unlock_irqrestore(&port->lock, flags);
 
 	switch (cmd) {
@@ -160,43 +160,43 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 		if (pgrp <= 0)
 			return -EINVAL;
 
-		task = current_task();
+		task = current_thread();
 		flags = spin_lock_irqsave(&port->lock);
-		if (port->sid && port->sid != task->sid) {
+		if (port->sid && port->sid != task->process->sid) {
 			spin_unlock_irqrestore(&port->lock, flags);
 			return -ENOTTY;
 		}
 		spin_unlock_irqrestore(&port->lock, flags);
 
-		if (!task_pgrp_exists(pgrp, task->sid))
+		if (!process_pgrp_exists(pgrp, task->process->sid))
 			return -EPERM;
 
 		flags = spin_lock_irqsave(&port->lock);
 		port->pgrp = pgrp;
 		spin_unlock_irqrestore(&port->lock, flags);
-		task_wake_all(&port->pgrp);
+		thread_wake_all(&port->pgrp);
 		return 0;
 
 	case TIOCSCTTY:
-		task = current_task();
-		if (task->sid != task->tgid)
+		task = current_thread();
+		if (task->process->sid != task->process->pid)
 			return -EPERM;
 
 		flags = spin_lock_irqsave(&port->lock);
-		if (port->sid && port->sid != task->sid) {
+		if (port->sid && port->sid != task->process->sid) {
 			spin_unlock_irqrestore(&port->lock, flags);
 			return -EPERM;
 		}
-		port->sid = task->sid;
-		port->pgrp = task->pgid;
+		port->sid = task->process->sid;
+		port->pgrp = task->process->pgid;
 		spin_unlock_irqrestore(&port->lock, flags);
-		task_wake_all(&port->pgrp);
+		thread_wake_all(&port->pgrp);
 		return 0;
 
 	case TIOCNOTTY:
-		task = current_task();
+		task = current_thread();
 		flags = spin_lock_irqsave(&port->lock);
-		if (!port->sid || port->sid != task->sid) {
+		if (!port->sid || port->sid != task->process->sid) {
 			spin_unlock_irqrestore(&port->lock, flags);
 			return -ENOTTY;
 		}
@@ -204,7 +204,7 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 		port->sid = 0;
 		port->pgrp = 0;
 		spin_unlock_irqrestore(&port->lock, flags);
-		task_wake_all(&port->pgrp);
+		thread_wake_all(&port->pgrp);
 
 		if (pgrp > 0) {
 			signal_send_pgrp(pgrp, SIGHUP);
@@ -268,10 +268,10 @@ void tty_detach_port(struct tty_port *port)
 	spin_unlock_irqrestore(&port->lock, flags);
 
 	/* Wake readers/writers waiting on this port. */
-	task_wake_all(&port->pgrp);
+	thread_wake_all(&port->pgrp);
 	if (tty) {
-		task_wake_all(&tty->rx_r);
-		task_wake_all(&tty->stopped);
+		thread_wake_all(&tty->rx_r);
+		thread_wake_all(&tty->stopped);
 	}
 
 	/* Drop the port's reference; open files keep their own. */
@@ -281,7 +281,7 @@ void tty_detach_port(struct tty_port *port)
 struct tty *tty_open(struct tty_port *port)
 {
 	struct tty *tty;
-	struct task *task = current_task();
+	struct thread *task = current_thread();
 
 	if (!port)
 		return NULL;
@@ -299,11 +299,11 @@ struct tty *tty_open(struct tty_port *port)
 	 * the controlling terminal.  Otherwise just remember the foreground
 	 * group if none was set yet.
 	 */
-	if (!port->sid && task->sid == task->tgid) {
-		port->sid = task->sid;
-		port->pgrp = task->pgid;
+	if (!port->sid && task->process->sid == task->process->pid) {
+		port->sid = task->process->sid;
+		port->pgrp = task->process->pgid;
 	} else if (!port->pgrp) {
-		port->pgrp = task->pgid;
+		port->pgrp = task->process->pgid;
 	}
 
 	refcnt_inc(&tty->refcnt);

@@ -115,7 +115,7 @@ retry:
 			     (I_FREEING | I_WILL_FREE | I_BAD)) ||
 			    !refcnt_inc_unless_zero(&inode->count)) {
 				spin_unlock_irqrestore(&inode->lock, flags);
-				task_sleep(&inode->state, &inode_hash_lock);
+				thread_sleep(&inode->state, &inode_hash_lock);
 				goto retry;
 			}
 
@@ -140,7 +140,7 @@ static bool inode_wait_new(struct fs_inode *inode)
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
 	while (inode->state & I_NEW)
-		task_sleep(&inode->state, &inode->lock);
+		thread_sleep(&inode->state, &inode->lock);
 
 	bool ready = !(inode->state & (I_BAD | I_FREEING | I_WILL_FREE));
 	spin_unlock_irqrestore(&inode->lock, flags);
@@ -208,7 +208,7 @@ void fs_inode_unlock_new(struct fs_inode *inode)
 
 	inode->state &= ~I_NEW;
 	spin_unlock_irqrestore(&inode->lock, flags);
-	task_wake_all(&inode->state);
+	thread_wake_all(&inode->state);
 }
 
 /*
@@ -224,7 +224,7 @@ void fs_inode_fail_new(struct fs_inode *inode)
 	inode->state |= I_BAD;
 	inode->state &= ~I_NEW;
 	spin_unlock_irqrestore(&inode->lock, flags);
-	task_wake_all(&inode->state);
+	thread_wake_all(&inode->state);
 }
 
 struct fs_inode *fs_inode_get(struct fs_inode *inode)
@@ -283,7 +283,7 @@ void fs_inode_put(struct fs_inode *inode)
 	 * will retry from scratch and either allocate a fresh inode or find
 	 * one created in the meantime.
 	 */
-	task_wake_all(&inode->state);
+	thread_wake_all(&inode->state);
 
 	__inode_free(inode);
 }

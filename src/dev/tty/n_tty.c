@@ -91,9 +91,9 @@ static void n_tty_kill_echo(struct tty *tty, size_t nr)
 		n_tty_erase_echo(tty);
 }
 
-static bool n_tty_background(struct tty_port *port, struct task *task)
+static bool n_tty_background(struct tty_port *port, struct thread *task)
 {
-	return port->pgrp > 0 && task->pgid != port->pgrp;
+	return port->pgrp > 0 && task->process->pgid != port->pgrp;
 }
 
 static void n_tty_signal(struct tty *tty, int sig, int c)
@@ -117,7 +117,7 @@ static void n_tty_signal(struct tty *tty, int sig, int c)
 	}
 
 	/* Wake a reader blocked in read() so it can observe the signal. */
-	task_wake_all(&tty->rx_r);
+	thread_wake_all(&tty->rx_r);
 }
 
 /* Store one byte without interpreting it as an editing character. */
@@ -129,7 +129,7 @@ static void n_tty_store(struct tty *tty, u8 c)
 	if (tty->rx_e - tty->rx_r >= tty->rx_size) {
 		/* Publish the buffer and let the reader drain it. */
 		tty->rx_w = tty->rx_e;
-		task_wake_all(&tty->rx_r);
+		thread_wake_all(&tty->rx_r);
 		return;
 	}
 
@@ -139,7 +139,7 @@ static void n_tty_store(struct tty *tty, u8 c)
 
 	if (!canonical) {
 		tty->rx_w = tty->rx_e;
-		task_wake_all(&tty->rx_r);
+		thread_wake_all(&tty->rx_r);
 	}
 }
 
@@ -229,7 +229,7 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 			}
 			if (c == t->c_cc[VSTART]) {
 				tty->stopped = false;
-				task_wake_all(&tty->stopped);
+				thread_wake_all(&tty->stopped);
 				continue;
 			}
 		}
@@ -295,7 +295,7 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 			} else {
 				tty->rx_w = tty->rx_e;
 			}
-			task_wake_all(&tty->rx_r);
+			thread_wake_all(&tty->rx_r);
 			continue;
 		}
 
@@ -304,7 +304,7 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 		if (c == '\n' || c == t->c_cc[VEOL] || c == t->c_cc[VEOL2] ||
 		    tty->rx_e - tty->rx_r == tty->rx_size) {
 			tty->rx_w = tty->rx_e;
-			task_wake_all(&tty->rx_r);
+			thread_wake_all(&tty->rx_r);
 		}
 	}
 
@@ -314,7 +314,7 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 {
 	struct tty_port *port = tty->port;
-	struct task *task = current_task();
+	struct thread *task = current_thread();
 	char tmp[256];
 	size_t total = 0;
 	size_t seen = 0;
@@ -337,7 +337,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 		/* Job control: background reads get SIGTTIN. */
 		if (n_tty_background(port, task) &&
 		    (port->termios.c_lflag & ISIG)) {
-			signal_send_pgrp(task->pgid, SIGTTIN);
+			signal_send_pgrp(task->process->pgid, SIGTTIN);
 			spin_unlock_irqrestore(&port->lock, flags);
 			sleeplock_release(&tty->read_lock);
 			return total > 0 ? (ssize_t)total : -EINTR;
@@ -384,7 +384,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 					return total > 0 ? (ssize_t)total :
 							   -EINTR;
 				}
-				task_sleep(&tty->rx_r, &port->lock);
+				thread_sleep(&tty->rx_r, &port->lock);
 				spin_unlock_irqrestore(&port->lock, flags);
 				continue;
 			}
@@ -443,24 +443,24 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 							return (ssize_t)total;
 						}
 					} else if (timed) {
-						task_arm_sleep_timer(
+						thread_arm_sleep_timer(
 							&port->lock, deadline);
-						task_sleep_interruptible(
+						thread_sleep_interruptible(
 							&tty->rx_r,
 							&port->lock);
 						spin_unlock_irqrestore(
 							&port->lock, flags);
-						task_disarm_sleep_timer();
+						thread_disarm_sleep_timer();
 						continue;
 					} else {
-						task_sleep(&tty->rx_r,
-							   &port->lock);
+						thread_sleep(&tty->rx_r,
+							     &port->lock);
 						spin_unlock_irqrestore(
 							&port->lock, flags);
 						continue;
 					}
 				} else {
-					task_sleep(&tty->rx_r, &port->lock);
+					thread_sleep(&tty->rx_r, &port->lock);
 					spin_unlock_irqrestore(&port->lock,
 							       flags);
 					continue;
@@ -503,7 +503,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 {
 	struct tty_port *port = tty->port;
-	struct task *task = current_task();
+	struct thread *task = current_thread();
 	char tmp[128];
 	size_t total = 0;
 	int err = 0;
@@ -517,7 +517,7 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 			  (port->termios.c_lflag & TOSTOP);
 
 		if (bg) {
-			signal_send_pgrp(task->pgid, SIGTTOU);
+			signal_send_pgrp(task->process->pgid, SIGTTOU);
 			spin_unlock_irqrestore(&port->lock, flags);
 			sleeplock_release(&tty->write_lock);
 			return -EINTR;
@@ -547,7 +547,7 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 				spin_unlock_irqrestore(&port->lock, flags);
 				break;
 			}
-			task_sleep(&tty->stopped, &port->lock);
+			thread_sleep(&tty->stopped, &port->lock);
 			spin_unlock_irqrestore(&port->lock, flags);
 		}
 
@@ -625,8 +625,8 @@ static long n_tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 			tty->lnext = false;
 		}
 		spin_unlock_irqrestore(&port->lock, flags);
-		task_wake_all(&tty->rx_r);
-		task_wake_all(&tty->stopped);
+		thread_wake_all(&tty->rx_r);
+		thread_wake_all(&tty->stopped);
 		return 0;
 
 	case TCFLSH:
@@ -639,7 +639,7 @@ static long n_tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 			tty->lnext = false;
 		}
 		spin_unlock_irqrestore(&port->lock, flags);
-		task_wake_all(&tty->rx_r);
+		thread_wake_all(&tty->rx_r);
 		return 0;
 
 	case FIONREAD:

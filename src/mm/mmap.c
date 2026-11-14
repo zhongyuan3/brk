@@ -339,7 +339,7 @@ int uvm_mmap_file_private(struct uvm_space *mm, u64 hint, size_t len, int prot,
 
 	file_off = (loff_t)offset;
 
-	fp = fdtable_get_file(current_task()->fdtable, fd);
+	fp = fdtable_get_file(current_process()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
@@ -405,7 +405,7 @@ int uvm_mmap_file_shared(struct uvm_space *mm, u64 hint, size_t len, int prot,
 	if (offset > 0x7fffffffffffffffULL - size)
 		return -EINVAL;
 
-	fp = fdtable_get_file(current_task()->fdtable, fd);
+	fp = fdtable_get_file(current_process()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
@@ -1072,7 +1072,7 @@ int uvm_msync(struct uvm_space *mm, u64 addr, size_t len, int flags)
 
 u64 sys_mmap(void)
 {
-	struct task *task = current_task();
+	struct thread *task = current_thread();
 	u64 hint = syscall_arg_raw(0);
 	size_t len = (size_t)syscall_arg_raw(1);
 	int prot = syscall_arg_int(2);
@@ -1082,20 +1082,20 @@ u64 sys_mmap(void)
 	u64 addr = 0;
 	int err;
 
-	if (!task || !task->mm)
+	if (!task || !task->process->mm)
 		return -EFAULT;
 
 	if (flags & MAP_ANONYMOUS) {
 		if (flags & MAP_SHARED)
 			return -EOPNOTSUPP;
-		err = uvm_mmap_anon(task->mm, hint, len, prot, flags, fd,
-				    offset, &addr);
+		err = uvm_mmap_anon(task->process->mm, hint, len, prot, flags,
+				    fd, offset, &addr);
 	} else if (flags & MAP_SHARED) {
-		err = uvm_mmap_file_shared(task->mm, hint, len, prot, flags, fd,
-					   offset, &addr);
+		err = uvm_mmap_file_shared(task->process->mm, hint, len, prot,
+					   flags, fd, offset, &addr);
 	} else {
-		err = uvm_mmap_file_private(task->mm, hint, len, prot, flags,
-					    fd, offset, &addr);
+		err = uvm_mmap_file_private(task->process->mm, hint, len, prot,
+					    flags, fd, offset, &addr);
 	}
 	if (err)
 		return (u64)(long)err;
@@ -1104,35 +1104,35 @@ u64 sys_mmap(void)
 
 u64 sys_munmap(void)
 {
-	struct task *task = current_task();
+	struct thread *task = current_thread();
 	u64 addr = syscall_arg_raw(0);
 	size_t len = (size_t)syscall_arg_raw(1);
 
-	if (!task || !task->mm)
+	if (!task || !task->process->mm)
 		return -EFAULT;
-	return (u64)(long)uvm_munmap(task->mm, addr, len);
+	return (u64)(long)uvm_munmap(task->process->mm, addr, len);
 }
 
 u64 sys_mprotect(void)
 {
-	struct task *task = current_task();
+	struct thread *task = current_thread();
 	u64 addr = syscall_arg_raw(0);
 	size_t len = (size_t)syscall_arg_raw(1);
 	int prot = syscall_arg_int(2);
 
-	if (!task || !task->mm)
+	if (!task || !task->process->mm)
 		return -EFAULT;
-	return (u64)(long)uvm_mprotect(task->mm, addr, len, prot);
+	return (u64)(long)uvm_mprotect(task->process->mm, addr, len, prot);
 }
 
 u64 sys_msync(void)
 {
-	struct task *task = current_task();
+	struct thread *task = current_thread();
 	u64 addr = syscall_arg_raw(0);
 	size_t len = (size_t)syscall_arg_raw(1);
 	int flags = syscall_arg_int(2);
 
-	if (!task || !task->mm)
+	if (!task || !task->process->mm)
 		return -EFAULT;
-	return (u64)(long)uvm_msync(task->mm, addr, len, flags);
+	return (u64)(long)uvm_msync(task->process->mm, addr, len, flags);
 }

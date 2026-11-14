@@ -38,7 +38,7 @@ static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 			if (fds[i].fd < 0)
 				continue;
 
-			file = fdtable_get_file(current_task()->fdtable,
+			file = fdtable_get_file(current_process()->fdtable,
 						fds[i].fd);
 			if (IS_ERR(file)) {
 				fds[i].revents = POLLNVAL;
@@ -60,7 +60,7 @@ static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 			return (int)ready;
 		if (!infinite && ktime_boottime_ns() >= deadline)
 			return 0;
-		if (task_is_killed(current_task()))
+		if (signal_pending(current_thread()))
 			return -EINTR;
 
 		ktime_nanosleep((ktime_t)POLL_SLEEP_NS, NULL);
@@ -122,7 +122,8 @@ static int apply_sigmask(const sigset_t *uset, sigset_t *oldmask)
 		return 0;
 	if (copy_from_user(&mask, uset, sizeof(mask)))
 		return -EFAULT;
-	if (signal_do_sigprocmask(current_task(), SIG_SETMASK, &mask, oldmask))
+	if (signal_do_sigprocmask(current_thread(), SIG_SETMASK, &mask,
+				  oldmask))
 		return -EINVAL;
 	return 1;
 }
@@ -154,7 +155,7 @@ u64 sys_ppoll(void)
 	ret = (int)poll_common(ufds, nfds, timeout_ms);
 
 	if (applied > 0)
-		signal_do_sigprocmask(current_task(), SIG_SETMASK, &oldmask,
+		signal_do_sigprocmask(current_thread(), SIG_SETMASK, &oldmask,
 				      NULL);
 	return ret;
 }

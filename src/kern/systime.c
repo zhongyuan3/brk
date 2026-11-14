@@ -15,7 +15,7 @@
 
 static int clock_now(int clockid, ktime_t *now)
 {
-	struct task *task = current_task();
+	struct process *process = current_process();
 
 	switch (clockid) {
 	case CLOCK_REALTIME:
@@ -27,8 +27,8 @@ static int clock_now(int clockid, ktime_t *now)
 		return 0;
 	case CLOCK_PROCESS_CPUTIME_ID:
 	case CLOCK_THREAD_CPUTIME_ID:
-		*now = (ktime_t)(task_get_user_time(task) +
-				 task_get_system_time(task)) *
+		*now = (ktime_t)(process_get_user_time(process) +
+				 process_get_system_time(process)) *
 		       (ktime_t)TICK_NS;
 		return 0;
 	default:
@@ -127,13 +127,14 @@ u64 sys_clock_nanosleep(void)
 
 u64 sys_get_times(void)
 {
-	struct task *task = current_task();
+	struct process *process = current_process();
 	struct brk_times *ubuf = syscall_arg_ptr(0);
 	struct brk_times times = {
-		.user_ns = task_get_user_time(task) * TICK_NS,
-		.system_ns = task_get_system_time(task) * TICK_NS,
-		.child_user_ns = task_get_child_user_time(task) * TICK_NS,
-		.child_system_ns = task_get_child_system_time(task) * TICK_NS,
+		.user_ns = process_get_user_time(process) * TICK_NS,
+		.system_ns = process_get_system_time(process) * TICK_NS,
+		.child_user_ns = process_get_child_user_time(process) * TICK_NS,
+		.child_system_ns =
+			process_get_child_system_time(process) * TICK_NS,
 	};
 
 	if (!ubuf)

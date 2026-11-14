@@ -806,8 +806,9 @@ static int tmpfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -EEXIST;
 	}
 	mode |= S_IFREG;
-	t_new_inode = tmpfs_inode_alloc(t_sb, mode, 0, current_task()->fsuid,
-					current_task()->fsgid);
+	t_new_inode = tmpfs_inode_alloc(t_sb, mode, 0,
+					current_process()->cred.fsuid,
+					current_process()->cred.fsgid);
 	if (!t_new_inode) {
 		sleeplock_release(&t_sb->s_lock);
 		return -ENOMEM;
@@ -953,8 +954,8 @@ static int tmpfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	}
 
 	t_inode = tmpfs_inode_alloc(t_sb, S_IFLNK | 0777, 0,
-				    current_task()->fsuid,
-				    current_task()->fsgid);
+				    current_process()->cred.fsuid,
+				    current_process()->cred.fsgid);
 	if (!t_inode) {
 		sleeplock_release(&t_sb->s_lock);
 		return -ENOMEM;
@@ -1045,8 +1046,9 @@ static int tmpfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 		sleeplock_release(&t_sb->s_lock);
 		return -EEXIST;
 	}
-	t_inode = tmpfs_inode_alloc_dir(t_sb, mode, current_task()->fsuid,
-					current_task()->fsgid);
+	t_inode = tmpfs_inode_alloc_dir(t_sb, mode,
+					current_process()->cred.fsuid,
+					current_process()->cred.fsgid);
 	if (!t_inode) {
 		sleeplock_release(&t_sb->s_lock);
 		return -ENOMEM;
@@ -1194,8 +1196,9 @@ static int tmpfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -EEXIST;
 	}
 
-	t_inode = tmpfs_inode_alloc(t_sb, mode, dev, current_task()->fsuid,
-				    current_task()->fsgid);
+	t_inode = tmpfs_inode_alloc(t_sb, mode, dev,
+				    current_process()->cred.fsuid,
+				    current_process()->cred.fsgid);
 	if (!t_inode) {
 		sleeplock_release(&t_sb->s_lock);
 		return -ENOMEM;

@@ -2,6 +2,7 @@
 #include <brk/clocksource.h>
 #include <brk/printk.h>
 #include <brk/seqcount.h>
+#include <brk/signal.h>
 #include <brk/spinlock.h>
 #include <brk/task.h>
 #include <brk/timeconst.h>
@@ -265,7 +266,7 @@ int timekeeper_set_real(ktime_t ns)
 
 int timekeeper_nanosleep(ktime_t dur, ktime_t *rem)
 {
-	struct task *task = current_task();
+	struct thread *task = current_thread();
 	s64 start_ns;
 	s64 deadline_ns;
 	s64 now_ns;
@@ -280,17 +281,17 @@ int timekeeper_nanosleep(ktime_t dur, ktime_t *rem)
 	start_ns = (s64)ktime_get_mono_ns();
 	deadline_ns = start_ns + dur;
 
-	task_disarm_sleep_timer();
-	task_arm_sleep_timer(&tk.lock, (u64)deadline_ns);
+	thread_disarm_sleep_timer();
+	thread_arm_sleep_timer(&tk.lock, (u64)deadline_ns);
 
 	flags = spin_lock_irqsave(&tk.lock);
 
 	for (;;) {
-		if (task_is_killed(task)) {
+		if (signal_pending(task)) {
 			s64 left_ns;
 
 			spin_unlock_irqrestore(&tk.lock, flags);
-			task_disarm_sleep_timer();
+			thread_disarm_sleep_timer();
 			now_ns = (s64)ktime_get_mono_ns();
 			left_ns = deadline_ns - now_ns;
 			if (left_ns < 0)
@@ -302,11 +303,11 @@ int timekeeper_nanosleep(ktime_t dur, ktime_t *rem)
 		now_ns = (s64)ktime_get_mono_ns();
 		if (now_ns >= deadline_ns)
 			break;
-		task_sleep_interruptible(task, &tk.lock);
+		thread_sleep_interruptible(task, &tk.lock);
 	}
 	spin_unlock_irqrestore(&tk.lock, flags);
 
-	task_disarm_sleep_timer();
+	thread_disarm_sleep_timer();
 
 	if (rem)
 		*rem = 0;

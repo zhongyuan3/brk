@@ -10,7 +10,7 @@ struct block_dev;
 struct gendisk;
 struct request;
 struct request_queue;
-struct task;
+struct thread;
 
 /*
  * Block I/O layer.
@@ -73,7 +73,7 @@ struct request_queue {
 	struct list_head queue;
 	request_fn_t queue_rq;
 	struct gendisk *disk;
-	struct task *worker;
+	struct thread *worker;
 	bool dead;
 	bool worker_done;
 };

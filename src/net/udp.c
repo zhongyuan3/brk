@@ -303,7 +303,7 @@ int udp_rcv(struct sk_buff *skb)
 		skb_free(skb);
 	}
 	if (wake)
-		task_wake_all(match);
+		thread_wake_all(match);
 
 	return 0;
 
@@ -337,7 +337,7 @@ static int udp_recvmsg(struct socket *sock, void *buf, size_t len,
 			spin_unlock_irqrestore(&sk->lock, flags);
 			return -EAGAIN;
 		}
-		task_sleep(sk, &sk->lock);
+		thread_sleep(sk, &sk->lock);
 	}
 	if (peek)
 		skb = sk->rcv_queue.head;
@@ -384,7 +384,7 @@ static int udp_shutdown(struct socket *sock, int how)
 	flags = spin_lock_irqsave(&sk->lock);
 	sk->shutdown = true;
 	spin_unlock_irqrestore(&sk->lock, flags);
-	task_wake_all(sk);
+	thread_wake_all(sk);
 	return 0;
 }
 

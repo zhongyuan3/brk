@@ -11,10 +11,10 @@
  * touch the interrupt state.
  *
  * If the protected data can also be accessed from an interrupt handler, or
- * if the critical section may block (task_sleep/task_yield/task_exit), use
+ * if the critical section may block (thread_sleep/thread_yield/thread_exit), use
  * the irqsave variants below instead. The irqsave variants do not affect
  * preempt_count: interrupts are already off, and they may be released and
- * reacquired around a task_sleep().
+ * reacquired around a thread_sleep().
  */
 void spin_lock(spinlock_t *lock);
 void spin_unlock(spinlock_t *lock);
@@ -35,7 +35,7 @@ void raw_spin_unlock(spinlock_t *lock);
  * work without any global bookkeeping.
  *
  * Interrupts are already disabled here, so these variants deliberately do
- * not touch preempt_count. This also lets them be held across task_sleep()
+ * not touch preempt_count. This also lets them be held across thread_sleep()
  * without preventing the switch itself.
  *
  *	irqstate_t flags = spin_lock_irqsave(&lock);

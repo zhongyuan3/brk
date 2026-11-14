@@ -58,7 +58,7 @@ static void devtmpfs_worker(void *arg)
 
 		flags = spin_lock_irqsave(&work_lock);
 		while (list_empty(&work_list))
-			task_sleep(&work_list, &work_lock);
+			thread_sleep(&work_list, &work_lock);
 
 		work = list_first_entry(&work_list, struct devtmpfs_work, list);
 		list_del_init(&work->list);
@@ -99,7 +99,7 @@ void devtmpfs_notify(struct device *dev, bool remove)
 		return;
 	}
 	list_add_tail(&work->list, &work_list);
-	task_wake_all(&work_list);
+	thread_wake_all(&work_list);
 	spin_unlock_irqrestore(&work_lock, flags);
 }
 
@@ -130,7 +130,7 @@ int devtmpfs_populate(void)
 
 int devtmpfs_start(void)
 {
-	struct task *task;
+	struct thread *task;
 	irqstate_t flags;
 
 	flags = spin_lock_irqsave(&work_lock);
@@ -150,9 +150,9 @@ int devtmpfs_start(void)
 	}
 
 	/* Inherit root/cwd so absolute /dev paths resolve correctly. */
-	fsinfo_copy(task->fsinfo, current_task()->fsinfo);
-	strlcpy(task->name, "devtmpfs", sizeof(task->name));
-	kthread_join(task);
+	fsinfo_copy(task->process->fsinfo, current_process()->fsinfo);
+	strlcpy(task->process->name, "devtmpfs", sizeof(task->process->name));
+	thread_start(task);
 
 	return 0;
 }

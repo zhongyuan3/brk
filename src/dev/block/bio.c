@@ -60,7 +60,7 @@ static void blk_queue_worker(void *arg)
 
 		flags = spin_lock_irqsave(&q->lock);
 		while (list_empty(&q->queue) && !q->dead)
-			task_sleep(&q->queue, &q->lock);
+			thread_sleep(&q->queue, &q->lock);
 
 		if (q->dead) {
 			/* Fail everything still queued, then let cleanup run. */
@@ -72,13 +72,13 @@ static void blk_queue_worker(void *arg)
 					next = bio->bi_next;
 					bio->bi_status = -ENODEV;
 					bio->bi_done = true;
-					task_wake_all(bio);
+					thread_wake_all(bio);
 				}
 				kfree(rq);
 			}
 			q->worker = NULL;
 			q->worker_done = true;
-			task_wake_all(&q->worker_done);
+			thread_wake_all(&q->worker_done);
 			spin_unlock_irqrestore(&q->lock, flags);
 			return;
 		}
@@ -94,7 +94,7 @@ static void blk_queue_worker(void *arg)
 			next = bio->bi_next;
 			bio->bi_status = rq->rq_status;
 			bio->bi_done = true;
-			task_wake_all(bio);
+			thread_wake_all(bio);
 		}
 		spin_unlock_irqrestore(&q->lock, flags);
 		kfree(rq);
@@ -110,7 +110,7 @@ static int blk_queue_ensure_worker(struct request_queue *q)
 
 	sleeplock_acquire(&q->worker_lock);
 	if (!q->worker) {
-		struct task *task;
+		struct thread *task;
 		irqstate_t flags;
 
 		flags = spin_lock_irqsave(&q->lock);
@@ -126,10 +126,10 @@ static int blk_queue_ensure_worker(struct request_queue *q)
 			err = -ENOMEM;
 			goto out;
 		}
-		snprintf(task->name, sizeof(task->name), "blk:%s",
-			 q->disk->disk_name);
+		snprintf(task->process->name, sizeof(task->process->name),
+			 "blk:%s", q->disk->disk_name);
 		q->worker = task;
-		kthread_join(task);
+		thread_start(task);
 	}
 out:
 	sleeplock_release(&q->worker_lock);
@@ -166,9 +166,9 @@ void blk_cleanup_queue(struct request_queue *q)
 
 	flags = spin_lock_irqsave(&q->lock);
 	q->dead = true;
-	task_wake_all(&q->queue);
+	thread_wake_all(&q->queue);
 	while (q->worker && !q->worker_done)
-		task_sleep(&q->worker_done, &q->lock);
+		thread_sleep(&q->worker_done, &q->lock);
 	spin_unlock_irqrestore(&q->lock, flags);
 
 	kfree(q);
@@ -251,12 +251,12 @@ int submit_bio_wait(struct bio *bio)
 	} else {
 		list_add_tail(&rq->rq_list, &q->queue);
 		spin_unlock_irqrestore(&q->lock, flags);
-		task_wake_all(&q->queue);
+		thread_wake_all(&q->queue);
 	}
 
 	flags = spin_lock_irqsave(&q->lock);
 	while (!bio->bi_done)
-		task_sleep(bio, &q->lock);
+		thread_sleep(bio, &q->lock);
 	spin_unlock_irqrestore(&q->lock, flags);
 
 	return bio->bi_status;

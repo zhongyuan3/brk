@@ -335,7 +335,7 @@ static void console_log_thread(void *arg)
 int console_log_start(void)
 {
 	static bool started;
-	struct task *task;
+	struct thread *task;
 
 	if (started)
 		return 0;
@@ -347,8 +347,9 @@ int console_log_start(void)
 		return -ENOMEM;
 	}
 
-	strlcpy(task->name, "klog-console", sizeof(task->name));
+	strlcpy(task->process->name, "klog-console",
+		sizeof(task->process->name));
 	started = true;
-	kthread_join(task);
+	thread_start(task);
 	return 0;
 }

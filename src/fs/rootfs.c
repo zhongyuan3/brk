@@ -14,7 +14,7 @@
 
 int rootfs_init(void)
 {
-	struct task *task;
+	struct thread *task;
 	struct fs_mount_state *mnt;
 	struct fs_mount_state *new_root_mnt;
 	struct fs_path new_root_path;
@@ -24,14 +24,14 @@ int rootfs_init(void)
 	if (IS_ERR(mnt))
 		return PTR_ERR(mnt);
 
-	task = current_task();
+	task = current_thread();
 	struct fs_path root_path = {
 		.mnt = mnt,
 		.dentry = fs_dentry_get(mnt->root),
 	};
-	fsinfo_set_root(task->fsinfo, &root_path);
+	fsinfo_set_root(task->process->fsinfo, &root_path);
 	fs_path_get(&root_path);
-	fsinfo_set_cwd(task->fsinfo, &root_path);
+	fsinfo_set_cwd(task->process->fsinfo, &root_path);
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
 	if (err)
@@ -69,8 +69,8 @@ int rootfs_init(void)
 	new_root_path.dentry = fs_dentry_get(new_root_mnt->root);
 	fs_path_get(&new_root_path);
 
-	fsinfo_update_root(task->fsinfo, &new_root_path);
-	fsinfo_update_cwd(task->fsinfo, &new_root_path);
+	fsinfo_update_root(task->process->fsinfo, &new_root_path);
+	fsinfo_update_cwd(task->process->fsinfo, &new_root_path);
 	fs_path_put(&root_path);
 	fs_path_put(&new_root_path);
 
@@ -109,9 +109,9 @@ int rootfs_init(void)
 		return err;
 	}
 
-	fdtable_alloc_fd(task->fdtable, f);
-	fdtable_dup_fd(task->fdtable, 0);
-	fdtable_dup_fd(task->fdtable, 0);
+	fdtable_alloc_fd(task->process->fdtable, f);
+	fdtable_dup_fd(task->process->fdtable, 0);
+	fdtable_dup_fd(task->process->fdtable, 0);
 
 	return 0;
 }

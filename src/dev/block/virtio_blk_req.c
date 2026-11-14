@@ -112,7 +112,7 @@ static void virtio_blk_vq_used(struct virtq *vq, u32 id, u32 len, void *ctx)
 
 	io = vblk->slots[id].trans;
 	io->completed = true;
-	task_wake_all(&io->completed);
+	thread_wake_all(&io->completed);
 }
 
 irqreturn_t virtio_blk_irq_handler(int irq, void *dev_id)
@@ -153,7 +153,7 @@ static int virtio_blk_submit_vec(struct virtio_blk_dev *vblk, u64 sector,
 	}
 
 	while (virtq_alloc_desc_chain(&vblk->vq, idx, chain))
-		task_sleep(&vblk->vq.desc, &vblk->lock);
+		thread_sleep(&vblk->vq.desc, &vblk->lock);
 
 	req = &vblk->reqs[idx[0]];
 	req->type = write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
@@ -188,12 +188,12 @@ static int virtio_blk_submit_vec(struct virtio_blk_dev *vblk, u64 sector,
 	virtio_queue_notify(vblk->vdev, 0);
 
 	while (!trans.completed)
-		task_sleep(&trans.completed, &vblk->lock);
+		thread_sleep(&trans.completed, &vblk->lock);
 
 	err = virtio_blk_status_to_errno(vblk->slots[idx[0]].status);
 	vblk->slots[idx[0]].trans = NULL;
 	virtq_free_desc_chain(&vblk->vq, idx[0]);
-	task_wake_all(&vblk->vq.desc);
+	thread_wake_all(&vblk->vq.desc);
 
 	spin_unlock_irqrestore(&vblk->lock, flags);
 	return err;
@@ -209,7 +209,7 @@ static int virtio_blk_flush(struct virtio_blk_dev *vblk)
 	irqstate_t flags = spin_lock_irqsave(&vblk->lock);
 
 	while (virtq_alloc_desc_chain(&vblk->vq, idx, 2))
-		task_sleep(&vblk->vq.desc, &vblk->lock);
+		thread_sleep(&vblk->vq.desc, &vblk->lock);
 
 	req = &vblk->reqs[idx[0]];
 	req->type = VIRTIO_BLK_T_FLUSH;
@@ -233,12 +233,12 @@ static int virtio_blk_flush(struct virtio_blk_dev *vblk)
 	virtio_queue_notify(vblk->vdev, 0);
 
 	while (!trans.completed)
-		task_sleep(&trans.completed, &vblk->lock);
+		thread_sleep(&trans.completed, &vblk->lock);
 
 	err = virtio_blk_status_to_errno(vblk->slots[idx[0]].status);
 	vblk->slots[idx[0]].trans = NULL;
 	virtq_free_desc_chain(&vblk->vq, idx[0]);
-	task_wake_all(&vblk->vq.desc);
+	thread_wake_all(&vblk->vq.desc);
 
 	spin_unlock_irqrestore(&vblk->lock, flags);
 	return err;

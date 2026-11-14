@@ -101,7 +101,7 @@ static int raw_recvmsg(struct socket *sock, void *buf, size_t len,
 			spin_unlock_irqrestore(&raw->sk.lock, flags);
 			return -EAGAIN;
 		}
-		task_sleep(&raw->sk, &raw->sk.lock);
+		thread_sleep(&raw->sk, &raw->sk.lock);
 	}
 	skb = peek ? raw->sk.rcv_queue.head : skb_dequeue(&raw->sk.rcv_queue);
 	spin_unlock_irqrestore(&raw->sk.lock, flags);
@@ -166,7 +166,7 @@ static int raw_shutdown(struct socket *sock, int how)
 	raw->sk.shutdown = true;
 	raw->sk.eof = true;
 	spin_unlock_irqrestore(&raw->sk.lock, flags);
-	task_wake_all(&raw->sk);
+	thread_wake_all(&raw->sk);
 	return 0;
 }
 
@@ -289,7 +289,7 @@ void raw_deliver(u8 protocol, struct sk_buff *skb, u32 saddr, u32 daddr)
 		spin_lock(&raw->sk.lock);
 		skb_queue_tail(&raw->sk.rcv_queue, copy);
 		spin_unlock(&raw->sk.lock);
-		task_wake_all(&raw->sk);
+		thread_wake_all(&raw->sk);
 	}
 	spin_unlock_irqrestore(&raw_lock, flags);
 }

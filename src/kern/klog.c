@@ -173,7 +173,7 @@ static void klog_entry(void *arg)
 
 int klog_start(void)
 {
-	struct task *task = kthread_create(klog_entry, NULL);
+	struct thread *task = kthread_create(klog_entry, NULL);
 
 	if (!task)
 		return -ENOMEM;
@@ -183,9 +183,9 @@ int klog_start(void)
 	 * current root/cwd so absolute paths such as /var/log/kernel.log resolve
 	 * correctly before the thread opens its file.
 	 */
-	fsinfo_copy(task->fsinfo, current_task()->fsinfo);
-	strlcpy(task->name, "klogd", sizeof(task->name));
-	kthread_join(task);
+	fsinfo_copy(task->process->fsinfo, current_process()->fsinfo);
+	strlcpy(task->process->name, "klogd", sizeof(task->process->name));
+	thread_start(task);
 
 	return 0;
 }

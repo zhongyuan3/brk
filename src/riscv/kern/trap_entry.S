@@ -87,7 +87,7 @@ ret_from_user_init:
 	# with `sp` pointing at their copied frame.
 	.global ret_from_fork
 ret_from_fork:
-	call task_schedlue_tail
+	call thread_sched_tail
 
 ret_from_trap:
 	# Remember the kernel per-CPU pointer while tp is still valid. It is

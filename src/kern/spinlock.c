@@ -3,7 +3,7 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
-#include <brk/task_types.h>
+#include <brk/thread_types.h>
 
 void spinlock_init(spinlock_t *lock, const char *name)
 {

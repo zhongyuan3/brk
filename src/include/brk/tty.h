@@ -19,7 +19,7 @@
 struct fs_file;
 struct char_dev;
 struct device;
-struct task;
+struct thread;
 struct tty;
 struct tty_port;
 struct tty_ops;

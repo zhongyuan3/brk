@@ -66,7 +66,8 @@ void start_kernel(void)
 
 	/* Core data structures, buses and registries. */
 	cpu_sched_init();
-	task_cache_init();
+	process_cache_init();
+	thread_cache_init();
 	irq_init();
 	uvm_space_cache_init();
 	page_cache_init();
@@ -103,5 +104,5 @@ void start_kernel(void)
 
 	local_irq_enable();
 
-	task_scheduler();
+	sched_start();
 }

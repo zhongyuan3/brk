@@ -8,12 +8,12 @@
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 
-struct task;
+struct thread;
 
 struct cpu {
-	struct task *handoff;
-	struct task *current;
-	struct task *idle;
+	struct thread *handoff;
+	struct thread *current;
+	struct thread *idle;
 	cpuid_t id;
 	int preempt_count;
 	bool initialized;
@@ -37,8 +37,8 @@ void preempt_disable(void);
 void preempt_enable(void);
 int preempt_count(void);
 
-struct task *current_task(void);
-void set_current_task(struct task *task);
+struct thread *current_thread(void);
+void set_current_thread(struct thread *task);
 
 extern struct cpu cpus[MAX_CPUS];
 
@@ -58,7 +58,7 @@ bool local_irq_enabled(void);
  * Save the callee-saved state of @prev and resume @next.  Both tasks must be
  * distinct, and @prev must be the task currently running on this CPU.
  */
-void context_switch(struct task *prev, struct task *next);
+void context_switch(struct thread *prev, struct thread *next);
 
 void set_thread_pointer(unsigned long value);
 unsigned long get_thread_pointer(void);

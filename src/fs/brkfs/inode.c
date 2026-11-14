@@ -332,8 +332,8 @@ static int brkfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	if (err)
 		goto out;
 	err = brkfs_disk_inode_init(sbi, ino, S_IFREG | mode, 1, 0,
-				    current_task()->fsuid,
-				    current_task()->fsgid);
+				    current_process()->cred.fsuid,
+				    current_process()->cred.fsgid);
 	if (err)
 		goto undo_alloc;
 
@@ -477,8 +477,8 @@ static int brkfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	if (err)
 		goto out;
 	err = brkfs_disk_inode_init(sbi, ino, S_IFLNK | 0777, 1, 0,
-				    current_task()->fsuid,
-				    current_task()->fsgid);
+				    current_process()->cred.fsuid,
+				    current_process()->cred.fsgid);
 	if (err)
 		goto undo_alloc;
 
@@ -561,8 +561,8 @@ static int brkfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 	if (err)
 		goto out;
 	err = brkfs_disk_inode_init(sbi, ino, (umode_t)(S_IFDIR | mode), 2, 0,
-				    current_task()->fsuid,
-				    current_task()->fsgid);
+				    current_process()->cred.fsuid,
+				    current_process()->cred.fsgid);
 	if (err)
 		goto undo_alloc;
 
@@ -838,8 +838,8 @@ static int brkfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 	if (err)
 		goto out;
 	err = brkfs_disk_inode_init(sbi, ino, mode, 1, dev,
-				    current_task()->fsuid,
-				    current_task()->fsgid);
+				    current_process()->cred.fsuid,
+				    current_process()->cred.fsgid);
 	if (err)
 		goto undo_alloc;
 

@@ -9,7 +9,7 @@ typedef struct sleeplock {
 	spinlock_t lock;
 
 	/* For debuging: */
-	pid_t pid; /* Process holding the lock. */
+	pid_t tid; /* Thread holding the lock. */
 	const char *name; /* Name of the lock. */
 } sleeplock_t;
 

@@ -244,31 +244,31 @@ static const struct procfs_entry *procfs_pid_by_idx(int idx)
 	return NULL;
 }
 
-static const char *procfs_state_name(enum task_state state)
+static const char *procfs_state_name(enum thread_state state)
 {
 	switch (state) {
-	case TASK_STATE_NEW:
+	case THREAD_STATE_NEW:
 		return "new";
-	case TASK_STATE_RUNNING:
+	case THREAD_STATE_RUNNING:
 		return "running";
-	case TASK_STATE_SLEEPING:
+	case THREAD_STATE_SLEEPING:
 		return "sleeping";
-	case TASK_STATE_ZOMBIE:
+	case THREAD_STATE_ZOMBIE:
 		return "zombie";
 	}
 	return "unknown";
 }
 
-static char procfs_state_letter(enum task_state state)
+static char procfs_state_letter(enum thread_state state)
 {
 	switch (state) {
-	case TASK_STATE_NEW:
+	case THREAD_STATE_NEW:
 		return 'N';
-	case TASK_STATE_RUNNING:
+	case THREAD_STATE_RUNNING:
 		return 'R';
-	case TASK_STATE_SLEEPING:
+	case THREAD_STATE_SLEEPING:
 		return 'S';
-	case TASK_STATE_ZOMBIE:
+	case THREAD_STATE_ZOMBIE:
 		return 'Z';
 	}
 	return '?';
@@ -385,9 +385,9 @@ static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
 				  char *buf, size_t size)
 {
 	(void)e;
-	struct task_info info;
+	struct process_info info;
 
-	if (!task_get_info(pid, &info))
+	if (!process_get_info(pid, &info))
 		return -ESRCH;
 
 	return snprintf(buf, size,
@@ -395,23 +395,24 @@ static int procfs_show_pid_status(const struct procfs_entry *e, pid_t pid,
 			"State:\t%c (%s)\n"
 			"Pid:\t%ld\n"
 			"PPid:\t%ld\n"
+			"Threads:\t%u\n"
 			"Killed:\t%d\n"
 			"Brk:\t0x%" PRIx64 "\n"
 			"Utime:\t%" PRIu64 "\n"
 			"Stime:\t%" PRIu64 "\n",
 			info.name, procfs_state_letter(info.state),
 			procfs_state_name(info.state), (long)info.pid,
-			(long)info.ppid, info.killed ? 1 : 0, info.brk,
-			info.utime, info.ktime);
+			(long)info.ppid, info.nr_threads, info.killed ? 1 : 0,
+			info.brk, info.utime, info.ktime);
 }
 
 static int procfs_show_pid_stat(const struct procfs_entry *e, pid_t pid,
 				char *buf, size_t size)
 {
 	(void)e;
-	struct task_info info;
+	struct process_info info;
 
-	if (!task_get_info(pid, &info))
+	if (!process_get_info(pid, &info))
 		return -ESRCH;
 
 	/*
@@ -431,10 +432,10 @@ static int procfs_show_pid_cmdline(const struct procfs_entry *e, pid_t pid,
 				   char *buf, size_t size)
 {
 	(void)e;
-	struct task_info info;
+	struct process_info info;
 	size_t n;
 
-	if (!task_get_info(pid, &info))
+	if (!process_get_info(pid, &info))
 		return -ESRCH;
 
 	n = strlen(info.name);
@@ -581,7 +582,7 @@ static struct fs_dentry *procfs_root_lookup(struct fs_inode *dir,
 	}
 
 	if (procfs_parse_pid(name, len, &pid)) {
-		if (!task_pid_exists(pid))
+		if (!process_pid_exists(pid))
 			return NULL;
 		struct fs_inode *inode = procfs_iget_pid_dir(sb, pid);
 		if (!inode)
@@ -602,7 +603,7 @@ static struct fs_dentry *procfs_pid_dir_lookup(struct fs_inode *dir,
 	const char *name = dentry->name.name;
 	int len = dentry->name.len;
 
-	if (!task_pid_exists(pid))
+	if (!process_pid_exists(pid))
 		return ERR_PTR(-ENOENT);
 
 	for (size_t i = 0; i < PROCFS_PID_ENTRIES_NR; ++i) {
@@ -941,7 +942,7 @@ static int procfs_root_iterate_shared(struct fs_file *file,
 	pids = kmalloc(sizeof(*pids) * PROCFS_PID_SNAPSHOT_MAX);
 	if (!pids)
 		return -ENOMEM;
-	npids = task_snapshot_pids(pids, PROCFS_PID_SNAPSHOT_MAX);
+	npids = process_snapshot_pids(pids, PROCFS_PID_SNAPSHOT_MAX);
 
 	for (int i = 0; i < npids; ++i) {
 		char name[16];
@@ -975,7 +976,7 @@ static int procfs_pid_dir_iterate_shared(struct fs_file *file,
 	pid_t pid = procfs_ino_pid(dir->ino);
 	loff_t idx;
 
-	if (!task_pid_exists(pid))
+	if (!process_pid_exists(pid))
 		return -ENOENT;
 
 	if (!procfs_emit_dot(ctx, dir))

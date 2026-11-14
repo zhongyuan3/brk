@@ -694,9 +694,9 @@ out_unlock:
 		tcp_send_segment(tsk, tx_seq, tx_ack, tx_flags, NULL, 0,
 				 tx_mss);
 	if (wake_child)
-		task_wake_all(&tsk->sk);
+		thread_wake_all(&tsk->sk);
 	if (wake_listener && listener)
-		task_wake_all(&listener->sk);
+		thread_wake_all(&listener->sk);
 	return 0;
 
 unlock_drop:
@@ -817,7 +817,7 @@ static int tcp_connect(struct socket *sock, const struct sockaddr *addr,
 	}
 
 	while (tsk->state == TCP_SYN_SENT && !tsk->err)
-		task_sleep(&tsk->sk, &tcp_lock);
+		thread_sleep(&tsk->sk, &tcp_lock);
 	st = tsk->state;
 	err = tsk->err;
 	spin_unlock_irqrestore(&tcp_lock, flags);
@@ -875,7 +875,7 @@ static int tcp_accept(struct socket *sock, struct socket **newsock)
 			spin_unlock_irqrestore(&tcp_lock, flags);
 			return -EAGAIN;
 		}
-		task_sleep(&tsk->sk, &tcp_lock);
+		thread_sleep(&tsk->sk, &tcp_lock);
 	}
 
 	child = list_first_entry(&tsk->accept_queue, struct tcp_sock,
@@ -953,7 +953,7 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 				kfree(copy);
 				return off ? (int)off : -EAGAIN;
 			}
-			task_sleep(&tsk->sk, &tcp_lock);
+			thread_sleep(&tsk->sk, &tcp_lock);
 		}
 
 		if (tsk->err) {
@@ -1004,7 +1004,7 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 
 		flags = spin_lock_irqsave(&tcp_lock);
 		while (!tsk->err && tsk->tx_kind == TCP_TX_DATA)
-			task_sleep(&tsk->sk, &tcp_lock);
+			thread_sleep(&tsk->sk, &tcp_lock);
 		err = tsk->err;
 		spin_unlock_irqrestore(&tcp_lock, flags);
 
@@ -1053,7 +1053,7 @@ static int tcp_recvmsg(struct socket *sock, void *buf, size_t len,
 				spin_unlock_irqrestore(&sk->lock, flags);
 				return total ? (int)total : -EAGAIN;
 			}
-			task_sleep(sk, &sk->lock);
+			thread_sleep(sk, &sk->lock);
 		}
 		if (sk->err) {
 			err = sk->err;
@@ -1124,7 +1124,7 @@ static int tcp_shutdown(struct socket *sock, int how)
 		tsk->sk.shutdown = true;
 		tsk->sk.eof = true;
 		spin_unlock_irqrestore(&tsk->sk.lock, flags);
-		task_wake_all(&tsk->sk);
+		thread_wake_all(&tsk->sk);
 	}
 
 	if (how != SHUT_WR && how != SHUT_RDWR)
@@ -1403,7 +1403,7 @@ static void tcp_timer_tick(void)
 				skb_queue_purge(&tsk->sk.rcv_queue);
 				kfree(tsk);
 			} else {
-				task_wake_all(&tsk->sk);
+				thread_wake_all(&tsk->sk);
 			}
 			continue;
 		}

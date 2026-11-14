@@ -1,0 +1,54 @@
+#ifndef BRK_THREAD_H
+#define BRK_THREAD_H
+
+#include <arch/asm/page.h>
+#include <brk/asm/cpu.h>
+#include <brk/cpu.h>
+#include <brk/spinlock_types.h>
+#include <brk/thread_types.h>
+#include <brk/types.h>
+
+#define KSTACK_PAGE_ORDER 2
+#define KSTACK_SIZE (PAGE_SIZE * (1 << KSTACK_PAGE_ORDER))
+#define USTACK_PAGE_ORDER 8
+#define USTACK_SIZE (PAGE_SIZE * (1 << USTACK_PAGE_ORDER))
+
+#define TIME_SLICE_MAX 5
+
+struct process;
+
+void thread_cache_init(void);
+struct thread *thread_create(struct process *process, void (*fn)(void *),
+			     void *data);
+void thread_start(struct thread *thread);
+
+void thread_exit(int status);
+void thread_exit_normal(int code);
+void thread_exit_signal(int sig);
+
+void thread_yield(void);
+void thread_sleep(void *chan, spinlock_t *lock);
+void thread_sleep_interruptible(void *chan, spinlock_t *lock);
+void thread_wake_all(void *chan);
+void thread_wake(struct thread *thread);
+
+/*
+ * Arm/disarm the current thread's one-shot sleep timeout.  The timer is owned
+ * by struct thread, so it remains valid until process_destroy() cancels it.
+ * The caller must disarm a previous timeout before arming a new one.
+ */
+void thread_arm_sleep_timer(spinlock_t *lock, u64 expires_ns);
+void thread_disarm_sleep_timer(void);
+
+void sched_enqueue(struct thread *thread);
+void sched_resume(void);
+void sched_start(void);
+
+struct thread *kthread_create(void (*fn)(void *), void *data);
+
+static inline bool thread_is_leader(struct thread *thread)
+{
+	return thread->tid == thread->process->pid;
+}
+
+#endif

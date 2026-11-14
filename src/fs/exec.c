@@ -155,7 +155,7 @@ static void copy_exec_strings(char **src, int n, uintptr_t *k_pos,
 }
 
 static void push_args(struct exec_args *args, uintptr_t *psp,
-		      uintptr_t stack_virt, struct task *task)
+		      uintptr_t stack_virt, struct thread *task)
 {
 	uintptr_t sp = *psp;
 	uintptr_t ksp = stack_virt + USTACK_SIZE;
@@ -362,7 +362,8 @@ static int __do_execve(const char *path, struct exec_args *args)
 {
 	struct elf_hdr elf_hdr = { 0 };
 	struct elf_phdr phdr = { 0 };
-	struct task *task = current_task();
+	struct process *process = current_process();
+	struct thread *task = current_thread();
 	struct fs_file *f = NULL;
 	struct uvm_space *new_mm = NULL;
 	umode_t file_mode;
@@ -429,34 +430,34 @@ static int __do_execve(const char *path, struct exec_args *args)
 		uintptr_t stack_virt = phys_to_virt(stack_phys);
 
 		push_args(args, &sp, stack_virt, task);
-		strlcpy(task->name, args->argv[0], sizeof(task->name));
+		strlcpy(process->name, args->argv[0], sizeof(process->name));
 
 		switch_pgtable(new_mm->pgd);
 
-		struct uvm_space *old_mm = task->mm;
+		struct uvm_space *old_mm = process->mm;
 
-		task->mm = new_mm;
+		process->mm = new_mm;
 		uvm_space_put(old_mm);
-		signal_reset(task);
+		signal_reset(process, task);
 		trap_frame_set_pc(task->frame, elf_hdr.e_entry);
 		trap_frame_set_sp(task->frame, sp);
 
 		if (file_mode & S_ISUID) {
-			task->euid = file_uid;
-			task->suid = file_uid;
-			task->fsuid = file_uid;
+			process->cred.euid = file_uid;
+			process->cred.suid = file_uid;
+			process->cred.fsuid = file_uid;
 			if (file_uid == 0) {
-				task->cap_effective = CAP_FULL_SET;
-				task->cap_permitted = CAP_FULL_SET;
+				process->cred.cap_effective = CAP_FULL_SET;
+				process->cred.cap_permitted = CAP_FULL_SET;
 			} else {
-				task->cap_effective = 0;
-				task->cap_permitted = 0;
+				process->cred.cap_effective = 0;
+				process->cred.cap_permitted = 0;
 			}
 		}
 		if ((file_mode & S_ISGID) && (file_mode & S_IXGRP)) {
-			task->egid = file_gid;
-			task->sgid = file_gid;
-			task->fsgid = file_gid;
+			process->cred.egid = file_gid;
+			process->cred.sgid = file_gid;
+			process->cred.fsgid = file_gid;
 		}
 	}
 

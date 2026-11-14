@@ -33,13 +33,13 @@ static void writeback_thread(void *arg)
 
 int writeback_start(void)
 {
-	struct task *task = kthread_create(writeback_thread, NULL);
+	struct thread *task = kthread_create(writeback_thread, NULL);
 
 	if (!task)
 		return -ENOMEM;
 
-	strlcpy(task->name, "writeback", sizeof(task->name));
-	kthread_join(task);
+	strlcpy(task->process->name, "writeback", sizeof(task->process->name));
+	thread_start(task);
 	pr_info("writeback: dirty page flush thread started\n");
 
 	return 0;

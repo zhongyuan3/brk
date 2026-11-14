@@ -1,6 +1,11 @@
 #ifndef BRK_TASK_H
 #define BRK_TASK_H
 
+/*
+ * Compatibility aggregate header.  New code should include <brk/process.h>
+ * or <brk/thread.h> directly.
+ */
+
 #include <arch/asm/page.h>
 #include <brk/asm/cpu.h>
 #include <brk/cpu.h>
@@ -8,118 +13,15 @@
 #include <brk/fs_types.h>
 #include <brk/mm_types.h>
 #include <brk/path.h>
+#include <brk/process.h>
 #include <brk/signal_types.h>
 #include <brk/spinlock_types.h>
-#include <brk/task_types.h>
+#include <brk/thread.h>
 #include <brk/types.h>
 #include <uapi/limits.h>
 #include <uapi/resource.h>
 #include <uapi/signal.h>
 #include <uapi/times.h>
 #include <uapi/types.h>
-
-#define KSTACK_PAGE_ORDER 2
-#define KSTACK_SIZE (PAGE_SIZE * (1 << KSTACK_PAGE_ORDER))
-#define USTACK_PAGE_ORDER 8
-#define USTACK_SIZE (PAGE_SIZE * (1 << USTACK_PAGE_ORDER))
-
-#define TIME_SLICE_MAX 5
-
-/*
- * Optional fields are borrowed from the caller. task_create() and
- * signal_init() each acquire their own reference for the resources they
- * own (fdtable/fsinfo and sigactions respectively).
- */
-struct task_create_args {
-	pid_t tgid;
-	pid_t pgid;
-	pid_t sid;
-	struct uvm_space *mm;
-	struct file_desc_table *fdtable;
-	struct file_system_info *fsinfo;
-	struct task_resource_usage *rsrc_usage;
-	struct sigaction_table *sigactions;
-	u64 blocked; /* if @sigactions is not NULL, @blocked must be valid */
-	void (*fn)(void); /* function to run after the task is created */
-};
-
-void task_init_main(void);
-
-void task_cache_init(void);
-struct task *task_create(struct task_create_args *args);
-struct task *task_create_idle(cpuid_t cpuid);
-void task_destroy(struct task *task);
-void task_set_killed(struct task *task);
-bool task_is_killed(struct task *task);
-bool task_pgrp_exists(pid_t pgid, pid_t sid);
-pid_t task_get_pgid(pid_t tgid);
-pid_t task_get_sid(pid_t tgid);
-void task_exit(int status);
-void task_exit_normal(int code);
-void task_exit_signal(int sig);
-int task_fork(void);
-
-void task_yield(void);
-void task_sleep(void *chan, spinlock_t *lock);
-void task_sleep_interruptible(void *chan, spinlock_t *lock);
-void task_wake_all(void *chan);
-
-/*
- * Arm/disarm the current task's one-shot sleep timeout.  The timer is owned
- * by struct task, so it remains valid until task_destroy() cancels it.  The
- * caller must disarm a previous timeout before arming a new one.
- */
-void task_arm_sleep_timer(spinlock_t *lock, u64 expires_ns);
-void task_disarm_sleep_timer(void);
-pid_t task_wait(pid_t cpid, int *status, int options, struct rusage *rus,
-		kuid_t *uid);
-void task_wake_spec(struct task *task);
-void task_sched_resume(void);
-void task_scheduler(void);
-void task_join(struct task *task);
-
-int task_get_times(struct task *task, struct tms *times);
-void task_add_system_time(struct task *task, u64 time);
-void task_add_user_time(struct task *task, u64 time);
-void task_add_child_system_time(struct task *task, u64 time);
-void task_add_child_user_time(struct task *task, u64 time);
-u64 task_get_system_time(struct task *task);
-u64 task_get_user_time(struct task *task);
-u64 task_get_child_system_time(struct task *task);
-u64 task_get_child_user_time(struct task *task);
-
-static inline bool task_is_leader(struct task *task)
-{
-	return task->pid == task->tgid;
-}
-
-struct task_resource_usage *task_rusage_alloc(void);
-void task_rusage_free(struct task_resource_usage *rsrc_usage);
-
-pid_t pid_alloc(void);
-void pid_free(pid_t pid);
-
-/*
- * Copy every live thread-group id into @out (up to @max entries).
- * Each tgid appears once even when the group has multiple threads.
- */
-int task_snapshot_pids(pid_t *out, int max);
-
-/*
- * Snapshot a thread group into @info. @tgid is the thread-group id
- * (as returned by getpid), not a per-thread tid.
- */
-bool task_get_info(pid_t tgid, struct task_info *info);
-
-/* Return true if a thread group with @tgid exists. */
-bool task_pid_exists(pid_t tgid);
-
-struct task *kthread_create(void (*fn)(void *), void *data);
-void kthread_join(struct task *kthread);
-
-extern struct task *init_reaper;
-extern struct list_head tasks;
-extern spinlock_t tasks_lock;
-extern spinlock_t wait_lock;
 
 #endif

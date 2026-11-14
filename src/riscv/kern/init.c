@@ -53,7 +53,7 @@ void secondary_entry(unsigned long hart_id)
 
 	pr_info("smp: cpu@%lu online\n", hart_id);
 
-	task_scheduler();
+	sched_start();
 }
 
 int arch_init(void)

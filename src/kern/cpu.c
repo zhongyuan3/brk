@@ -101,14 +101,14 @@ void set_this_cpuid(cpuid_t cpuid)
 	(void)cpuid;
 }
 
-struct task *current_task(void)
+struct thread *current_thread(void)
 {
 	struct cpu *c = this_cpu();
 	assert(c != NULL);
 	return c->current;
 }
 
-void set_current_task(struct task *task)
+void set_current_thread(struct thread *task)
 {
 	struct cpu *c = this_cpu();
 	assert(c != NULL);

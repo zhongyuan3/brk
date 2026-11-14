@@ -4,18 +4,19 @@
 #include <arch/trapframe.h>
 #include <brk/assert.h>
 #include <brk/cpu.h>
+#include <brk/error.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
 #include <brk/fsinfo.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
+#include <brk/process.h>
 #include <brk/refcnt.h>
 #include <brk/signal.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
-#include <brk/task.h>
-#include <brk/task_types.h>
+#include <brk/thread.h>
 #include <brk/tick.h>
 #include <brk/types.h>
 #include <uapi/capability.h>
@@ -33,24 +34,24 @@ static unsigned int cpu_load(struct cpu *cpu)
 {
 	irqstate_t flags = spin_lock_irqsave(&cpu->run_queue_lock);
 	unsigned int load = cpu->nr_running;
-	struct task *cur = cpu->current;
+	struct thread *cur = cpu->current;
 	spin_unlock_irqrestore(&cpu->run_queue_lock, flags);
 
-	/* nr_running counts queued tasks; also account for the running one. */
+	/* nr_running counts queued threads; also account for the running one. */
 	if (cur && cur != cpu->idle)
 		load++;
 	return load;
 }
 
 /*
- * Pick a CPU for a task that is not currently running.  Only CPUs that have
+ * Pick a CPU for a thread that is not currently running.  Only CPUs that have
  * entered their idle task (online) are eligible, so a newly started CPU
  * cannot receive an IPI before its scheduler context exists.
  *
  * The rotating hint makes equal-load choices round-robin instead of always
  * favouring CPU 0.
  */
-static int task_select_cpu(void)
+static int thread_select_cpu(void)
 {
 	int best = -1;
 	unsigned int best_load = ~0U;
@@ -76,37 +77,38 @@ static int task_select_cpu(void)
 	return best;
 }
 
-void task_join(struct task *task)
+void sched_enqueue(struct thread *thread)
 {
 	struct cpu *cpu;
 	irqstate_t flags;
 	int target;
 
 	/*
-	 * The currently running task must stay on this CPU until
-	 * context_switch() has saved its context.  Everything else (new tasks
-	 * and tasks woken from sleep) has a complete saved context and may be
+	 * The currently running thread must stay on this CPU until
+	 * context_switch() has saved its context.  Everything else (new threads
+	 * and threads woken from sleep) has a complete saved context and may be
 	 * placed on any online CPU.
 	 */
-	if (task->oncpu < 0) {
-		target = task_select_cpu();
+	if (thread->oncpu < 0) {
+		target = thread_select_cpu();
 		if (target < 0)
-			target = task->cpu;
+			target = thread->cpu;
 	} else {
-		assert(task->cpu == (int)this_cpuid());
-		target = task->cpu;
+		assert(thread->cpu == (int)this_cpuid());
+		target = thread->cpu;
 	}
 
 	if (target < 0 || target >= MAX_CPUS)
-		panic("task_join: pid=%d invalid cpu %d\n", task->pid, target);
+		panic("sched_enqueue: tid=%d invalid cpu %d\n", thread->tid,
+		      target);
 
 	cpu = &cpus[target];
 	flags = spin_lock_irqsave(&cpu->run_queue_lock);
 
-	assert(list_empty(&task->queue));
-	assert(task->state == TASK_STATE_RUNNING);
-	task->cpu = target;
-	list_add_tail(&task->queue, &cpu->run_queue);
+	assert(list_empty(&thread->queue));
+	assert(thread->state == THREAD_STATE_RUNNING);
+	thread->cpu = target;
+	list_add_tail(&thread->queue, &cpu->run_queue);
 	cpu->nr_running++;
 	spin_unlock_irqrestore(&cpu->run_queue_lock, flags);
 
@@ -123,98 +125,119 @@ void task_join(struct task *task)
  * The caller runs with interrupts disabled and can therefore use the
  * non-irqsave form of the rq lock.
  */
-static struct task *task_pick_next(struct cpu *cpu)
+static struct thread *thread_pick_next(struct cpu *cpu)
 {
-	struct task *task = NULL;
+	struct thread *thread = NULL;
 
 	spin_lock(&cpu->run_queue_lock);
 	if (!list_empty(&cpu->run_queue)) {
-		task = list_first_entry(&cpu->run_queue, struct task, queue);
-		assert(task->cpu == (int)cpu->id);
-		list_del_init(&task->queue);
+		thread =
+			list_first_entry(&cpu->run_queue, struct thread, queue);
+		assert(thread->cpu == (int)cpu->id);
+		list_del_init(&thread->queue);
 		assert(cpu->nr_running > 0);
 		cpu->nr_running--;
 	}
 	spin_unlock(&cpu->run_queue_lock);
-	return task;
+	return thread;
 }
 
 /*
- * Static bootstrap task for every CPU.  CPU0 runs the filesystem setup in
- * this task and then keeps it as the orphan reaper; secondary CPUs park their
- * boot task and hand the CPU over to a real idle task.
+ * Static bootstrap process/thread for every CPU.  CPU0 runs the filesystem
+ * setup in this thread and then keeps it as the orphan reaper; secondary CPUs
+ * park their boot thread and hand the CPU over to a real idle thread.
  */
-static struct task init_tasks[MAX_CPUS];
+struct init_unit {
+	struct process process;
+	struct thread thread;
+};
+
+static struct init_unit init_tasks[MAX_CPUS];
 
 static_assert(KSTACK_SIZE == (PAGE_SIZE << INIT_STACK_PAGE_ORDER),
 	      "boot stack and kernel stack sizes differ");
 
-static void init_task_setup(struct task *task, cpuid_t cpuid)
+static void init_unit_setup(struct init_unit *unit, cpuid_t cpuid)
 {
-	if (task->kstack_base)
+	struct process *process = &unit->process;
+	struct thread *thread = &unit->thread;
+
+	if (thread->kstack_base)
 		return;
 
-	list_init(&task->list);
-	list_init(&task->queue);
-	list_init(&task->children);
-	list_init(&task->child);
-	spinlock_init(&task->lock, "init_task");
+	list_init(&process->list);
+	list_init(&process->children);
+	list_init(&process->sibling);
+	list_init(&process->threads);
+	spinlock_init(&process->lock, "init_process");
+	process->pid = 0;
+	process->pgid = 0;
+	process->sid = 0;
+	process->nr_threads = 1;
+	process->nr_live = 1;
+	process->leader = thread;
+	process->flags = PROCESS_FLAG_STATIC | PROCESS_FLAG_KTHREAD;
+	strlcpy(process->name, "init_task", sizeof(process->name));
+	process->cred.umask = 022;
+	process->cred.cap_effective = CAP_FULL_SET;
+	process->cred.cap_permitted = CAP_FULL_SET;
 
-	task->state = TASK_STATE_RUNNING;
-	task->oncpu = -1;
-	task->cpu = (int)cpuid;
-	task->is_init_task = true;
-	task->pid = 0;
-	task->tgid = 0;
-	task->pgid = 0;
-	task->sid = 0;
-	task->umask = 022;
-	task->cap_effective = CAP_FULL_SET;
-	task->cap_permitted = CAP_FULL_SET;
+	list_init(&thread->list);
+	list_init(&thread->proc_threads);
+	list_init(&thread->queue);
+	spinlock_init(&thread->lock, "init_thread");
+	thread->process = process;
+	thread->tid = 0;
+	thread->state = THREAD_STATE_RUNNING;
+	thread->oncpu = -1;
+	thread->cpu = (int)cpuid;
+	thread->is_init_thread = true;
+	list_add_tail(&thread->proc_threads, &process->threads);
 
-	task->kstack_top = arch_boot_stack_top(cpuid);
-	task->kstack_base = task->kstack_top - KSTACK_SIZE;
-	task->frame = (struct trap_frame *)(task->kstack_top - TRAP_FRAME_SIZE);
-	memset(task->frame, 0, TRAP_FRAME_SIZE);
-	trap_frame_set_kernel_tp(task->frame, (unsigned long)&cpus[cpuid]);
+	thread->kstack_top = arch_boot_stack_top(cpuid);
+	thread->kstack_base = thread->kstack_top - KSTACK_SIZE;
+	thread->frame =
+		(struct trap_frame *)(thread->kstack_top - TRAP_FRAME_SIZE);
+	memset(thread->frame, 0, TRAP_FRAME_SIZE);
+	trap_frame_set_kernel_tp(thread->frame, (unsigned long)&cpus[cpuid]);
 
 	if (cpuid == boot_info.boot_hart_id) {
-		task->fsinfo = fsinfo_alloc();
-		task->fdtable = fdtable_alloc();
-		if (!task->fsinfo || !task->fdtable)
-			panic("failed to allocate init task filesystem state\n");
-		if (signal_init(task, NULL, 0))
-			panic("failed to initialize init task signals\n");
+		process->fsinfo = fsinfo_alloc();
+		process->fdtable = fdtable_alloc();
+		if (!process->fsinfo || !process->fdtable)
+			panic("failed to allocate init process filesystem state\n");
+		if (signal_init(process, thread, NULL, 0))
+			panic("failed to initialize init process signals\n");
 	}
-
-	strlcpy(task->name, "init_task", sizeof(task->name));
 }
 
 /*
- * Bootstrap the CPU into its boot task.  The current stack is the boot stack
- * and becomes init_task's kernel stack.  A separate idle task is allocated so
- * init_task may sleep during filesystem setup and later while reaping.
+ * Bootstrap the CPU into its boot thread.  The current stack is the boot
+ * stack and becomes init_thread's kernel stack.  A separate idle thread is
+ * allocated so init_thread may sleep during filesystem setup and later while
+ * reaping.
  */
-void task_scheduler(void)
+void sched_start(void)
 {
 	struct cpu *cpu = this_cpu();
-	struct task *init = &init_tasks[cpu->id];
-	struct task *idle;
+	struct init_unit *unit = &init_tasks[cpu->id];
+	struct thread *init = &unit->thread;
+	struct process *idle_process;
 
 	local_irq_disable();
 
-	init_task_setup(init, cpu->id);
+	init_unit_setup(unit, cpu->id);
 
-	idle = task_create_idle(cpu->id);
-	if (!idle)
-		panic("failed to create idle task for cpu %lu\n", cpu->id);
+	idle_process = process_create_idle(cpu->id);
+	if (!idle_process)
+		panic("failed to create idle thread for cpu %lu\n", cpu->id);
 
-	cpu->idle = idle;
+	cpu->idle = idle_process->leader;
 	cpu->handoff = NULL;
 
 	assert(init->oncpu == -1);
 	init->oncpu = cpu->id;
-	set_current_task(init);
+	set_current_thread(init);
 
 	load_final_page_table();
 	user_access_disable();
@@ -223,30 +246,33 @@ void task_scheduler(void)
 	init->ktime = tick_get_jiffies();
 
 	/*
-	 * Publish this CPU as online only after current is the boot task.  An
+	 * Publish this CPU as online only after current is the boot thread.  An
 	 * IPI may then queue work immediately, but it stays pending until the
-	 * task enables interrupts or switches to idle.
+	 * thread enables interrupts or switches to idle.
 	 */
 	__atomic_store_n(&cpu->online, true, __ATOMIC_RELEASE);
 
 	if (cpu->id == boot_info.boot_hart_id) {
 		local_irq_enable();
-		task_init_main();
-		panic("init task returned\n");
+		process_init_main();
+		panic("init process returned\n");
 	}
 
 	/*
-	 * Secondary CPUs have no boot work.  Park the static boot task and
-	 * hand over to the real idle task through the normal scheduler path.
+	 * Secondary CPUs have no boot work.  Park the static boot thread and
+	 * hand over to the real idle thread through the normal scheduler path.
 	 */
-	init->state = TASK_STATE_ZOMBIE;
-	task_yield();
-	panic("secondary init task resumed\n");
+	init->state = THREAD_STATE_ZOMBIE;
+	unit->process.nr_live = 0;
+	unit->process.exited = true;
+	unit->process.last_thread = init;
+	thread_yield();
+	panic("secondary init thread resumed\n");
 }
 
-static void task_sched(void)
+static void sched_switch(void)
 {
-	struct task *curr = current_task();
+	struct thread *curr = current_thread();
 	struct cpu *cpu = this_cpu();
 
 	assert(!local_irq_enabled());
@@ -254,46 +280,47 @@ static void task_sched(void)
 	assert(cpu->preempt_count == 0);
 	assert(curr->oncpu == (int)cpu->id);
 
-	set_current_task(NULL);
+	set_current_thread(NULL);
 
 	switch (curr->state) {
-	case TASK_STATE_RUNNING:
+	case THREAD_STATE_RUNNING:
 		if (curr != cpu->idle)
-			task_join(curr);
+			sched_enqueue(curr);
 		break;
-	case TASK_STATE_ZOMBIE:
+	case THREAD_STATE_ZOMBIE:
 		break;
-	case TASK_STATE_SLEEPING:
-		/* task_sleep() already linked us into the sleep queue. */
+	case THREAD_STATE_SLEEPING:
+		/* thread_sleep() already linked us into the sleep queue. */
 		break;
 	default:
-		panic("unexpected state: pid=%d, state=%d\n", curr->pid,
+		panic("unexpected state: tid=%d, state=%d\n", curr->tid,
 		      curr->state);
 	}
 
-	struct task *next = task_pick_next(cpu);
+	struct thread *next = thread_pick_next(cpu);
 	if (!next)
 		next = cpu->idle;
 	if (!next)
-		panic("cpu %lu has no runnable task and no idle task\n",
+		panic("cpu %lu has no runnable thread and no idle thread\n",
 		      cpu->id);
 
 	if (next == curr) {
 		curr->time_slice = TIME_SLICE_MAX;
-		set_current_task(curr);
+		set_current_thread(curr);
 		return;
 	}
 
-	task_add_system_time(curr, tick_get_jiffies() - curr->ktime);
+	process_add_system_time(curr->process,
+				tick_get_jiffies() - curr->ktime);
 	cpu->handoff = curr;
 
 	raw_spin_lock(&next->lock);
 	assert(next->oncpu == -1);
 	next->oncpu = cpu->id;
-	set_current_task(next);
+	set_current_thread(next);
 	trap_frame_set_kernel_tp(next->frame, (unsigned long)cpu);
-	if (next->mm) {
-		switch_pgtable(next->mm->pgd);
+	if (next->process->mm) {
+		switch_pgtable(next->process->mm->pgd);
 		user_access_enable();
 	} else {
 		load_final_page_table();
@@ -302,75 +329,77 @@ static void task_sched(void)
 	next->time_slice = TIME_SLICE_MAX;
 	next->ktime = tick_get_jiffies();
 	/*
-	 * curr->oncpu is cleared by task_sched_resume() in the next task's
+	 * curr->oncpu is cleared by sched_resume() in the next thread's
 	 * context, i.e. only after this CPU has completely left curr.  This
 	 * lets a parent on another CPU wait until a zombie is safe to reap.
 	 */
 	context_switch(curr, next);
 
-	task_sched_resume();
+	sched_resume();
 }
 
-void task_yield(void)
+void thread_yield(void)
 {
 	irqstate_t flags = local_irq_save();
-	struct task *task = current_task();
+	struct thread *thread = current_thread();
 
 	assert(preempt_count() == 0);
 
-	raw_spin_lock(&task->lock);
-	task_sched();
-	raw_spin_unlock(&task->lock);
+	raw_spin_lock(&thread->lock);
+	sched_switch();
+	raw_spin_unlock(&thread->lock);
 
 	local_irq_restore(flags);
 }
 
-static void task_sleep_common(void *chan, spinlock_t *lock, bool interruptible)
+static void thread_sleep_common(void *chan, spinlock_t *lock,
+				bool interruptible)
 {
-	struct task *task = current_task();
+	struct thread *thread = current_thread();
 
 	assert(!local_irq_enabled());
 	assert(lock->locked);
 	assert(preempt_count() == 0);
 
-	raw_spin_lock(&task->lock);
-	task->state = TASK_STATE_SLEEPING;
-	task->chan = chan;
+	raw_spin_lock(&thread->lock);
+	thread->state = THREAD_STATE_SLEEPING;
+	thread->chan = chan;
 
 	/*
-	 * Publish the task on the sleep queue while the caller's condition
+	 * Publish the thread on the sleep queue while the caller's condition
 	 * lock is still held. A wakeup that races with us must take that
 	 * condition lock, so it is guaranteed to observe the queue entry.
 	 */
 	irqstate_t sflags = spin_lock_irqsave(&sleep_queue_lock);
 
-	list_add_tail(&task->queue, &sleep_queue);
+	list_add_tail(&thread->queue, &sleep_queue);
 	spin_unlock_irqrestore(&sleep_queue_lock, sflags);
 
 	/*
 	 * A signal sent between the caller's condition check and the queue
-	 * publication above could not find us through task_wake_spec().  For
+	 * publication above could not find us through thread_wake().  For
 	 * interruptible callers, recheck after publication and abort before
 	 * scheduling.  Such callers must return to user space promptly so the
 	 * signal can actually be delivered.
 	 */
-	if (interruptible && task->sigactions && signal_pending(task)) {
+	if (interruptible && thread->process->sigactions &&
+	    signal_pending(thread)) {
 		sflags = spin_lock_irqsave(&sleep_queue_lock);
-		task->state = TASK_STATE_RUNNING;
-		task->chan = NULL;
-		list_del_init(&task->queue);
+		thread->state = THREAD_STATE_RUNNING;
+		thread->chan = NULL;
+		list_del_init(&thread->queue);
 		spin_unlock_irqrestore(&sleep_queue_lock, sflags);
 
-		raw_spin_unlock(&task->lock);
+		raw_spin_unlock(&thread->lock);
 		raw_spin_unlock(lock);
 		raw_spin_lock(lock);
 		return;
 	}
 
 	raw_spin_unlock(lock);
-	task_sched();
-	task->chan = NULL;
-	raw_spin_unlock(&task->lock);
+	sched_switch();
+	thread->chan = NULL;
+	raw_spin_unlock(&thread->lock);
 	raw_spin_lock(lock);
 }
 
@@ -379,32 +408,32 @@ static void task_sleep_common(void *chan, spinlock_t *lock, bool interruptible)
  * state stays disabled across the switch and is restored by the caller's
  * irqrestore once it drops @lock.
  */
-void task_sleep(void *chan, spinlock_t *lock)
+void thread_sleep(void *chan, spinlock_t *lock)
 {
-	task_sleep_common(chan, lock, false);
+	thread_sleep_common(chan, lock, false);
 }
 
 /*
- * Like task_sleep(), but abort the sleep if a signal is already pending once
- * the task becomes visible on the sleep queue.  The caller must check for a
+ * Like thread_sleep(), but abort the sleep if a signal is already pending once
+ * the thread becomes visible on the sleep queue.  The caller must check for a
  * pending signal before calling this again, otherwise the syscall could spin
  * in kernel space and never deliver the signal.
  */
-void task_sleep_interruptible(void *chan, spinlock_t *lock)
+void thread_sleep_interruptible(void *chan, spinlock_t *lock)
 {
-	task_sleep_common(chan, lock, true);
+	thread_sleep_common(chan, lock, true);
 }
 
-void task_wake_all(void *chan)
+void thread_wake_all(void *chan)
 {
 	while (1) {
-		struct task *p, *wakee = NULL;
+		struct thread *p, *wakee = NULL;
 		bool retry = false;
 		irqstate_t flags;
 
 		/*
-		 * task_sched() takes task->lock before sleep_queue_lock when
-		 * a task goes to sleep, so never block on task->lock while
+		 * sched_switch() takes thread->lock before sleep_queue_lock when
+		 * a thread goes to sleep, so never block on thread->lock while
 		 * holding sleep_queue_lock. Try-lock instead; if the sleeper
 		 * still owns it, drop sleep_queue_lock and retry.
 		 */
@@ -412,7 +441,8 @@ void task_wake_all(void *chan)
 		list_for_each_entry(p, &sleep_queue, queue) {
 			irqstate_t pflags;
 
-			if (p->state != TASK_STATE_SLEEPING || p->chan != chan)
+			if (p->state != THREAD_STATE_SLEEPING ||
+			    p->chan != chan)
 				continue;
 
 			if (!spin_trylock_irqsave(&p->lock, &pflags)) {
@@ -420,7 +450,7 @@ void task_wake_all(void *chan)
 				continue;
 			}
 
-			p->state = TASK_STATE_RUNNING;
+			p->state = THREAD_STATE_RUNNING;
 			p->chan = NULL;
 			list_del_init(&p->queue);
 			spin_unlock_irqrestore(&p->lock, pflags);
@@ -430,29 +460,29 @@ void task_wake_all(void *chan)
 		spin_unlock_irqrestore(&sleep_queue_lock, flags);
 
 		if (wakee)
-			task_join(wakee);
+			sched_enqueue(wakee);
 		else if (!retry)
 			break;
 	}
 }
 
-void task_wake_spec(struct task *task)
+void thread_wake(struct thread *thread)
 {
 	while (1) {
-		struct task *p = NULL;
+		struct thread *p = NULL;
 		bool found = false;
 		irqstate_t flags;
 		irqstate_t tflags;
 
 		flags = spin_lock_irqsave(&sleep_queue_lock);
 		list_for_each_entry(p, &sleep_queue, queue) {
-			if (p == task) {
+			if (p == thread) {
 				found = true;
 				break;
 			}
 		}
 
-		if (!found || p->state != TASK_STATE_SLEEPING) {
+		if (!found || p->state != THREAD_STATE_SLEEPING) {
 			spin_unlock_irqrestore(&sleep_queue_lock, flags);
 			return;
 		}
@@ -462,91 +492,103 @@ void task_wake_spec(struct task *task)
 			continue;
 		}
 
-		p->state = TASK_STATE_RUNNING;
+		p->state = THREAD_STATE_RUNNING;
 		p->chan = NULL;
 		list_del_init(&p->queue);
 		spin_unlock_irqrestore(&p->lock, tflags);
 		spin_unlock_irqrestore(&sleep_queue_lock, flags);
-		task_join(p);
+		sched_enqueue(p);
 		return;
 	}
 }
 
-void task_exit_normal(int code)
+void thread_exit_normal(int code)
 {
-	task_exit((code & 0xff) << 8);
+	thread_exit((code & 0xff) << 8);
 }
 
-void task_exit_signal(int sig)
+void thread_exit_signal(int sig)
 {
-	task_exit(sig & 0x7f);
+	thread_exit(sig & 0x7f);
 }
 
-void task_exit(int status)
+void thread_exit(int status)
 {
-	struct task *child;
-	struct task *task = current_task();
+	struct process *process = current_process();
+	struct process *child;
+	struct thread *thread = current_thread();
 	irqstate_t flags;
+	bool last;
 	bool reparented = false;
 
 	/*
-	 * Drop this task's references now.  For a private table this closes
-	 * the descriptors / releases cwd and root immediately; for a shared
-	 * table the last exiting task does the final close.  The reference
-	 * count makes the "am I the last user?" decision atomic, unlike the
-	 * old read-then-close check which could race with a concurrent
-	 * fdtable_get()/fsinfo_get().
+	 * Only the process-wide exit path releases filesystem state.  With a
+	 * single thread per process this is always the last thread; the check
+	 * keeps the code ready for real thread groups.
 	 */
-	if (task->fdtable) {
-		fdtable_put(task->fdtable);
-		task->fdtable = NULL;
+	flags = spin_lock_irqsave(&process->lock);
+	process->nr_live--;
+	last = process->nr_live == 0;
+	if (last) {
+		process->exited = true;
+		process->exit_status = status;
+		process->last_thread = thread;
 	}
-	if (task->fsinfo) {
-		fsinfo_put(task->fsinfo);
-		task->fsinfo = NULL;
+	spin_unlock_irqrestore(&process->lock, flags);
+
+	if (last) {
+		/*
+		 * Drop the shared file references now so pipes and descriptors
+		 * are released even if the parent never reaps us.
+		 */
+		flags = spin_lock_irqsave(&process->lock);
+		struct file_desc_table *fdtable = process->fdtable;
+		struct file_system_info *fsinfo = process->fsinfo;
+		process->fdtable = NULL;
+		process->fsinfo = NULL;
+		spin_unlock_irqrestore(&process->lock, flags);
+		if (fdtable)
+			fdtable_put(fdtable);
+		if (fsinfo)
+			fsinfo_put(fsinfo);
+
+		flags = spin_lock_irqsave(&wait_lock);
+		if (!list_empty(&process->children)) {
+			struct process *reaper = init_reaper;
+
+			if (!reaper)
+				panic("thread_exit: no init reaper\n");
+
+			list_for_each_entry(child, &process->children, sibling)
+				child->parent = reaper;
+			list_splice(&process->children, &reaper->children);
+			reparented = true;
+		}
+		spin_unlock_irqrestore(&wait_lock, flags);
+
+		if (reparented)
+			thread_wake_all(init_reaper);
 	}
-
-	flags = spin_lock_irqsave(&wait_lock);
-	if (!list_empty(&task->children)) {
-		struct task *reaper = init_reaper;
-
-		if (!reaper)
-			panic("task_exit: no init reaper\n");
-
-		list_for_each_entry(child, &task->children, child)
-			child->parent = reaper;
-		list_splice(&task->children, &reaper->children);
-		reparented = true;
-	}
-	spin_unlock_irqrestore(&wait_lock, flags);
-
-	/*
-	 * The parent is woken by task_sched_resume() after this task has
-	 * actually left the CPU.  Waking it here would let another CPU run it
-	 * while this task is still on-CPU and its state is not yet ZOMBIE.
-	 */
-	if (reparented)
-		task_wake_spec(init_reaper);
 
 	assert(preempt_count() == 0);
 
-	/* task_sched() never returns for a zombie, so no irqrestore here. */
+	/* sched_switch() never returns for a zombie, so no irqrestore here. */
 	local_irq_disable();
-	raw_spin_lock(&task->lock);
+	raw_spin_lock(&thread->lock);
 
-	task->state = TASK_STATE_ZOMBIE;
-	task->exit_status = status;
+	thread->state = THREAD_STATE_ZOMBIE;
+	thread->exit_status = status;
 
-	task_sched();
+	sched_switch();
 
 	panic("scheduling zombie\n");
 }
 
-pid_t task_wait(pid_t pid, int *status, int options, struct rusage *rus,
-		kuid_t *uid)
+pid_t process_wait(pid_t pid, int *status, int options, struct rusage *rus,
+		   kuid_t *uid)
 {
-	struct task *child;
-	struct task *parent = current_task();
+	struct process *child;
+	struct process *parent = current_process();
 	irqstate_t flags;
 	bool found;
 	bool nohang = options & WNOHANG;
@@ -565,20 +607,15 @@ pid_t task_wait(pid_t pid, int *status, int options, struct rusage *rus,
 again:
 	found = false;
 
-	list_for_each_entry(child, &parent->children, child) {
+	list_for_each_entry(child, &parent->children, sibling) {
 		irqstate_t cflags = spin_lock_irqsave(&child->lock);
+		bool ready;
 
-		if (pid > 0 && child->tgid == pid) {
+		if (pid > 0 && child->pid == pid)
 			found = true;
-		}
 
-		/*
-		 * A zombie is only safe to reap after its exiting CPU has
-		 * cleared oncpu in task_sched_resume(); before that the task
-		 * still owns a kernel stack/context that the CPU may touch.
-		 */
-		if (child->state != TASK_STATE_ZOMBIE || child->oncpu != -1 ||
-		    (pid > 0 && child->tgid != pid)) {
+		ready = child->exited && child->reap_ready;
+		if (!ready || (pid > 0 && child->pid != pid)) {
 			spin_unlock_irqrestore(&child->lock, cflags);
 			continue;
 		}
@@ -586,28 +623,29 @@ again:
 		if (status)
 			*status = child->exit_status;
 		if (uid)
-			*uid = child->uid;
-		retpid = child->tgid;
-		if (!nowait) {
-			task_add_child_system_time(
-				parent,
-				task_get_system_time(child) +
-					task_get_child_system_time(child));
-			task_add_child_user_time(
-				parent,
-				task_get_user_time(child) +
-					task_get_child_user_time(child));
-		}
+			*uid = child->cred.uid;
+		retpid = child->pid;
 		spin_unlock_irqrestore(&child->lock, cflags);
+
+		if (!nowait) {
+			process_add_child_system_time(
+				parent,
+				process_get_system_time(child) +
+					process_get_child_system_time(child));
+			process_add_child_user_time(
+				parent,
+				process_get_user_time(child) +
+					process_get_child_user_time(child));
+		}
 
 		if (nowait) {
 			spin_unlock_irqrestore(&wait_lock, flags);
 			return retpid;
 		}
 
-		list_del_init(&child->child);
+		list_del_init(&child->sibling);
 		spin_unlock_irqrestore(&wait_lock, flags);
-		task_destroy(child);
+		process_destroy(child);
 		return retpid;
 	}
 
@@ -621,26 +659,36 @@ again:
 		return 0;
 	}
 
-	task_sleep(parent, &wait_lock);
+	thread_sleep(parent, &wait_lock);
 
 	goto again;
 }
 
-void task_sched_resume(void)
+void sched_resume(void)
 {
 	struct cpu *cpu = this_cpu();
-	struct task *prev = cpu->handoff;
+	struct thread *prev = cpu->handoff;
+	struct process *wake_parent = NULL;
 
 	if (!prev)
 		return;
 
 	/*
-	 * The previous task's context is now fully saved; this CPU no longer
+	 * The previous thread's context is now fully saved; this CPU no longer
 	 * touches its kernel stack.  Publish oncpu == -1 before releasing its
 	 * lock so a parent on another CPU can safely reap a zombie.
 	 */
-	bool zombie = prev->state == TASK_STATE_ZOMBIE;
-	struct task *parent = zombie ? prev->parent : NULL;
+	bool zombie = prev->state == THREAD_STATE_ZOMBIE;
+	if (zombie) {
+		struct process *process = prev->process;
+		irqstate_t flags = spin_lock_irqsave(&process->lock);
+
+		if (process->exited && process->last_thread == prev) {
+			process->reap_ready = true;
+			wake_parent = process->parent;
+		}
+		spin_unlock_irqrestore(&process->lock, flags);
+	}
 
 	prev->oncpu = -1;
 	raw_spin_unlock(&prev->lock);
@@ -649,10 +697,8 @@ void task_sched_resume(void)
 	/*
 	 * The parent was not woken before the switch because it could have
 	 * run on another CPU while @prev was still on-CPU.  Now that the
-	 * zombie is really off-CPU and safe to reap, wake it.  @prev may be
-	 * reaped as soon as we dropped its lock, so only use the parent
-	 * pointer captured while it was still pinned by the lock.
+	 * zombie is really off-CPU and safe to reap, wake its waiters.
 	 */
-	if (parent)
-		task_wake_spec(parent);
+	if (wake_parent)
+		thread_wake_all(wake_parent);
 }

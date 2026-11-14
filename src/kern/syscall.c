@@ -96,20 +96,20 @@ static u64 (*systable[])(void) = {
 
 void syscall(void)
 {
-	struct task *task = current_task();
-	u64 num = trap_frame_get_syscall_no(task->frame);
+	struct thread *thread = current_thread();
+	u64 num = trap_frame_get_syscall_no(thread->frame);
 	u64 ret;
 
 	if (num < lengthof(systable) && systable[num])
 		ret = systable[num]();
 	else
 		ret = -ENOSYS;
-	trap_frame_set_ret_val(task->frame, ret);
+	trap_frame_set_ret_val(thread->frame, ret);
 }
 
 u64 syscall_arg_raw(int argno)
 {
-	struct trap_frame *tf = current_task()->frame;
+	struct trap_frame *tf = current_thread()->frame;
 	return trap_frame_get_arg(tf, argno);
 }
 

@@ -162,7 +162,7 @@ noreturn static void trap_panic(const char *name, unsigned long code,
 }
 
 static void handle_interrupt(unsigned long code, struct trap_frame *frame,
-			     bool from_user, struct task *task)
+			     bool from_user, struct thread *task)
 {
 	switch (code) {
 	case INTERRUPT_SUPERVISOR_SOFTWARE:
@@ -174,7 +174,7 @@ static void handle_interrupt(unsigned long code, struct trap_frame *frame,
 		 * preempt_disable() section is active.
 		 */
 		if (preempt_count() == 0)
-			task_yield();
+			thread_yield();
 		break;
 	case INTERRUPT_SUPERVISOR_TIMER:
 		timer_handle_tick();
@@ -189,7 +189,7 @@ static void handle_interrupt(unsigned long code, struct trap_frame *frame,
 			 * context.
 			 */
 			if (preempt_count() == 0)
-				task_yield();
+				thread_yield();
 		}
 		break;
 	case INTERRUPT_SUPERVISOR_EXTERNAL:
@@ -197,11 +197,11 @@ static void handle_interrupt(unsigned long code, struct trap_frame *frame,
 		break;
 	default:
 		if (from_user) {
-			task_set_killed(task);
+			signal_send_process(task->process, SIGKILL);
 			pr_warn("%s: pid=%d,scause=%#" PRIx64 ",sepc=%#" PRIx64
 				",stval=%#" PRIx64 "\n",
-				interrupt_name(code), task->pid, frame->scause,
-				frame->sepc, frame->stval);
+				interrupt_name(code), task->process->pid,
+				frame->scause, frame->sepc, frame->stval);
 		} else {
 			trap_panic(interrupt_name(code), code, frame);
 		}
@@ -215,7 +215,7 @@ static void handle_interrupt(unsigned long code, struct trap_frame *frame,
  * addresses are left to the caller, which panics.
  */
 static bool handle_page_fault(unsigned long code, struct trap_frame *frame,
-			      bool from_user, struct task *task)
+			      bool from_user, struct thread *task)
 {
 	bool write = (code == EXCEPTION_STORE_PAGE_FAULT);
 	bool instr = (code == EXCEPTION_INSTRUCTION_PAGE_FAULT);
@@ -229,8 +229,9 @@ static bool handle_page_fault(unsigned long code, struct trap_frame *frame,
 	if (!from_user && !(frame->sstatus & SSTATUS_SUM))
 		return false;
 
-	if (task && task->mm)
-		err = uvm_handle_fault(task->mm, frame->stval, write, instr);
+	if (task && task->process->mm)
+		err = uvm_handle_fault(task->process->mm, frame->stval, write,
+				       instr);
 	if (!err)
 		return true;
 
@@ -243,7 +244,7 @@ static bool handle_page_fault(unsigned long code, struct trap_frame *frame,
 }
 
 static void handle_exception(unsigned long code, struct trap_frame *frame,
-			     bool from_user, struct task *task)
+			     bool from_user, struct thread *task)
 {
 	switch (code) {
 	case EXCEPTION_ECALL_FROM_USER:
@@ -265,9 +266,9 @@ static void handle_exception(unsigned long code, struct trap_frame *frame,
 		if (from_user) {
 			pr_warn("%s: pid=%d,scause=%#" PRIx64 ",sepc=%#" PRIx64
 				",stval=%#" PRIx64 "\n",
-				exception_name(code), task->pid, frame->scause,
-				frame->sepc, frame->stval);
-			task_set_killed(task);
+				exception_name(code), task->process->pid,
+				frame->scause, frame->sepc, frame->stval);
+			signal_send_process(task->process, SIGKILL);
 		} else {
 			trap_panic(exception_name(code), code, frame);
 		}
@@ -283,13 +284,13 @@ void trap_handler(struct trap_frame *frame)
 		early_trap_handler(frame, is_interrupt, code);
 
 	bool from_user = (frame->sstatus & SSTATUS_SPP) == 0;
-	struct task *task = current_task();
+	struct thread *task = current_thread();
 	u64 jiffies = 0;
 
 	if (from_user) {
 		write_sstatus(read_sstatus() | SSTATUS_SUM);
 		jiffies = tick_get_jiffies();
-		task_add_user_time(task, jiffies - task->utime);
+		process_add_user_time(task->process, jiffies - task->utime);
 		task->ktime = jiffies;
 	}
 
@@ -302,7 +303,7 @@ void trap_handler(struct trap_frame *frame)
 		prepare_to_ret_to_user(frame);
 		signal_deliver_pending(task);
 		jiffies = tick_get_jiffies();
-		task_add_system_time(task, jiffies - task->ktime);
+		process_add_system_time(task->process, jiffies - task->ktime);
 		task->utime = jiffies;
 	}
 }
