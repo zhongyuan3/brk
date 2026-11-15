@@ -29,9 +29,9 @@ int rootfs_init(void)
 		.mnt = mnt,
 		.dentry = fs_dentry_get(mnt->root),
 	};
-	fsinfo_set_root(task->process->fsinfo, &root_path);
+	fsinfo_set_root(&task->process->fsinfo, &root_path);
 	fs_path_get(&root_path);
-	fsinfo_set_cwd(task->process->fsinfo, &root_path);
+	fsinfo_set_cwd(&task->process->fsinfo, &root_path);
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
 	if (err)
@@ -69,8 +69,8 @@ int rootfs_init(void)
 	new_root_path.dentry = fs_dentry_get(new_root_mnt->root);
 	fs_path_get(&new_root_path);
 
-	fsinfo_update_root(task->process->fsinfo, &new_root_path);
-	fsinfo_update_cwd(task->process->fsinfo, &new_root_path);
+	fsinfo_update_root(&task->process->fsinfo, &new_root_path);
+	fsinfo_update_cwd(&task->process->fsinfo, &new_root_path);
 	fs_path_put(&root_path);
 	fs_path_put(&new_root_path);
 
@@ -109,9 +109,9 @@ int rootfs_init(void)
 		return err;
 	}
 
-	fdtable_alloc_fd(task->process->fdtable, f);
-	fdtable_dup_fd(task->process->fdtable, 0);
-	fdtable_dup_fd(task->process->fdtable, 0);
+	fdtable_alloc_fd(&task->process->fdtable, f);
+	fdtable_dup_fd(&task->process->fdtable, 0);
+	fdtable_dup_fd(&task->process->fdtable, 0);
 
 	return 0;
 }

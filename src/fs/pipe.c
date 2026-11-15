@@ -563,16 +563,16 @@ int do_pipe2(int *pipefd, int flags)
 	if (err)
 		return err;
 
-	fd0 = fdtable_alloc_fd(task->process->fdtable, rf);
+	fd0 = fdtable_alloc_fd(&task->process->fdtable, rf);
 	if (fd0 < 0) {
 		fs_file_put(wf);
 		fs_file_put(rf);
 		return -EMFILE;
 	}
 
-	fd1 = fdtable_alloc_fd(task->process->fdtable, wf);
+	fd1 = fdtable_alloc_fd(&task->process->fdtable, wf);
 	if (fd1 < 0) {
-		fdtable_close_fd(task->process->fdtable, fd0);
+		fdtable_close_fd(&task->process->fdtable, fd0);
 		fs_file_put(wf);
 		return -EMFILE;
 	}

@@ -2,7 +2,6 @@
 #define BRK_FDTABLE_H
 
 #include <brk/fs_types.h>
-#include <brk/refcnt_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <uapi/limits.h>
@@ -10,12 +9,10 @@
 struct file_desc_table {
 	struct fs_file *files[OPEN_MAX];
 	spinlock_t lock;
-	refcnt_t refcnt;
 };
 
-struct file_desc_table *fdtable_alloc(void);
-struct file_desc_table *fdtable_get(struct file_desc_table *table);
-void fdtable_put(struct file_desc_table *table);
+void fdtable_init(struct file_desc_table *table);
+void fdtable_deinit(struct file_desc_table *table);
 
 /**
  * fdtable_copy() - Copy a file descriptor table
@@ -81,7 +78,5 @@ int fdtable_dup_fd(struct file_desc_table *table, int fd);
  * Return: 0 on success, or an error code on failure.
  */
 int fdtable_dup_fd2(struct file_desc_table *table, int oldfd, int newfd);
-
-void fdtable_close_all(struct file_desc_table *table);
 
 #endif

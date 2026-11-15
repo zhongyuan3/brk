@@ -39,7 +39,6 @@ struct uvm_space *uvm_space_create(void)
 	mm = slab_alloc(&uvms_cache);
 	if (!mm)
 		return ERR_PTR(-ENOMEM);
-	refcnt_init(&mm->refcnt, 1);
 	sleeplock_init(&mm->lock, "uvm_space");
 
 	mm->pgd = create_user_pgtable();
@@ -117,15 +116,9 @@ static void uvm_space_destroy(struct uvm_space *mm)
 	slab_free(&uvms_cache, mm);
 }
 
-struct uvm_space *uvm_space_get(struct uvm_space *mm)
+void uvm_space_free(struct uvm_space *mm)
 {
-	refcnt_inc(&mm->refcnt);
-	return mm;
-}
-
-void uvm_space_put(struct uvm_space *mm)
-{
-	if (refcnt_dec_fetch(&mm->refcnt) > 0)
+	if (!mm)
 		return;
 	uvm_space_destroy(mm);
 }

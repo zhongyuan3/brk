@@ -3,19 +3,16 @@
 
 #include <brk/fs_types.h>
 #include <brk/path.h>
-#include <brk/refcnt_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 
 struct file_system_info {
 	struct fs_path cwd, root;
 	spinlock_t lock;
-	refcnt_t refcnt;
 };
 
-struct file_system_info *fsinfo_alloc(void);
-void fsinfo_put(struct file_system_info *info);
-struct file_system_info *fsinfo_get(struct file_system_info *info);
+void fsinfo_init(struct file_system_info *info);
+void fsinfo_deinit(struct file_system_info *info);
 
 /**
  * fsinfo_copy() - Copy a file system info
@@ -81,7 +78,5 @@ void fsinfo_get_cwd(struct file_system_info *info, struct fs_path *path);
  * The caller must call fs_path_put() on the returned path after use.
  */
 void fsinfo_get_root(struct file_system_info *info, struct fs_path *path);
-
-void fsinfo_free_resources(struct file_system_info *info);
 
 #endif

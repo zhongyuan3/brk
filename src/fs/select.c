@@ -38,7 +38,7 @@ static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 			if (fds[i].fd < 0)
 				continue;
 
-			file = fdtable_get_file(current_process()->fdtable,
+			file = fdtable_get_file(&current_process()->fdtable,
 						fds[i].fd);
 			if (IS_ERR(file)) {
 				fds[i].revents = POLLNVAL;

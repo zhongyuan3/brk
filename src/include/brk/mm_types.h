@@ -66,7 +66,6 @@ struct uvm_space {
 	u64 brk;
 	/* Top-down mmap allocation cursor, below the user stack. */
 	u64 mmap_top;
-	refcnt_t refcnt;
 	/* Serializes all address-space mutations across threads. */
 	sleeplock_t lock;
 };

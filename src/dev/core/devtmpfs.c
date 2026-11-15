@@ -150,7 +150,7 @@ int devtmpfs_start(void)
 	}
 
 	/* Inherit root/cwd so absolute /dev paths resolve correctly. */
-	fsinfo_copy(task->process->fsinfo, current_process()->fsinfo);
+	fsinfo_copy(&task->process->fsinfo, &current_process()->fsinfo);
 	strlcpy(task->process->name, "devtmpfs", sizeof(task->process->name));
 	thread_start(task);
 

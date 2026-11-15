@@ -1,6 +1,9 @@
 #ifndef BRK_PROCESS_TYPES_H
 #define BRK_PROCESS_TYPES_H
 
+#include <brk/fdtable.h>
+#include <brk/fsinfo.h>
+#include <brk/signal_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/thread_types.h>
 #include <brk/types.h>
@@ -11,10 +14,7 @@
 #define PROCESS_NAME_MAX 32
 #define NGROUPS_MAX 32
 
-struct sigaction_table;
 struct uvm_space;
-struct file_desc_table;
-struct file_system_info;
 
 /* Process credentials, inherited on fork and shared by all threads. */
 struct cred {
@@ -93,18 +93,18 @@ struct process {
 	pid_t pgid;
 	pid_t sid;
 
-	/* Process-owned resources. */
+	/* Process-owned resources.  mm is optional and allocated separately. */
 	struct uvm_space *mm;
-	struct file_desc_table *fdtable;
-	struct file_system_info *fsinfo;
-	struct sigaction_table *sigactions;
-	struct process_resource_usage *rsrc_usage;
+	struct file_desc_table fdtable;
+	struct file_system_info fsinfo;
+	struct sigaction_table sigactions;
+	struct process_resource_usage rsrc_usage;
 
 	struct cred cred;
 	/* protects @cred */
 	spinlock_t cred_lock;
 
-	/* protected by @sigactions->lock */
+	/* protected by @sigactions.lock */
 	u64 shared_pending;
 
 	char name[PROCESS_NAME_MAX]; /* no lock protection */

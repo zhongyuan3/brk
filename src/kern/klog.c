@@ -183,7 +183,7 @@ int klog_start(void)
 	 * current root/cwd so absolute paths such as /var/log/kernel.log resolve
 	 * correctly before the thread opens its file.
 	 */
-	fsinfo_copy(task->process->fsinfo, current_process()->fsinfo);
+	fsinfo_copy(&task->process->fsinfo, &current_process()->fsinfo);
 	strlcpy(task->process->name, "klogd", sizeof(task->process->name));
 	thread_start(task);
 

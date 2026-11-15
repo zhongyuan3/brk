@@ -1,7 +1,6 @@
 #ifndef BRK_SIGNAL_H
 #define BRK_SIGNAL_H
 
-#include <brk/refcnt_types.h>
 #include <brk/signal_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
@@ -12,9 +11,7 @@
 struct process;
 struct thread;
 
-struct sigaction_table *sigaction_table_alloc(void);
-void sigaction_table_put(struct sigaction_table *table);
-struct sigaction_table *sigaction_table_get(struct sigaction_table *table);
+void sigaction_table_init(struct sigaction_table *table);
 void sigaction_table_copy(struct sigaction_table *dst,
 			  struct sigaction_table *src);
 void sigaction_table_reset(struct sigaction_table *table);
@@ -22,11 +19,9 @@ void sigaction_table_reset(struct sigaction_table *table);
 void signal_send(struct thread *thread, int sig);
 void signal_send_process(struct process *process, int sig);
 void signal_send_pgrp(pid_t pgrp, int sig);
-int signal_init(struct process *process, struct thread *thread,
-		struct sigaction_table *sigactions, u64 blocked);
+void signal_init(struct process *process, struct thread *thread, u64 blocked);
 void signal_thread_init(struct process *process, struct thread *thread,
 			u64 blocked);
-void signal_deinit(struct process *process);
 void signal_reset(struct process *process, struct thread *thread);
 bool signal_pending(struct thread *thread);
 void signal_deliver_pending(struct thread *thread);

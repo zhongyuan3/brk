@@ -340,7 +340,7 @@ int uvm_mmap_file_private(struct uvm_space *mm, u64 hint, size_t len, int prot,
 
 	file_off = (loff_t)offset;
 
-	fp = fdtable_get_file(current_process()->fdtable, fd);
+	fp = fdtable_get_file(&current_process()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
@@ -406,7 +406,7 @@ int uvm_mmap_file_shared(struct uvm_space *mm, u64 hint, size_t len, int prot,
 	if (offset > 0x7fffffffffffffffULL - size)
 		return -EINVAL;
 
-	fp = fdtable_get_file(current_process()->fdtable, fd);
+	fp = fdtable_get_file(&current_process()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 

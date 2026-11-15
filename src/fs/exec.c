@@ -438,7 +438,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 		struct uvm_space *old_mm = process->mm;
 
 		process->mm = new_mm;
-		uvm_space_put(old_mm);
+		uvm_space_free(old_mm);
 		signal_reset(process, task);
 		trap_frame_set_pc(task->frame, elf_hdr.e_entry);
 		trap_frame_set_sp(task->frame, sp);
@@ -469,7 +469,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 
 err:
 	if (new_mm && !IS_ERR(new_mm))
-		uvm_space_put(new_mm);
+		uvm_space_free(new_mm);
 	if (!IS_ERR(f) && f)
 		fs_file_put(f);
 	return err;

@@ -174,6 +174,9 @@ static void init_unit_setup(struct init_unit *unit, cpuid_t cpuid)
 	list_init(&process->threads);
 	spinlock_init(&process->lock, "init_process");
 	spinlock_init(&process->cred_lock, "init_cred");
+	fdtable_init(&process->fdtable);
+	fsinfo_init(&process->fsinfo);
+	spinlock_init(&process->rsrc_usage.lock, "init_resource_usage");
 	process->pid = 0;
 	process->pgid = 0;
 	process->sid = 0;
@@ -205,14 +208,7 @@ static void init_unit_setup(struct init_unit *unit, cpuid_t cpuid)
 	memset(thread->frame, 0, TRAP_FRAME_SIZE);
 	trap_frame_set_kernel_tp(thread->frame, (unsigned long)&cpus[cpuid]);
 
-	if (cpuid == boot_info.boot_hart_id) {
-		process->fsinfo = fsinfo_alloc();
-		process->fdtable = fdtable_alloc();
-		if (!process->fsinfo || !process->fdtable)
-			panic("failed to allocate init process filesystem state\n");
-		if (signal_init(process, thread, NULL, 0))
-			panic("failed to initialize init process signals\n");
-	}
+	signal_init(process, thread, 0);
 }
 
 /*
@@ -391,8 +387,7 @@ static void thread_sleep_common(void *chan, spinlock_t *lock,
 	 * scheduling.  Such callers must return to user space promptly so the
 	 * signal can actually be delivered.
 	 */
-	if (interruptible && thread->process->sigactions &&
-	    signal_pending(thread)) {
+	if (interruptible && signal_pending(thread)) {
 		sflags = spin_lock_irqsave(&sleep_queue_lock);
 		thread->state = THREAD_STATE_RUNNING;
 		thread->chan = NULL;
@@ -570,16 +565,8 @@ void thread_exit(int status)
 		 * Drop the shared file references now so pipes and descriptors
 		 * are released even if the parent never reaps us.
 		 */
-		flags = spin_lock_irqsave(&process->lock);
-		struct file_desc_table *fdtable = process->fdtable;
-		struct file_system_info *fsinfo = process->fsinfo;
-		process->fdtable = NULL;
-		process->fsinfo = NULL;
-		spin_unlock_irqrestore(&process->lock, flags);
-		if (fdtable)
-			fdtable_put(fdtable);
-		if (fsinfo)
-			fsinfo_put(fsinfo);
+		fdtable_deinit(&process->fdtable);
+		fsinfo_deinit(&process->fsinfo);
 
 		flags = spin_lock_irqsave(&wait_lock);
 		if (!list_empty(&process->children)) {

@@ -2,47 +2,29 @@
 #include <brk/fdtable.h>
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
-#include <brk/refcnt.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 #include <uapi/errno.h>
 
-struct file_desc_table *fdtable_alloc(void)
+void fdtable_init(struct file_desc_table *table)
 {
-	struct file_desc_table *table;
-
-	table = kzalloc(sizeof(struct file_desc_table));
-	if (!table)
-		return NULL;
-
-	refcnt_init(&table->refcnt, 1);
+	memset(table, 0, sizeof(*table));
 	spinlock_init(&table->lock, "fdtable");
-
-	return table;
 }
 
-struct file_desc_table *fdtable_get(struct file_desc_table *table)
+void fdtable_deinit(struct file_desc_table *table)
 {
-	refcnt_inc(&table->refcnt);
-	return table;
-}
-
-void fdtable_put(struct file_desc_table *table)
-{
-	if (refcnt_dec_fetch(&table->refcnt) > 0)
-		return;
-
-	/*
-	 * refcnt dropped to zero: no other thread can reach this table,
-	 * so no locking is needed while draining the file array.
-	 */
 	for (int i = 0; i < OPEN_MAX; i++) {
-		if (table->files[i]) {
-			fs_file_put(table->files[i]);
-			table->files[i] = NULL;
-		}
-	}
+		struct fs_file *file = NULL;
 
-	kfree(table);
+		spin_lock(&table->lock);
+		file = table->files[i];
+		table->files[i] = NULL;
+		spin_unlock(&table->lock);
+
+		if (file)
+			fs_file_put(file);
+	}
 }
 
 void fdtable_copy(struct file_desc_table *dst, struct file_desc_table *src)
@@ -174,19 +156,4 @@ int fdtable_dup_fd2(struct file_desc_table *table, int oldfd, int newfd)
 	if (old_file)
 		fs_file_put(old_file);
 	return 0;
-}
-
-void fdtable_close_all(struct file_desc_table *table)
-{
-	for (int i = 0; i < OPEN_MAX; i++) {
-		struct fs_file *file = NULL;
-
-		spin_lock(&table->lock);
-		file = table->files[i];
-		table->files[i] = NULL;
-		spin_unlock(&table->lock);
-
-		if (file)
-			fs_file_put(file);
-	}
 }

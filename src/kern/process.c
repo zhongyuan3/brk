@@ -277,13 +277,10 @@ struct thread *thread_create_user(struct process *process, u64 stack, u64 entry,
 	thread->newly_forked = true;
 	thread->clear_tid = clear_tid;
 
-	if (process->sigactions) {
-		irqstate_t flags =
-			spin_lock_irqsave(&process->sigactions->lock);
+	irqstate_t sflags = spin_lock_irqsave(&process->sigactions.lock);
 
-		blocked = current->blocked;
-		spin_unlock_irqrestore(&process->sigactions->lock, flags);
-	}
+	blocked = current->blocked;
+	spin_unlock_irqrestore(&process->sigactions.lock, sflags);
 	signal_thread_init(process, thread, blocked);
 
 	thread->frame->sp = stack;
@@ -364,15 +361,9 @@ void process_destroy(struct process *process)
 		thread_free(thread);
 	}
 
-	signal_deinit(process);
-	if (process->fsinfo)
-		fsinfo_put(process->fsinfo);
-	if (process->fdtable)
-		fdtable_put(process->fdtable);
-	if (process->mm)
-		uvm_space_put(process->mm);
-	if (process->rsrc_usage)
-		process_rusage_free(process->rsrc_usage);
+	fdtable_deinit(&process->fdtable);
+	fsinfo_deinit(&process->fsinfo);
+	uvm_space_free(process->mm);
 	pid_free(process->pid);
 	process_free(process);
 }
@@ -414,6 +405,10 @@ struct process *process_create(struct process_create_args *args)
 	list_init(&process->threads);
 	spinlock_init(&process->lock, "process");
 	spinlock_init(&process->cred_lock, "cred");
+	fdtable_init(&process->fdtable);
+	fsinfo_init(&process->fsinfo);
+	spinlock_init(&process->rsrc_usage.lock, "process_resource_usage");
+
 	process->pid = pid_alloc();
 	if (process->pid < 0) {
 		err = -ENOMEM;
@@ -430,45 +425,11 @@ struct process *process_create(struct process_create_args *args)
 	if (args && args->name)
 		strlcpy(process->name, args->name, sizeof(process->name));
 
-	if (args && args->mm) {
-		process->mm = uvm_space_get(args->mm);
-	} else {
-		process->mm = uvm_space_create();
-		if (IS_ERR(process->mm)) {
-			err = PTR_ERR(process->mm);
-			process->mm = NULL;
-			goto mm_failed;
-		}
-	}
-
-	if (args && args->fdtable) {
-		process->fdtable = fdtable_get(args->fdtable);
-	} else {
-		process->fdtable = fdtable_alloc();
-		if (!process->fdtable) {
-			err = -ENOMEM;
-			goto fdtable_failed;
-		}
-	}
-
-	if (args && args->fsinfo) {
-		process->fsinfo = fsinfo_get(args->fsinfo);
-	} else {
-		process->fsinfo = fsinfo_alloc();
-		if (!process->fsinfo) {
-			err = -ENOMEM;
-			goto fsinfo_failed;
-		}
-	}
-
-	if (args && args->rsrc_usage) {
-		process->rsrc_usage = args->rsrc_usage;
-	} else {
-		process->rsrc_usage = process_rusage_alloc();
-		if (!process->rsrc_usage) {
-			err = -ENOMEM;
-			goto rusage_failed;
-		}
+	process->mm = uvm_space_create();
+	if (IS_ERR(process->mm)) {
+		err = PTR_ERR(process->mm);
+		process->mm = NULL;
+		goto mm_failed;
 	}
 
 	thread = thread_create_in(process, args ? args->fn : NULL, true);
@@ -477,11 +438,7 @@ struct process *process_create(struct process_create_args *args)
 		goto thread_failed;
 	}
 
-	err = signal_init(process, thread, args ? args->sigactions : NULL,
-			  args ? args->blocked : 0);
-	if (err)
-		goto signal_failed;
-
+	signal_init(process, thread, args ? args->blocked : 0);
 	process_link(process);
 
 	if (process->parent) {
@@ -493,18 +450,8 @@ struct process *process_create(struct process_create_args *args)
 
 	return process;
 
-signal_failed:
-	signal_deinit(process);
-	thread_destroy(thread);
 thread_failed:
-	if (!(args && args->rsrc_usage))
-		process_rusage_free(process->rsrc_usage);
-rusage_failed:
-	fsinfo_put(process->fsinfo);
-fsinfo_failed:
-	fdtable_put(process->fdtable);
-fdtable_failed:
-	uvm_space_put(process->mm);
+	uvm_space_free(process->mm);
 mm_failed:
 	pid_free(process->pid);
 pid_failed:
@@ -557,6 +504,9 @@ struct process *process_create_idle(cpuid_t cpuid)
 	list_init(&process->threads);
 	spinlock_init(&process->lock, "idle_process");
 	spinlock_init(&process->cred_lock, "idle_cred");
+	fdtable_init(&process->fdtable);
+	fsinfo_init(&process->fsinfo);
+	spinlock_init(&process->rsrc_usage.lock, "idle_resource_usage");
 	process->pid = 0;
 	process->pgid = 0;
 	process->sid = 0;
@@ -568,6 +518,7 @@ struct process *process_create_idle(cpuid_t cpuid)
 	if (IS_ERR(thread))
 		goto fail;
 
+	signal_init(process, thread, 0);
 	thread->state = THREAD_STATE_RUNNING;
 	thread->is_init_thread = true;
 	trap_frame_set_kernel_tp(thread->frame, (unsigned long)&cpus[cpuid]);
@@ -596,8 +547,8 @@ static void process_start_user_init(struct process *init)
 {
 	struct process *parent = current_process();
 
-	fsinfo_copy(init->fsinfo, parent->fsinfo);
-	fdtable_copy(init->fdtable, parent->fdtable);
+	fsinfo_copy(&init->fsinfo, &parent->fsinfo);
+	fdtable_copy(&init->fdtable, &parent->fdtable);
 
 	irqstate_t flags = spin_lock_irqsave(&wait_lock);
 	init->parent = parent;
@@ -990,8 +941,8 @@ int process_fork(void)
 	child->cred = parent->cred;
 	spin_unlock_irqrestore(&parent->cred_lock, cred_flags);
 
-	fdtable_copy(child->fdtable, parent->fdtable);
-	fsinfo_copy(child->fsinfo, parent->fsinfo);
+	fdtable_copy(&child->fdtable, &parent->fdtable);
+	fsinfo_copy(&child->fsinfo, &parent->fsinfo);
 	signal_copy(child, child->leader, parent, current_thread());
 
 	memcpy(child->leader->frame, current_thread()->frame, TRAP_FRAME_SIZE);
@@ -1015,67 +966,67 @@ failed:
 
 int process_get_times(struct process *process, struct tms *times)
 {
-	if (!process || !process->rsrc_usage)
+	if (!process)
 		return -EINVAL;
 
-	spin_lock(&process->rsrc_usage->lock);
+	spin_lock(&process->rsrc_usage.lock);
 	if (times)
-		*times = process->rsrc_usage->times;
-	spin_unlock(&process->rsrc_usage->lock);
+		*times = process->rsrc_usage.times;
+	spin_unlock(&process->rsrc_usage.lock);
 
 	return 0;
 }
 
 void process_add_system_time(struct process *process, u64 time)
 {
-	if (!process || !process->rsrc_usage)
+	if (!process)
 		return;
 
-	spin_lock(&process->rsrc_usage->lock);
-	process->rsrc_usage->times.tms_stime += time;
-	spin_unlock(&process->rsrc_usage->lock);
+	spin_lock(&process->rsrc_usage.lock);
+	process->rsrc_usage.times.tms_stime += time;
+	spin_unlock(&process->rsrc_usage.lock);
 }
 
 void process_add_user_time(struct process *process, u64 time)
 {
-	if (!process || !process->rsrc_usage)
+	if (!process)
 		return;
 
-	spin_lock(&process->rsrc_usage->lock);
-	process->rsrc_usage->times.tms_utime += time;
-	spin_unlock(&process->rsrc_usage->lock);
+	spin_lock(&process->rsrc_usage.lock);
+	process->rsrc_usage.times.tms_utime += time;
+	spin_unlock(&process->rsrc_usage.lock);
 }
 
 void process_add_child_system_time(struct process *process, u64 time)
 {
-	if (!process || !process->rsrc_usage)
+	if (!process)
 		return;
 
-	spin_lock(&process->rsrc_usage->lock);
-	process->rsrc_usage->times.tms_cstime += time;
-	spin_unlock(&process->rsrc_usage->lock);
+	spin_lock(&process->rsrc_usage.lock);
+	process->rsrc_usage.times.tms_cstime += time;
+	spin_unlock(&process->rsrc_usage.lock);
 }
 
 void process_add_child_user_time(struct process *process, u64 time)
 {
-	if (!process || !process->rsrc_usage)
+	if (!process)
 		return;
 
-	spin_lock(&process->rsrc_usage->lock);
-	process->rsrc_usage->times.tms_cutime += time;
-	spin_unlock(&process->rsrc_usage->lock);
+	spin_lock(&process->rsrc_usage.lock);
+	process->rsrc_usage.times.tms_cutime += time;
+	spin_unlock(&process->rsrc_usage.lock);
 }
 
 u64 process_get_system_time(struct process *process)
 {
 	u64 time;
 
-	if (!process || !process->rsrc_usage)
+	if (!process)
 		return 0;
 
-	spin_lock(&process->rsrc_usage->lock);
-	time = process->rsrc_usage->times.tms_stime;
-	spin_unlock(&process->rsrc_usage->lock);
+	spin_lock(&process->rsrc_usage.lock);
+	time = process->rsrc_usage.times.tms_stime;
+	spin_unlock(&process->rsrc_usage.lock);
 
 	return time;
 }
@@ -1084,12 +1035,12 @@ u64 process_get_user_time(struct process *process)
 {
 	u64 time;
 
-	if (!process || !process->rsrc_usage)
+	if (!process)
 		return 0;
 
-	spin_lock(&process->rsrc_usage->lock);
-	time = process->rsrc_usage->times.tms_utime;
-	spin_unlock(&process->rsrc_usage->lock);
+	spin_lock(&process->rsrc_usage.lock);
+	time = process->rsrc_usage.times.tms_utime;
+	spin_unlock(&process->rsrc_usage.lock);
 
 	return time;
 }
@@ -1098,12 +1049,12 @@ u64 process_get_child_system_time(struct process *process)
 {
 	u64 time;
 
-	if (!process || !process->rsrc_usage)
+	if (!process)
 		return 0;
 
-	spin_lock(&process->rsrc_usage->lock);
-	time = process->rsrc_usage->times.tms_cstime;
-	spin_unlock(&process->rsrc_usage->lock);
+	spin_lock(&process->rsrc_usage.lock);
+	time = process->rsrc_usage.times.tms_cstime;
+	spin_unlock(&process->rsrc_usage.lock);
 
 	return time;
 }
@@ -1112,34 +1063,14 @@ u64 process_get_child_user_time(struct process *process)
 {
 	u64 time;
 
-	if (!process || !process->rsrc_usage)
+	if (!process)
 		return 0;
 
-	spin_lock(&process->rsrc_usage->lock);
-	time = process->rsrc_usage->times.tms_cutime;
-	spin_unlock(&process->rsrc_usage->lock);
+	spin_lock(&process->rsrc_usage.lock);
+	time = process->rsrc_usage.times.tms_cutime;
+	spin_unlock(&process->rsrc_usage.lock);
 
 	return time;
-}
-
-struct process_resource_usage *process_rusage_alloc(void)
-{
-	struct process_resource_usage *rsrc_usage;
-
-	rsrc_usage = kzalloc(sizeof(struct process_resource_usage));
-	if (!rsrc_usage)
-		return NULL;
-
-	spinlock_init(&rsrc_usage->lock, "process_resource_usage");
-	return rsrc_usage;
-}
-
-void process_rusage_free(struct process_resource_usage *rsrc_usage)
-{
-	if (!rsrc_usage)
-		return;
-
-	kfree(rsrc_usage);
 }
 
 static void kthread_return(void)

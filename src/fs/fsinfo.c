@@ -1,29 +1,18 @@
 #include <brk/fsinfo.h>
 #include <brk/kmalloc.h>
 #include <brk/path.h>
-#include <brk/refcnt.h>
 #include <brk/spinlock.h>
+#include <brk/string.h>
 
-struct file_system_info *fsinfo_alloc(void)
+void fsinfo_init(struct file_system_info *info)
 {
-	struct file_system_info *info;
-
-	info = kzalloc(sizeof(struct file_system_info));
-	if (!info)
-		return NULL;
-
-	refcnt_init(&info->refcnt, 1);
+	memset(info, 0, sizeof(*info));
 	spinlock_init(&info->lock, "fsinfo");
-
-	return info;
 }
 
-void fsinfo_put(struct file_system_info *info)
+void fsinfo_deinit(struct file_system_info *info)
 {
 	struct fs_path cwd, root;
-
-	if (refcnt_dec_fetch(&info->refcnt) > 0)
-		return;
 
 	/*
 	 * fs_path_put() can evict the last dentry/inode and therefore sleep
@@ -40,14 +29,6 @@ void fsinfo_put(struct file_system_info *info)
 
 	fs_path_put(&cwd);
 	fs_path_put(&root);
-
-	kfree(info);
-}
-
-struct file_system_info *fsinfo_get(struct file_system_info *info)
-{
-	refcnt_inc(&info->refcnt);
-	return info;
 }
 
 void fsinfo_copy(struct file_system_info *dst, struct file_system_info *src)
@@ -114,23 +95,4 @@ void fsinfo_get_root(struct file_system_info *info, struct fs_path *path)
 	fs_path_get(&info->root);
 	*path = info->root;
 	spin_unlock(&info->lock);
-}
-
-void fsinfo_free_resources(struct file_system_info *info)
-{
-	struct fs_path cwd, root;
-
-	spin_lock(&info->lock);
-	cwd = info->cwd;
-	root = info->root;
-	info->cwd = (struct fs_path){ 0 };
-	info->root = (struct fs_path){ 0 };
-	spin_unlock(&info->lock);
-
-	/*
-	 * The final cwd/root dentry may be the last reference and its
-	 * eviction may sleep.  Never do that under info->lock.
-	 */
-	fs_path_put(&cwd);
-	fs_path_put(&root);
 }

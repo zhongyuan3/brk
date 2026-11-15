@@ -14,20 +14,10 @@
 #include <uapi/times.h>
 #include <uapi/types.h>
 
-/*
- * Optional resource fields are borrowed from the caller.  process_create()
- * and signal initialization each acquire their own reference for the
- * resources they own.
- */
 struct process_create_args {
 	struct process *parent;
 	pid_t pgid;
 	pid_t sid;
-	struct uvm_space *mm;
-	struct file_desc_table *fdtable;
-	struct file_system_info *fsinfo;
-	struct process_resource_usage *rsrc_usage;
-	struct sigaction_table *sigactions;
 	u64 blocked;
 	const char *name;
 	unsigned int flags;
@@ -70,9 +60,6 @@ u64 process_get_system_time(struct process *process);
 u64 process_get_user_time(struct process *process);
 u64 process_get_child_system_time(struct process *process);
 u64 process_get_child_user_time(struct process *process);
-
-struct process_resource_usage *process_rusage_alloc(void);
-void process_rusage_free(struct process_resource_usage *rsrc_usage);
 
 pid_t pid_alloc(void);
 void pid_free(pid_t pid);

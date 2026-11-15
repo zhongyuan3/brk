@@ -18,7 +18,7 @@ static int socket_from_fd(int fd, struct fs_file **filep, struct socket **sockp)
 	if (fd < 0)
 		return -EBADF;
 
-	file = fdtable_get_file(current_process()->fdtable, fd);
+	file = fdtable_get_file(&current_process()->fdtable, fd);
 	if (IS_ERR(file))
 		return PTR_ERR(file);
 
@@ -57,7 +57,7 @@ u64 sys_socket(void)
 		return PTR_ERR(file);
 	}
 
-	fd = fdtable_alloc_fd(current_process()->fdtable, file);
+	fd = fdtable_alloc_fd(&current_process()->fdtable, file);
 	if (fd < 0) {
 		fs_file_put(file);
 		return fd;
@@ -271,7 +271,7 @@ static u64 sys_accept_common(unsigned int flags)
 		return PTR_ERR(nfile);
 	}
 
-	nfd = fdtable_alloc_fd(current_process()->fdtable, nfile);
+	nfd = fdtable_alloc_fd(&current_process()->fdtable, nfile);
 	if (nfd < 0) {
 		fs_file_put(nfile);
 		return nfd;

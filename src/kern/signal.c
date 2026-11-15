@@ -84,7 +84,7 @@ static int get_next_signal_locked(struct thread *thread)
 		for (sig = 1; sig < NSIG; ++sig) {
 			if (!(thread_pending_locked(thread) & (1ULL << sig)))
 				continue;
-			if (thread->process->sigactions->actions[sig].sa_flags &
+			if (thread->process->sigactions.actions[sig].sa_flags &
 			    SA_NODEFER)
 				nodfer |= (1ULL << sig);
 		}
@@ -113,15 +113,15 @@ static void signal_reset_locked(struct process *process, struct thread *thread)
 {
 	signal_reset_signal_sets_locked(thread);
 	process->shared_pending = 0;
-	sigaction_table_reset_locked(process->sigactions);
+	sigaction_table_reset_locked(&process->sigactions);
 }
 
 void signal_reset(struct process *process, struct thread *thread)
 {
-	irqstate_t flags = spin_lock_irqsave(&process->sigactions->lock);
+	irqstate_t flags = spin_lock_irqsave(&process->sigactions.lock);
 
 	signal_reset_locked(process, thread);
-	spin_unlock_irqrestore(&process->sigactions->lock, flags);
+	spin_unlock_irqrestore(&process->sigactions.lock, flags);
 }
 
 static void clear_pending_locked(struct thread *thread, int sig)
@@ -135,12 +135,12 @@ bool signal_pending(struct thread *thread)
 	bool pending;
 	irqstate_t flags;
 
-	if (!thread || !thread->process || !thread->process->sigactions)
+	if (!thread || !thread->process)
 		return false;
 
-	flags = spin_lock_irqsave(&thread->process->sigactions->lock);
+	flags = spin_lock_irqsave(&thread->process->sigactions.lock);
 	pending = get_next_signal_locked(thread) != 0;
-	spin_unlock_irqrestore(&thread->process->sigactions->lock, flags);
+	spin_unlock_irqrestore(&thread->process->sigactions.lock, flags);
 	return pending;
 }
 
@@ -250,7 +250,7 @@ void signal_send(struct thread *thread, int sig)
 {
 	irqstate_t tflags, sflags;
 
-	if (!thread || !sig_valid(sig) || !thread->process->sigactions)
+	if (!thread || !sig_valid(sig))
 		return;
 
 	tflags = spin_lock_irqsave(&thread->lock);
@@ -258,10 +258,10 @@ void signal_send(struct thread *thread, int sig)
 		spin_unlock_irqrestore(&thread->lock, tflags);
 		return;
 	}
-	sflags = spin_lock_irqsave(&thread->process->sigactions->lock);
+	sflags = spin_lock_irqsave(&thread->process->sigactions.lock);
 	spin_unlock_irqrestore(&thread->lock, tflags);
 	thread->pending |= (1ULL << sig);
-	spin_unlock_irqrestore(&thread->process->sigactions->lock, sflags);
+	spin_unlock_irqrestore(&thread->process->sigactions.lock, sflags);
 
 	thread_wake(thread);
 }
@@ -291,7 +291,7 @@ void signal_send_process(struct process *process, int sig)
 	struct thread *wake = NULL;
 	irqstate_t flags, sflags;
 
-	if (!process || !sig_valid(sig) || !process->sigactions)
+	if (!process || !sig_valid(sig))
 		return;
 
 	flags = spin_lock_irqsave(&process->lock);
@@ -300,10 +300,10 @@ void signal_send_process(struct process *process, int sig)
 		return;
 	}
 	wake = process_pick_live_thread_locked(process, sig);
-	sflags = spin_lock_irqsave(&process->sigactions->lock);
+	sflags = spin_lock_irqsave(&process->sigactions.lock);
 	spin_unlock_irqrestore(&process->lock, flags);
 	process->shared_pending |= (1ULL << sig);
-	spin_unlock_irqrestore(&process->sigactions->lock, sflags);
+	spin_unlock_irqrestore(&process->sigactions.lock, sflags);
 
 	if (wake)
 		thread_wake(wake);
@@ -314,48 +314,16 @@ void signal_thread_init(struct process *process, struct thread *thread,
 {
 	irqstate_t flags;
 
-	if (!process->sigactions)
-		return;
-
-	flags = spin_lock_irqsave(&process->sigactions->lock);
+	flags = spin_lock_irqsave(&process->sigactions.lock);
 	signal_reset_signal_sets_locked(thread);
 	thread->blocked = blocked;
-	spin_unlock_irqrestore(&process->sigactions->lock, flags);
+	spin_unlock_irqrestore(&process->sigactions.lock, flags);
 }
 
-int signal_init(struct process *process, struct thread *thread,
-		struct sigaction_table *sigactions, u64 blocked)
+void signal_init(struct process *process, struct thread *thread, u64 blocked)
 {
-	if (!sigactions) {
-		process->sigactions = sigaction_table_alloc();
-		if (!process->sigactions)
-			return -ENOMEM;
-		sigaction_table_reset(process->sigactions);
-		irqstate_t flags =
-			spin_lock_irqsave(&process->sigactions->lock);
-
-		signal_reset_signal_sets_locked(thread);
-		thread->blocked = blocked;
-		spin_unlock_irqrestore(&process->sigactions->lock, flags);
-	} else {
-		process->sigactions = sigaction_table_get(sigactions);
-		irqstate_t flags =
-			spin_lock_irqsave(&process->sigactions->lock);
-
-		signal_reset_signal_sets_locked(thread);
-		thread->blocked = blocked;
-		spin_unlock_irqrestore(&process->sigactions->lock, flags);
-	}
-	return 0;
-}
-
-void signal_deinit(struct process *process)
-{
-	if (!process->sigactions)
-		return;
-
-	sigaction_table_put(process->sigactions);
-	process->sigactions = NULL;
+	sigaction_table_init(&process->sigactions);
+	signal_thread_init(process, thread, blocked);
 }
 
 static bool setup_signal_frame_locked(struct thread *thread, int sig,
@@ -377,9 +345,9 @@ static bool setup_signal_frame_locked(struct thread *thread, int sig,
 	frame->signo = sig;
 
 	thread->sigframe_sp = sp;
-	if (!(process->sigactions->actions[sig].sa_flags & SA_NODEFER))
+	if (!(process->sigactions.actions[sig].sa_flags & SA_NODEFER))
 		thread->blocked |= (1ULL << sig);
-	thread->blocked |= process->sigactions->actions[sig].sa_mask;
+	thread->blocked |= process->sigactions.actions[sig].sa_mask;
 	clear_pending_locked(thread, sig);
 	thread->in_handler = true;
 
@@ -394,36 +362,36 @@ static void signal_deliver_one(struct thread *thread, int sig)
 	struct process *process = thread->process;
 	void (*handler)(int);
 	u64 user_handler;
-	irqstate_t flags = spin_lock_irqsave(&process->sigactions->lock);
+	irqstate_t flags = spin_lock_irqsave(&process->sigactions.lock);
 
-	handler = process->sigactions->actions[sig].sa_handler;
+	handler = process->sigactions.actions[sig].sa_handler;
 
 	if (sig == SIGKILL ||
 	    (handler == SIG_DFL && sig_default_terminate(sig))) {
-		spin_unlock_irqrestore(&process->sigactions->lock, flags);
+		spin_unlock_irqrestore(&process->sigactions.lock, flags);
 		thread_exit_signal(sig);
 		return;
 	}
 
 	if (handler == SIG_IGN) {
 		clear_pending_locked(thread, sig);
-		spin_unlock_irqrestore(&process->sigactions->lock, flags);
+		spin_unlock_irqrestore(&process->sigactions.lock, flags);
 		return;
 	}
 
 	if (handler == SIG_DFL) {
 		clear_pending_locked(thread, sig);
-		spin_unlock_irqrestore(&process->sigactions->lock, flags);
+		spin_unlock_irqrestore(&process->sigactions.lock, flags);
 		return;
 	}
 
 	user_handler = (u64)(uintptr_t)handler;
 	if (!setup_signal_frame_locked(thread, sig, user_handler)) {
-		spin_unlock_irqrestore(&process->sigactions->lock, flags);
+		spin_unlock_irqrestore(&process->sigactions.lock, flags);
 		thread_exit_signal(sig);
 		return;
 	}
-	spin_unlock_irqrestore(&process->sigactions->lock, flags);
+	spin_unlock_irqrestore(&process->sigactions.lock, flags);
 }
 
 void signal_deliver_pending(struct thread *thread)
@@ -433,17 +401,17 @@ void signal_deliver_pending(struct thread *thread)
 
 	for (;;) {
 		irqstate_t flags =
-			spin_lock_irqsave(&thread->process->sigactions->lock);
+			spin_lock_irqsave(&thread->process->sigactions.lock);
 
 		sig = get_next_signal_locked(thread);
-		spin_unlock_irqrestore(&thread->process->sigactions->lock,
+		spin_unlock_irqrestore(&thread->process->sigactions.lock,
 				       flags);
 		if (!sig)
 			return;
 		signal_deliver_one(thread, sig);
-		flags = spin_lock_irqsave(&thread->process->sigactions->lock);
+		flags = spin_lock_irqsave(&thread->process->sigactions.lock);
 		in_handler = thread->in_handler;
-		spin_unlock_irqrestore(&thread->process->sigactions->lock,
+		spin_unlock_irqrestore(&thread->process->sigactions.lock,
 				       flags);
 		if (in_handler)
 			return;
@@ -459,26 +427,25 @@ static void sigaction_table_copy_locked(struct sigaction_table *dst,
 void signal_copy(struct process *dst_process, struct thread *dst_thread,
 		 struct process *src_process, struct thread *src_thread)
 {
-	irqstate_t sflags = spin_lock_irqsave(&src_process->sigactions->lock);
-	irqstate_t dflags = spin_lock_irqsave(&dst_process->sigactions->lock);
+	irqstate_t sflags = spin_lock_irqsave(&src_process->sigactions.lock);
+	irqstate_t dflags = spin_lock_irqsave(&dst_process->sigactions.lock);
 
 	dst_thread->pending = 0;
 	dst_thread->blocked = src_thread->blocked;
 	dst_thread->in_handler = false;
 	dst_thread->sigframe_sp = 0;
 	dst_process->shared_pending = 0;
-	sigaction_table_copy_locked(dst_process->sigactions,
-				    src_process->sigactions);
-	spin_unlock_irqrestore(&dst_process->sigactions->lock, dflags);
-	spin_unlock_irqrestore(&src_process->sigactions->lock, sflags);
+	sigaction_table_copy_locked(&dst_process->sigactions,
+				    &src_process->sigactions);
+	spin_unlock_irqrestore(&dst_process->sigactions.lock, dflags);
+	spin_unlock_irqrestore(&src_process->sigactions.lock, sflags);
 }
 
 u64 signal_do_sigreturn(struct thread *thread)
 {
 	struct user_sigframe *frame;
 	u64 ret = 0;
-	irqstate_t flags =
-		spin_lock_irqsave(&thread->process->sigactions->lock);
+	irqstate_t flags = spin_lock_irqsave(&thread->process->sigactions.lock);
 
 	if (!thread->sigframe_sp) {
 		ret = -EINVAL;
@@ -498,14 +465,14 @@ u64 signal_do_sigreturn(struct thread *thread)
 	ret = trap_frame_get_arg(thread->frame, 0);
 
 unlock_and_return:
-	spin_unlock_irqrestore(&thread->process->sigactions->lock, flags);
+	spin_unlock_irqrestore(&thread->process->sigactions.lock, flags);
 	return ret;
 }
 
 int signal_do_sigaction(struct process *process, int sig,
 			const struct sigaction *act, struct sigaction *oact)
 {
-	struct sigaction_table *table = process->sigactions;
+	struct sigaction_table *table = &process->sigactions;
 
 	if (!sig_valid(sig))
 		return -EINVAL;
@@ -526,8 +493,7 @@ int signal_do_sigprocmask(struct thread *thread, int how, const sigset_t *set,
 			  sigset_t *oldset)
 {
 	sigset_t newblocked;
-	irqstate_t flags =
-		spin_lock_irqsave(&thread->process->sigactions->lock);
+	irqstate_t flags = spin_lock_irqsave(&thread->process->sigactions.lock);
 
 	if (oldset)
 		*oldset = thread->blocked;
@@ -546,43 +512,21 @@ int signal_do_sigprocmask(struct thread *thread, int how, const sigset_t *set,
 			break;
 		default:
 			spin_unlock_irqrestore(
-				&thread->process->sigactions->lock, flags);
+				&thread->process->sigactions.lock, flags);
 			return -EINVAL;
 		}
 		newblocked &= ~(1ULL << SIGKILL);
 		newblocked &= ~(1ULL << SIGSTOP);
 		thread->blocked = newblocked;
 	}
-	spin_unlock_irqrestore(&thread->process->sigactions->lock, flags);
+	spin_unlock_irqrestore(&thread->process->sigactions.lock, flags);
 	return 0;
 }
 
-struct sigaction_table *sigaction_table_alloc(void)
+void sigaction_table_init(struct sigaction_table *table)
 {
-	struct sigaction_table *table;
-
-	table = kzalloc(sizeof(struct sigaction_table));
-	if (!table)
-		return NULL;
-
-	refcnt_init(&table->refcnt, 1);
 	spinlock_init(&table->lock, "sigaction_table");
-
-	return table;
-}
-
-void sigaction_table_put(struct sigaction_table *table)
-{
-	if (refcnt_dec_fetch(&table->refcnt) > 0)
-		return;
-
-	kfree(table);
-}
-
-struct sigaction_table *sigaction_table_get(struct sigaction_table *table)
-{
-	refcnt_inc(&table->refcnt);
-	return table;
+	sigaction_table_reset_locked(table);
 }
 
 void sigaction_table_copy(struct sigaction_table *dst,
@@ -624,9 +568,9 @@ u64 sys_sigpending(void)
 	if (!uset)
 		return -EFAULT;
 
-	flags = spin_lock_irqsave(&thread->process->sigactions->lock);
+	flags = spin_lock_irqsave(&thread->process->sigactions.lock);
 	set = thread_pending_locked(thread) & thread->blocked;
-	spin_unlock_irqrestore(&thread->process->sigactions->lock, flags);
+	spin_unlock_irqrestore(&thread->process->sigactions.lock, flags);
 
 	if (copy_to_user(uset, &set, sizeof(set)))
 		return -EFAULT;
@@ -664,7 +608,7 @@ u64 sys_sigtimedwait(void)
 	}
 
 	for (;;) {
-		flags = spin_lock_irqsave(&thread->process->sigactions->lock);
+		flags = spin_lock_irqsave(&thread->process->sigactions.lock);
 		for (sig = 1; sig < NSIG; sig++) {
 			if ((set & (1ULL << sig)) &&
 			    (thread_pending_locked(thread) & (1ULL << sig)))
@@ -679,13 +623,13 @@ u64 sys_sigtimedwait(void)
 			if (uinfo && !user_range_ok((u64)(uintptr_t)uinfo,
 						    sizeof(siginfo_t))) {
 				spin_unlock_irqrestore(
-					&thread->process->sigactions->lock,
+					&thread->process->sigactions.lock,
 					flags);
 				return -EFAULT;
 			}
 			clear_pending_locked(thread, sig);
 			spin_unlock_irqrestore(
-				&thread->process->sigactions->lock, flags);
+				&thread->process->sigactions.lock, flags);
 			break;
 		}
 
@@ -695,17 +639,17 @@ u64 sys_sigtimedwait(void)
 		 */
 		if (thread_pending_locked(thread) & ~thread->blocked & ~set) {
 			spin_unlock_irqrestore(
-				&thread->process->sigactions->lock, flags);
+				&thread->process->sigactions.lock, flags);
 			return -EINTR;
 		}
 
 		if (timed && (s64)ktime_get_mono_ns() >= deadline) {
 			spin_unlock_irqrestore(
-				&thread->process->sigactions->lock, flags);
+				&thread->process->sigactions.lock, flags);
 			return -EAGAIN;
 		}
 
-		spin_unlock_irqrestore(&thread->process->sigactions->lock,
+		spin_unlock_irqrestore(&thread->process->sigactions.lock,
 				       flags);
 		(void)ktime_nanosleep(NS_PER_MS, NULL);
 	}
@@ -747,9 +691,9 @@ u64 sys_sigsuspend(void)
 	if (set & ~(((u64)1 << NSIG) - 1))
 		return -EINVAL;
 
-	flags = spin_lock_irqsave(&thread->process->sigactions->lock);
+	flags = spin_lock_irqsave(&thread->process->sigactions.lock);
 	oldset = thread->blocked;
-	spin_unlock_irqrestore(&thread->process->sigactions->lock, flags);
+	spin_unlock_irqrestore(&thread->process->sigactions.lock, flags);
 
 	if (uoldset && copy_to_user(uoldset, &oldset, sizeof(oldset)))
 		return -EFAULT;
@@ -757,9 +701,9 @@ u64 sys_sigsuspend(void)
 	set &= ~(1ULL << SIGKILL);
 	set &= ~(1ULL << SIGSTOP);
 
-	flags = spin_lock_irqsave(&thread->process->sigactions->lock);
+	flags = spin_lock_irqsave(&thread->process->sigactions.lock);
 	thread->blocked = set;
-	spin_unlock_irqrestore(&thread->process->sigactions->lock, flags);
+	spin_unlock_irqrestore(&thread->process->sigactions.lock, flags);
 
 	/*
 	 * Leave the temporary mask installed on return: the trap path delivers
