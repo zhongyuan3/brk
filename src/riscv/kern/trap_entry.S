@@ -20,13 +20,16 @@ trap_entry:
 
 .Ltrap_from_user:
 	# Trap from user mode. sp is the kernel stack top and sscratch holds
-	# the user sp. tp still holds the user's thread pointer, so reload the
-	# kernel per-CPU pointer saved by ret_from_trap.
+	# the user sp. tp still holds the user's thread pointer: save it before
+	# loading the kernel per-CPU pointer, otherwise the user TLS/TCB value
+	# would be lost on every syscall.
 	addi sp, sp, -__RISCV_TRAP_FRAME_SIZE
 	sd x5, 40(sp)
 	csrr x5, sscratch
 	sd x5, 16(sp)
+	sd x4, 32(sp)
 	ld tp, __RISCV_TRAP_FRAME_KERNEL_TP(sp)
+	j .Ltrap_save_regs_no_tp
 
 .Ltrap_save_regs:
 	# From here on the kernel runs with sscratch cleared, so a nested trap
@@ -37,6 +40,15 @@ trap_entry:
 	sd x1, 8(sp)
 	sd x3, 24(sp)
 	sd x4, 32(sp)
+	j .Ltrap_save_regs_tail
+
+.Ltrap_save_regs_no_tp:
+	csrw sscratch, zero
+	sd x0, 0(sp)
+	sd x1, 8(sp)
+	sd x3, 24(sp)
+
+.Ltrap_save_regs_tail:
 	sd x6, 48(sp)
 	sd x7, 56(sp)
 	sd x8, 64(sp)

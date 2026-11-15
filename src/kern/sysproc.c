@@ -1,6 +1,6 @@
 #include <arch/pgtable.h>
-#include <brk/kmalloc.h>
 #include <brk/error.h>
+#include <brk/kmalloc.h>
 #include <brk/permission.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
