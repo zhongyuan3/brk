@@ -377,14 +377,15 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 					sleeplock_release(&tty->read_lock);
 					return 0;
 				}
-				if (signal_pending(task)) {
+				if (thread_abort_pending(task)) {
 					spin_unlock_irqrestore(&port->lock,
 							       flags);
 					sleeplock_release(&tty->read_lock);
 					return total > 0 ? (ssize_t)total :
 							   -EINTR;
 				}
-				thread_sleep(&tty->rx_r, &port->lock);
+				(void)thread_sleep_interruptible(&tty->rx_r,
+								 &port->lock);
 				spin_unlock_irqrestore(&port->lock, flags);
 				continue;
 			}
@@ -397,7 +398,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 			if (copy == 0) {
 				u64 now;
 
-				if (signal_pending(task)) {
+				if (thread_abort_pending(task)) {
 					spin_unlock_irqrestore(&port->lock,
 							       flags);
 					sleeplock_release(&tty->read_lock);
@@ -453,14 +454,16 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 						thread_disarm_sleep_timer();
 						continue;
 					} else {
-						thread_sleep(&tty->rx_r,
-							     &port->lock);
+						(void)thread_sleep_interruptible(
+							&tty->rx_r,
+							&port->lock);
 						spin_unlock_irqrestore(
 							&port->lock, flags);
 						continue;
 					}
 				} else {
-					thread_sleep(&tty->rx_r, &port->lock);
+					(void)thread_sleep_interruptible(
+						&tty->rx_r, &port->lock);
 					spin_unlock_irqrestore(&port->lock,
 							       flags);
 					continue;
@@ -547,7 +550,13 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 				spin_unlock_irqrestore(&port->lock, flags);
 				break;
 			}
-			thread_sleep(&tty->stopped, &port->lock);
+			if (thread_abort_pending(task)) {
+				spin_unlock_irqrestore(&port->lock, flags);
+				err = -EINTR;
+				goto out;
+			}
+			(void)thread_sleep_interruptible(&tty->stopped,
+							 &port->lock);
 			spin_unlock_irqrestore(&port->lock, flags);
 		}
 
@@ -578,6 +587,7 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 			break;
 	}
 
+out:
 	sleeplock_release(&tty->write_lock);
 
 	if (total > 0 && (ssize_t)total > 0)

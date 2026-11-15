@@ -901,9 +901,11 @@ void process_exit_group(int status)
 
 	/*
 	 * The current thread keeps the process alive, so sibling thread
-	 * objects cannot be freed while we walk the list.  Woken sleepers
-	 * re-check group_exiting in thread_sleep_common(); running threads
-	 * observe it on their next return to user mode.
+	 * objects cannot be freed while we walk the list.  Interruptible
+	 * sleepers observe group_exiting through thread_abort_pending() and
+	 * unwind with -EINTR; running threads observe it on their next return
+	 * to user mode.  Uninterruptible sleeps are woken spuriously and go
+	 * back to waiting, so in-flight kernel operations still complete.
 	 */
 	list_for_each_entry(thread, &process->threads, proc_threads) {
 		if (thread != current_thread())

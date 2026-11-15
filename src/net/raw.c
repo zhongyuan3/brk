@@ -101,7 +101,10 @@ static int raw_recvmsg(struct socket *sock, void *buf, size_t len,
 			spin_unlock_irqrestore(&raw->sk.lock, flags);
 			return -EAGAIN;
 		}
-		thread_sleep(&raw->sk, &raw->sk.lock);
+		if (!thread_sleep_interruptible(&raw->sk, &raw->sk.lock)) {
+			spin_unlock_irqrestore(&raw->sk.lock, flags);
+			return -EINTR;
+		}
 	}
 	skb = peek ? raw->sk.rcv_queue.head : skb_dequeue(&raw->sk.rcv_queue);
 	spin_unlock_irqrestore(&raw->sk.lock, flags);

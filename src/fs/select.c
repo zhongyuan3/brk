@@ -60,7 +60,7 @@ static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 			return (int)ready;
 		if (!infinite && ktime_boottime_ns() >= deadline)
 			return 0;
-		if (signal_pending(current_thread()))
+		if (thread_abort_pending(current_thread()))
 			return -EINTR;
 
 		ktime_nanosleep((ktime_t)POLL_SLEEP_NS, NULL);

@@ -352,7 +352,28 @@ void thread_yield(void)
 	local_irq_restore(flags);
 }
 
-static void thread_sleep_common(void *chan, spinlock_t *lock,
+/*
+ * A pending fatal condition only aborts sleeps that opted in to being
+ * interruptible.  Uninterruptible sleeps back kernel operations that must run
+ * to completion (block I/O, page cache and inode serialization, filesystem
+ * teardown); interrupting them mid-flight leaves persistent state (for example
+ * an inode stuck in I_FREEING) because there is no way to unwind safely.
+ *
+ * The exit path of the current thread is excluded as well: once thread_exit()
+ * starts dropping files and evicting inodes, it must be allowed to block on the
+ * resulting writeback even though group_exiting is already set.
+ */
+bool thread_abort_pending(struct thread *thread)
+{
+	return !thread->in_exit && (signal_pending(thread) ||
+				    process_group_exiting(thread->process));
+}
+
+/*
+ * Return true if the thread actually slept, false if an interruptible sleep
+ * was aborted by thread_abort_pending() before scheduling.
+ */
+static bool thread_sleep_common(void *chan, spinlock_t *lock,
 				bool interruptible)
 {
 	struct thread *thread = current_thread();
@@ -361,17 +382,8 @@ static void thread_sleep_common(void *chan, spinlock_t *lock,
 	assert(lock->locked);
 	assert(preempt_count() == 0);
 
-	/*
-	 * A thread that is already running its own exit path must still be
-	 * allowed to block.  The exit path releases files and evicts inodes,
-	 * which can require filesystem writeback; aborting those sleeps here
-	 * would leave the affected objects half torn down (e.g. an inode stuck
-	 * in I_FREEING) while the thread disappears.
-	 */
-	if (!thread->in_exit && process_group_exiting(thread->process)) {
-		raw_spin_unlock(lock);
-		thread_exit(process_group_exit_status(thread->process));
-	}
+	if (interruptible && thread_abort_pending(thread))
+		return false;
 
 	raw_spin_lock(&thread->lock);
 	thread->state = THREAD_STATE_SLEEPING;
@@ -388,13 +400,13 @@ static void thread_sleep_common(void *chan, spinlock_t *lock,
 	spin_unlock_irqrestore(&sleep_queue_lock, sflags);
 
 	/*
-	 * A signal sent between the caller's condition check and the queue
-	 * publication above could not find us through thread_wake().  For
-	 * interruptible callers, recheck after publication and abort before
-	 * scheduling.  Such callers must return to user space promptly so the
-	 * signal can actually be delivered.
+	 * A signal or group exit that arrives between the caller's condition
+	 * check and the queue publication above could not find us through
+	 * thread_wake().  For interruptible callers, recheck after publication
+	 * and abort before scheduling.  Such callers must return to user space
+	 * promptly so the condition can be acted on.
 	 */
-	if (interruptible && signal_pending(thread)) {
+	if (interruptible && thread_abort_pending(thread)) {
 		sflags = spin_lock_irqsave(&sleep_queue_lock);
 		thread->state = THREAD_STATE_RUNNING;
 		thread->chan = NULL;
@@ -404,7 +416,7 @@ static void thread_sleep_common(void *chan, spinlock_t *lock,
 		raw_spin_unlock(&thread->lock);
 		raw_spin_unlock(lock);
 		raw_spin_lock(lock);
-		return;
+		return false;
 	}
 
 	raw_spin_unlock(lock);
@@ -412,27 +424,31 @@ static void thread_sleep_common(void *chan, spinlock_t *lock,
 	thread->chan = NULL;
 	raw_spin_unlock(&thread->lock);
 	raw_spin_lock(lock);
+	return true;
 }
 
 /*
  * Callers must hold @lock and run with interrupts disabled. The interrupt
  * state stays disabled across the switch and is restored by the caller's
  * irqrestore once it drops @lock.
+ *
+ * Uninterruptible sleeps always wait for their condition.  Use this for
+ * kernel-internal operations that cannot be unwound safely.
  */
 void thread_sleep(void *chan, spinlock_t *lock)
 {
-	thread_sleep_common(chan, lock, false);
+	(void)thread_sleep_common(chan, lock, false);
 }
 
 /*
- * Like thread_sleep(), but abort the sleep if a signal is already pending once
- * the thread becomes visible on the sleep queue.  The caller must check for a
- * pending signal before calling this again, otherwise the syscall could spin
- * in kernel space and never deliver the signal.
+ * Like thread_sleep(), but abort the sleep when a signal is pending or the
+ * process group is exiting.  Returns false when the sleep was aborted; the
+ * caller must unwind and return -EINTR (or a partial result) instead of
+ * re-entering the sleep.
  */
-void thread_sleep_interruptible(void *chan, spinlock_t *lock)
+bool thread_sleep_interruptible(void *chan, spinlock_t *lock)
 {
-	thread_sleep_common(chan, lock, true);
+	return thread_sleep_common(chan, lock, true);
 }
 
 void thread_wake_all(void *chan)
@@ -533,8 +549,9 @@ void thread_exit(int status)
 	bool reparented = false;
 
 	/*
-	 * The teardown below can block on filesystem I/O.  Do not let the
-	 * exit_group check in thread_sleep_common() abort those waits.
+	 * The teardown below can block on filesystem I/O.  Keep it out of
+	 * thread_abort_pending() so neither a fatal signal nor a group exit
+	 * can abort those waits halfway through.
 	 */
 	thread->in_exit = true;
 
@@ -688,7 +705,10 @@ again:
 		return 0;
 	}
 
-	thread_sleep(parent, &wait_lock);
+	if (!thread_sleep_interruptible(parent, &wait_lock)) {
+		spin_unlock_irqrestore(&wait_lock, flags);
+		return -EINTR;
+	}
 
 	goto again;
 }

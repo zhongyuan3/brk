@@ -30,7 +30,8 @@ void thread_exit_signal(int sig);
 
 void thread_yield(void);
 void thread_sleep(void *chan, spinlock_t *lock);
-void thread_sleep_interruptible(void *chan, spinlock_t *lock);
+bool thread_sleep_interruptible(void *chan, spinlock_t *lock);
+bool thread_abort_pending(struct thread *thread);
 void thread_wake_all(void *chan);
 void thread_wake(struct thread *thread);
 

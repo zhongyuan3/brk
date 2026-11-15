@@ -287,7 +287,7 @@ int timekeeper_nanosleep(ktime_t dur, ktime_t *rem)
 	flags = spin_lock_irqsave(&tk.lock);
 
 	for (;;) {
-		if (signal_pending(task)) {
+		if (thread_abort_pending(task)) {
 			s64 left_ns;
 
 			spin_unlock_irqrestore(&tk.lock, flags);
@@ -303,7 +303,7 @@ int timekeeper_nanosleep(ktime_t dur, ktime_t *rem)
 		now_ns = (s64)ktime_get_mono_ns();
 		if (now_ns >= deadline_ns)
 			break;
-		thread_sleep_interruptible(task, &tk.lock);
+		(void)thread_sleep_interruptible(task, &tk.lock);
 	}
 	spin_unlock_irqrestore(&tk.lock, flags);
 

@@ -337,7 +337,10 @@ static int udp_recvmsg(struct socket *sock, void *buf, size_t len,
 			spin_unlock_irqrestore(&sk->lock, flags);
 			return -EAGAIN;
 		}
-		thread_sleep(sk, &sk->lock);
+		if (!thread_sleep_interruptible(sk, &sk->lock)) {
+			spin_unlock_irqrestore(&sk->lock, flags);
+			return -EINTR;
+		}
 	}
 	if (peek)
 		skb = sk->rcv_queue.head;

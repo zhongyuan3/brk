@@ -300,11 +300,15 @@ static ssize_t pipe_read(struct fs_file *file, char *buf, size_t size,
 				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EAGAIN;
 			}
-			if (signal_pending(current_thread())) {
+			if (thread_abort_pending(current_thread())) {
 				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EINTR;
 			}
-			thread_sleep(&pipe->rwait, &pipe->lock);
+			if (!thread_sleep_interruptible(&pipe->rwait,
+							&pipe->lock)) {
+				spin_unlock_irqrestore(&pipe->lock, flags);
+				return total ? total : -EINTR;
+			}
 		}
 
 		n = pipe->count;
@@ -353,11 +357,15 @@ static ssize_t pipe_write(struct fs_file *file, const char *buf, size_t size,
 				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EAGAIN;
 			}
-			if (signal_pending(current_thread())) {
+			if (thread_abort_pending(current_thread())) {
 				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EINTR;
 			}
-			thread_sleep(&pipe->wwait, &pipe->lock);
+			if (!thread_sleep_interruptible(&pipe->wwait,
+							&pipe->lock)) {
+				spin_unlock_irqrestore(&pipe->lock, flags);
+				return total ? total : -EINTR;
+			}
 			if (pipe->readers == 0) {
 				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EPIPE;

@@ -72,7 +72,7 @@ static u64 thread_pending_locked(struct thread *thread)
 	return thread->pending | thread->process->shared_pending;
 }
 
-static int get_next_signal_locked(struct thread *thread)
+static u64 thread_deliverable_locked(struct thread *thread)
 {
 	u64 deliver = thread_pending_locked(thread) & ~thread->blocked;
 
@@ -91,6 +91,13 @@ static int get_next_signal_locked(struct thread *thread)
 		deliver |= nodfer & ~thread->blocked;
 	}
 
+	return deliver;
+}
+
+static int get_next_signal_locked(struct thread *thread)
+{
+	u64 deliver = thread_deliverable_locked(thread);
+
 	if (!deliver)
 		return 0;
 
@@ -99,6 +106,27 @@ static int get_next_signal_locked(struct thread *thread)
 			return sig;
 	}
 	return 0;
+}
+
+/*
+ * A signal that will be discarded at delivery time (SIG_IGN, or a default
+ * action that ignores it) must not abort a blocking syscall.  Otherwise a
+ * pending SIGWINCH or SIGCHLD would make every wait return -EINTR even though
+ * returning to user space would simply drop the signal.
+ */
+static bool signal_is_actionable_locked(struct process *process, int sig)
+{
+	void (*handler)(int);
+
+	if (sig == SIGKILL)
+		return true;
+
+	handler = process->sigactions.actions[sig].sa_handler;
+	if (handler == SIG_IGN)
+		return false;
+	if (handler == SIG_DFL && !sig_default_terminate(sig))
+		return false;
+	return true;
 }
 
 static void signal_reset_signal_sets_locked(struct thread *thread)
@@ -132,14 +160,23 @@ static void clear_pending_locked(struct thread *thread, int sig)
 
 bool signal_pending(struct thread *thread)
 {
-	bool pending;
+	bool pending = false;
+	u64 deliver;
 	irqstate_t flags;
 
 	if (!thread || !thread->process)
 		return false;
 
 	flags = spin_lock_irqsave(&thread->process->sigactions.lock);
-	pending = get_next_signal_locked(thread) != 0;
+	deliver = thread_deliverable_locked(thread);
+	for (int sig = 1; sig < NSIG; ++sig) {
+		if (!(deliver & (1ULL << sig)))
+			continue;
+		if (!signal_is_actionable_locked(thread->process, sig))
+			continue;
+		pending = true;
+		break;
+	}
 	spin_unlock_irqrestore(&thread->process->sigactions.lock, flags);
 	return pending;
 }
@@ -649,6 +686,12 @@ u64 sys_sigtimedwait(void)
 			return -EAGAIN;
 		}
 
+		if (thread_abort_pending(thread)) {
+			spin_unlock_irqrestore(
+				&thread->process->sigactions.lock, flags);
+			return -EINTR;
+		}
+
 		spin_unlock_irqrestore(&thread->process->sigactions.lock,
 				       flags);
 		(void)ktime_nanosleep(NS_PER_MS, NULL);
@@ -669,7 +712,7 @@ u64 sys_pause(void)
 {
 	struct thread *thread = current_thread();
 
-	while (!signal_pending(thread))
+	while (!thread_abort_pending(thread))
 		ktime_nanosleep(NS_PER_MS, NULL);
 
 	return -EINTR;
@@ -710,7 +753,7 @@ u64 sys_sigsuspend(void)
 	 * the signal handler with this mask, and libc restores @oldset after
 	 * the handler returns.
 	 */
-	while (!signal_pending(thread))
+	while (!thread_abort_pending(thread))
 		ktime_nanosleep(NS_PER_MS, NULL);
 
 	return -EINTR;

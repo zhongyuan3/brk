@@ -816,8 +816,12 @@ static int tcp_connect(struct socket *sock, const struct sockaddr *addr,
 		return st == TCP_ESTABLISHED ? 0 : -EINPROGRESS;
 	}
 
-	while (tsk->state == TCP_SYN_SENT && !tsk->err)
-		thread_sleep(&tsk->sk, &tcp_lock);
+	while (tsk->state == TCP_SYN_SENT && !tsk->err) {
+		if (!thread_sleep_interruptible(&tsk->sk, &tcp_lock)) {
+			spin_unlock_irqrestore(&tcp_lock, flags);
+			return -EINTR;
+		}
+	}
 	st = tsk->state;
 	err = tsk->err;
 	spin_unlock_irqrestore(&tcp_lock, flags);
@@ -875,7 +879,10 @@ static int tcp_accept(struct socket *sock, struct socket **newsock)
 			spin_unlock_irqrestore(&tcp_lock, flags);
 			return -EAGAIN;
 		}
-		thread_sleep(&tsk->sk, &tcp_lock);
+		if (!thread_sleep_interruptible(&tsk->sk, &tcp_lock)) {
+			spin_unlock_irqrestore(&tcp_lock, flags);
+			return -EINTR;
+		}
 	}
 
 	child = list_first_entry(&tsk->accept_queue, struct tcp_sock,
@@ -953,7 +960,11 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 				kfree(copy);
 				return off ? (int)off : -EAGAIN;
 			}
-			thread_sleep(&tsk->sk, &tcp_lock);
+			if (!thread_sleep_interruptible(&tsk->sk, &tcp_lock)) {
+				spin_unlock_irqrestore(&tcp_lock, flags);
+				kfree(copy);
+				return off ? (int)off : -EINTR;
+			}
 		}
 
 		if (tsk->err) {
@@ -1003,8 +1014,16 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 		}
 
 		flags = spin_lock_irqsave(&tcp_lock);
-		while (!tsk->err && tsk->tx_kind == TCP_TX_DATA)
-			thread_sleep(&tsk->sk, &tcp_lock);
+		while (!tsk->err && tsk->tx_kind == TCP_TX_DATA) {
+			if (!thread_sleep_interruptible(&tsk->sk, &tcp_lock)) {
+				/*
+				 * This chunk is already queued in the TCP
+				 * stack, so report it as transferred.
+				 */
+				spin_unlock_irqrestore(&tcp_lock, flags);
+				return (int)(off + n);
+			}
+		}
 		err = tsk->err;
 		spin_unlock_irqrestore(&tcp_lock, flags);
 
@@ -1053,7 +1072,10 @@ static int tcp_recvmsg(struct socket *sock, void *buf, size_t len,
 				spin_unlock_irqrestore(&sk->lock, flags);
 				return total ? (int)total : -EAGAIN;
 			}
-			thread_sleep(sk, &sk->lock);
+			if (!thread_sleep_interruptible(sk, &sk->lock)) {
+				spin_unlock_irqrestore(&sk->lock, flags);
+				return total ? (int)total : -EINTR;
+			}
 		}
 		if (sk->err) {
 			err = sk->err;
