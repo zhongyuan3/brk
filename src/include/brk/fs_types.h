@@ -4,19 +4,19 @@
 #include <brk/types.h>
 #include <stdbool.h>
 
-struct fs_driver;
-struct fs_super_block;
-struct fs_super_block_ops;
-struct fs_inode;
-struct fs_inode_ops;
-struct fs_file;
-struct fs_file_ops;
-struct fs_dentry;
-struct fs_dentry_ops;
-struct fs_mount_state;
-struct fs_path;
+struct file_system_type;
+struct super_block;
+struct super_block_ops;
+struct inode;
+struct inode_ops;
+struct file;
+struct file_ops;
+struct dentry;
+struct dentry_ops;
+struct mount_state;
+struct path;
 
-/* fs_iattr.valid bits */
+/* iattr.valid bits */
 #define ATTR_MODE (1u << 0)
 #define ATTR_UID (1u << 1)
 #define ATTR_GID (1u << 2)
@@ -25,7 +25,7 @@ struct fs_path;
 #define ATTR_MTIME (1u << 5)
 #define ATTR_CTIME (1u << 6)
 
-struct fs_iattr {
+struct iattr {
 	unsigned int valid;
 	umode_t mode;
 	kuid_t uid;
@@ -34,11 +34,11 @@ struct fs_iattr {
 	ktime_t atime;
 	ktime_t mtime;
 	ktime_t ctime;
-	struct fs_file *file;
+	struct file *file;
 };
 
-struct fs_dir_iterator {
-	bool (*actor)(struct fs_dir_iterator *, const char *, int, loff_t, u64,
+struct dir_iterator {
+	bool (*actor)(struct dir_iterator *, const char *, int, loff_t, u64,
 		      unsigned int);
 	loff_t pos;
 };

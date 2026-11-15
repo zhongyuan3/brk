@@ -16,18 +16,18 @@
 
 static struct slab_allocator file_cache;
 
-void fs_file_cache_init(void)
+void file_cache_init(void)
 {
-	slab_init(&file_cache, sizeof(struct fs_file), alignof(struct fs_file),
+	slab_init(&file_cache, sizeof(struct file), alignof(struct file),
 		  "file_cache");
 }
 
-struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode)
+struct file *file_alloc(struct path *path, fmode_t mode)
 {
-	struct fs_file *file;
-	struct fs_inode *inode;
+	struct file *file;
+	struct inode *inode;
 
-	inode = fs_dentry_inode(path->dentry);
+	inode = dentry_inode(path->dentry);
 	if (!inode)
 		return ERR_PTR(-ENOENT);
 
@@ -36,7 +36,7 @@ struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode)
 		return ERR_PTR(-ENOMEM);
 
 	refcnt_init(&file->count, 1);
-	fs_path_get(path);
+	path_get(path);
 	file->path = *path;
 	file->inode = inode;
 	file->ops = inode->fops;
@@ -51,7 +51,7 @@ struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode)
 
 	int err = file->ops->open(file->inode, file);
 	if (err) {
-		fs_path_put(&file->path);
+		path_put(&file->path);
 		slab_free(&file_cache, file);
 		return ERR_PTR(err);
 	}
@@ -59,16 +59,15 @@ struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode)
 	return file;
 }
 
-struct fs_file *fs_file_get(struct fs_file *file)
+struct file *file_get(struct file *file)
 {
 	refcnt_inc(&file->count);
 	return file;
 }
 
-struct fs_file *fs_file_alloc_anon(const struct fs_file_ops *ops,
-				   void *private_data)
+struct file *file_alloc_anon(const struct file_ops *ops, void *private_data)
 {
-	struct fs_file *file;
+	struct file *file;
 
 	if (!ops)
 		return ERR_PTR(-EINVAL);
@@ -91,9 +90,9 @@ struct fs_file *fs_file_alloc_anon(const struct fs_file_ops *ops,
 	return file;
 }
 
-void fs_file_put(struct fs_file *file)
+void file_put(struct file *file)
 {
-	const struct fs_file_ops *fop;
+	const struct file_ops *fop;
 
 	if (refcnt_dec_fetch(&file->count) > 0)
 		return;
@@ -103,16 +102,16 @@ void fs_file_put(struct fs_file *file)
 		fop->release(file->inode, file);
 
 	if (!file->anon)
-		fs_path_put(&file->path);
+		path_put(&file->path);
 
 	slab_free(&file_cache, file);
 }
 
-loff_t fs_file_lseek(struct fs_file *file, loff_t len, int whence)
+loff_t file_lseek(struct file *file, loff_t len, int whence)
 {
 	loff_t ret;
 
-	/* Serialize with fs_file_read()/write() and getdents(). */
+	/* Serialize with file_read()/write() and getdents(). */
 	sleeplock_acquire(&file->pos_lock);
 	ret = file->ops->llseek(file, len, whence);
 	if (ret >= 0)
@@ -121,7 +120,7 @@ loff_t fs_file_lseek(struct fs_file *file, loff_t len, int whence)
 	return ret;
 }
 
-ssize_t fs_file_read(struct fs_file *file, void *buf, size_t size)
+ssize_t file_read(struct file *file, void *buf, size_t size)
 {
 	loff_t *pos = &file->pos;
 	sleeplock_acquire(&file->pos_lock);
@@ -130,9 +129,9 @@ ssize_t fs_file_read(struct fs_file *file, void *buf, size_t size)
 	return ret;
 }
 
-void fs_remove_inode_privs(struct fs_inode *inode, struct fs_dentry *dentry)
+void remove_inode_privs(struct inode *inode, struct dentry *dentry)
 {
-	struct fs_iattr attr;
+	struct iattr attr;
 
 	if (!inode || !dentry || !inode->ops || !inode->ops->setattr)
 		return;
@@ -147,18 +146,18 @@ void fs_remove_inode_privs(struct fs_inode *inode, struct fs_dentry *dentry)
 	inode->ops->setattr(dentry, &attr);
 }
 
-void fs_file_remove_privs(struct fs_file *file)
+void file_remove_privs(struct file *file)
 {
 	if (!file || file->anon || !file->inode)
 		return;
-	fs_remove_inode_privs(file->inode, file->path.dentry);
+	remove_inode_privs(file->inode, file->path.dentry);
 }
 
-ssize_t fs_file_write(struct fs_file *file, const void *buf, size_t size)
+ssize_t file_write(struct file *file, const void *buf, size_t size)
 {
 	loff_t *pos = &file->pos;
 
-	fs_file_remove_privs(file);
+	file_remove_privs(file);
 
 	sleeplock_acquire(&file->pos_lock);
 	ssize_t ret = file->ops->write(file, buf, size, pos);
@@ -166,14 +165,14 @@ ssize_t fs_file_write(struct fs_file *file, const void *buf, size_t size)
 	return ret;
 }
 
-long fs_file_ioctl(struct fs_file *file, unsigned int cmd, unsigned long arg)
+long file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	if (!file->ops->ioctl)
 		return -ENOTTY;
 	return file->ops->ioctl(file, cmd, arg);
 }
 
-unsigned int fs_file_poll(struct fs_file *file, unsigned int events)
+unsigned int file_poll(struct file *file, unsigned int events)
 {
 	if (!file)
 		return POLLNVAL;
@@ -184,9 +183,9 @@ unsigned int fs_file_poll(struct fs_file *file, unsigned int events)
 	return (POLLIN | POLLOUT) & (events | POLLERR | POLLHUP);
 }
 
-int fs_file_stat(struct fs_file *file, struct kstat *buf)
+int file_stat(struct file *file, struct kstat *buf)
 {
-	const struct fs_inode_ops *i_op;
+	const struct inode_ops *i_op;
 
 	if (file->anon) {
 		memset(buf, 0, sizeof(*buf));
@@ -199,9 +198,9 @@ int fs_file_stat(struct fs_file *file, struct kstat *buf)
 	return i_op->getattr(&file->path, buf, 0, 0);
 }
 
-int fs_file_truncate(struct fs_file *file, loff_t size)
+int file_truncate(struct file *file, loff_t size)
 {
-	struct fs_iattr attr = {
+	struct iattr attr = {
 		.valid = ATTR_SIZE,
 		.size = size,
 		.file = file,
@@ -218,19 +217,19 @@ int fs_file_truncate(struct fs_file *file, loff_t size)
 	if (!file->inode->ops || !file->inode->ops->setattr)
 		return -EOPNOTSUPP;
 
-	fs_file_remove_privs(file);
+	file_remove_privs(file);
 
 	return file->inode->ops->setattr(file->path.dentry, &attr);
 }
 
-int fs_file_fallocate(struct fs_file *file, int mode, loff_t offset, loff_t len)
+int file_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
 {
 	if (!file || !file->inode)
 		return -EINVAL;
 	if (!file->ops || !file->ops->fallocate)
 		return -EOPNOTSUPP;
 
-	fs_file_remove_privs(file);
+	file_remove_privs(file);
 
 	return file->ops->fallocate(file, mode, offset, len);
 }

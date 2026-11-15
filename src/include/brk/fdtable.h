@@ -7,7 +7,7 @@
 #include <uapi/limits.h>
 
 struct file_desc_table {
-	struct fs_file *files[OPEN_MAX];
+	struct file *files[OPEN_MAX];
 	spinlock_t lock;
 };
 
@@ -32,7 +32,7 @@ void fdtable_copy(struct file_desc_table *dst, struct file_desc_table *src);
  *
  * Return: The new file descriptor on success, or an error code on failure.
  */
-int fdtable_alloc_fd(struct file_desc_table *table, struct fs_file *file);
+int fdtable_alloc_fd(struct file_desc_table *table, struct file *file);
 
 /**
  * fdtable_close_fd() - Close a file descriptor for the file system file
@@ -51,9 +51,9 @@ int fdtable_close_fd(struct file_desc_table *table, int fd);
  * @fd: The file descriptor to get the file system file for
  *
  * This function increments the reference count of the file system file.
- * The caller must call fs_file_put() on the returned file after use.
+ * The caller must call file_put() on the returned file after use.
  */
-struct fs_file *fdtable_get_file(struct file_desc_table *table, int fd);
+struct file *fdtable_get_file(struct file_desc_table *table, int fd);
 
 /**
  * fdtable_dup_fd() - Duplicate a file descriptor

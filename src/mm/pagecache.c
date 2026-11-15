@@ -584,10 +584,10 @@ int truncate_inode_pages(struct page_cache *m, loff_t new_size)
 	return 0;
 }
 
-ssize_t generic_file_read(struct fs_file *file, char *buf, size_t size,
+ssize_t generic_file_read(struct file *file, char *buf, size_t size,
 			  loff_t *pos)
 {
-	struct fs_inode *inode = file->inode;
+	struct inode *inode = file->inode;
 	struct page_cache *m = inode->mapping;
 	ssize_t total = 0;
 	loff_t isize;
@@ -638,10 +638,10 @@ ssize_t generic_file_read(struct fs_file *file, char *buf, size_t size,
 	return total > 0 ? total : err;
 }
 
-ssize_t generic_file_write(struct fs_file *file, const char *buf, size_t size,
+ssize_t generic_file_write(struct file *file, const char *buf, size_t size,
 			   loff_t *pos)
 {
-	struct fs_inode *inode = file->inode;
+	struct inode *inode = file->inode;
 	struct page_cache *m = inode->mapping;
 	ssize_t total = 0;
 	int err = 0;
@@ -699,8 +699,8 @@ ssize_t generic_file_write(struct fs_file *file, const char *buf, size_t size,
 	}
 
 	if (total > 0) {
-		fs_inode_touch_mtime(inode);
-		fs_inode_mark_dirty(inode);
+		inode_touch_mtime(inode);
+		inode_mark_dirty(inode);
 	}
 
 	sleeplock_release(&inode->rwsem);

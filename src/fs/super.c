@@ -11,16 +11,16 @@
 static LIST_DEFINE(super_blocks);
 static SPINLOCK_DEFINE(sb_lock);
 
-struct fs_super_block *fs_super_block_alloc(struct fs_driver *driver)
+struct super_block *super_block_alloc(struct file_system_type *type)
 {
-	struct fs_super_block *sb;
+	struct super_block *sb;
 
 	sb = kzalloc(sizeof(*sb));
 	if (!sb)
 		return NULL;
 
 	list_init(&sb->list);
-	sb->driver = driver;
+	sb->type = type;
 	list_init(&sb->instance);
 	refcnt_init(&sb->count, 1);
 
@@ -37,7 +37,7 @@ struct fs_super_block *fs_super_block_alloc(struct fs_driver *driver)
 	return sb;
 }
 
-void fs_super_block_free(struct fs_super_block *sb)
+void super_block_free(struct super_block *sb)
 {
 	spin_lock(&sb_lock);
 	list_del_init(&sb->list);
@@ -46,19 +46,19 @@ void fs_super_block_free(struct fs_super_block *sb)
 	kfree(sb);
 }
 
-void fs_super_block_get(struct fs_super_block *sb)
+void super_block_get(struct super_block *sb)
 {
 	refcnt_inc(&sb->count);
 }
 
-void fs_super_block_put(struct fs_super_block *sb)
+void super_block_put(struct super_block *sb)
 {
 	if (refcnt_dec_fetch(&sb->count) > 0)
 		return;
 
 	if (sb->ops->put_super)
 		sb->ops->put_super(sb);
-	fs_super_block_free(sb);
+	super_block_free(sb);
 }
 
 /*
@@ -69,9 +69,9 @@ void fs_super_block_put(struct fs_super_block *sb)
  * The inode rwsem is held to exclude concurrent file I/O and truncation,
  * matching the locking used by the per-file ->fsync path.
  */
-static int writeback_single_inode(struct fs_inode *inode)
+static int writeback_single_inode(struct inode *inode)
 {
-	const struct fs_super_block_ops *ops = inode->sb->ops;
+	const struct super_block_ops *ops = inode->sb->ops;
 	int ret = 0;
 	int err;
 
@@ -90,10 +90,10 @@ static int writeback_single_inode(struct fs_inode *inode)
 	return ret;
 }
 
-int sync_filesystem(struct fs_super_block *sb)
+int sync_filesystem(struct super_block *sb)
 {
 	LIST_DEFINE(work);
-	struct fs_inode *inode, *n;
+	struct inode *inode, *n;
 	int ret = 0;
 
 	if (!sb)
@@ -103,7 +103,7 @@ int sync_filesystem(struct fs_super_block *sb)
 	 * Snapshot the dirty inode list: pin every inode that is not being
 	 * torn down and move it onto a private work list. Inodes keep their
 	 * I_DIRTY marker while parked there, so a concurrent dirtier (whose
-	 * fs_inode_mark_dirty() only links when I_DIRTY is clear) will not try
+	 * inode_mark_dirty() only links when I_DIRTY is clear) will not try
 	 * to re-link an inode that is already on the work list.
 	 */
 	spin_lock(&sb->inodes_lock);
@@ -111,8 +111,8 @@ int sync_filesystem(struct fs_super_block *sb)
 		spin_lock(&inode->lock);
 		/*
 		 * Skip inodes that are on their way out, and pin the rest with
-		 * refcnt_inc_unless_zero() rather than fs_inode_get(): if
-		 * fs_inode_put() has already dropped the last reference (but not
+		 * refcnt_inc_unless_zero() rather than inode_get(): if
+		 * inode_put() has already dropped the last reference (but not
 		 * yet set I_FREEING), the count is zero and we must not
 		 * resurrect the inode. Doing both under inode->lock makes the
 		 * I_FREEING check and the pin atomic against that teardown.
@@ -137,7 +137,7 @@ int sync_filesystem(struct fs_super_block *sb)
 		 * is caught by a later sync.
 		 */
 		spin_lock(&sb->inodes_lock);
-		inode = list_first_entry(&work, struct fs_inode, list);
+		inode = list_first_entry(&work, struct inode, list);
 		list_del_init(&inode->list);
 		spin_lock(&inode->lock);
 		inode->state &= ~I_DIRTY;
@@ -147,7 +147,7 @@ int sync_filesystem(struct fs_super_block *sb)
 		err = writeback_single_inode(inode);
 		if (err && !ret)
 			ret = err;
-		fs_inode_put(inode);
+		inode_put(inode);
 	}
 
 	/*
@@ -166,7 +166,7 @@ int sync_filesystem(struct fs_super_block *sb)
 
 int sync_all_filesystems(void)
 {
-	struct fs_super_block *sb, *next;
+	struct super_block *sb, *next;
 	int ret = 0;
 
 	/*
@@ -178,10 +178,9 @@ int sync_all_filesystems(void)
 	spin_lock(&sb_lock);
 	sb = list_empty(&super_blocks) ?
 		     NULL :
-		     list_first_entry(&super_blocks, struct fs_super_block,
-				      list);
+		     list_first_entry(&super_blocks, struct super_block, list);
 	if (sb)
-		fs_super_block_get(sb);
+		super_block_get(sb);
 	spin_unlock(&sb_lock);
 
 	while (sb) {
@@ -194,17 +193,17 @@ int sync_all_filesystems(void)
 			       NULL :
 			       list_next_entry(sb, list);
 		if (next)
-			fs_super_block_get(next);
+			super_block_get(next);
 		spin_unlock(&sb_lock);
 
-		fs_super_block_put(sb);
+		super_block_put(sb);
 		sb = next;
 	}
 
 	return ret;
 }
 
-int fs_statfs(struct fs_super_block *sb, struct kstatfs *buf)
+int statfs(struct super_block *sb, struct kstatfs *buf)
 {
 	if (!sb || !buf)
 		return -EINVAL;

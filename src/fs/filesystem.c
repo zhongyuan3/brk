@@ -6,44 +6,47 @@
 static LIST_DEFINE(filesystems);
 static SPINLOCK_DEFINE(filesystems_lock);
 
-int fs_driver_register(struct fs_driver *fs)
+int file_system_type_register(struct file_system_type *type)
 {
 	spin_lock(&filesystems_lock);
-	list_add_tail(&fs->list, &filesystems);
+	list_add_tail(&type->list, &filesystems);
 	spin_unlock(&filesystems_lock);
 	return 0;
 }
 
-int fs_driver_unregister(struct fs_driver *fs)
+int file_system_type_unregister(struct file_system_type *type)
 {
 	spin_lock(&filesystems_lock);
-	list_del_init(&fs->list);
+	list_del_init(&type->list);
 	spin_unlock(&filesystems_lock);
 	return 0;
 }
 
-struct fs_driver *fs_driver_lookup(const char *name)
+struct file_system_type *file_system_type_lookup(const char *name)
 {
-	struct fs_driver *fs;
+	struct file_system_type *type;
+
 	spin_lock(&filesystems_lock);
-	list_for_each_entry(fs, &filesystems, list) {
-		if (!strcmp(fs->name, name)) {
+	list_for_each_entry(type, &filesystems, list) {
+		if (!strcmp(type->name, name)) {
 			spin_unlock(&filesystems_lock);
-			return fs;
+			return type;
 		}
 	}
 	spin_unlock(&filesystems_lock);
 	return NULL;
 }
 
-void fs_driver_for_each(void (*fn)(const struct fs_driver *, void *), void *ctx)
+void file_system_type_for_each(void (*fn)(const struct file_system_type *,
+					  void *),
+			       void *ctx)
 {
-	struct fs_driver *fs;
+	struct file_system_type *type;
 
 	if (!fn)
 		return;
 	spin_lock(&filesystems_lock);
-	list_for_each_entry(fs, &filesystems, list)
-		fn(fs, ctx);
+	list_for_each_entry(type, &filesystems, list)
+		fn(type, ctx);
 	spin_unlock(&filesystems_lock);
 }

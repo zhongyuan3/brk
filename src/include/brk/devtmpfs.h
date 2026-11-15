@@ -5,7 +5,7 @@
 #include <brk/fs.h>
 #include <brk/types.h>
 
-extern struct fs_driver devtmpfs_fs_type;
+extern struct file_system_type devtmpfs_fs_type;
 
 /*
  * Create /dev nodes for every registered device that has a dev_t.  Used both

@@ -8,8 +8,8 @@
 #include <stddef.h>
 
 struct cached_page;
-struct fs_inode;
-struct fs_file;
+struct inode;
+struct file;
 
 /* VMA backing store. */
 #define UVM_REGION_ANON 0
@@ -53,8 +53,8 @@ struct uvm_region {
 	unsigned int kind;
 
 	/* Shared file mapping: keep the inode and file offset alive. */
-	struct fs_inode *inode;
-	struct fs_file *file;
+	struct inode *inode;
+	struct file *file;
 	loff_t file_offset;
 };
 

@@ -44,65 +44,65 @@ typedef unsigned int fmode_t;
 struct page_cache;
 struct page_cache_ops;
 
-struct fs_mount_args {
-	struct fs_driver *driver;
+struct mount_args {
+	struct file_system_type *type;
 	const char *dev_name;
 	void *data;
 	unsigned long flags;
 };
 
-struct fs_mount_result {
-	struct fs_super_block *sb;
-	struct fs_dentry *root;
+struct mount_result {
+	struct super_block *sb;
+	struct dentry *root;
 };
 
-struct fs_driver {
+struct file_system_type {
 	const char *name;
 	unsigned int flags;
-	int (*mount)(struct fs_mount_args *, struct fs_mount_result *);
+	int (*mount)(struct mount_args *, struct mount_result *);
 	spinlock_t lock;
 	struct list_head super_blocks;
 	struct list_head list;
 };
 
-struct fs_super_block {
+struct super_block {
 	struct list_head list;
-	struct fs_driver *driver;
+	struct file_system_type *type;
 	struct list_head instance;
 	refcnt_t count;
 	unsigned long block_size;
 	unsigned long magic;
 	unsigned long flags;
-	const struct fs_super_block_ops *ops;
-	struct fs_dentry *root;
+	const struct super_block_ops *ops;
+	struct dentry *root;
 	void *private_data;
 	spinlock_t inodes_lock;
 	struct list_head inodes;
 	struct list_head dirty_inodes;
 	spinlock_t mnt_states_lock;
 	struct list_head mnt_states;
-	const struct fs_dentry_ops *default_dops;
+	const struct dentry_ops *default_dops;
 };
 
-struct fs_super_block_ops {
-	struct fs_inode *(*alloc_inode)(struct fs_super_block *);
-	void (*free_inode)(struct fs_inode *);
-	int (*write_inode)(struct fs_inode *, int);
-	void (*evict_inode)(struct fs_inode *);
-	void (*put_super)(struct fs_super_block *);
+struct super_block_ops {
+	struct inode *(*alloc_inode)(struct super_block *);
+	void (*free_inode)(struct inode *);
+	int (*write_inode)(struct inode *, int);
+	void (*evict_inode)(struct inode *);
+	void (*put_super)(struct super_block *);
 	/*
 	 * Optional: flush filesystem-level metadata that is not attached to
 	 * an inode (block/inode bitmaps, directory blocks, ...).  Called by
 	 * sync_filesystem() after all dirty inode writebacks have completed.
 	 */
-	int (*sync_fs)(struct fs_super_block *);
-	int (*statfs)(struct fs_super_block *, struct kstatfs *);
+	int (*sync_fs)(struct super_block *);
+	int (*statfs)(struct super_block *, struct kstatfs *);
 };
 
-struct fs_inode {
-	struct fs_super_block *sb;
-	const struct fs_inode_ops *ops;
-	const struct fs_file_ops *fops;
+struct inode {
+	struct super_block *sb;
+	const struct inode_ops *ops;
+	const struct file_ops *fops;
 	refcnt_t count;
 	spinlock_t lock;
 	sleeplock_t rwsem;
@@ -125,29 +125,27 @@ struct fs_inode {
 	void *private_data;
 };
 
-struct fs_inode_ops {
-	struct fs_dentry *(*lookup)(struct fs_inode *, struct fs_dentry *,
-				    unsigned int);
-	int (*create)(struct fs_inode *, struct fs_dentry *, umode_t, bool);
-	int (*link)(struct fs_dentry *, struct fs_inode *, struct fs_dentry *);
-	int (*unlink)(struct fs_inode *, struct fs_dentry *);
-	int (*symlink)(struct fs_inode *, struct fs_dentry *, const char *);
-	int (*readlink)(struct fs_dentry *, char *, int);
-	int (*mkdir)(struct fs_inode *, struct fs_dentry *, umode_t);
-	int (*rmdir)(struct fs_inode *, struct fs_dentry *);
-	int (*rename)(struct fs_inode *, struct fs_dentry *, struct fs_inode *,
-		      struct fs_dentry *, unsigned int);
-	int (*mknod)(struct fs_inode *, struct fs_dentry *, umode_t, dev_t);
-	int (*getattr)(const struct fs_path *, struct kstat *, u32,
-		       unsigned int);
-	int (*setattr)(struct fs_dentry *, struct fs_iattr *);
+struct inode_ops {
+	struct dentry *(*lookup)(struct inode *, struct dentry *, unsigned int);
+	int (*create)(struct inode *, struct dentry *, umode_t, bool);
+	int (*link)(struct dentry *, struct inode *, struct dentry *);
+	int (*unlink)(struct inode *, struct dentry *);
+	int (*symlink)(struct inode *, struct dentry *, const char *);
+	int (*readlink)(struct dentry *, char *, int);
+	int (*mkdir)(struct inode *, struct dentry *, umode_t);
+	int (*rmdir)(struct inode *, struct dentry *);
+	int (*rename)(struct inode *, struct dentry *, struct inode *,
+		      struct dentry *, unsigned int);
+	int (*mknod)(struct inode *, struct dentry *, umode_t, dev_t);
+	int (*getattr)(const struct path *, struct kstat *, u32, unsigned int);
+	int (*setattr)(struct dentry *, struct iattr *);
 };
 
-struct fs_file {
+struct file {
 	refcnt_t count;
-	struct fs_path path;
-	struct fs_inode *inode;
-	const struct fs_file_ops *ops;
+	struct path path;
+	struct inode *inode;
+	const struct file_ops *ops;
 	spinlock_t lock;
 	fmode_t mode;
 	/* Anonymous object (socket, ...): no path/inode to release. */
@@ -160,31 +158,32 @@ struct fs_file {
 	void *dev_private;
 };
 
-struct fs_file_ops {
-	int (*open)(struct fs_inode *, struct fs_file *);
-	int (*release)(struct fs_inode *, struct fs_file *);
-	ssize_t (*read)(struct fs_file *, char *, size_t, loff_t *);
-	ssize_t (*write)(struct fs_file *, const char *, size_t, loff_t *);
-	loff_t (*llseek)(struct fs_file *, loff_t, int);
-	int (*iterate_shared)(struct fs_file *, struct fs_dir_iterator *);
-	int (*fsync)(struct fs_file *, loff_t, loff_t, int);
-	int (*flush)(struct fs_file *);
-	long (*ioctl)(struct fs_file *, unsigned int, unsigned long);
-	int (*fallocate)(struct fs_file *, int mode, loff_t offset, loff_t len);
+struct file_ops {
+	int (*open)(struct inode *, struct file *);
+	int (*release)(struct inode *, struct file *);
+	ssize_t (*read)(struct file *, char *, size_t, loff_t *);
+	ssize_t (*write)(struct file *, const char *, size_t, loff_t *);
+	loff_t (*llseek)(struct file *, loff_t, int);
+	int (*iterate_shared)(struct file *, struct dir_iterator *);
+	int (*fsync)(struct file *, loff_t, loff_t, int);
+	int (*flush)(struct file *);
+	long (*ioctl)(struct file *, unsigned int, unsigned long);
+	int (*fallocate)(struct file *, int mode, loff_t offset, loff_t len);
 	/* Readiness for poll/select; returns POLL* revents. */
-	unsigned int (*poll)(struct fs_file *file, unsigned int events);
+	unsigned int (*poll)(struct file *file, unsigned int events);
 };
 
-int fs_driver_register(struct fs_driver *fs);
-int fs_driver_unregister(struct fs_driver *fs);
-struct fs_driver *fs_driver_lookup(const char *name);
-void fs_driver_for_each(void (*fn)(const struct fs_driver *fs, void *ctx),
-			void *ctx);
+int file_system_type_register(struct file_system_type *fs);
+int file_system_type_unregister(struct file_system_type *fs);
+struct file_system_type *file_system_type_lookup(const char *name);
+void file_system_type_for_each(void (*fn)(const struct file_system_type *fs,
+					  void *ctx),
+			       void *ctx);
 
-struct fs_super_block *fs_super_block_alloc(struct fs_driver *driver);
-void fs_super_block_free(struct fs_super_block *sb);
-void fs_super_block_get(struct fs_super_block *sb);
-void fs_super_block_put(struct fs_super_block *sb);
+struct super_block *super_block_alloc(struct file_system_type *type);
+void super_block_free(struct super_block *sb);
+void super_block_get(struct super_block *sb);
+void super_block_put(struct super_block *sb);
 
 /*
  * sync_filesystem() - write back every dirty inode of @sb (data + metadata).
@@ -192,48 +191,45 @@ void fs_super_block_put(struct fs_super_block *sb);
  *
  * Return: 0 on success, or the first negative errno encountered.
  */
-int sync_filesystem(struct fs_super_block *sb);
+int sync_filesystem(struct super_block *sb);
 int sync_all_filesystems(void);
 
-struct fs_inode *fs_inode_get_locked(struct fs_super_block *sb,
-				     unsigned long ino);
-void fs_inode_unlock_new(struct fs_inode *inode);
-void fs_inode_fail_new(struct fs_inode *inode);
-struct fs_inode *fs_inode_get(struct fs_inode *inode);
-void fs_inode_put(struct fs_inode *inode);
-void fs_inode_mark_dirty(struct fs_inode *inode);
-void fs_inode_clear(struct fs_inode *inode);
-void fs_inode_cache_init(void);
-int fs_inode_attach_page_cache(struct fs_inode *inode,
-			       const struct page_cache_ops *ops);
-void fs_inode_times_set_all_now(struct fs_inode *inode);
-void fs_inode_times_set(struct fs_inode *inode, const ktime_t *atime,
-			const ktime_t *mtime);
-void fs_inode_touch_mtime(struct fs_inode *inode);
-void fs_inode_touch_ctime(struct fs_inode *inode);
-void fs_inode_touch_mtime_ctime(struct fs_inode *inode);
-void fs_inode_times_to_kstat(struct fs_inode *inode, struct kstat *ks);
+struct inode *inode_get_locked(struct super_block *sb, unsigned long ino);
+void inode_unlock_new(struct inode *inode);
+void inode_fail_new(struct inode *inode);
+struct inode *inode_get(struct inode *inode);
+void inode_put(struct inode *inode);
+void inode_mark_dirty(struct inode *inode);
+void inode_clear(struct inode *inode);
+void inode_cache_init(void);
+int inode_attach_page_cache(struct inode *inode,
+			    const struct page_cache_ops *ops);
+void inode_times_set_all_now(struct inode *inode);
+void inode_times_set(struct inode *inode, const ktime_t *atime,
+		     const ktime_t *mtime);
+void inode_touch_mtime(struct inode *inode);
+void inode_touch_ctime(struct inode *inode);
+void inode_touch_mtime_ctime(struct inode *inode);
+void inode_times_to_kstat(struct inode *inode, struct kstat *ks);
 
-struct fs_file *fs_file_alloc(struct fs_path *path, fmode_t mode);
-struct fs_file *fs_file_alloc_anon(const struct fs_file_ops *ops,
-				   void *private_data);
-struct fs_file *fs_file_get(struct fs_file *file);
-void fs_file_put(struct fs_file *file);
-loff_t fs_file_lseek(struct fs_file *file, loff_t len, int whence);
-ssize_t fs_file_read(struct fs_file *file, void *buf, size_t size);
-ssize_t fs_file_write(struct fs_file *file, const void *buf, size_t size);
-long fs_file_ioctl(struct fs_file *file, unsigned int cmd, unsigned long arg);
-unsigned int fs_file_poll(struct fs_file *file, unsigned int events);
-int fs_file_stat(struct fs_file *file, struct kstat *buf);
-void fs_remove_inode_privs(struct fs_inode *inode, struct fs_dentry *dentry);
-void fs_file_remove_privs(struct fs_file *file);
-int fs_statfs(struct fs_super_block *sb, struct kstatfs *buf);
-int fs_file_truncate(struct fs_file *file, loff_t size);
-int fs_file_fallocate(struct fs_file *file, int mode, loff_t offset,
-		      loff_t len);
-void fs_file_cache_init(void);
+struct file *file_alloc(struct path *path, fmode_t mode);
+struct file *file_alloc_anon(const struct file_ops *ops, void *private_data);
+struct file *file_get(struct file *file);
+void file_put(struct file *file);
+loff_t file_lseek(struct file *file, loff_t len, int whence);
+ssize_t file_read(struct file *file, void *buf, size_t size);
+ssize_t file_write(struct file *file, const void *buf, size_t size);
+long file_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+unsigned int file_poll(struct file *file, unsigned int events);
+int file_stat(struct file *file, struct kstat *buf);
+void remove_inode_privs(struct inode *inode, struct dentry *dentry);
+void file_remove_privs(struct file *file);
+int statfs(struct super_block *sb, struct kstatfs *buf);
+int file_truncate(struct file *file, loff_t size);
+int file_fallocate(struct file *file, int mode, loff_t offset, loff_t len);
+void file_cache_init(void);
 
-struct fs_file *do_openat(int dirfd, const char *path, int flags, umode_t mode);
+struct file *do_openat(int dirfd, const char *path, int flags, umode_t mode);
 int do_execve(const char *path, char **argv, char **envp);
 int do_mkdirat(int dirfd, const char *path, umode_t mode);
 int do_mknodat(int dirfd, const char *path, umode_t mode, dev_t dev);
@@ -245,30 +241,30 @@ int do_readlinkat(int dirfd, const char *path, char *buf, size_t bufsiz);
 int do_renameat(int olddirfd, const char *oldpath, int newdirfd,
 		const char *newpath, unsigned int flags);
 
-int fs_init(void);
+int vfs_init(void);
 int rootfs_init(void);
 
 void pipe_fs_init(void);
-int anon_pipe_create(struct fs_file **read_file, struct fs_file **write_file,
+int anon_pipe_create(struct file **read_file, struct file **write_file,
 		     unsigned int flags);
 
 int do_pipe2(int *pipefd, int flags);
 
-extern struct fs_driver tmpfs_fs_type;
-extern struct fs_driver brkfs_fs_type;
-extern struct fs_driver procfs_fs_type;
+extern struct file_system_type tmpfs_fs_type;
+extern struct file_system_type brkfs_fs_type;
+extern struct file_system_type procfs_fs_type;
 
-extern const struct fs_super_block_ops tmpfs_sops;
-extern const struct fs_inode_ops tmpfs_iops;
-extern const struct fs_file_ops tmpfs_dir_fops;
-extern const struct fs_file_ops tmpfs_file_fops;
+extern const struct super_block_ops tmpfs_sops;
+extern const struct inode_ops tmpfs_iops;
+extern const struct file_ops tmpfs_dir_fops;
+extern const struct file_ops tmpfs_file_fops;
 
-extern const struct fs_super_block_ops brkfs_sops;
-extern const struct fs_inode_ops brkfs_iops;
-extern const struct fs_file_ops brkfs_dir_fops;
-extern const struct fs_file_ops brkfs_file_fops;
+extern const struct super_block_ops brkfs_sops;
+extern const struct inode_ops brkfs_iops;
+extern const struct file_ops brkfs_dir_fops;
+extern const struct file_ops brkfs_file_fops;
 
-extern const struct fs_file_ops chrdev_fops;
-extern const struct fs_file_ops blkdev_fops;
+extern const struct file_ops chrdev_fops;
+extern const struct file_ops blkdev_fops;
 
 #endif

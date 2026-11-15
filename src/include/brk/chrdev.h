@@ -9,7 +9,7 @@
 
 #define FIRST_DYNAMIC_CHRDEV_MAJOR 16
 
-struct fs_file_ops;
+struct file_ops;
 
 struct char_dev {
 	dev_t dev;
@@ -19,7 +19,7 @@ struct char_dev {
 	 * lifetime; drivers must keep per-open state in file->private_data
 	 * and must not replace file->ops.
 	 */
-	const struct fs_file_ops *fops;
+	const struct file_ops *fops;
 	struct hlist_node hlist;
 	refcnt_t ref;
 	bool dead;

@@ -168,7 +168,7 @@ static int map_anon_lazy(struct uvm_space *mm, u64 addr, size_t size, int prot)
 }
 
 static int map_region(struct uvm_space *mm, u64 addr, size_t size, int prot,
-		      struct fs_file *fp, loff_t file_off)
+		      struct file *fp, loff_t file_off)
 {
 	size_t nr_pages = size / PAGE_SIZE;
 	struct uvm_region *vma;
@@ -304,7 +304,7 @@ int uvm_mmap_anon(struct uvm_space *mm, u64 hint, size_t len, int prot,
 int uvm_mmap_file_private(struct uvm_space *mm, u64 hint, size_t len, int prot,
 			  int flags, int fd, u64 offset, u64 *addr_out)
 {
-	struct fs_file *fp;
+	struct file *fp;
 	u64 size;
 	u64 addr = 0;
 	loff_t file_off;
@@ -365,15 +365,15 @@ int uvm_mmap_file_private(struct uvm_space *mm, u64 hint, size_t len, int prot,
 	err = 0;
 
 out_put:
-	fs_file_put(fp);
+	file_put(fp);
 	return err;
 }
 
 int uvm_mmap_file_shared(struct uvm_space *mm, u64 hint, size_t len, int prot,
 			 int flags, int fd, u64 offset, u64 *addr_out)
 {
-	struct fs_file *fp;
-	struct fs_inode *inode;
+	struct file *fp;
+	struct inode *inode;
 	struct uvm_region *vma;
 	struct cached_page **cached;
 	u64 size;
@@ -433,7 +433,7 @@ int uvm_mmap_file_shared(struct uvm_space *mm, u64 hint, size_t len, int prot,
 	 * writeback has a valid inode size for pages past the old EOF.
 	 */
 	if ((prot & PROT_WRITE) && (u64)inode->size < offset + size) {
-		err = fs_file_truncate(fp, (loff_t)(offset + size));
+		err = file_truncate(fp, (loff_t)(offset + size));
 		if (err)
 			goto out_put;
 	}
@@ -463,8 +463,8 @@ int uvm_mmap_file_shared(struct uvm_space *mm, u64 hint, size_t len, int prot,
 	vma->nr_pages = 0;
 	vma->flags = pte_flags;
 	vma->cached = cached;
-	vma->inode = fs_inode_get(inode);
-	vma->file = fs_file_get(fp);
+	vma->inode = inode_get(inode);
+	vma->file = file_get(fp);
 	vma->file_offset = (loff_t)offset;
 
 	for (size_t i = 0; i < nr_pages; i++) {
@@ -498,7 +498,7 @@ int uvm_mmap_file_shared(struct uvm_space *mm, u64 hint, size_t len, int prot,
 	err = 0;
 
 out_put:
-	fs_file_put(fp);
+	file_put(fp);
 	return err;
 }
 
@@ -592,8 +592,8 @@ int uvm_munmap(struct uvm_space *mm, u64 addr, size_t len)
 					r->file_offset + (hi - rstart);
 
 				if (shared) {
-					right->inode = fs_inode_get(r->inode);
-					right->file = fs_file_get(r->file);
+					right->inode = inode_get(r->inode);
+					right->file = file_get(r->file);
 					right->cached = (struct cached_page **)
 						right_pages;
 					memcpy(right->cached,
@@ -757,13 +757,13 @@ static struct uvm_region *split_region_at(struct uvm_space *mm,
 	right->nr_pages = right_nr;
 
 	if (r->kind == UVM_REGION_SHARED_FILE) {
-		right->inode = fs_inode_get(r->inode);
-		right->file = fs_file_get(r->file);
+		right->inode = inode_get(r->inode);
+		right->file = file_get(r->file);
 		right->cached = kcalloc(right_nr, sizeof(right->cached[0]));
 		if (!right->cached) {
-			fs_inode_put(right->inode);
+			inode_put(right->inode);
 			if (right->file)
-				fs_file_put(right->file);
+				file_put(right->file);
 			uvm_region_free(right);
 			return ERR_PTR(-ENOMEM);
 		}
@@ -1038,7 +1038,7 @@ int uvm_msync(struct uvm_space *mm, u64 addr, size_t len, int flags)
 
 		if ((r->flags & PTE_W) && r->file &&
 		    (u64)r->inode->size < (u64)r->file_offset + r->size) {
-			int err = fs_file_truncate(
+			int err = file_truncate(
 				r->file, (loff_t)(r->file_offset + r->size));
 
 			if (err)

@@ -7,7 +7,7 @@
 #include <brk/types.h>
 
 struct file_system_info {
-	struct fs_path cwd, root;
+	struct path cwd, root;
 	spinlock_t lock;
 };
 
@@ -30,7 +30,7 @@ void fsinfo_copy(struct file_system_info *dst, struct file_system_info *src);
  *
  * This function takes ownership of the @path.
  */
-void fsinfo_set_cwd(struct file_system_info *info, struct fs_path *path);
+void fsinfo_set_cwd(struct file_system_info *info, struct path *path);
 
 /**
  * fsinfo_set_root() - Set the root directory of the file system info
@@ -39,7 +39,7 @@ void fsinfo_set_cwd(struct file_system_info *info, struct fs_path *path);
  *
  * This function takes ownership of the @path.
  */
-void fsinfo_set_root(struct file_system_info *info, struct fs_path *path);
+void fsinfo_set_root(struct file_system_info *info, struct path *path);
 
 /**
  * fsinfo_update_cwd() - Update the current working directory of the file system info
@@ -48,7 +48,7 @@ void fsinfo_set_root(struct file_system_info *info, struct fs_path *path);
  *
  * Puts the old current working directory and takes ownership of @path.
  */
-void fsinfo_update_cwd(struct file_system_info *info, struct fs_path *path);
+void fsinfo_update_cwd(struct file_system_info *info, struct path *path);
 
 /**
  * fsinfo_update_root() - Update the root directory of the file system info
@@ -57,7 +57,7 @@ void fsinfo_update_cwd(struct file_system_info *info, struct fs_path *path);
  *
  * Puts the old root directory and takes ownership of @path.
  */
-void fsinfo_update_root(struct file_system_info *info, struct fs_path *path);
+void fsinfo_update_root(struct file_system_info *info, struct path *path);
 
 /**
  * fsinfo_get_cwd() - Get the current working directory of the file system info
@@ -65,9 +65,9 @@ void fsinfo_update_root(struct file_system_info *info, struct fs_path *path);
  * @path: The buffer to store the current working directory
  *
  * This function increments the reference count of the current working directory.
- * The caller must call fs_path_put() on the returned path after use.
+ * The caller must call path_put() on the returned path after use.
  */
-void fsinfo_get_cwd(struct file_system_info *info, struct fs_path *path);
+void fsinfo_get_cwd(struct file_system_info *info, struct path *path);
 
 /**
  * fsinfo_get_root() - Get the root directory of the file system info
@@ -75,8 +75,8 @@ void fsinfo_get_cwd(struct file_system_info *info, struct fs_path *path);
  * @path: The buffer to store the root directory
  *
  * This function increments the reference count of the root directory.
- * The caller must call fs_path_put() on the returned path after use.
+ * The caller must call path_put() on the returned path after use.
  */
-void fsinfo_get_root(struct file_system_info *info, struct fs_path *path);
+void fsinfo_get_root(struct file_system_info *info, struct path *path);
 
 #endif

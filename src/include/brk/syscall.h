@@ -4,7 +4,7 @@
 #include <brk/types.h>
 #include <uapi/syscall.h>
 
-struct fs_file;
+struct file;
 
 void syscall(void);
 u64 syscall_arg_raw(int argno);

@@ -11,7 +11,7 @@
 #include <uapi/errno.h>
 #include <uapi/stat.h>
 
-static int brkfs_dir_get_block(struct fs_inode *dir, u64 blk_idx, u32 *bno,
+static int brkfs_dir_get_block(struct inode *dir, u64 blk_idx, u32 *bno,
 			       bool create)
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
@@ -35,21 +35,21 @@ static int brkfs_dir_write_block(struct brkfs_sb_info *sbi, u32 bno, u8 *buf)
 	return brkfs_block_write(sbi, bno, buf);
 }
 
-static int brkfs_dir_open(struct fs_inode *inode, struct fs_file *file)
+static int brkfs_dir_open(struct inode *inode, struct file *file)
 {
 	file->ops = &brkfs_dir_fops;
 	(void)inode;
 	return 0;
 }
 
-static int brkfs_dir_release(struct fs_inode *inode, struct fs_file *file)
+static int brkfs_dir_release(struct inode *inode, struct file *file)
 {
 	(void)inode;
 	(void)file;
 	return 0;
 }
 
-static ssize_t brkfs_dir_read(struct fs_file *file, char *buf, size_t size,
+static ssize_t brkfs_dir_read(struct file *file, char *buf, size_t size,
 			      loff_t *pos)
 {
 	(void)file;
@@ -59,8 +59,8 @@ static ssize_t brkfs_dir_read(struct fs_file *file, char *buf, size_t size,
 	return -EISDIR;
 }
 
-static ssize_t brkfs_dir_write(struct fs_file *file, const char *buf,
-			       size_t size, loff_t *pos)
+static ssize_t brkfs_dir_write(struct file *file, const char *buf, size_t size,
+			       loff_t *pos)
 {
 	(void)file;
 	(void)buf;
@@ -69,9 +69,9 @@ static ssize_t brkfs_dir_write(struct fs_file *file, const char *buf,
 	return -EISDIR;
 }
 
-static loff_t brkfs_dir_llseek(struct fs_file *file, loff_t offset, int whence)
+static loff_t brkfs_dir_llseek(struct file *file, loff_t offset, int whence)
 {
-	struct fs_inode *inode = file->inode;
+	struct inode *inode = file->inode;
 	loff_t new_pos = 0;
 
 	if (whence == SEEK_SET)
@@ -87,10 +87,9 @@ static loff_t brkfs_dir_llseek(struct fs_file *file, loff_t offset, int whence)
 	return new_pos;
 }
 
-static int brkfs_dir_iterate_shared(struct fs_file *file,
-				    struct fs_dir_iterator *ctx)
+static int brkfs_dir_iterate_shared(struct file *file, struct dir_iterator *ctx)
 {
-	struct fs_inode *inode = file->inode;
+	struct inode *inode = file->inode;
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	size_t bsz = sbi->s_sb.s_blocksize;
 	loff_t off = ctx->pos;
@@ -156,10 +155,10 @@ out:
 	return err;
 }
 
-static int brkfs_dir_fsync(struct fs_file *file, loff_t start, loff_t end,
+static int brkfs_dir_fsync(struct file *file, loff_t start, loff_t end,
 			   int datasync)
 {
-	struct fs_inode *inode = file->inode;
+	struct inode *inode = file->inode;
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	int err;
 
@@ -178,13 +177,13 @@ static int brkfs_dir_fsync(struct fs_file *file, loff_t start, loff_t end,
 	return err;
 }
 
-static int brkfs_dir_flush(struct fs_file *file)
+static int brkfs_dir_flush(struct file *file)
 {
 	(void)file;
 	return -EISDIR;
 }
 
-static long brkfs_dir_ioctl(struct fs_file *file, unsigned int cmd,
+static long brkfs_dir_ioctl(struct file *file, unsigned int cmd,
 			    unsigned long arg)
 {
 	(void)file;
@@ -217,7 +216,7 @@ static size_t brkfs_dirent_reclen(unsigned int name_len)
 	return align_up(offsetof(struct brkfs_dir_entry, name) + name_len, 4u);
 }
 
-static int brkfs_dir_ensure_first_block(struct fs_inode *dir)
+static int brkfs_dir_ensure_first_block(struct inode *dir)
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	struct brkfs_inode_info *info = dir->private_data;
@@ -306,7 +305,7 @@ static int __brkfs_dir_add_in_block(u8 *blk, size_t bs, u32 ino,
 	return -ENOSPC;
 }
 
-int brkfs_dir_add(struct fs_inode *dir, u32 child_ino, const char *name,
+int brkfs_dir_add(struct inode *dir, u32 child_ino, const char *name,
 		  unsigned int name_len, umode_t child_mode)
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
@@ -412,7 +411,7 @@ static int __brkfs_dir_remove_in_block(u8 *blk, size_t bs,
 	return -ENOENT;
 }
 
-int brkfs_new_dir_body(struct fs_inode *inode, u32 parent_ino)
+int brkfs_new_dir_body(struct inode *inode, u32 parent_ino)
 {
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	struct brkfs_inode_info *di = inode->private_data;
@@ -477,8 +476,7 @@ int brkfs_new_dir_body(struct fs_inode *inode, u32 parent_ino)
 	return err;
 }
 
-int brkfs_dir_remove(struct fs_inode *dir, const char *name,
-		     unsigned int name_len)
+int brkfs_dir_remove(struct inode *dir, const char *name, unsigned int name_len)
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	size_t bs = sbi->s_sb.s_blocksize;
@@ -520,7 +518,7 @@ out:
  * non-empty, or a negative errno on I/O/format errors.  The caller must hold
  * @dir->rwsem.
  */
-int brkfs_dir_is_empty(struct fs_inode *dir)
+int brkfs_dir_is_empty(struct inode *dir)
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	size_t bs = sbi->s_sb.s_blocksize;
@@ -582,8 +580,8 @@ out:
 	return ret;
 }
 
-int brkfs_dir_lookup(struct fs_inode *dir, const char *name,
-		     unsigned int name_len, u32 *ino_out, u8 *type_out)
+int brkfs_dir_lookup(struct inode *dir, const char *name, unsigned int name_len,
+		     u32 *ino_out, u8 *type_out)
 {
 	struct brkfs_sb_info *sbi = dir->sb->private_data;
 	size_t bs = sbi->s_sb.s_blocksize;
@@ -642,7 +640,7 @@ int brkfs_dir_lookup(struct fs_inode *dir, const char *name,
 	return -ENOENT;
 }
 
-const struct fs_file_ops brkfs_dir_fops = {
+const struct file_ops brkfs_dir_fops = {
 	.open = brkfs_dir_open,
 	.release = brkfs_dir_release,
 	.read = brkfs_dir_read,

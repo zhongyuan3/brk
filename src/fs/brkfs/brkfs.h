@@ -217,9 +217,9 @@ int brkfs_super_set_features(struct brkfs_sb_info *sbi, u32 features);
 int brkfs_super_write(struct brkfs_sb_info *sbi);
 void brkfs_orphan_cleanup(struct brkfs_sb_info *sbi);
 void brkfs_orphan_remove(struct brkfs_sb_info *sbi, u32 ino);
-int brkfs_inode_read(struct brkfs_sb_info *sbi, struct fs_inode *inode);
-void brkfs_inode_setup_ops(struct fs_inode *inode);
-int brkfs_inode_write(struct brkfs_sb_info *sbi, struct fs_inode *inode);
+int brkfs_inode_read(struct brkfs_sb_info *sbi, struct inode *inode);
+void brkfs_inode_setup_ops(struct inode *inode);
+int brkfs_inode_write(struct brkfs_sb_info *sbi, struct inode *inode);
 int brkfs_inode_alloc(struct brkfs_sb_info *sbi, u32 *out_ino);
 int brkfs_inode_free(struct brkfs_sb_info *sbi, u32 ino);
 int brkfs_data_alloc(struct brkfs_sb_info *sbi, u32 *bno);
@@ -236,24 +236,24 @@ int brkfs_disk_inode_init(struct brkfs_sb_info *sbi, u32 ino, umode_t mode,
 			  unsigned int nlink, dev_t rdev, kuid_t uid,
 			  kgid_t gid);
 
-int brkfs_dir_lookup(struct fs_inode *dir, const char *name,
-		     unsigned int name_len, u32 *ino_out, u8 *type_out);
-int brkfs_dir_add(struct fs_inode *dir, u32 child_ino, const char *name,
+int brkfs_dir_lookup(struct inode *dir, const char *name, unsigned int name_len,
+		     u32 *ino_out, u8 *type_out);
+int brkfs_dir_add(struct inode *dir, u32 child_ino, const char *name,
 		  unsigned int name_len, umode_t child_mode);
-int brkfs_dir_remove(struct fs_inode *dir, const char *name,
+int brkfs_dir_remove(struct inode *dir, const char *name,
 		     unsigned int name_len);
-int brkfs_dir_is_empty(struct fs_inode *dir);
-int brkfs_new_dir_body(struct fs_inode *inode, u32 parent_ino);
+int brkfs_dir_is_empty(struct inode *dir);
+int brkfs_new_dir_body(struct inode *inode, u32 parent_ino);
 
-int brkfs_file_read_at(struct fs_inode *inode, loff_t *pos, void *buf,
-		       size_t size, size_t *read_out);
-int brkfs_file_write_at(struct fs_inode *inode, loff_t *pos, const void *buf,
+int brkfs_file_read_at(struct inode *inode, loff_t *pos, void *buf, size_t size,
+		       size_t *read_out);
+int brkfs_file_write_at(struct inode *inode, loff_t *pos, const void *buf,
 			size_t size, size_t *written_out);
-int brkfs_truncate_inode_blocks(struct fs_inode *inode, loff_t new_size);
+int brkfs_truncate_inode_blocks(struct inode *inode, loff_t new_size);
 
 #define BRKFS_GETBLK_CREATE 0x1
 
-int brkfs_inode_getblk(struct fs_inode *inode, loff_t off, u32 *bno,
+int brkfs_inode_getblk(struct inode *inode, loff_t off, u32 *bno,
 		       unsigned flags, struct brkfs_sb_info *sbi);
 
 extern const struct page_cache_ops brkfs_file_pc_ops;

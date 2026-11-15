@@ -6,7 +6,7 @@
 #include <uapi/errno.h>
 #include <uapi/ioctl.h>
 
-static int blkdev_file_open(struct fs_inode *inode, struct fs_file *file)
+static int blkdev_file_open(struct inode *inode, struct file *file)
 {
 	struct block_dev *bd;
 
@@ -19,7 +19,7 @@ static int blkdev_file_open(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static int blkdev_file_release(struct fs_inode *inode, struct fs_file *file)
+static int blkdev_file_release(struct inode *inode, struct file *file)
 {
 	struct block_dev *bd = file->private_data;
 	int err = 0;
@@ -35,7 +35,7 @@ static int blkdev_file_release(struct fs_inode *inode, struct fs_file *file)
 	return err;
 }
 
-static ssize_t blkdev_file_read(struct fs_file *file, char *buf, size_t size,
+static ssize_t blkdev_file_read(struct file *file, char *buf, size_t size,
 				loff_t *pos)
 {
 	struct block_dev *bd = file->private_data;
@@ -89,7 +89,7 @@ static ssize_t blkdev_file_read(struct fs_file *file, char *buf, size_t size,
 	return (ssize_t)total;
 }
 
-static ssize_t blkdev_file_write(struct fs_file *file, const char *buf,
+static ssize_t blkdev_file_write(struct file *file, const char *buf,
 				 size_t size, loff_t *pos)
 {
 	struct block_dev *bd = file->private_data;
@@ -146,8 +146,7 @@ static ssize_t blkdev_file_write(struct fs_file *file, const char *buf,
 	return (ssize_t)total;
 }
 
-static loff_t blkdev_file_llseek(struct fs_file *file, loff_t offset,
-				 int whence)
+static loff_t blkdev_file_llseek(struct file *file, loff_t offset, int whence)
 {
 	struct block_dev *bd = file->private_data;
 	loff_t new_pos;
@@ -174,15 +173,15 @@ static loff_t blkdev_file_llseek(struct fs_file *file, loff_t offset,
 	return new_pos;
 }
 
-static int blkdev_file_iterate_shared(struct fs_file *file,
-				      struct fs_dir_iterator *ctx)
+static int blkdev_file_iterate_shared(struct file *file,
+				      struct dir_iterator *ctx)
 {
 	(void)file;
 	(void)ctx;
 	return -ENOTDIR;
 }
 
-static int blkdev_file_fsync(struct fs_file *file, loff_t start, loff_t end,
+static int blkdev_file_fsync(struct file *file, loff_t start, loff_t end,
 			     int datasync)
 {
 	struct block_dev *bd = file->private_data;
@@ -198,13 +197,13 @@ static int blkdev_file_fsync(struct fs_file *file, loff_t start, loff_t end,
 	return err;
 }
 
-static int blkdev_file_flush(struct fs_file *file)
+static int blkdev_file_flush(struct file *file)
 {
 	(void)file;
 	return 0;
 }
 
-static long blkdev_file_ioctl(struct fs_file *file, unsigned int cmd,
+static long blkdev_file_ioctl(struct file *file, unsigned int cmd,
 			      unsigned long arg)
 {
 	struct block_dev *bd = file->private_data;
@@ -233,7 +232,7 @@ static long blkdev_file_ioctl(struct fs_file *file, unsigned int cmd,
 	}
 }
 
-const struct fs_file_ops blkdev_fops = {
+const struct file_ops blkdev_fops = {
 	.open = blkdev_file_open,
 	.release = blkdev_file_release,
 	.read = blkdev_file_read,

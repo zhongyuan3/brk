@@ -165,9 +165,9 @@ void uvm_region_release(struct uvm_region *region)
 
 	if (region->kind == UVM_REGION_SHARED_FILE) {
 		if (region->inode)
-			fs_inode_put(region->inode);
+			inode_put(region->inode);
 		if (region->file)
-			fs_file_put(region->file);
+			file_put(region->file);
 	}
 
 	uvm_region_free(region);
@@ -202,15 +202,15 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 
 	if (src->kind == UVM_REGION_SHARED_FILE) {
 		dst->kind = UVM_REGION_SHARED_FILE;
-		dst->inode = fs_inode_get(src->inode);
-		dst->file = fs_file_get(src->file);
+		dst->inode = inode_get(src->inode);
+		dst->file = file_get(src->file);
 		dst->file_offset = src->file_offset;
 		dst->cached = kcalloc(npgs, sizeof(dst->cached[0]));
 		if (!dst->cached) {
-			fs_inode_put(dst->inode);
+			inode_put(dst->inode);
 			dst->inode = NULL;
 			if (dst->file) {
-				fs_file_put(dst->file);
+				file_put(dst->file);
 				dst->file = NULL;
 			}
 			return -ENOMEM;
@@ -261,10 +261,10 @@ failed_shared:
 		kfree(dst->cached);
 		dst->cached = NULL;
 		if (dst->inode)
-			fs_inode_put(dst->inode);
+			inode_put(dst->inode);
 		dst->inode = NULL;
 		if (dst->file) {
-			fs_file_put(dst->file);
+			file_put(dst->file);
 			dst->file = NULL;
 		}
 		return err;

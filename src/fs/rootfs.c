@@ -15,9 +15,9 @@
 int rootfs_init(void)
 {
 	struct thread *task;
-	struct fs_mount_state *mnt;
-	struct fs_mount_state *new_root_mnt;
-	struct fs_path new_root_path;
+	struct mount_state *mnt;
+	struct mount_state *new_root_mnt;
+	struct path new_root_path;
 	int err;
 
 	mnt = kernel_mount(&tmpfs_fs_type, 0, NULL, NULL);
@@ -25,12 +25,12 @@ int rootfs_init(void)
 		return PTR_ERR(mnt);
 
 	task = current_thread();
-	struct fs_path root_path = {
+	struct path root_path = {
 		.mnt = mnt,
-		.dentry = fs_dentry_get(mnt->root),
+		.dentry = dentry_get(mnt->root),
 	};
 	fsinfo_set_root(&task->process->fsinfo, &root_path);
-	fs_path_get(&root_path);
+	path_get(&root_path);
 	fsinfo_set_cwd(&task->process->fsinfo, &root_path);
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
@@ -61,18 +61,18 @@ int rootfs_init(void)
 	if (err)
 		return err;
 
-	new_root_mnt = fs_mount_state_lookup(&root_path);
+	new_root_mnt = mount_state_lookup(&root_path);
 	if (!new_root_mnt)
 		return -EINVAL;
 
 	new_root_path.mnt = new_root_mnt;
-	new_root_path.dentry = fs_dentry_get(new_root_mnt->root);
-	fs_path_get(&new_root_path);
+	new_root_path.dentry = dentry_get(new_root_mnt->root);
+	path_get(&new_root_path);
 
 	fsinfo_update_root(&task->process->fsinfo, &new_root_path);
 	fsinfo_update_cwd(&task->process->fsinfo, &new_root_path);
-	fs_path_put(&root_path);
-	fs_path_put(&new_root_path);
+	path_put(&root_path);
+	path_put(&new_root_path);
 
 	err = do_mkdirat(AT_FDCWD, "/dev", 0755);
 	if (err && err != -EEXIST)
@@ -103,7 +103,7 @@ int rootfs_init(void)
 	if (err)
 		return err;
 
-	struct fs_file *f = do_openat(AT_FDCWD, "/dev/tty0", O_RDWR, 0);
+	struct file *f = do_openat(AT_FDCWD, "/dev/tty0", O_RDWR, 0);
 	if (IS_ERR(f)) {
 		err = PTR_ERR(f);
 		return err;

@@ -78,9 +78,9 @@ void start_kernel(void)
 	platform_bus_init();
 	virtio_bus_init();
 	plic_driver_register();
-	fs_dentry_cache_init();
-	fs_file_cache_init();
-	fs_inode_cache_init();
+	dentry_cache_init();
+	file_cache_init();
+	inode_cache_init();
 	net_init();
 
 	/* Device tree was built in arch_init(). */

@@ -34,10 +34,10 @@ static void klog_sleep_ms(unsigned long ms)
 	(void)ktime_nanosleep((ktime_t)ms * (ktime_t)NS_PER_MS, &rem);
 }
 
-static void klog_write(struct fs_file *file, const char *buf, size_t len)
+static void klog_write(struct file *file, const char *buf, size_t len)
 {
 	while (len > 0) {
-		ssize_t n = fs_file_write(file, buf, len);
+		ssize_t n = file_write(file, buf, len);
 
 		if (n < 0) {
 			/* The filesystem may be temporarily busy; retry. */
@@ -51,7 +51,7 @@ static void klog_write(struct fs_file *file, const char *buf, size_t len)
 	}
 }
 
-static void klog_sync(struct fs_file *file)
+static void klog_sync(struct file *file)
 {
 	/*
 	 * The log file is the only persistent copy of kernel messages.
@@ -66,7 +66,7 @@ static void klog_entry(void *arg)
 {
 	char rec[PRINTK_MAX_PAYLOAD + 1];
 	char out[PRINTK_MAX_PAYLOAD + 256];
-	struct fs_file *file = NULL;
+	struct file *file = NULL;
 	struct printk_log_reader reader;
 	bool reader_ready = false;
 	u8 level;
@@ -77,7 +77,7 @@ static void klog_entry(void *arg)
 
 	for (;;) {
 		if (!file) {
-			struct fs_file *f =
+			struct file *f =
 				do_openat(AT_FDCWD, KLOG_PATH,
 					  O_WRONLY | O_CREAT | O_APPEND, 0644);
 

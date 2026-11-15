@@ -38,20 +38,20 @@
 #define LOOKUP_IS_SCOPED (LOOKUP_BENEATH | LOOKUP_IN_ROOT)
 /* 3 spare bits for scoping */
 
-struct fs_path {
-	struct fs_mount_state *mnt;
-	struct fs_dentry *dentry;
+struct path {
+	struct mount_state *mnt;
+	struct dentry *dentry;
 };
 
-int fs_path_lookup_at(int dir_fd, const char *name, unsigned int flags,
-		      struct fs_path *path);
-int fs_path_lookup(const char *name, unsigned int flags, struct fs_path *path);
-int fs_path_parent_at(int dir_fd, const char *name, struct fs_path *path,
-		      struct qstr *last_component);
-void fs_path_get(struct fs_path *path);
-void fs_path_put(struct fs_path *path);
-int fs_path_to_absolute(const struct fs_path *path, char *buf, size_t bufsz);
-int fs_path_dot(struct fs_path *path, struct fs_path *dot);
-int fs_path_dot_dot(struct fs_path *path, struct fs_path *dotdot);
+int path_lookup_at(int dir_fd, const char *name, unsigned int flags,
+		   struct path *path);
+int path_lookup(const char *name, unsigned int flags, struct path *path);
+int path_parent_at(int dir_fd, const char *name, struct path *path,
+		   struct qstr *last_component);
+void path_get(struct path *path);
+void path_put(struct path *path);
+int path_to_absolute(const struct path *path, char *buf, size_t bufsz);
+int path_dot(struct path *path, struct path *dot);
+int path_dot_dot(struct path *path, struct path *dotdot);
 
 #endif

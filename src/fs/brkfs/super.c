@@ -122,11 +122,11 @@ void brkfs_sb_info_free(struct brkfs_sb_info *sbi)
 	kfree(sbi);
 }
 
-static struct fs_inode *brkfs_alloc_inode(struct fs_super_block *sb)
+static struct inode *brkfs_alloc_inode(struct super_block *sb)
 {
 	(void)sb;
 
-	struct fs_inode *inode;
+	struct inode *inode;
 	struct brkfs_inode_info *info;
 
 	inode = kzalloc(sizeof(*inode));
@@ -141,21 +141,21 @@ static struct fs_inode *brkfs_alloc_inode(struct fs_super_block *sb)
 	return inode;
 }
 
-static void brkfs_free_inode(struct fs_inode *inode)
+static void brkfs_free_inode(struct inode *inode)
 {
 	kfree(inode->private_data);
 	inode->private_data = NULL;
 	kfree(inode);
 }
 
-static int brkfs_write_inode(struct fs_inode *inode, int sync)
+static int brkfs_write_inode(struct inode *inode, int sync)
 {
 	struct brkfs_sb_info *sb_info = inode->sb->private_data;
 	(void)sync;
 	return brkfs_inode_write(sb_info, inode);
 }
 
-static void brkfs_evict_inode(struct fs_inode *inode)
+static void brkfs_evict_inode(struct inode *inode)
 {
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
 
@@ -181,18 +181,18 @@ static void brkfs_evict_inode(struct fs_inode *inode)
 	}
 }
 
-static int brkfs_sync_fs(struct fs_super_block *sb);
+static int brkfs_sync_fs(struct super_block *sb);
 
-static void brkfs_put_super(struct fs_super_block *sb)
+static void brkfs_put_super(struct super_block *sb)
 {
 	struct brkfs_sb_info *sb_info = sb->private_data;
-	struct fs_driver *driver = sb->driver;
+	struct file_system_type *type = sb->type;
 
-	spin_lock(&driver->lock);
+	spin_lock(&type->lock);
 	list_del(&sb->instance);
-	spin_unlock(&driver->lock);
+	spin_unlock(&type->lock);
 
-	fs_dentry_put(sb->root);
+	dentry_put(sb->root);
 	sb->root = NULL;
 
 	if (sb_info) {
@@ -209,7 +209,7 @@ static void brkfs_put_super(struct fs_super_block *sb)
 	sb->private_data = NULL;
 }
 
-static int brkfs_sync_fs(struct fs_super_block *sb)
+static int brkfs_sync_fs(struct super_block *sb)
 {
 	struct brkfs_sb_info *sbi = sb->private_data;
 	int err;
@@ -236,7 +236,7 @@ static int brkfs_sync_fs(struct fs_super_block *sb)
 	return err;
 }
 
-static int brkfs_statfs(struct fs_super_block *sb, struct kstatfs *buf)
+static int brkfs_statfs(struct super_block *sb, struct kstatfs *buf)
 {
 	struct brkfs_sb_info *sbi = sb->private_data;
 	u32 free_blocks;
@@ -259,7 +259,7 @@ static int brkfs_statfs(struct fs_super_block *sb, struct kstatfs *buf)
 	return 0;
 }
 
-const struct fs_super_block_ops brkfs_sops = {
+const struct super_block_ops brkfs_sops = {
 	.alloc_inode = brkfs_alloc_inode,
 	.free_inode = brkfs_free_inode,
 	.write_inode = brkfs_write_inode,

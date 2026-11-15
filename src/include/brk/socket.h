@@ -10,7 +10,7 @@
 #define SOCK_DEFAULT_RCVBUF 4096
 #define SOCK_DEFAULT_SNDBUF 4096
 
-struct fs_file_ops;
+struct file_ops;
 struct socket;
 
 /*
@@ -67,7 +67,7 @@ struct socket {
 	const struct proto_ops *ops;
 };
 
-extern const struct fs_file_ops socket_file_ops;
+extern const struct file_ops socket_file_ops;
 
 int sock_create(int family, int type, int protocol, struct socket **res);
 void sock_release(struct socket *sock);

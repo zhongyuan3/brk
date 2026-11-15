@@ -16,7 +16,7 @@
 /* Passed to tty_port::put_char for erase rendering (not on the wire). */
 #define TTY_VIS_BACKSPACE 0x100
 
-struct fs_file;
+struct file;
 struct char_dev;
 struct device;
 struct thread;

@@ -31,7 +31,7 @@ static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 		unsigned int ready = 0;
 
 		for (unsigned int i = 0; i < nfds; i++) {
-			struct fs_file *file;
+			struct file *file;
 			unsigned int rev;
 
 			fds[i].revents = 0;
@@ -46,8 +46,8 @@ static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 				continue;
 			}
 
-			rev = fs_file_poll(file, (unsigned int)fds[i].events);
-			fs_file_put(file);
+			rev = file_poll(file, (unsigned int)fds[i].events);
+			file_put(file);
 
 			fds[i].revents =
 				(short)(rev & ((unsigned int)fds[i].events |

@@ -73,14 +73,14 @@ static void tmpfs_stamp_times(struct tmpfs_inode *ip)
 }
 
 static void tmpfs_inode_times_to_vfs(const struct tmpfs_inode *t,
-				     struct fs_inode *inode)
+				     struct inode *inode)
 {
 	inode->atime = ktime_from_sec_nsec(t->i_atime, t->i_atime_nsec);
 	inode->mtime = ktime_from_sec_nsec(t->i_mtime, t->i_mtime_nsec);
 	inode->ctime = ktime_from_sec_nsec(t->i_ctime, t->i_ctime_nsec);
 }
 
-static void tmpfs_vfs_times_to_inode(const struct fs_inode *inode,
+static void tmpfs_vfs_times_to_inode(const struct inode *inode,
 				     struct tmpfs_inode *t)
 {
 	t->i_atime = (u32)ktime_to_sec(inode->atime);
@@ -248,8 +248,7 @@ static struct tmpfs_inode *tmpfs_inode_alloc_dir(struct tmpfs_super_block *sb,
 	return ip;
 }
 
-static int tmpfs_inode_read(struct tmpfs_super_block *sb,
-			    struct fs_inode *inode)
+static int tmpfs_inode_read(struct tmpfs_super_block *sb, struct inode *inode)
 {
 	struct tmpfs_inode *t_inode;
 
@@ -596,7 +595,7 @@ static int tmpfs_write_file_at(struct tmpfs_inode *ip, const void *buf,
 	return ret;
 }
 
-static void tmpfs_inode_attach_fops(struct fs_inode *inode)
+static void tmpfs_inode_attach_fops(struct inode *inode)
 {
 	if (S_ISCHR(inode->mode))
 		inode->fops = &chrdev_fops;
@@ -609,29 +608,29 @@ static void tmpfs_inode_attach_fops(struct fs_inode *inode)
 }
 
 static int tmpfs_init_new_inode(struct tmpfs_super_block *sb,
-				struct fs_inode *inode)
+				struct inode *inode)
 {
 	int err;
 
 	inode->ops = &tmpfs_iops;
 	err = tmpfs_inode_read(sb, inode);
 	if (err) {
-		fs_inode_fail_new(inode);
+		inode_fail_new(inode);
 		return err;
 	}
 	tmpfs_inode_attach_fops(inode);
-	fs_inode_unlock_new(inode);
+	inode_unlock_new(inode);
 	return 0;
 }
 
-int tmpfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
+int tmpfs_mount(struct mount_args *args, struct mount_result *result)
 {
-	struct fs_super_block *sb;
+	struct super_block *sb;
 	struct tmpfs_super_block *t_sb;
-	struct fs_inode *root_inode;
-	struct fs_dentry *root_dentry;
+	struct inode *root_inode;
+	struct dentry *root_dentry;
 
-	sb = fs_super_block_alloc(args->driver);
+	sb = super_block_alloc(args->type);
 	if (!sb)
 		return -ENOMEM;
 
@@ -643,37 +642,37 @@ int tmpfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 
 	t_sb = tmpfs_alloc_super();
 	if (!t_sb) {
-		fs_super_block_free(sb);
+		super_block_free(sb);
 		return -ENOMEM;
 	}
 	sb->private_data = t_sb;
 
-	root_inode = fs_inode_get_locked(sb, TMPFS_ROOT_INO);
+	root_inode = inode_get_locked(sb, TMPFS_ROOT_INO);
 	if (!root_inode) {
 		tmpfs_free_super(t_sb);
-		fs_super_block_free(sb);
+		super_block_free(sb);
 		return -ENOMEM;
 	}
 	if (tmpfs_init_new_inode(t_sb, root_inode)) {
-		fs_inode_put(root_inode);
+		inode_put(root_inode);
 		tmpfs_free_super(t_sb);
-		fs_super_block_free(sb);
+		super_block_free(sb);
 		return -EIO;
 	}
 
-	root_dentry = fs_dentry_make_root(root_inode);
+	root_dentry = dentry_make_root(root_inode);
 	if (!root_dentry) {
-		fs_inode_put(root_inode);
+		inode_put(root_inode);
 		tmpfs_free_super(t_sb);
-		fs_super_block_free(sb);
+		super_block_free(sb);
 		return -ENOMEM;
 	}
 
-	sb->root = fs_dentry_get(root_dentry);
+	sb->root = dentry_get(root_dentry);
 
-	spin_lock(&args->driver->lock);
-	list_add_tail(&sb->instance, &args->driver->super_blocks);
-	spin_unlock(&args->driver->lock);
+	spin_lock(&args->type->lock);
+	list_add_tail(&sb->instance, &args->type->super_blocks);
+	spin_unlock(&args->type->lock);
 
 	result->root = root_dentry;
 	result->sb = sb;
@@ -681,7 +680,7 @@ int tmpfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 	return 0;
 }
 
-static int tmpfs_write_inode(struct fs_inode *inode, int sync)
+static int tmpfs_write_inode(struct inode *inode, int sync)
 {
 	(void)sync;
 
@@ -700,7 +699,7 @@ static int tmpfs_write_inode(struct fs_inode *inode, int sync)
 	return 0;
 }
 
-static void tmpfs_evict_inode(struct fs_inode *inode)
+static void tmpfs_evict_inode(struct inode *inode)
 {
 	struct tmpfs_inode *t_inode = inode->private_data;
 	struct tmpfs_super_block *t_sb = inode->sb->private_data;
@@ -719,31 +718,31 @@ static void tmpfs_evict_inode(struct fs_inode *inode)
 	sleeplock_release(&t_sb->s_lock);
 }
 
-static void tmpfs_put_super(struct fs_super_block *sb)
+static void tmpfs_put_super(struct super_block *sb)
 {
 	struct tmpfs_super_block *t_sb = sb->private_data;
-	struct fs_driver *driver = sb->driver;
+	struct file_system_type *type = sb->type;
 
-	spin_lock(&driver->lock);
+	spin_lock(&type->lock);
 	list_del(&sb->instance);
-	spin_unlock(&driver->lock);
+	spin_unlock(&type->lock);
 
-	fs_dentry_put(sb->root);
+	dentry_put(sb->root);
 	sb->root = NULL;
 
 	tmpfs_free_super(t_sb);
 	sb->private_data = NULL;
 }
 
-static struct fs_dentry *
-tmpfs_lookup(struct fs_inode *dir, struct fs_dentry *dentry, unsigned int flags)
+static struct dentry *tmpfs_lookup(struct inode *dir, struct dentry *dentry,
+				   unsigned int flags)
 {
 	(void)flags;
 
-	struct fs_inode *inode;
+	struct inode *inode;
 	struct tmpfs_inode *t_dir, *t_inode;
 	struct tmpfs_super_block *t_sb;
-	struct fs_super_block *sb;
+	struct super_block *sb;
 	u32 ino;
 
 	t_dir = dir->private_data;
@@ -760,7 +759,7 @@ tmpfs_lookup(struct fs_inode *dir, struct fs_dentry *dentry, unsigned int flags)
 	ino = t_inode->i_no;
 	sleeplock_release(&t_sb->s_lock);
 
-	inode = fs_inode_get_locked(sb, ino);
+	inode = inode_get_locked(sb, ino);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 
@@ -768,22 +767,22 @@ tmpfs_lookup(struct fs_inode *dir, struct fs_dentry *dentry, unsigned int flags)
 	bool is_new = (inode->state & I_NEW) != 0;
 	spin_unlock(&inode->lock);
 	if (is_new && tmpfs_init_new_inode(t_sb, inode)) {
-		fs_inode_put(inode);
+		inode_put(inode);
 		return ERR_PTR(-EIO);
 	}
 
-	return fs_dentry_splice_alias(inode, dentry);
+	return dentry_splice_alias(inode, dentry);
 }
 
-static int tmpfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
-			umode_t mode, bool excl)
+static int tmpfs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
+			bool excl)
 {
 	(void)excl;
 
-	struct fs_inode *inode;
+	struct inode *inode;
 	struct tmpfs_inode *t_new_inode, *t_dir;
 	struct tmpfs_super_block *t_sb;
-	struct fs_super_block *sb;
+	struct super_block *sb;
 	struct process_fsids ids = process_current_fsids();
 	int err;
 
@@ -821,7 +820,7 @@ static int tmpfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 	}
 	sleeplock_release(&t_sb->s_lock);
 
-	inode = fs_inode_get_locked(sb, t_new_inode->i_no);
+	inode = inode_get_locked(sb, t_new_inode->i_no);
 	if (!inode) {
 		sleeplock_acquire(&t_sb->s_lock);
 		(void)tmpfs_dir_del_entry(t_dir, dentry->name.len,
@@ -831,7 +830,7 @@ static int tmpfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -ENOMEM;
 	}
 	if (tmpfs_init_new_inode(t_sb, inode)) {
-		fs_inode_put(inode);
+		inode_put(inode);
 		sleeplock_acquire(&t_sb->s_lock);
 		(void)tmpfs_dir_del_entry(t_dir, dentry->name.len,
 					  dentry->name.name);
@@ -840,16 +839,16 @@ static int tmpfs_create(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -EIO;
 	}
 
-	fs_dentry_instantiate(dentry, inode);
-	fs_inode_touch_mtime_ctime(dir);
+	dentry_instantiate(dentry, inode);
+	inode_touch_mtime_ctime(dir);
 
 	return 0;
 }
 
-static int tmpfs_link(struct fs_dentry *old_dentry, struct fs_inode *dir,
-		      struct fs_dentry *new_dentry)
+static int tmpfs_link(struct dentry *old_dentry, struct inode *dir,
+		      struct dentry *new_dentry)
 {
-	struct fs_inode *old_inode;
+	struct inode *old_inode;
 	struct tmpfs_inode *t_dir, *t_old_inode;
 	struct tmpfs_super_block *t_sb;
 	int err;
@@ -880,22 +879,22 @@ static int tmpfs_link(struct fs_dentry *old_dentry, struct fs_inode *dir,
 	sleeplock_release(&t_sb->s_lock);
 
 	/*
-	 * fs_dentry_instantiate() takes ownership of one inode reference.
+	 * dentry_instantiate() takes ownership of one inode reference.
 	 * The new dentry needs its own reference: the old dentry keeps the
 	 * one it already owns, otherwise both dentries would eventually put
 	 * the same reference.
 	 */
-	fs_inode_get(old_inode);
-	fs_dentry_instantiate(new_dentry, old_inode);
-	fs_inode_touch_ctime(old_inode);
-	fs_inode_touch_mtime_ctime(dir);
+	inode_get(old_inode);
+	dentry_instantiate(new_dentry, old_inode);
+	inode_touch_ctime(old_inode);
+	inode_touch_mtime_ctime(dir);
 
 	return 0;
 }
 
-static int tmpfs_unlink(struct fs_inode *dir, struct fs_dentry *dentry)
+static int tmpfs_unlink(struct inode *dir, struct dentry *dentry)
 {
-	struct fs_inode *inode;
+	struct inode *inode;
 	struct tmpfs_inode *t_inode, *t_dir;
 	struct tmpfs_super_block *t_sb;
 
@@ -918,16 +917,16 @@ static int tmpfs_unlink(struct fs_inode *dir, struct fs_dentry *dentry)
 		--inode->nlink;
 	sleeplock_release(&t_sb->s_lock);
 
-	fs_inode_touch_ctime(inode);
-	fs_inode_touch_mtime_ctime(dir);
+	inode_touch_ctime(inode);
+	inode_touch_mtime_ctime(dir);
 
 	return 0;
 }
 
-static int tmpfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
+static int tmpfs_symlink(struct inode *dir, struct dentry *dentry,
 			 const char *symname)
 {
-	struct fs_inode *inode;
+	struct inode *inode;
 	struct tmpfs_inode *t_inode, *t_dir;
 	struct tmpfs_super_block *t_sb;
 	struct process_fsids ids = process_current_fsids();
@@ -978,15 +977,15 @@ static int tmpfs_symlink(struct fs_inode *dir, struct fs_dentry *dentry,
 	ino = t_inode->i_no;
 	sleeplock_release(&t_sb->s_lock);
 
-	inode = fs_inode_get_locked(dir->sb, ino);
+	inode = inode_get_locked(dir->sb, ino);
 	if (!inode)
 		goto rollback;
 	if (tmpfs_init_new_inode(t_sb, inode)) {
-		fs_inode_put(inode);
+		inode_put(inode);
 		goto rollback;
 	}
-	fs_dentry_instantiate(dentry, inode);
-	fs_inode_touch_mtime_ctime(dir);
+	dentry_instantiate(dentry, inode);
+	inode_touch_mtime_ctime(dir);
 
 	return 0;
 
@@ -998,9 +997,9 @@ rollback:
 	return -ENOMEM;
 }
 
-static int tmpfs_readlink(struct fs_dentry *dentry, char *buf, int bufsiz)
+static int tmpfs_readlink(struct dentry *dentry, char *buf, int bufsiz)
 {
-	struct fs_inode *inode = dentry->inode;
+	struct inode *inode = dentry->inode;
 	struct tmpfs_inode *t_inode = inode->private_data;
 	struct tmpfs_super_block *t_sb = inode->sb->private_data;
 	off_t pos = 0;
@@ -1023,11 +1022,10 @@ static int tmpfs_readlink(struct fs_dentry *dentry, char *buf, int bufsiz)
 	return (int)rcnt;
 }
 
-static int tmpfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
-		       umode_t mode)
+static int tmpfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 {
-	struct fs_inode *inode;
-	struct fs_super_block *sb;
+	struct inode *inode;
+	struct super_block *sb;
 	struct tmpfs_inode *t_inode, *t_dir;
 	struct tmpfs_super_block *t_sb;
 	struct process_fsids ids = process_current_fsids();
@@ -1063,7 +1061,7 @@ static int tmpfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 	++dir->nlink;
 	sleeplock_release(&t_sb->s_lock);
 
-	inode = fs_inode_get_locked(sb, t_inode->i_no);
+	inode = inode_get_locked(sb, t_inode->i_no);
 	if (!inode) {
 		sleeplock_acquire(&t_sb->s_lock);
 		(void)tmpfs_dir_del_entry(t_dir, dentry->name.len,
@@ -1077,7 +1075,7 @@ static int tmpfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -ENOMEM;
 	}
 	if (tmpfs_init_new_inode(t_sb, inode)) {
-		fs_inode_put(inode);
+		inode_put(inode);
 		sleeplock_acquire(&t_sb->s_lock);
 		(void)tmpfs_dir_del_entry(t_dir, dentry->name.len,
 					  dentry->name.name);
@@ -1089,8 +1087,8 @@ static int tmpfs_mkdir(struct fs_inode *dir, struct fs_dentry *dentry,
 		sleeplock_release(&t_sb->s_lock);
 		return -EIO;
 	}
-	fs_dentry_instantiate(dentry, inode);
-	fs_inode_touch_mtime_ctime(dir);
+	dentry_instantiate(dentry, inode);
+	inode_touch_mtime_ctime(dir);
 
 	return 0;
 }
@@ -1122,9 +1120,9 @@ static bool tmpfs_dir_is_empty(struct tmpfs_inode *dir)
 	return true;
 }
 
-static int tmpfs_rmdir(struct fs_inode *dir, struct fs_dentry *dentry)
+static int tmpfs_rmdir(struct inode *dir, struct dentry *dentry)
 {
-	struct fs_inode *inode;
+	struct inode *inode;
 	struct tmpfs_inode *t_dir, *t_inode;
 	struct tmpfs_super_block *t_sb;
 	int err;
@@ -1155,14 +1153,14 @@ static int tmpfs_rmdir(struct fs_inode *dir, struct fs_dentry *dentry)
 
 	sleeplock_release(&t_sb->s_lock);
 
-	fs_inode_touch_ctime(inode);
-	fs_inode_touch_mtime_ctime(dir);
+	inode_touch_ctime(inode);
+	inode_touch_mtime_ctime(dir);
 
 	return 0;
 }
 
-static int tmpfs_rename(struct fs_inode *old_dir, struct fs_dentry *old_dentry,
-			struct fs_inode *new_dir, struct fs_dentry *new_dentry,
+static int tmpfs_rename(struct inode *old_dir, struct dentry *old_dentry,
+			struct inode *new_dir, struct dentry *new_dentry,
 			unsigned int flags)
 {
 	(void)old_dir;
@@ -1173,10 +1171,10 @@ static int tmpfs_rename(struct fs_inode *old_dir, struct fs_dentry *old_dentry,
 	return -EOPNOTSUPP;
 }
 
-static int tmpfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
-		       umode_t mode, dev_t dev)
+static int tmpfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
+		       dev_t dev)
 {
-	struct fs_inode *inode;
+	struct inode *inode;
 	struct tmpfs_inode *t_inode, *t_dir;
 	struct tmpfs_super_block *t_sb;
 	struct process_fsids ids = process_current_fsids();
@@ -1209,7 +1207,7 @@ static int tmpfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 	}
 	sleeplock_release(&t_sb->s_lock);
 
-	inode = fs_inode_get_locked(dir->sb, t_inode->i_no);
+	inode = inode_get_locked(dir->sb, t_inode->i_no);
 	if (!inode) {
 		sleeplock_acquire(&t_sb->s_lock);
 		(void)tmpfs_dir_del_entry(t_dir, dentry->name.len,
@@ -1219,7 +1217,7 @@ static int tmpfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 		return -ENOMEM;
 	}
 	if (tmpfs_init_new_inode(t_sb, inode)) {
-		fs_inode_put(inode);
+		inode_put(inode);
 		sleeplock_acquire(&t_sb->s_lock);
 		(void)tmpfs_dir_del_entry(t_dir, dentry->name.len,
 					  dentry->name.name);
@@ -1227,19 +1225,19 @@ static int tmpfs_mknod(struct fs_inode *dir, struct fs_dentry *dentry,
 		sleeplock_release(&t_sb->s_lock);
 		return -EIO;
 	}
-	fs_dentry_instantiate(dentry, inode);
-	fs_inode_touch_mtime_ctime(dir);
+	dentry_instantiate(dentry, inode);
+	inode_touch_mtime_ctime(dir);
 
 	return 0;
 }
 
-static int tmpfs_getattr(const struct fs_path *path, struct kstat *stat,
-			 u32 mask, unsigned int flags)
+static int tmpfs_getattr(const struct path *path, struct kstat *stat, u32 mask,
+			 unsigned int flags)
 {
 	(void)flags;
 	(void)mask;
 
-	struct fs_inode *inode = path->dentry->inode;
+	struct inode *inode = path->dentry->inode;
 
 	memset(stat, 0, sizeof(*stat));
 	stat->ino = inode->ino;
@@ -1251,13 +1249,13 @@ static int tmpfs_getattr(const struct fs_path *path, struct kstat *stat,
 	stat->size = inode->size;
 	stat->blksize = PAGE_SIZE;
 	stat->blocks = (inode->size + 511) / 512;
-	fs_inode_times_to_kstat(inode, stat);
+	inode_times_to_kstat(inode, stat);
 	return 0;
 }
 
-static int tmpfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
+static int tmpfs_setattr(struct dentry *dentry, struct iattr *attr)
 {
-	struct fs_inode *inode = dentry->inode;
+	struct inode *inode = dentry->inode;
 	struct tmpfs_inode *t_inode;
 	struct tmpfs_super_block *t_sb;
 	struct page *pg, *prev, *next;
@@ -1329,7 +1327,7 @@ static int tmpfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 	if (attr->valid & ATTR_MODE) {
 		inode->mode = (inode->mode & S_IFMT) | (attr->mode & 07777);
 		t_inode->i_mode = inode->mode;
-		fs_inode_touch_ctime(inode);
+		inode_touch_ctime(inode);
 	}
 
 	if (attr->valid & (ATTR_UID | ATTR_GID)) {
@@ -1341,14 +1339,14 @@ static int tmpfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 		t_inode->i_uid = inode->uid;
 		t_inode->i_gid = inode->gid;
 		t_inode->i_mode = inode->mode;
-		fs_inode_touch_ctime(inode);
+		inode_touch_ctime(inode);
 	}
 
 	if (attr->valid & (ATTR_ATIME | ATTR_MTIME | ATTR_CTIME)) {
-		fs_inode_times_set(
+		inode_times_set(
 			inode, (attr->valid & ATTR_ATIME) ? &attr->atime : NULL,
 			(attr->valid & ATTR_MTIME) ? &attr->mtime : NULL);
-		fs_inode_touch_ctime(inode);
+		inode_touch_ctime(inode);
 		tmpfs_vfs_times_to_inode(inode, t_inode);
 	}
 
@@ -1358,7 +1356,7 @@ out:
 	return err;
 }
 
-static int tmpfs_file_open(struct fs_inode *inode, struct fs_file *file)
+static int tmpfs_file_open(struct inode *inode, struct file *file)
 {
 	(void)file;
 	if (S_ISREG(inode->mode) || S_ISLNK(inode->mode))
@@ -1366,10 +1364,10 @@ static int tmpfs_file_open(struct fs_inode *inode, struct fs_file *file)
 	return -EINVAL;
 }
 
-static ssize_t tmpfs_file_read(struct fs_file *file, char *buf, size_t size,
+static ssize_t tmpfs_file_read(struct file *file, char *buf, size_t size,
 			       loff_t *pos)
 {
-	struct fs_inode *inode = file->inode;
+	struct inode *inode = file->inode;
 	struct tmpfs_inode *t_inode = inode->private_data;
 	struct tmpfs_super_block *t_sb = inode->sb->private_data;
 	int err = 0;
@@ -1391,10 +1389,10 @@ static ssize_t tmpfs_file_read(struct fs_file *file, char *buf, size_t size,
 	return rcnt;
 }
 
-static ssize_t tmpfs_file_write(struct fs_file *file, const char *buf,
-				size_t size, loff_t *pos)
+static ssize_t tmpfs_file_write(struct file *file, const char *buf, size_t size,
+				loff_t *pos)
 {
-	struct fs_inode *inode = file->inode;
+	struct inode *inode = file->inode;
 	struct tmpfs_inode *t_inode = inode->private_data;
 	struct tmpfs_super_block *t_sb = inode->sb->private_data;
 	int err = 0;
@@ -1416,7 +1414,7 @@ static ssize_t tmpfs_file_write(struct fs_file *file, const char *buf,
 	if (old_pos + (loff_t)wcnt > inode->size)
 		inode->size = old_pos + (loff_t)wcnt;
 
-	fs_inode_touch_mtime(inode);
+	inode_touch_mtime(inode);
 	sleeplock_acquire(&t_sb->s_lock);
 	t_inode->i_size = (u32)inode->size;
 	tmpfs_vfs_times_to_inode(inode, t_inode);
@@ -1427,9 +1425,9 @@ static ssize_t tmpfs_file_write(struct fs_file *file, const char *buf,
 	return wcnt;
 }
 
-static loff_t tmpfs_file_llseek(struct fs_file *file, loff_t offset, int whence)
+static loff_t tmpfs_file_llseek(struct file *file, loff_t offset, int whence)
 {
-	struct fs_inode *inode = file->inode;
+	struct inode *inode = file->inode;
 	struct tmpfs_inode *t_inode = inode->private_data;
 	struct tmpfs_super_block *t_sb = inode->sb->private_data;
 	int err = 0;
@@ -1455,15 +1453,15 @@ static loff_t tmpfs_file_llseek(struct fs_file *file, loff_t offset, int whence)
 	return new_pos;
 }
 
-static int tmpfs_file_iterate_shared(struct fs_file *file,
-				     struct fs_dir_iterator *ctx)
+static int tmpfs_file_iterate_shared(struct file *file,
+				     struct dir_iterator *ctx)
 {
 	(void)file;
 	(void)ctx;
 	return -ENOTDIR;
 }
 
-static int tmpfs_file_fsync(struct fs_file *file, loff_t start, loff_t end,
+static int tmpfs_file_fsync(struct file *file, loff_t start, loff_t end,
 			    int datasync)
 {
 	(void)file;
@@ -1473,13 +1471,13 @@ static int tmpfs_file_fsync(struct fs_file *file, loff_t start, loff_t end,
 	return 0;
 }
 
-static int tmpfs_file_flush(struct fs_file *file)
+static int tmpfs_file_flush(struct file *file)
 {
 	(void)file;
 	return 0;
 }
 
-static long tmpfs_file_ioctl(struct fs_file *file, unsigned int cmd,
+static long tmpfs_file_ioctl(struct file *file, unsigned int cmd,
 			     unsigned long arg)
 {
 	(void)file;
@@ -1488,14 +1486,14 @@ static long tmpfs_file_ioctl(struct fs_file *file, unsigned int cmd,
 	return 0;
 }
 
-static int tmpfs_dir_open(struct fs_inode *inode, struct fs_file *file)
+static int tmpfs_dir_open(struct inode *inode, struct file *file)
 {
 	(void)inode;
 	(void)file;
 	return 0;
 }
 
-static ssize_t tmpfs_dir_read(struct fs_file *file, char *buf, size_t size,
+static ssize_t tmpfs_dir_read(struct file *file, char *buf, size_t size,
 			      loff_t *pos)
 {
 	(void)file;
@@ -1505,8 +1503,8 @@ static ssize_t tmpfs_dir_read(struct fs_file *file, char *buf, size_t size,
 	return -EISDIR;
 }
 
-static ssize_t tmpfs_dir_write(struct fs_file *file, const char *buf,
-			       size_t size, loff_t *pos)
+static ssize_t tmpfs_dir_write(struct file *file, const char *buf, size_t size,
+			       loff_t *pos)
 {
 	(void)file;
 	(void)buf;
@@ -1515,7 +1513,7 @@ static ssize_t tmpfs_dir_write(struct fs_file *file, const char *buf,
 	return -EISDIR;
 }
 
-static loff_t tmpfs_dir_llseek(struct fs_file *file, loff_t offset, int whence)
+static loff_t tmpfs_dir_llseek(struct file *file, loff_t offset, int whence)
 {
 	loff_t new_pos = 0;
 
@@ -1531,10 +1529,9 @@ static loff_t tmpfs_dir_llseek(struct fs_file *file, loff_t offset, int whence)
 	return new_pos;
 }
 
-static int tmpfs_dir_iterate_shared(struct fs_file *file,
-				    struct fs_dir_iterator *ctx)
+static int tmpfs_dir_iterate_shared(struct file *file, struct dir_iterator *ctx)
 {
-	struct fs_inode *inode = file->inode;
+	struct inode *inode = file->inode;
 	struct tmpfs_inode *t_inode = inode->private_data;
 	struct tmpfs_super_block *t_sb = inode->sb->private_data;
 	struct page *pg;
@@ -1577,7 +1574,7 @@ static int tmpfs_dir_iterate_shared(struct fs_file *file,
 	return 0;
 }
 
-static int tmpfs_dir_fsync(struct fs_file *file, loff_t start, loff_t end,
+static int tmpfs_dir_fsync(struct file *file, loff_t start, loff_t end,
 			   int datasync)
 {
 	(void)file;
@@ -1587,13 +1584,13 @@ static int tmpfs_dir_fsync(struct fs_file *file, loff_t start, loff_t end,
 	return 0;
 }
 
-static int tmpfs_dir_flush(struct fs_file *file)
+static int tmpfs_dir_flush(struct file *file)
 {
 	(void)file;
 	return 0;
 }
 
-static long tmpfs_dir_ioctl(struct fs_file *file, unsigned int cmd,
+static long tmpfs_dir_ioctl(struct file *file, unsigned int cmd,
 			    unsigned long arg)
 {
 	(void)file;
@@ -1602,7 +1599,7 @@ static long tmpfs_dir_ioctl(struct fs_file *file, unsigned int cmd,
 	return 0;
 }
 
-struct fs_driver tmpfs_fs_type = {
+struct file_system_type tmpfs_fs_type = {
 	.name = "tmpfs",
 	.mount = tmpfs_mount,
 	.lock = SPINLOCK_INITIALIZER("tmpfs_fs_lock"),
@@ -1610,13 +1607,13 @@ struct fs_driver tmpfs_fs_type = {
 	.list = LIST_INITIALIZER(tmpfs_fs_type.list),
 };
 
-const struct fs_super_block_ops tmpfs_sops = {
+const struct super_block_ops tmpfs_sops = {
 	.write_inode = tmpfs_write_inode,
 	.evict_inode = tmpfs_evict_inode,
 	.put_super = tmpfs_put_super,
 };
 
-const struct fs_inode_ops tmpfs_iops = {
+const struct inode_ops tmpfs_iops = {
 	.lookup = tmpfs_lookup,
 	.create = tmpfs_create,
 	.link = tmpfs_link,
@@ -1631,7 +1628,7 @@ const struct fs_inode_ops tmpfs_iops = {
 	.setattr = tmpfs_setattr,
 };
 
-const struct fs_file_ops tmpfs_file_fops = {
+const struct file_ops tmpfs_file_fops = {
 	.open = tmpfs_file_open,
 	.read = tmpfs_file_read,
 	.write = tmpfs_file_write,
@@ -1642,7 +1639,7 @@ const struct fs_file_ops tmpfs_file_fops = {
 	.ioctl = tmpfs_file_ioctl,
 };
 
-const struct fs_file_ops tmpfs_dir_fops = {
+const struct file_ops tmpfs_dir_fops = {
 	.open = tmpfs_dir_open,
 	.read = tmpfs_dir_read,
 	.write = tmpfs_dir_write,

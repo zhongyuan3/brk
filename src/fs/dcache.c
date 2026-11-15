@@ -19,16 +19,16 @@ static struct hlist_head dentry_htable[DENTRY_HTABLE_SIZE];
 static SPINLOCK_DEFINE(dentry_htable_lock);
 static struct slab_allocator dentry_cache;
 
-void fs_dentry_cache_init(void)
+void dentry_cache_init(void)
 {
-	slab_init(&dentry_cache, sizeof(struct fs_dentry),
-		  alignof(struct fs_dentry), "dentry_cache");
+	slab_init(&dentry_cache, sizeof(struct dentry), alignof(struct dentry),
+		  "dentry_cache");
 }
 
-static struct fs_dentry *__dentry_alloc(struct fs_super_block *sb,
-					const struct qstr *name)
+static struct dentry *__dentry_alloc(struct super_block *sb,
+				     const struct qstr *name)
 {
-	struct fs_dentry *d;
+	struct dentry *d;
 
 	d = slab_alloc(&dentry_cache);
 	if (!d)
@@ -66,23 +66,23 @@ static struct fs_dentry *__dentry_alloc(struct fs_super_block *sb,
 	return d;
 }
 
-static void __dentry_free(struct fs_dentry *dentry)
+static void __dentry_free(struct dentry *dentry)
 {
 	if (dentry->name.len >= DENTRY_SHORT_NAME_SIZE)
 		kfree(dentry->long_name);
 	slab_free(&dentry_cache, dentry);
 }
 
-static struct fs_dentry *fs_dentry_alloc(struct fs_dentry *parent,
-					 const struct qstr *name)
+static struct dentry *dentry_alloc(struct dentry *parent,
+				   const struct qstr *name)
 {
-	struct fs_dentry *d;
+	struct dentry *d;
 
 	d = __dentry_alloc(parent->sb, name);
 	if (!d)
 		return NULL;
 
-	d->parent = fs_dentry_get(parent);
+	d->parent = dentry_get(parent);
 	spin_lock(&parent->lock);
 	list_add(&d->child, &parent->children);
 	spin_unlock(&parent->lock);
@@ -90,9 +90,9 @@ static struct fs_dentry *fs_dentry_alloc(struct fs_dentry *parent,
 	return d;
 }
 
-struct fs_dentry *fs_dentry_make_root(struct fs_inode *root_inode)
+struct dentry *dentry_make_root(struct inode *root_inode)
 {
-	struct fs_dentry *d;
+	struct dentry *d;
 
 	if (!root_inode)
 		return NULL;
@@ -101,25 +101,24 @@ struct fs_dentry *fs_dentry_make_root(struct fs_inode *root_inode)
 	if (!d)
 		return NULL;
 
-	fs_dentry_instantiate(d, root_inode);
+	dentry_instantiate(d, root_inode);
 
 	return d;
 }
 
-struct fs_dentry *fs_dentry_alloc_anon(struct fs_inode *inode,
-				       const struct qstr *name)
+struct dentry *dentry_alloc_anon(struct inode *inode, const struct qstr *name)
 {
-	struct fs_dentry *d;
+	struct dentry *d;
 
 	d = __dentry_alloc(inode->sb, name);
 	if (!d)
 		return NULL;
 
-	fs_dentry_instantiate(d, inode);
+	dentry_instantiate(d, inode);
 	return d;
 }
 
-void fs_dentry_instantiate(struct fs_dentry *dentry, struct fs_inode *inode)
+void dentry_instantiate(struct dentry *dentry, struct inode *inode)
 {
 	/*
 	 * The caller transfers one inode reference to the dentry.  Refuse to
@@ -139,9 +138,9 @@ void fs_dentry_instantiate(struct fs_dentry *dentry, struct fs_inode *inode)
 	spin_unlock(&dentry->lock);
 }
 
-void fs_dentry_make_negative(struct fs_dentry *dentry)
+void dentry_make_negative(struct dentry *dentry)
 {
-	struct fs_inode *inode;
+	struct inode *inode;
 	irqstate_t flags;
 
 	if (!dentry)
@@ -160,10 +159,10 @@ void fs_dentry_make_negative(struct fs_dentry *dentry)
 	list_del_init(&dentry->alias);
 	spin_unlock(&inode->lock);
 
-	fs_inode_put(inode);
+	inode_put(inode);
 }
 
-struct fs_dentry *fs_dentry_get(struct fs_dentry *dentry)
+struct dentry *dentry_get(struct dentry *dentry)
 {
 	pr_debug("duplicating: name=%.*s, refcnt=%d\n", (int)dentry->name.len,
 		 dentry->name.name, refcnt_read(&dentry->count));
@@ -171,7 +170,7 @@ struct fs_dentry *fs_dentry_get(struct fs_dentry *dentry)
 	return dentry;
 }
 
-bool fs_dentry_is_negative(struct fs_dentry *dentry)
+bool dentry_is_negative(struct dentry *dentry)
 {
 	bool neg;
 
@@ -181,7 +180,7 @@ bool fs_dentry_is_negative(struct fs_dentry *dentry)
 	return neg;
 }
 
-bool fs_dentry_is_mounted(struct fs_dentry *dentry)
+bool dentry_is_mounted(struct dentry *dentry)
 {
 	bool mounted;
 
@@ -191,9 +190,9 @@ bool fs_dentry_is_mounted(struct fs_dentry *dentry)
 	return mounted;
 }
 
-struct fs_inode *fs_dentry_inode(struct fs_dentry *dentry)
+struct inode *dentry_inode(struct dentry *dentry)
 {
-	struct fs_inode *inode;
+	struct inode *inode;
 
 	spin_lock(&dentry->lock);
 	inode = dentry->inode;
@@ -201,10 +200,10 @@ struct fs_inode *fs_dentry_inode(struct fs_dentry *dentry)
 	return inode;
 }
 
-void fs_dentry_put(struct fs_dentry *dentry)
+void dentry_put(struct dentry *dentry)
 {
-	const struct fs_dentry_ops *op;
-	struct fs_inode *inode;
+	const struct dentry_ops *op;
+	struct inode *inode;
 
 	pr_debug("putting: name=%.*s, refcnt=%d\n", (int)dentry->name.len,
 		 dentry->name.name, refcnt_read(&dentry->count));
@@ -219,7 +218,7 @@ void fs_dentry_put(struct fs_dentry *dentry)
 		spin_lock(&dentry->parent->lock);
 		list_del(&dentry->child);
 		spin_unlock(&dentry->parent->lock);
-		fs_dentry_put(dentry->parent);
+		dentry_put(dentry->parent);
 	}
 
 	if (!(dentry->flags & DCACHE_UNHASHED)) {
@@ -245,17 +244,17 @@ void fs_dentry_put(struct fs_dentry *dentry)
 		if (op->iput)
 			op->iput(dentry, inode);
 		else
-			fs_inode_put(inode);
+			inode_put(inode);
 	}
 
 	__dentry_free(dentry);
 }
 
-static struct fs_dentry *__dentry_lookup(struct hlist_head *head,
-					 struct fs_dentry *parent,
-					 const struct qstr *name)
+static struct dentry *__dentry_lookup(struct hlist_head *head,
+				      struct dentry *parent,
+				      const struct qstr *name)
 {
-	struct fs_dentry *dentry;
+	struct dentry *dentry;
 
 	assert(spin_is_locked_by_me(&dentry_htable_lock));
 
@@ -268,7 +267,7 @@ static struct fs_dentry *__dentry_lookup(struct hlist_head *head,
 			/*
 			 * A dentry drops its last reference before it removes
 			 * itself from this hash table, so a plain refcnt_inc()
-			 * could resurrect a dentry that fs_dentry_put() is
+			 * could resurrect a dentry that dentry_put() is
 			 * already tearing down.  Only take a reference while
 			 * the count is still non-zero; a dying entry is simply
 			 * treated as a miss and the caller will either allocate
@@ -283,7 +282,7 @@ static struct fs_dentry *__dentry_lookup(struct hlist_head *head,
 	return NULL;
 }
 
-static void fs_dentry_hash(struct fs_dentry *dentry, u32 idx)
+static void dentry_hash(struct dentry *dentry, u32 idx)
 {
 	spin_lock(&dentry->lock);
 	if (dentry->parent != dentry && (dentry->flags & DCACHE_UNHASHED)) {
@@ -297,11 +296,10 @@ static void fs_dentry_hash(struct fs_dentry *dentry, u32 idx)
 	spin_unlock(&dentry->lock);
 }
 
-struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
-				   const struct qstr *name)
+struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name)
 {
-	struct fs_inode *inode;
-	struct fs_dentry *dentry, *tmp;
+	struct inode *inode;
+	struct dentry *dentry, *tmp;
 	struct hlist_head *head;
 
 	u32 idx = name->hash & (DENTRY_HTABLE_SIZE - 1);
@@ -319,7 +317,7 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 	}
 	pr_debug("cache miss for %.*s\n", (int)name->len, name->name);
 
-	dentry = fs_dentry_alloc(parent, name);
+	dentry = dentry_alloc(parent, name);
 	if (!dentry)
 		return ERR_PTR(-ENOMEM);
 
@@ -338,13 +336,13 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 	if (tmp) {
 		/*
 		 * @dentry was never instantiated.  Mark it negative so that
-		 * fs_dentry_put() does not try to iput a NULL inode.
+		 * dentry_put() does not try to iput a NULL inode.
 		 */
 		spin_lock(&dentry->lock);
 		dentry->flags |= DCACHE_NEGATIVE;
 		spin_unlock(&dentry->lock);
 		sleeplock_release(&inode->rwsem);
-		fs_dentry_put(dentry);
+		dentry_put(dentry);
 		return tmp;
 	}
 
@@ -358,7 +356,7 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 		dentry->flags |= DCACHE_NEGATIVE;
 		spin_unlock(&dentry->lock);
 		sleeplock_release(&inode->rwsem);
-		fs_dentry_put(dentry);
+		dentry_put(dentry);
 		return ERR_CAST(tmp);
 	}
 
@@ -375,17 +373,16 @@ struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
 	 * particular a negative dentry must be visible to the next creator
 	 * so that both callers operate on the same object.
 	 */
-	fs_dentry_hash(dentry, idx);
+	dentry_hash(dentry, idx);
 	sleeplock_release(&inode->rwsem);
 
 	return dentry;
 }
 
-struct fs_dentry *fs_dentry_splice_alias(struct fs_inode *inode,
-					 struct fs_dentry *dentry)
+struct dentry *dentry_splice_alias(struct inode *inode, struct dentry *dentry)
 {
 	struct list_head *dentries;
-	struct fs_dentry *d;
+	struct dentry *d;
 
 	if (!inode)
 		return ERR_PTR(-EINVAL);
@@ -401,7 +398,7 @@ struct fs_dentry *fs_dentry_splice_alias(struct fs_inode *inode,
 				     &d->name)) {
 			/*
 			 * @d is on inode->dentries, but its last reference may
-			 * already have been dropped by fs_dentry_put() (the
+			 * already have been dropped by dentry_put() (the
 			 * alias is unlinked under inode->lock, not before the
 			 * refcount reaches zero).  Do not resurrect it.
 			 */
@@ -412,13 +409,13 @@ struct fs_dentry *fs_dentry_splice_alias(struct fs_inode *inode,
 
 			/*
 			 * @d already owns an inode reference.  Drop the
-			 * temporary one obtained by fs_inode_get_locked() so
+			 * temporary one obtained by inode_get_locked() so
 			 * that the alias path does not leak it.
 			 */
-			fs_inode_put(inode);
+			inode_put(inode);
 
 			dentry->flags |= DCACHE_NEGATIVE;
-			fs_dentry_put(dentry);
+			dentry_put(dentry);
 			return d;
 		}
 	}
@@ -447,7 +444,7 @@ const struct qstr dotdot_name = {
 	.hash = DOTDOT_NAME_HASH,
 };
 
-static int generic_compare(const struct fs_dentry *dentry, unsigned int len,
+static int generic_compare(const struct dentry *dentry, unsigned int len,
 			   const char *str, const struct qstr *name)
 {
 	(void)dentry;
@@ -458,6 +455,6 @@ static int generic_compare(const struct fs_dentry *dentry, unsigned int len,
 	return memcmp(str, name->name, len);
 }
 
-const struct fs_dentry_ops generic_dop = {
+const struct dentry_ops generic_dop = {
 	.compare = generic_compare,
 };

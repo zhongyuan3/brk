@@ -567,7 +567,7 @@ void process_init_main(void)
 	init_reaper = current_process();
 
 	/*
-	 * Allocate the user init process before fs_init() so it keeps PID 1.
+	 * Allocate the user init process before vfs_init() so it keeps PID 1.
 	 * It stays NEW until the filesystem is ready and is only then made
 	 * runnable.
 	 */
@@ -576,7 +576,7 @@ void process_init_main(void)
 	/* Block probing issues real I/O and must precede the rootfs mount. */
 	gendisk_scan_partitions();
 
-	int err = fs_init();
+	int err = vfs_init();
 	if (err)
 		panic("failed to initialize filesystem: %s\n", strerror(err));
 

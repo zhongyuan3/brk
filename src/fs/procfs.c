@@ -340,14 +340,14 @@ struct procfs_fs_iter {
 	size_t pos;
 };
 
-static void procfs_fs_collect(const struct fs_driver *fs, void *ctx)
+static void procfs_fs_collect(const struct file_system_type *type, void *ctx)
 {
 	struct procfs_fs_iter *it = ctx;
 	int n;
 
 	if (it->pos >= it->size)
 		return;
-	n = snprintf(it->buf + it->pos, it->size - it->pos, "%s\n", fs->name);
+	n = snprintf(it->buf + it->pos, it->size - it->pos, "%s\n", type->name);
 	if (n > 0)
 		it->pos += (size_t)n;
 }
@@ -359,7 +359,7 @@ static int procfs_show_filesystems(const struct procfs_entry *e, pid_t pid,
 	(void)pid;
 	struct procfs_fs_iter it = { .buf = buf, .size = size, .pos = 0 };
 
-	fs_driver_for_each(procfs_fs_collect, &it);
+	file_system_type_for_each(procfs_fs_collect, &it);
 	return (int)it.pos;
 }
 
@@ -449,14 +449,14 @@ static int procfs_show_pid_cmdline(const struct procfs_entry *e, pid_t pid,
 	return (int)(n + (size > n ? 1 : 0));
 }
 
-static const struct fs_file_ops procfs_root_dir_fops;
-static const struct fs_file_ops procfs_pid_dir_fops;
-static const struct fs_file_ops procfs_file_fops;
-static const struct fs_inode_ops procfs_root_iops;
-static const struct fs_inode_ops procfs_pid_dir_iops;
-static const struct fs_inode_ops procfs_file_iops;
+static const struct file_ops procfs_root_dir_fops;
+static const struct file_ops procfs_pid_dir_fops;
+static const struct file_ops procfs_file_fops;
+static const struct inode_ops procfs_root_iops;
+static const struct inode_ops procfs_pid_dir_iops;
+static const struct inode_ops procfs_file_iops;
 
-static void procfs_init_inode(struct fs_inode *inode, umode_t mode,
+static void procfs_init_inode(struct inode *inode, umode_t mode,
 			      unsigned int nlink)
 {
 	inode->mode = mode;
@@ -465,16 +465,15 @@ static void procfs_init_inode(struct fs_inode *inode, umode_t mode,
 	inode->gid = 0;
 	inode->size = 0;
 	inode->rdev = 0;
-	fs_inode_times_set_all_now(inode);
+	inode_times_set_all_now(inode);
 }
 
-static struct fs_inode *procfs_iget(struct fs_super_block *sb,
-				    unsigned long ino, umode_t mode,
-				    unsigned int nlink,
-				    const struct fs_inode_ops *iop,
-				    const struct fs_file_ops *fop)
+static struct inode *procfs_iget(struct super_block *sb, unsigned long ino,
+				 umode_t mode, unsigned int nlink,
+				 const struct inode_ops *iop,
+				 const struct file_ops *fop)
 {
-	struct fs_inode *inode = fs_inode_get_locked(sb, ino);
+	struct inode *inode = inode_get_locked(sb, ino);
 	bool is_new;
 	irqstate_t flags;
 
@@ -489,34 +488,32 @@ static struct fs_inode *procfs_iget(struct fs_super_block *sb,
 		procfs_init_inode(inode, mode, nlink);
 		inode->ops = iop;
 		inode->fops = fop;
-		fs_inode_unlock_new(inode);
+		inode_unlock_new(inode);
 	}
 	return inode;
 }
 
-static struct fs_inode *procfs_iget_root(struct fs_super_block *sb)
+static struct inode *procfs_iget_root(struct super_block *sb)
 {
 	return procfs_iget(sb, PROC_INO_ROOT, S_IFDIR | 0555, 2,
 			   &procfs_root_iops, &procfs_root_dir_fops);
 }
 
-static struct fs_inode *procfs_iget_static(struct fs_super_block *sb,
-					   const struct procfs_entry *e)
+static struct inode *procfs_iget_static(struct super_block *sb,
+					const struct procfs_entry *e)
 {
 	return procfs_iget(sb, procfs_make_static_ino(e->idx), e->mode, 1,
 			   &procfs_file_iops, &procfs_file_fops);
 }
 
-static struct fs_inode *procfs_iget_pid_dir(struct fs_super_block *sb,
-					    pid_t pid)
+static struct inode *procfs_iget_pid_dir(struct super_block *sb, pid_t pid)
 {
 	return procfs_iget(sb, procfs_make_pid_dir_ino(pid), S_IFDIR | 0555, 2,
 			   &procfs_pid_dir_iops, &procfs_pid_dir_fops);
 }
 
-static struct fs_inode *procfs_iget_pid_file(struct fs_super_block *sb,
-					     pid_t pid,
-					     const struct procfs_entry *e)
+static struct inode *procfs_iget_pid_file(struct super_block *sb, pid_t pid,
+					  const struct procfs_entry *e)
 {
 	return procfs_iget(sb, procfs_make_pid_file_ino(pid, e->idx), e->mode,
 			   1, &procfs_file_iops, &procfs_file_fops);
@@ -540,33 +537,32 @@ static bool procfs_parse_pid(const char *name, int len, pid_t *out)
 	return true;
 }
 
-static void procfs_evict_inode(struct fs_inode *inode)
+static void procfs_evict_inode(struct inode *inode)
 {
 	(void)inode;
 	/* Nothing per-inode is allocated, so there is nothing to free. */
 }
 
-static void procfs_put_super(struct fs_super_block *sb)
+static void procfs_put_super(struct super_block *sb)
 {
-	struct fs_driver *driver = sb->driver;
-	spin_lock(&driver->lock);
+	struct file_system_type *type = sb->type;
+	spin_lock(&type->lock);
 	list_del(&sb->instance);
-	spin_unlock(&driver->lock);
+	spin_unlock(&type->lock);
 	if (sb->root)
-		fs_dentry_put(sb->root);
+		dentry_put(sb->root);
 }
 
-static const struct fs_super_block_ops procfs_sops = {
+static const struct super_block_ops procfs_sops = {
 	.evict_inode = procfs_evict_inode,
 	.put_super = procfs_put_super,
 };
 
-static struct fs_dentry *procfs_root_lookup(struct fs_inode *dir,
-					    struct fs_dentry *dentry,
-					    unsigned int flags)
+static struct dentry *
+procfs_root_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 {
 	(void)flags;
-	struct fs_super_block *sb = dir->sb;
+	struct super_block *sb = dir->sb;
 	const char *name = dentry->name.name;
 	int len = dentry->name.len;
 	pid_t pid;
@@ -574,31 +570,31 @@ static struct fs_dentry *procfs_root_lookup(struct fs_inode *dir,
 	for (size_t i = 0; i < PROCFS_ROOT_ENTRIES_NR; ++i) {
 		const struct procfs_entry *e = &procfs_root_entries[i];
 		if (e->name_len == len && !memcmp(e->name, name, len)) {
-			struct fs_inode *inode = procfs_iget_static(sb, e);
+			struct inode *inode = procfs_iget_static(sb, e);
 			if (!inode)
 				return ERR_PTR(-ENOMEM);
-			return fs_dentry_splice_alias(inode, dentry);
+			return dentry_splice_alias(inode, dentry);
 		}
 	}
 
 	if (procfs_parse_pid(name, len, &pid)) {
 		if (!process_pid_exists(pid))
 			return NULL;
-		struct fs_inode *inode = procfs_iget_pid_dir(sb, pid);
+		struct inode *inode = procfs_iget_pid_dir(sb, pid);
 		if (!inode)
 			return ERR_PTR(-ENOMEM);
-		return fs_dentry_splice_alias(inode, dentry);
+		return dentry_splice_alias(inode, dentry);
 	}
 
 	return NULL;
 }
 
-static struct fs_dentry *procfs_pid_dir_lookup(struct fs_inode *dir,
-					       struct fs_dentry *dentry,
-					       unsigned int flags)
+static struct dentry *procfs_pid_dir_lookup(struct inode *dir,
+					    struct dentry *dentry,
+					    unsigned int flags)
 {
 	(void)flags;
-	struct fs_super_block *sb = dir->sb;
+	struct super_block *sb = dir->sb;
 	pid_t pid = procfs_ino_pid(dir->ino);
 	const char *name = dentry->name.name;
 	int len = dentry->name.len;
@@ -609,22 +605,21 @@ static struct fs_dentry *procfs_pid_dir_lookup(struct fs_inode *dir,
 	for (size_t i = 0; i < PROCFS_PID_ENTRIES_NR; ++i) {
 		const struct procfs_entry *e = &procfs_pid_entries[i];
 		if (e->name_len == len && !memcmp(e->name, name, len)) {
-			struct fs_inode *inode =
-				procfs_iget_pid_file(sb, pid, e);
+			struct inode *inode = procfs_iget_pid_file(sb, pid, e);
 			if (!inode)
 				return ERR_PTR(-ENOMEM);
-			return fs_dentry_splice_alias(inode, dentry);
+			return dentry_splice_alias(inode, dentry);
 		}
 	}
 	return NULL;
 }
 
-static int procfs_getattr(const struct fs_path *path, struct kstat *stat,
-			  u32 mask, unsigned int flags)
+static int procfs_getattr(const struct path *path, struct kstat *stat, u32 mask,
+			  unsigned int flags)
 {
 	(void)mask;
 	(void)flags;
-	struct fs_inode *inode = path->dentry->inode;
+	struct inode *inode = path->dentry->inode;
 
 	memset(stat, 0, sizeof(*stat));
 	stat->ino = inode->ino;
@@ -636,11 +631,11 @@ static int procfs_getattr(const struct fs_path *path, struct kstat *stat,
 	stat->size = inode->size;
 	stat->blksize = PAGE_SIZE;
 	stat->blocks = 0;
-	fs_inode_times_to_kstat(inode, stat);
+	inode_times_to_kstat(inode, stat);
 	return 0;
 }
 
-static int procfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
+static int procfs_setattr(struct dentry *dentry, struct iattr *attr)
 {
 	(void)dentry;
 
@@ -653,19 +648,19 @@ static int procfs_setattr(struct fs_dentry *dentry, struct fs_iattr *attr)
 	return 0;
 }
 
-static const struct fs_inode_ops procfs_root_iops = {
+static const struct inode_ops procfs_root_iops = {
 	.lookup = procfs_root_lookup,
 	.getattr = procfs_getattr,
 	.setattr = procfs_setattr,
 };
 
-static const struct fs_inode_ops procfs_pid_dir_iops = {
+static const struct inode_ops procfs_pid_dir_iops = {
 	.lookup = procfs_pid_dir_lookup,
 	.getattr = procfs_getattr,
 	.setattr = procfs_setattr,
 };
 
-static const struct fs_inode_ops procfs_file_iops = {
+static const struct inode_ops procfs_file_iops = {
 	.getattr = procfs_getattr,
 	.setattr = procfs_setattr,
 };
@@ -676,7 +671,7 @@ struct procfs_file_priv {
 	size_t cap; /* allocation size */
 };
 
-static int procfs_file_open(struct fs_inode *inode, struct fs_file *file)
+static int procfs_file_open(struct inode *inode, struct file *file)
 {
 	const struct procfs_entry *e;
 	procfs_show_fn show;
@@ -723,7 +718,7 @@ static int procfs_file_open(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static int procfs_file_release(struct fs_inode *inode, struct fs_file *file)
+static int procfs_file_release(struct inode *inode, struct file *file)
 {
 	(void)inode;
 	struct procfs_file_priv *priv = file->private_data;
@@ -735,7 +730,7 @@ static int procfs_file_release(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static ssize_t procfs_file_read(struct fs_file *file, char *buf, size_t size,
+static ssize_t procfs_file_read(struct file *file, char *buf, size_t size,
 				loff_t *pos)
 {
 	struct procfs_file_priv *priv = file->private_data;
@@ -754,7 +749,7 @@ static ssize_t procfs_file_read(struct fs_file *file, char *buf, size_t size,
 	return (ssize_t)n;
 }
 
-static ssize_t procfs_file_write(struct fs_file *file, const char *buf,
+static ssize_t procfs_file_write(struct file *file, const char *buf,
 				 size_t size, loff_t *pos)
 {
 	(void)file;
@@ -764,8 +759,7 @@ static ssize_t procfs_file_write(struct fs_file *file, const char *buf,
 	return -EROFS;
 }
 
-static loff_t procfs_file_llseek(struct fs_file *file, loff_t offset,
-				 int whence)
+static loff_t procfs_file_llseek(struct file *file, loff_t offset, int whence)
 {
 	struct procfs_file_priv *priv = file->private_data;
 	loff_t end = priv ? (loff_t)priv->len : 0;
@@ -789,15 +783,15 @@ static loff_t procfs_file_llseek(struct fs_file *file, loff_t offset,
 	return new_pos;
 }
 
-static int procfs_file_iterate_shared(struct fs_file *file,
-				      struct fs_dir_iterator *ctx)
+static int procfs_file_iterate_shared(struct file *file,
+				      struct dir_iterator *ctx)
 {
 	(void)file;
 	(void)ctx;
 	return -ENOTDIR;
 }
 
-static int procfs_file_fsync(struct fs_file *file, loff_t start, loff_t end,
+static int procfs_file_fsync(struct file *file, loff_t start, loff_t end,
 			     int datasync)
 {
 	(void)file;
@@ -807,13 +801,13 @@ static int procfs_file_fsync(struct fs_file *file, loff_t start, loff_t end,
 	return 0;
 }
 
-static int procfs_file_flush(struct fs_file *file)
+static int procfs_file_flush(struct file *file)
 {
 	(void)file;
 	return 0;
 }
 
-static long procfs_file_ioctl(struct fs_file *file, unsigned int cmd,
+static long procfs_file_ioctl(struct file *file, unsigned int cmd,
 			      unsigned long arg)
 {
 	(void)file;
@@ -822,7 +816,7 @@ static long procfs_file_ioctl(struct fs_file *file, unsigned int cmd,
 	return -ENOTTY;
 }
 
-static const struct fs_file_ops procfs_file_fops = {
+static const struct file_ops procfs_file_fops = {
 	.open = procfs_file_open,
 	.release = procfs_file_release,
 	.read = procfs_file_read,
@@ -834,21 +828,21 @@ static const struct fs_file_ops procfs_file_fops = {
 	.ioctl = procfs_file_ioctl,
 };
 
-static int procfs_dir_open(struct fs_inode *inode, struct fs_file *file)
+static int procfs_dir_open(struct inode *inode, struct file *file)
 {
 	(void)inode;
 	(void)file;
 	return 0;
 }
 
-static int procfs_dir_release(struct fs_inode *inode, struct fs_file *file)
+static int procfs_dir_release(struct inode *inode, struct file *file)
 {
 	(void)inode;
 	(void)file;
 	return 0;
 }
 
-static ssize_t procfs_dir_read(struct fs_file *file, char *buf, size_t size,
+static ssize_t procfs_dir_read(struct file *file, char *buf, size_t size,
 			       loff_t *pos)
 {
 	(void)file;
@@ -858,8 +852,8 @@ static ssize_t procfs_dir_read(struct fs_file *file, char *buf, size_t size,
 	return -EISDIR;
 }
 
-static ssize_t procfs_dir_write(struct fs_file *file, const char *buf,
-				size_t size, loff_t *pos)
+static ssize_t procfs_dir_write(struct file *file, const char *buf, size_t size,
+				loff_t *pos)
 {
 	(void)file;
 	(void)buf;
@@ -868,7 +862,7 @@ static ssize_t procfs_dir_write(struct fs_file *file, const char *buf,
 	return -EISDIR;
 }
 
-static loff_t procfs_dir_llseek(struct fs_file *file, loff_t offset, int whence)
+static loff_t procfs_dir_llseek(struct file *file, loff_t offset, int whence)
 {
 	loff_t new_pos;
 
@@ -887,7 +881,7 @@ static loff_t procfs_dir_llseek(struct fs_file *file, loff_t offset, int whence)
 	return new_pos;
 }
 
-static unsigned long procfs_parent_ino(const struct fs_inode *inode)
+static unsigned long procfs_parent_ino(const struct inode *inode)
 {
 	/*
 	 * For the root inode there is no in-fs parent; reusing the inode's
@@ -899,7 +893,7 @@ static unsigned long procfs_parent_ino(const struct fs_inode *inode)
 	return PROC_INO_ROOT;
 }
 
-static bool procfs_emit_dot(struct fs_dir_iterator *ctx, struct fs_inode *dir)
+static bool procfs_emit_dot(struct dir_iterator *ctx, struct inode *dir)
 {
 	if (ctx->pos == 0) {
 		if (!ctx->actor(ctx, ".", 1, ctx->pos, dir->ino, DT_DIR))
@@ -915,10 +909,10 @@ static bool procfs_emit_dot(struct fs_dir_iterator *ctx, struct fs_inode *dir)
 	return true;
 }
 
-static int procfs_root_iterate_shared(struct fs_file *file,
-				      struct fs_dir_iterator *ctx)
+static int procfs_root_iterate_shared(struct file *file,
+				      struct dir_iterator *ctx)
 {
-	struct fs_inode *dir = file->inode;
+	struct inode *dir = file->inode;
 	loff_t idx;
 	pid_t *pids;
 	int npids;
@@ -969,10 +963,10 @@ static int procfs_root_iterate_shared(struct fs_file *file,
 	return 0;
 }
 
-static int procfs_pid_dir_iterate_shared(struct fs_file *file,
-					 struct fs_dir_iterator *ctx)
+static int procfs_pid_dir_iterate_shared(struct file *file,
+					 struct dir_iterator *ctx)
 {
-	struct fs_inode *dir = file->inode;
+	struct inode *dir = file->inode;
 	pid_t pid = procfs_ino_pid(dir->ino);
 	loff_t idx;
 
@@ -997,7 +991,7 @@ static int procfs_pid_dir_iterate_shared(struct fs_file *file,
 	return 0;
 }
 
-static int procfs_dir_fsync(struct fs_file *file, loff_t start, loff_t end,
+static int procfs_dir_fsync(struct file *file, loff_t start, loff_t end,
 			    int datasync)
 {
 	(void)file;
@@ -1007,13 +1001,13 @@ static int procfs_dir_fsync(struct fs_file *file, loff_t start, loff_t end,
 	return 0;
 }
 
-static int procfs_dir_flush(struct fs_file *file)
+static int procfs_dir_flush(struct file *file)
 {
 	(void)file;
 	return 0;
 }
 
-static long procfs_dir_ioctl(struct fs_file *file, unsigned int cmd,
+static long procfs_dir_ioctl(struct file *file, unsigned int cmd,
 			     unsigned long arg)
 {
 	(void)file;
@@ -1022,7 +1016,7 @@ static long procfs_dir_ioctl(struct fs_file *file, unsigned int cmd,
 	return -ENOTTY;
 }
 
-static const struct fs_file_ops procfs_root_dir_fops = {
+static const struct file_ops procfs_root_dir_fops = {
 	.open = procfs_dir_open,
 	.release = procfs_dir_release,
 	.read = procfs_dir_read,
@@ -1034,7 +1028,7 @@ static const struct fs_file_ops procfs_root_dir_fops = {
 	.ioctl = procfs_dir_ioctl,
 };
 
-static const struct fs_file_ops procfs_pid_dir_fops = {
+static const struct file_ops procfs_pid_dir_fops = {
 	.open = procfs_dir_open,
 	.release = procfs_dir_release,
 	.read = procfs_dir_read,
@@ -1046,12 +1040,12 @@ static const struct fs_file_ops procfs_pid_dir_fops = {
 	.ioctl = procfs_dir_ioctl,
 };
 
-int procfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
+int procfs_mount(struct mount_args *args, struct mount_result *result)
 {
-	struct fs_super_block *sb;
-	struct fs_inode *root_inode;
-	struct fs_dentry *root_dentry;
-	sb = fs_super_block_alloc(args->driver);
+	struct super_block *sb;
+	struct inode *root_inode;
+	struct dentry *root_dentry;
+	sb = super_block_alloc(args->type);
 	if (!sb)
 		return -ENOMEM;
 
@@ -1064,22 +1058,22 @@ int procfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 
 	root_inode = procfs_iget_root(sb);
 	if (!root_inode) {
-		fs_super_block_free(sb);
+		super_block_free(sb);
 		return -ENOMEM;
 	}
 
-	root_dentry = fs_dentry_make_root(root_inode);
+	root_dentry = dentry_make_root(root_inode);
 	if (!root_dentry) {
-		fs_inode_put(root_inode);
-		fs_super_block_free(sb);
+		inode_put(root_inode);
+		super_block_free(sb);
 		return -ENOMEM;
 	}
 
-	sb->root = fs_dentry_get(root_dentry);
+	sb->root = dentry_get(root_dentry);
 
-	spin_lock(&args->driver->lock);
-	list_add_tail(&sb->instance, &args->driver->super_blocks);
-	spin_unlock(&args->driver->lock);
+	spin_lock(&args->type->lock);
+	list_add_tail(&sb->instance, &args->type->super_blocks);
+	spin_unlock(&args->type->lock);
 
 	result->root = root_dentry;
 	result->sb = sb;
@@ -1087,7 +1081,7 @@ int procfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 	return 0;
 }
 
-struct fs_driver procfs_fs_type = {
+struct file_system_type procfs_fs_type = {
 	.name = "procfs",
 	.mount = procfs_mount,
 	.lock = SPINLOCK_INITIALIZER("procfs_fs_lock"),

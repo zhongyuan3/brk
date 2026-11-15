@@ -34,8 +34,8 @@ struct anon_pipe {
 	char buf[PIPE_RING_CAP];
 };
 
-static struct fs_mount_state *pipe_mnt;
-static struct fs_driver pipefs_fs_type;
+static struct mount_state *pipe_mnt;
+static struct file_system_type pipefs_fs_type;
 
 static const struct qstr pipe_d_name = {
 	.name = "[pipe]",
@@ -43,9 +43,8 @@ static const struct qstr pipe_d_name = {
 	.hash = 0xed5301a9,
 };
 
-static struct fs_dentry *pipefs_lookup(struct fs_inode *dir,
-				       struct fs_dentry *dentry,
-				       unsigned int flags)
+static struct dentry *pipefs_lookup(struct inode *dir, struct dentry *dentry,
+				    unsigned int flags)
 {
 	(void)dir;
 	(void)dentry;
@@ -53,10 +52,10 @@ static struct fs_dentry *pipefs_lookup(struct fs_inode *dir,
 	return NULL;
 }
 
-static int pipefs_dir_getattr(const struct fs_path *path, struct kstat *st,
+static int pipefs_dir_getattr(const struct path *path, struct kstat *st,
 			      u32 mask, unsigned int flags)
 {
-	struct fs_inode *inode = path->dentry->inode;
+	struct inode *inode = path->dentry->inode;
 
 	(void)mask;
 	(void)flags;
@@ -65,23 +64,23 @@ static int pipefs_dir_getattr(const struct fs_path *path, struct kstat *st,
 	st->mode = inode->mode;
 	st->nlink = inode->nlink;
 	st->blksize = PIPE_BUF;
-	fs_inode_times_to_kstat(inode, st);
+	inode_times_to_kstat(inode, st);
 	return 0;
 }
 
-static const struct fs_inode_ops pipefs_dir_iops = {
+static const struct inode_ops pipefs_dir_iops = {
 	.lookup = pipefs_lookup,
 	.getattr = pipefs_dir_getattr,
 };
 
-static int pipefs_dir_open(struct fs_inode *inode, struct fs_file *file)
+static int pipefs_dir_open(struct inode *inode, struct file *file)
 {
 	(void)inode;
 	(void)file;
 	return 0;
 }
 
-static ssize_t pipefs_dir_read(struct fs_file *file, char *buf, size_t size,
+static ssize_t pipefs_dir_read(struct file *file, char *buf, size_t size,
 			       loff_t *pos)
 {
 	(void)file;
@@ -91,8 +90,8 @@ static ssize_t pipefs_dir_read(struct fs_file *file, char *buf, size_t size,
 	return -EISDIR;
 }
 
-static ssize_t pipefs_dir_write(struct fs_file *file, const char *buf,
-				size_t size, loff_t *pos)
+static ssize_t pipefs_dir_write(struct file *file, const char *buf, size_t size,
+				loff_t *pos)
 {
 	(void)file;
 	(void)buf;
@@ -101,7 +100,7 @@ static ssize_t pipefs_dir_write(struct fs_file *file, const char *buf,
 	return -EISDIR;
 }
 
-static loff_t pipefs_dir_llseek(struct fs_file *file, loff_t offset, int whence)
+static loff_t pipefs_dir_llseek(struct file *file, loff_t offset, int whence)
 {
 	loff_t new_pos = 0;
 
@@ -117,15 +116,15 @@ static loff_t pipefs_dir_llseek(struct fs_file *file, loff_t offset, int whence)
 	return new_pos;
 }
 
-static int pipefs_dir_iterate_shared(struct fs_file *file,
-				     struct fs_dir_iterator *ctx)
+static int pipefs_dir_iterate_shared(struct file *file,
+				     struct dir_iterator *ctx)
 {
 	(void)file;
 	(void)ctx;
 	return 0;
 }
 
-static const struct fs_file_ops pipefs_dir_fops = {
+static const struct file_ops pipefs_dir_fops = {
 	.open = pipefs_dir_open,
 	.read = pipefs_dir_read,
 	.write = pipefs_dir_write,
@@ -133,44 +132,44 @@ static const struct fs_file_ops pipefs_dir_fops = {
 	.iterate_shared = pipefs_dir_iterate_shared,
 };
 
-static void pipefs_evict_inode(struct fs_inode *inode)
+static void pipefs_evict_inode(struct inode *inode)
 {
 	if (inode->private_data) {
 		kfree(inode->private_data);
 		inode->private_data = NULL;
 	}
-	fs_inode_clear(inode);
+	inode_clear(inode);
 }
 
-static void pipefs_put_super(struct fs_super_block *sb)
+static void pipefs_put_super(struct super_block *sb)
 {
-	struct fs_driver *driver = sb->driver;
-	spin_lock(&driver->lock);
+	struct file_system_type *type = sb->type;
+	spin_lock(&type->lock);
 	list_del(&sb->instance);
-	spin_unlock(&driver->lock);
-	fs_dentry_put(sb->root);
+	spin_unlock(&type->lock);
+	dentry_put(sb->root);
 }
 
-static int pipefs_write_inode(struct fs_inode *inode, int sync)
+static int pipefs_write_inode(struct inode *inode, int sync)
 {
 	(void)inode;
 	(void)sync;
 	return 0;
 }
 
-static const struct fs_super_block_ops pipefs_sops = {
+static const struct super_block_ops pipefs_sops = {
 	.put_super = pipefs_put_super,
 	.evict_inode = pipefs_evict_inode,
 	.write_inode = pipefs_write_inode,
 };
 
-int pipefs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
+int pipefs_mount(struct mount_args *args, struct mount_result *result)
 {
-	struct fs_super_block *sb;
-	struct fs_inode *root_inode;
-	struct fs_dentry *root_dentry;
+	struct super_block *sb;
+	struct inode *root_inode;
+	struct dentry *root_dentry;
 
-	sb = fs_super_block_alloc(args->driver);
+	sb = super_block_alloc(args->type);
 	if (!sb)
 		return -ENOMEM;
 
@@ -180,9 +179,9 @@ int pipefs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 	sb->ops = &pipefs_sops;
 	sb->default_dops = &generic_dop;
 
-	root_inode = fs_inode_get_locked(sb, 1);
+	root_inode = inode_get_locked(sb, 1);
 	if (!root_inode) {
-		fs_super_block_free(sb);
+		super_block_free(sb);
 		return -ENOMEM;
 	}
 
@@ -195,22 +194,22 @@ int pipefs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 		root_inode->ops = &pipefs_dir_iops;
 		root_inode->fops = &pipefs_dir_fops;
 		root_inode->nlink = 1;
-		fs_inode_times_set_all_now(root_inode);
-		fs_inode_unlock_new(root_inode);
+		inode_times_set_all_now(root_inode);
+		inode_unlock_new(root_inode);
 	}
 
-	root_dentry = fs_dentry_make_root(root_inode);
+	root_dentry = dentry_make_root(root_inode);
 	if (!root_dentry) {
-		fs_inode_put(root_inode);
-		fs_super_block_free(sb);
+		inode_put(root_inode);
+		super_block_free(sb);
 		return -ENOMEM;
 	}
 
-	sb->root = fs_dentry_get(root_dentry);
+	sb->root = dentry_get(root_dentry);
 
-	spin_lock(&args->driver->lock);
-	list_add_tail(&sb->instance, &args->driver->super_blocks);
-	spin_unlock(&args->driver->lock);
+	spin_lock(&args->type->lock);
+	list_add_tail(&sb->instance, &args->type->super_blocks);
+	spin_unlock(&args->type->lock);
 
 	result->root = root_dentry;
 	result->sb = sb;
@@ -218,10 +217,10 @@ int pipefs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 	return 0;
 }
 
-static int pipe_getattr(const struct fs_path *path, struct kstat *st, u32 mask,
+static int pipe_getattr(const struct path *path, struct kstat *st, u32 mask,
 			unsigned int flags)
 {
-	struct fs_inode *inode = path->dentry->inode;
+	struct inode *inode = path->dentry->inode;
 
 	(void)mask;
 	(void)flags;
@@ -231,22 +230,22 @@ static int pipe_getattr(const struct fs_path *path, struct kstat *st, u32 mask,
 	st->nlink = inode->nlink;
 	st->size = 0;
 	st->blksize = PIPE_BUF;
-	fs_inode_times_to_kstat(inode, st);
+	inode_times_to_kstat(inode, st);
 	return 0;
 }
 
-static const struct fs_inode_ops pipe_inode_iops = {
+static const struct inode_ops pipe_inode_iops = {
 	.getattr = pipe_getattr,
 };
 
-static int pipe_open(struct fs_inode *inode, struct fs_file *file)
+static int pipe_open(struct inode *inode, struct file *file)
 {
 	(void)inode;
 	(void)file;
 	return 0;
 }
 
-static int pipe_release(struct fs_inode *inode, struct fs_file *file)
+static int pipe_release(struct inode *inode, struct file *file)
 {
 	struct anon_pipe *pipe = inode->private_data;
 	irqstate_t flags;
@@ -269,8 +268,7 @@ static int pipe_release(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static ssize_t pipe_read(struct fs_file *file, char *buf, size_t size,
-			 loff_t *pos)
+static ssize_t pipe_read(struct file *file, char *buf, size_t size, loff_t *pos)
 {
 	struct anon_pipe *pipe = file->inode->private_data;
 	size_t n, first;
@@ -334,7 +332,7 @@ static ssize_t pipe_read(struct fs_file *file, char *buf, size_t size,
 	return total;
 }
 
-static ssize_t pipe_write(struct fs_file *file, const char *buf, size_t size,
+static ssize_t pipe_write(struct file *file, const char *buf, size_t size,
 			  loff_t *pos)
 {
 	struct anon_pipe *pipe = file->inode->private_data;
@@ -399,7 +397,7 @@ static ssize_t pipe_write(struct fs_file *file, const char *buf, size_t size,
 	return total;
 }
 
-static loff_t pipe_llseek(struct fs_file *file, loff_t offset, int whence)
+static loff_t pipe_llseek(struct file *file, loff_t offset, int whence)
 {
 	(void)file;
 	(void)offset;
@@ -407,7 +405,7 @@ static loff_t pipe_llseek(struct fs_file *file, loff_t offset, int whence)
 	return -ESPIPE;
 }
 
-static unsigned int pipe_poll(struct fs_file *file, unsigned int events)
+static unsigned int pipe_poll(struct file *file, unsigned int events)
 {
 	struct anon_pipe *pipe = file->inode->private_data;
 	unsigned int rev = 0;
@@ -430,7 +428,7 @@ static unsigned int pipe_poll(struct fs_file *file, unsigned int events)
 	return rev & (events | POLLERR | POLLHUP);
 }
 
-static const struct fs_file_ops pipe_fifo_fops = {
+static const struct file_ops pipe_fifo_fops = {
 	.open = pipe_open,
 	.release = pipe_release,
 	.read = pipe_read,
@@ -454,14 +452,14 @@ static unsigned long pipe_alloc_ino(void)
  *
  * Return: 0 on success, negative errno on failure.
  */
-int anon_pipe_create(struct fs_file **read_file, struct fs_file **write_file,
+int anon_pipe_create(struct file **read_file, struct file **write_file,
 		     unsigned int flags)
 {
-	struct fs_inode *inode;
-	struct fs_dentry *d;
-	struct fs_path path;
+	struct inode *inode;
+	struct dentry *d;
+	struct path path;
 	struct anon_pipe *pipe;
-	struct fs_file *rf, *wf;
+	struct file *rf, *wf;
 	unsigned long ino;
 
 	if (!pipe_mnt)
@@ -479,7 +477,7 @@ int anon_pipe_create(struct fs_file **read_file, struct fs_file **write_file,
 	pipe->nonblock = (flags & O_NONBLOCK) != 0;
 
 	ino = pipe_alloc_ino();
-	inode = fs_inode_get_locked(pipe_mnt->sb, ino);
+	inode = inode_get_locked(pipe_mnt->sb, ino);
 	if (!inode) {
 		kfree(pipe);
 		return -ENOMEM;
@@ -490,7 +488,7 @@ int anon_pipe_create(struct fs_file **read_file, struct fs_file **write_file,
 	spin_unlock_irqrestore(&inode->lock, inode_flags);
 
 	if (!inode_is_new) {
-		fs_inode_put(inode);
+		inode_put(inode);
 		kfree(pipe);
 		return -EBUSY;
 	}
@@ -500,42 +498,42 @@ int anon_pipe_create(struct fs_file **read_file, struct fs_file **write_file,
 	inode->fops = &pipe_fifo_fops;
 	inode->nlink = 1;
 	inode->private_data = pipe;
-	fs_inode_times_set_all_now(inode);
-	fs_inode_unlock_new(inode);
+	inode_times_set_all_now(inode);
+	inode_unlock_new(inode);
 
-	d = fs_dentry_alloc_anon(inode, &pipe_d_name);
+	d = dentry_alloc_anon(inode, &pipe_d_name);
 	if (!d) {
-		fs_inode_put(inode);
+		inode_put(inode);
 		return -ENOMEM;
 	}
 
 	/*
 	 * @path owns the dentry/mount references created above.
-	 * fs_file_alloc() takes an additional reference for each file, so do
+	 * file_alloc() takes an additional reference for each file, so do
 	 * not get them again for the second end: that would leak one dentry
 	 * and one mount reference per pipe.
 	 */
-	path.mnt = fs_mount_state_get(pipe_mnt);
+	path.mnt = mount_state_get(pipe_mnt);
 	path.dentry = d;
 
-	rf = fs_file_alloc(&path, FMODE_READ);
+	rf = file_alloc(&path, FMODE_READ);
 	if (IS_ERR(rf)) {
 		int err = PTR_ERR(rf);
 
-		fs_path_put(&path);
+		path_put(&path);
 		return err;
 	}
 
-	wf = fs_file_alloc(&path, FMODE_WRITE);
+	wf = file_alloc(&path, FMODE_WRITE);
 	if (IS_ERR(wf)) {
 		int err = PTR_ERR(wf);
 
-		fs_path_put(&path);
-		fs_file_put(rf);
+		path_put(&path);
+		file_put(rf);
 		return err;
 	}
 
-	fs_path_put(&path);
+	path_put(&path);
 
 	*read_file = rf;
 	*write_file = wf;
@@ -550,7 +548,7 @@ void pipe_fs_init(void)
 	list_init(&pipefs_fs_type.super_blocks);
 	list_init(&pipefs_fs_type.list);
 
-	fs_driver_register(&pipefs_fs_type);
+	file_system_type_register(&pipefs_fs_type);
 
 	pipe_mnt = kernel_mount(&pipefs_fs_type, 0, "", NULL);
 	if (IS_ERR(pipe_mnt))
@@ -560,7 +558,7 @@ void pipe_fs_init(void)
 
 int do_pipe2(int *pipefd, int flags)
 {
-	struct fs_file *rf, *wf;
+	struct file *rf, *wf;
 	struct thread *task = current_thread();
 	int fd0, fd1, err;
 
@@ -573,15 +571,15 @@ int do_pipe2(int *pipefd, int flags)
 
 	fd0 = fdtable_alloc_fd(&task->process->fdtable, rf);
 	if (fd0 < 0) {
-		fs_file_put(wf);
-		fs_file_put(rf);
+		file_put(wf);
+		file_put(rf);
 		return -EMFILE;
 	}
 
 	fd1 = fdtable_alloc_fd(&task->process->fdtable, wf);
 	if (fd1 < 0) {
 		fdtable_close_fd(&task->process->fdtable, fd0);
-		fs_file_put(wf);
+		file_put(wf);
 		return -EMFILE;
 	}
 

@@ -11,9 +11,9 @@
 #include <uapi/errno.h>
 #include <uapi/socket.h>
 
-static int socket_from_fd(int fd, struct fs_file **filep, struct socket **sockp)
+static int socket_from_fd(int fd, struct file **filep, struct socket **sockp)
 {
-	struct fs_file *file;
+	struct file *file;
 
 	if (fd < 0)
 		return -EBADF;
@@ -23,7 +23,7 @@ static int socket_from_fd(int fd, struct fs_file **filep, struct socket **sockp)
 		return PTR_ERR(file);
 
 	if (file->ops != &socket_file_ops) {
-		fs_file_put(file);
+		file_put(file);
 		return -ENOTSOCK;
 	}
 
@@ -38,7 +38,7 @@ u64 sys_socket(void)
 	int type = syscall_arg_int(1);
 	int protocol = syscall_arg_int(2);
 	bool nonblock = (type & SOCK_NONBLOCK) != 0;
-	struct fs_file *file;
+	struct file *file;
 	struct socket *sock;
 	int fd;
 	int err;
@@ -51,7 +51,7 @@ u64 sys_socket(void)
 
 	sock->nonblock = nonblock;
 
-	file = fs_file_alloc_anon(&socket_file_ops, sock);
+	file = file_alloc_anon(&socket_file_ops, sock);
 	if (IS_ERR(file)) {
 		sock_release(sock);
 		return PTR_ERR(file);
@@ -59,7 +59,7 @@ u64 sys_socket(void)
 
 	fd = fdtable_alloc_fd(&current_process()->fdtable, file);
 	if (fd < 0) {
-		fs_file_put(file);
+		file_put(file);
 		return fd;
 	}
 	return fd;
@@ -71,7 +71,7 @@ u64 sys_bind(void)
 	const void *uaddr = syscall_arg_ptr(1);
 	int addrlen = syscall_arg_int(2);
 	struct sockaddr_in sa;
-	struct fs_file *file;
+	struct file *file;
 	struct socket *sock;
 	int err;
 
@@ -87,7 +87,7 @@ u64 sys_bind(void)
 		return err;
 
 	err = sock->ops->bind(sock, (const struct sockaddr *)&sa, addrlen);
-	fs_file_put(file);
+	file_put(file);
 	return err;
 }
 
@@ -97,7 +97,7 @@ u64 sys_connect(void)
 	const void *uaddr = syscall_arg_ptr(1);
 	int addrlen = syscall_arg_int(2);
 	struct sockaddr_in sa;
-	struct fs_file *file;
+	struct file *file;
 	struct socket *sock;
 	int err;
 
@@ -113,7 +113,7 @@ u64 sys_connect(void)
 		return err;
 
 	err = sock->ops->connect(sock, (const struct sockaddr *)&sa, addrlen);
-	fs_file_put(file);
+	file_put(file);
 	return err;
 }
 
@@ -126,7 +126,7 @@ u64 sys_sendto(void)
 	const void *uaddr = syscall_arg_ptr(4);
 	int addrlen = syscall_arg_int(5);
 	struct sockaddr_in sa;
-	struct fs_file *file;
+	struct file *file;
 	struct socket *sock;
 	int err;
 
@@ -146,7 +146,7 @@ u64 sys_sendto(void)
 	err = sock->ops->sendmsg(sock, buf, len,
 				 uaddr ? (const struct sockaddr *)&sa : NULL,
 				 uaddr ? (int)sizeof(sa) : 0, (int)flags);
-	fs_file_put(file);
+	file_put(file);
 	return err;
 }
 
@@ -159,7 +159,7 @@ u64 sys_recvfrom(void)
 	void *uaddr = syscall_arg_ptr(4);
 	int *uaddrlen = syscall_arg_ptr(5);
 	struct sockaddr_in sa;
-	struct fs_file *file;
+	struct file *file;
 	struct socket *sock;
 	int salen = sizeof(sa);
 	int ulen = 0;
@@ -186,7 +186,7 @@ u64 sys_recvfrom(void)
 		    copy_to_user(uaddrlen, &salen, sizeof(salen)))
 			err = -EFAULT;
 	}
-	fs_file_put(file);
+	file_put(file);
 	return err;
 }
 
@@ -194,7 +194,7 @@ u64 sys_shutdown(void)
 {
 	int fd = syscall_arg_int(0);
 	int how = syscall_arg_int(1);
-	struct fs_file *file;
+	struct file *file;
 	struct socket *sock;
 	int err;
 
@@ -207,7 +207,7 @@ u64 sys_shutdown(void)
 	} else {
 		err = sock->ops->shutdown(sock, how);
 	}
-	fs_file_put(file);
+	file_put(file);
 	return err;
 }
 
@@ -215,7 +215,7 @@ u64 sys_listen(void)
 {
 	int fd = syscall_arg_int(0);
 	int backlog = syscall_arg_int(1);
-	struct fs_file *file;
+	struct file *file;
 	struct socket *sock;
 	int err;
 
@@ -228,7 +228,7 @@ u64 sys_listen(void)
 	} else {
 		err = sock->ops->listen(sock, backlog);
 	}
-	fs_file_put(file);
+	file_put(file);
 	return err;
 }
 
@@ -237,7 +237,7 @@ static u64 sys_accept_common(unsigned int flags)
 	int fd = syscall_arg_int(0);
 	void *uaddr = syscall_arg_ptr(1);
 	int *uaddrlen = syscall_arg_ptr(2);
-	struct fs_file *file, *nfile;
+	struct file *file, *nfile;
 	struct socket *sock, *newsock;
 	int ulen = 0, salen;
 	int err, nfd;
@@ -253,19 +253,19 @@ static u64 sys_accept_common(unsigned int flags)
 	if (err)
 		return err;
 	if (!sock->ops->accept) {
-		fs_file_put(file);
+		file_put(file);
 		return -EOPNOTSUPP;
 	}
 
 	err = sock->ops->accept(sock, &newsock);
-	fs_file_put(file);
+	file_put(file);
 	if (err)
 		return err;
 
 	if (flags & SOCK_NONBLOCK)
 		newsock->nonblock = true;
 
-	nfile = fs_file_alloc_anon(&socket_file_ops, newsock);
+	nfile = file_alloc_anon(&socket_file_ops, newsock);
 	if (IS_ERR(nfile)) {
 		sock_release(newsock);
 		return PTR_ERR(nfile);
@@ -273,7 +273,7 @@ static u64 sys_accept_common(unsigned int flags)
 
 	nfd = fdtable_alloc_fd(&current_process()->fdtable, nfile);
 	if (nfd < 0) {
-		fs_file_put(nfile);
+		file_put(nfile);
 		return nfd;
 	}
 
@@ -305,7 +305,7 @@ static u64 sys_getname(bool peer)
 	void *uaddr = syscall_arg_ptr(1);
 	int *uaddrlen = syscall_arg_ptr(2);
 	struct sockaddr_in sa;
-	struct fs_file *file;
+	struct file *file;
 	struct socket *sock;
 	int salen;
 	int ulen;
@@ -323,7 +323,7 @@ static u64 sys_getname(bool peer)
 		return err;
 
 	if (!sock->ops->getname) {
-		fs_file_put(file);
+		file_put(file);
 		return -ENOSYS;
 	}
 
@@ -336,7 +336,7 @@ static u64 sys_getname(bool peer)
 		    copy_to_user(uaddrlen, &salen, sizeof(salen)))
 			err = -EFAULT;
 	}
-	fs_file_put(file);
+	file_put(file);
 	return err;
 }
 
@@ -357,7 +357,7 @@ u64 sys_setsockopt(void)
 	int optname = syscall_arg_int(2);
 	const void *optval = syscall_arg_ptr(3);
 	int optlen = syscall_arg_int(4);
-	struct fs_file *file;
+	struct file *file;
 	struct socket *sock;
 	int value;
 	int err;
@@ -397,7 +397,7 @@ u64 sys_setsockopt(void)
 	} else {
 		err = -ENOPROTOOPT;
 	}
-	fs_file_put(file);
+	file_put(file);
 	return err;
 }
 
@@ -408,7 +408,7 @@ u64 sys_getsockopt(void)
 	int optname = syscall_arg_int(2);
 	void *optval = syscall_arg_ptr(3);
 	int *optlen = syscall_arg_ptr(4);
-	struct fs_file *file;
+	struct file *file;
 	struct socket *sock;
 	irqstate_t flags;
 	int value;
@@ -427,7 +427,7 @@ u64 sys_getsockopt(void)
 		return err;
 
 	if (level != SOL_SOCKET) {
-		fs_file_put(file);
+		file_put(file);
 		return -ENOPROTOOPT;
 	}
 
@@ -455,7 +455,7 @@ u64 sys_getsockopt(void)
 		value = sock->sk ? (int)sock->sk->sndbuf : 0;
 		break;
 	default:
-		fs_file_put(file);
+		file_put(file);
 		return -ENOPROTOOPT;
 	}
 
@@ -464,6 +464,6 @@ u64 sys_getsockopt(void)
 	if (copy_to_user(optval, &value, len) ||
 	    copy_to_user(optlen, &len, sizeof(len)))
 		err = -EFAULT;
-	fs_file_put(file);
+	file_put(file);
 	return err;
 }

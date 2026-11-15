@@ -95,32 +95,32 @@ static int brkfs_read_super(struct brkfs_super_block *sb,
 static struct block_dev *brkfs_get_bdev(const char *dev_name)
 {
 	int err;
-	struct fs_path path = { 0 };
-	struct fs_inode *inode;
+	struct path path = { 0 };
+	struct inode *inode;
 	struct block_dev *bdev;
 
-	err = fs_path_lookup(dev_name, 0, &path);
+	err = path_lookup(dev_name, 0, &path);
 	if (err)
 		return ERR_PTR(err);
 
 	/* A lookup may succeed for a negative dentry (missing device node). */
 	inode = path.dentry ? path.dentry->inode : NULL;
 	if (!inode) {
-		fs_path_put(&path);
+		path_put(&path);
 		return ERR_PTR(-ENOENT);
 	}
 	if (!S_ISBLK(inode->mode)) {
-		fs_path_put(&path);
+		path_put(&path);
 		return ERR_PTR(-ENOTBLK);
 	}
 
 	bdev = blkdev_get(inode->rdev);
 	if (!bdev) {
-		fs_path_put(&path);
+		path_put(&path);
 		return ERR_PTR(-ENODEV);
 	}
 
-	fs_path_put(&path);
+	path_put(&path);
 	return bdev;
 }
 
@@ -208,15 +208,15 @@ static int brkfs_validate_super(struct brkfs_super_block *sb, u64 capacity)
 	return 0;
 }
 
-int brkfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
+int brkfs_mount(struct mount_args *args, struct mount_result *result)
 {
 	struct block_dev *bdev = NULL;
 	int err;
 	struct brkfs_super_block brk_sb;
-	struct fs_super_block *sb;
+	struct super_block *sb;
 	struct brkfs_sb_info *sb_info;
-	struct fs_dentry *root_dentry;
-	struct fs_inode *root_inode;
+	struct dentry *root_dentry;
+	struct inode *root_inode;
 
 	bdev = brkfs_get_bdev(args->dev_name);
 	if (IS_ERR(bdev))
@@ -264,7 +264,7 @@ int brkfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 		return err;
 	}
 
-	sb = fs_super_block_alloc(args->driver);
+	sb = super_block_alloc(args->type);
 	if (!sb) {
 		brkfs_sb_info_free(sb_info);
 		return -ENOMEM;
@@ -278,9 +278,9 @@ int brkfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 
 	sb->private_data = sb_info;
 
-	root_inode = fs_inode_get_locked(sb, BRKFS_ROOT_INO);
+	root_inode = inode_get_locked(sb, BRKFS_ROOT_INO);
 	if (!root_inode) {
-		fs_super_block_free(sb);
+		super_block_free(sb);
 		brkfs_sb_info_free(sb_info);
 		return -ENOMEM;
 	}
@@ -289,28 +289,28 @@ int brkfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 	err = brkfs_inode_read(sb_info, root_inode);
 	sleeplock_release(&root_inode->rwsem);
 	if (err) {
-		fs_inode_fail_new(root_inode);
-		fs_inode_put(root_inode);
-		fs_super_block_free(sb);
+		inode_fail_new(root_inode);
+		inode_put(root_inode);
+		super_block_free(sb);
 		brkfs_sb_info_free(sb_info);
 		return err;
 	}
 	brkfs_inode_setup_ops(root_inode);
-	fs_inode_unlock_new(root_inode);
+	inode_unlock_new(root_inode);
 
-	root_dentry = fs_dentry_make_root(root_inode);
+	root_dentry = dentry_make_root(root_inode);
 	if (!root_dentry) {
-		fs_inode_put(root_inode);
-		fs_super_block_free(sb);
+		inode_put(root_inode);
+		super_block_free(sb);
 		brkfs_sb_info_free(sb_info);
 		return -ENOMEM;
 	}
 
-	sb->root = fs_dentry_get(root_dentry);
+	sb->root = dentry_get(root_dentry);
 
-	spin_lock(&args->driver->lock);
-	list_add_tail(&sb->instance, &args->driver->super_blocks);
-	spin_unlock(&args->driver->lock);
+	spin_lock(&args->type->lock);
+	list_add_tail(&sb->instance, &args->type->super_blocks);
+	spin_unlock(&args->type->lock);
 
 	result->root = root_dentry;
 	result->sb = sb;
@@ -318,7 +318,7 @@ int brkfs_mount(struct fs_mount_args *args, struct fs_mount_result *result)
 	return 0;
 }
 
-struct fs_driver brkfs_fs_type = {
+struct file_system_type brkfs_fs_type = {
 	.name = "brkfs",
 	.mount = brkfs_mount,
 	.lock = SPINLOCK_INITIALIZER("brkfs_fs_lock"),

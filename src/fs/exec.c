@@ -44,9 +44,9 @@ struct exec_strings_acc {
 	size_t bytes;
 };
 
-static int exec_read_exact(struct fs_file *fp, u64 off, void *buf, size_t n)
+static int exec_read_exact(struct file *fp, u64 off, void *buf, size_t n)
 {
-	loff_t ret = fs_file_lseek(fp, off, SEEK_SET);
+	loff_t ret = file_lseek(fp, off, SEEK_SET);
 
 	if (ret < 0) {
 		pr_err("%s(): Failed to lseek file: %s\n", __func__,
@@ -54,7 +54,7 @@ static int exec_read_exact(struct fs_file *fp, u64 off, void *buf, size_t n)
 		return -EIO;
 	}
 
-	ssize_t rcnt = fs_file_read(fp, buf, n);
+	ssize_t rcnt = file_read(fp, buf, n);
 
 	if (rcnt < 0) {
 		pr_err("%s(): Failed to read file: %s\n", __func__,
@@ -79,14 +79,14 @@ static int elf_validate_exec_hdr(const struct elf_hdr *h)
 	return 0;
 }
 
-static int elf_read_phdr(struct fs_file *f, u64 off, struct elf_phdr *phdr)
+static int elf_read_phdr(struct file *f, u64 off, struct elf_phdr *phdr)
 {
 	ssize_t r;
-	loff_t ret = fs_file_lseek(f, off, SEEK_SET);
+	loff_t ret = file_lseek(f, off, SEEK_SET);
 
 	if (ret < 0)
 		return -EIO;
-	r = fs_file_read(f, phdr, sizeof(*phdr));
+	r = file_read(f, phdr, sizeof(*phdr));
 	if (r < 0)
 		return -EIO;
 	if ((size_t)r != sizeof(*phdr))
@@ -94,9 +94,9 @@ static int elf_read_phdr(struct fs_file *f, u64 off, struct elf_phdr *phdr)
 	return 0;
 }
 
-static int exec_read_elf_header(struct fs_file *f, struct elf_hdr *elf_hdr)
+static int exec_read_elf_header(struct file *f, struct elf_hdr *elf_hdr)
 {
-	ssize_t r = fs_file_read(f, elf_hdr, sizeof(*elf_hdr));
+	ssize_t r = file_read(f, elf_hdr, sizeof(*elf_hdr));
 
 	if (r < 0)
 		return -EIO;
@@ -211,7 +211,7 @@ static unsigned int flags_to_perm(unsigned int flags)
 }
 
 static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
-		   struct elf_phdr *ph, struct fs_file *fp)
+		   struct elf_phdr *ph, struct file *fp)
 {
 	int err = 0;
 	size_t npgs = vma->size >> PAGE_SHIFT;
@@ -278,8 +278,7 @@ failed:
 	return err;
 }
 
-static int load_seg(struct uvm_space *mm, struct elf_phdr *ph,
-		    struct fs_file *fp)
+static int load_seg(struct uvm_space *mm, struct elf_phdr *ph, struct file *fp)
 {
 	u64 start, end;
 	struct uvm_region *vma;
@@ -365,7 +364,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 	struct elf_phdr phdr = { 0 };
 	struct process *process = current_process();
 	struct thread *task = current_thread();
-	struct fs_file *f = NULL;
+	struct file *f = NULL;
 	struct uvm_space *new_mm = NULL;
 	umode_t file_mode;
 	kuid_t file_uid;
@@ -412,7 +411,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 		}
 	}
 
-	fs_file_put(f);
+	file_put(f);
 	f = NULL;
 
 	new_mm->heap->addr = find_brk(new_mm);
@@ -471,7 +470,7 @@ err:
 	if (new_mm && !IS_ERR(new_mm))
 		uvm_space_free(new_mm);
 	if (!IS_ERR(f) && f)
-		fs_file_put(f);
+		file_put(f);
 	return err;
 }
 

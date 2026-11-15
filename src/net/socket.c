@@ -62,7 +62,7 @@ void sock_release(struct socket *sock)
 	kfree(sock);
 }
 
-static ssize_t socket_read(struct fs_file *file, char *buf, size_t size,
+static ssize_t socket_read(struct file *file, char *buf, size_t size,
 			   loff_t *pos)
 {
 	struct socket *sock = file->private_data;
@@ -75,7 +75,7 @@ static ssize_t socket_read(struct fs_file *file, char *buf, size_t size,
 	return sock->ops->recvmsg(sock, buf, size, NULL, NULL, 0);
 }
 
-static ssize_t socket_write(struct fs_file *file, const char *buf, size_t size,
+static ssize_t socket_write(struct file *file, const char *buf, size_t size,
 			    loff_t *pos)
 {
 	struct socket *sock = file->private_data;
@@ -88,7 +88,7 @@ static ssize_t socket_write(struct fs_file *file, const char *buf, size_t size,
 	return sock->ops->sendmsg(sock, buf, size, NULL, 0, 0);
 }
 
-static int socket_file_release(struct fs_inode *inode, struct fs_file *file)
+static int socket_file_release(struct inode *inode, struct file *file)
 {
 	(void)inode;
 
@@ -99,7 +99,7 @@ static int socket_file_release(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static loff_t socket_llseek(struct fs_file *file, loff_t offset, int whence)
+static loff_t socket_llseek(struct file *file, loff_t offset, int whence)
 {
 	(void)file;
 	(void)offset;
@@ -107,8 +107,7 @@ static loff_t socket_llseek(struct fs_file *file, loff_t offset, int whence)
 	return -ESPIPE;
 }
 
-static long socket_ioctl(struct fs_file *file, unsigned int cmd,
-			 unsigned long arg)
+static long socket_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	long err;
 
@@ -117,7 +116,7 @@ static long socket_ioctl(struct fs_file *file, unsigned int cmd,
 	return err == -EOPNOTSUPP ? -ENOTTY : err;
 }
 
-static unsigned int socket_file_poll(struct fs_file *file, unsigned int events)
+static unsigned int socket_file_poll(struct file *file, unsigned int events)
 {
 	struct socket *sock = file->private_data;
 
@@ -127,7 +126,7 @@ static unsigned int socket_file_poll(struct fs_file *file, unsigned int events)
 	return sock->ops->poll(sock, events);
 }
 
-const struct fs_file_ops socket_file_ops = {
+const struct file_ops socket_file_ops = {
 	.release = socket_file_release,
 	.read = socket_read,
 	.write = socket_write,

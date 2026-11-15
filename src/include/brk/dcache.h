@@ -29,13 +29,13 @@ struct qstr {
 		.name = n, .hash = fnv1a_32(n, l), .len = l \
 	}
 
-struct fs_dentry {
+struct dentry {
 	refcnt_t count;
 	unsigned int flags;
 	spinlock_t lock;
-	struct fs_inode *inode;
+	struct inode *inode;
 	struct list_head alias;
-	struct fs_dentry *parent;
+	struct dentry *parent;
 	struct list_head child;
 	struct list_head children;
 	struct hlist_node hash;
@@ -44,38 +44,35 @@ struct fs_dentry {
 		char short_name[DENTRY_SHORT_NAME_SIZE];
 		char *long_name;
 	};
-	struct fs_super_block *sb;
-	const struct fs_dentry_ops *ops;
+	struct super_block *sb;
+	const struct dentry_ops *ops;
 	void *private_data;
 };
 
-struct fs_dentry_ops {
-	int (*compare)(const struct fs_dentry *, unsigned int, const char *,
+struct dentry_ops {
+	int (*compare)(const struct dentry *, unsigned int, const char *,
 		       const struct qstr *);
-	void (*release)(struct fs_dentry *);
-	void (*iput)(struct fs_dentry *, struct fs_inode *);
+	void (*release)(struct dentry *);
+	void (*iput)(struct dentry *, struct inode *);
 };
 
-struct fs_dentry *fs_dentry_make_root(struct fs_inode *root_inode);
-struct fs_dentry *fs_dentry_alloc_anon(struct fs_inode *inode,
-				       const struct qstr *name);
-void fs_dentry_instantiate(struct fs_dentry *dentry, struct fs_inode *inode);
-void fs_dentry_make_negative(struct fs_dentry *dentry);
-struct fs_dentry *fs_dentry_get(struct fs_dentry *dentry);
-void fs_dentry_put(struct fs_dentry *dentry);
+struct dentry *dentry_make_root(struct inode *root_inode);
+struct dentry *dentry_alloc_anon(struct inode *inode, const struct qstr *name);
+void dentry_instantiate(struct dentry *dentry, struct inode *inode);
+void dentry_make_negative(struct dentry *dentry);
+struct dentry *dentry_get(struct dentry *dentry);
+void dentry_put(struct dentry *dentry);
 /*
  * Locked accessors for the dentry state that path walking reads without
  * holding any other lock.  Use these instead of reading ->flags / ->inode
  * directly.
  */
-bool fs_dentry_is_negative(struct fs_dentry *dentry);
-bool fs_dentry_is_mounted(struct fs_dentry *dentry);
-struct fs_inode *fs_dentry_inode(struct fs_dentry *dentry);
-struct fs_dentry *fs_dentry_lookup(struct fs_dentry *parent,
-				   const struct qstr *name);
-struct fs_dentry *fs_dentry_splice_alias(struct fs_inode *inode,
-					 struct fs_dentry *dentry);
-void fs_dentry_cache_init(void);
+bool dentry_is_negative(struct dentry *dentry);
+bool dentry_is_mounted(struct dentry *dentry);
+struct inode *dentry_inode(struct dentry *dentry);
+struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name);
+struct dentry *dentry_splice_alias(struct inode *inode, struct dentry *dentry);
+void dentry_cache_init(void);
 
 extern const struct qstr slash_name;
 extern const struct qstr dot_name;
@@ -85,6 +82,6 @@ extern const struct qstr dotdot_name;
 #define DOT_NAME_HASH 0x2b0c98f1
 #define DOTDOT_NAME_HASH 0xa3d4a70d
 
-extern const struct fs_dentry_ops generic_dop;
+extern const struct dentry_ops generic_dop;
 
 #endif

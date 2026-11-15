@@ -17,16 +17,15 @@ static struct hlist_head inode_hash_table[INODE_HTABLE_SIZE];
 static SPINLOCK_DEFINE(inode_hash_lock);
 static struct slab_allocator inode_cache;
 
-void fs_inode_cache_init(void)
+void inode_cache_init(void)
 {
-	slab_init(&inode_cache, sizeof(struct fs_inode),
-		  alignof(struct fs_inode), "inode_cache");
+	slab_init(&inode_cache, sizeof(struct inode), alignof(struct inode),
+		  "inode_cache");
 }
 
-static struct fs_inode *__inode_alloc(struct fs_super_block *sb,
-				      unsigned long ino)
+static struct inode *__inode_alloc(struct super_block *sb, unsigned long ino)
 {
-	struct fs_inode *inode;
+	struct inode *inode;
 
 	if (sb->ops->alloc_inode) {
 		inode = sb->ops->alloc_inode(sb);
@@ -62,9 +61,9 @@ static struct fs_inode *__inode_alloc(struct fs_super_block *sb,
 	return inode;
 }
 
-static void __inode_free(struct fs_inode *inode)
+static void __inode_free(struct inode *inode)
 {
-	const struct fs_super_block_ops *op = inode->sb->ops;
+	const struct super_block_ops *op = inode->sb->ops;
 
 	if (op->free_inode)
 		op->free_inode(inode);
@@ -72,7 +71,7 @@ static void __inode_free(struct fs_inode *inode)
 		slab_free(&inode_cache, inode);
 }
 
-static u32 __inode_hash(const struct fs_super_block *sb, unsigned long ino)
+static u32 __inode_hash(const struct super_block *sb, unsigned long ino)
 {
 	const u8 *k = (u8 *)&sb;
 	u32 h = 0x811c9dc5;
@@ -88,11 +87,11 @@ static u32 __inode_hash(const struct fs_super_block *sb, unsigned long ino)
 	return h & (INODE_HTABLE_SIZE - 1);
 }
 
-static struct fs_inode *__inode_lookup(struct hlist_head *bucket,
-				       const struct fs_super_block *sb,
-				       unsigned long ino)
+static struct inode *__inode_lookup(struct hlist_head *bucket,
+				    const struct super_block *sb,
+				    unsigned long ino)
 {
-	struct fs_inode *inode;
+	struct inode *inode;
 
 	assert(spin_is_locked_by_me(&inode_hash_lock));
 
@@ -104,7 +103,7 @@ retry:
 
 			/*
 			 * Check if being freed, and take the reference while
-			 * holding inode->lock.  fs_inode_put() drops the last
+			 * holding inode->lock.  inode_put() drops the last
 			 * reference before it sets I_FREEING, so a plain
 			 * refcnt_inc() could resurrect an inode that is about
 			 * to be freed.  inc_unless_zero() closes that window;
@@ -135,7 +134,7 @@ retry:
  * failed (I_BAD) or the inode started dying.  In the false case the caller
  * must drop its reference and retry the hash lookup.
  */
-static bool inode_wait_new(struct fs_inode *inode)
+static bool inode_wait_new(struct inode *inode)
 {
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
@@ -147,10 +146,9 @@ static bool inode_wait_new(struct fs_inode *inode)
 	return ready;
 }
 
-struct fs_inode *fs_inode_get_locked(struct fs_super_block *sb,
-				     unsigned long ino)
+struct inode *inode_get_locked(struct super_block *sb, unsigned long ino)
 {
-	struct fs_inode *inode, *old;
+	struct inode *inode, *old;
 	struct hlist_head *head = inode_hash_table + __inode_hash(sb, ino);
 	irqstate_t flags;
 
@@ -160,7 +158,7 @@ retry:
 	spin_unlock_irqrestore(&inode_hash_lock, flags);
 	if (inode) {
 		if (!inode_wait_new(inode)) {
-			fs_inode_put(inode);
+			inode_put(inode);
 			goto retry;
 		}
 		return inode;
@@ -195,14 +193,14 @@ retry:
 
 	inode = old;
 	if (!inode_wait_new(inode)) {
-		fs_inode_put(inode);
+		inode_put(inode);
 		goto retry;
 	}
 
 	return inode;
 }
 
-void fs_inode_unlock_new(struct fs_inode *inode)
+void inode_unlock_new(struct inode *inode)
 {
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
@@ -214,10 +212,10 @@ void fs_inode_unlock_new(struct fs_inode *inode)
 /*
  * Mark a never-published I_NEW inode as unusable.  Waiters are woken and
  * will drop their temporary references; the inode is then freed by the
- * normal fs_inode_put() path without running ->evict_inode() on partially
+ * normal inode_put() path without running ->evict_inode() on partially
  * initialized state.
  */
-void fs_inode_fail_new(struct fs_inode *inode)
+void inode_fail_new(struct inode *inode)
 {
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
@@ -227,15 +225,15 @@ void fs_inode_fail_new(struct fs_inode *inode)
 	thread_wake_all(&inode->state);
 }
 
-struct fs_inode *fs_inode_get(struct fs_inode *inode)
+struct inode *inode_get(struct inode *inode)
 {
 	refcnt_inc(&inode->count);
 	return inode;
 }
 
-void fs_inode_put(struct fs_inode *inode)
+void inode_put(struct inode *inode)
 {
-	const struct fs_super_block_ops *s_op;
+	const struct super_block_ops *s_op;
 	bool bad;
 
 	if (refcnt_dec_fetch(&inode->count) > 0)
@@ -288,8 +286,8 @@ void fs_inode_put(struct fs_inode *inode)
 	__inode_free(inode);
 }
 
-int fs_inode_attach_page_cache(struct fs_inode *inode,
-			       const struct page_cache_ops *ops)
+int inode_attach_page_cache(struct inode *inode,
+			    const struct page_cache_ops *ops)
 {
 	struct page_cache *m;
 
@@ -302,9 +300,9 @@ int fs_inode_attach_page_cache(struct fs_inode *inode,
 	return 0;
 }
 
-void fs_inode_mark_dirty(struct fs_inode *inode)
+void inode_mark_dirty(struct inode *inode)
 {
-	struct fs_super_block *sb = inode->sb;
+	struct super_block *sb = inode->sb;
 	bool need_link;
 
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
@@ -321,7 +319,7 @@ void fs_inode_mark_dirty(struct fs_inode *inode)
 	spin_unlock(&sb->inodes_lock);
 }
 
-void fs_inode_clear(struct fs_inode *inode)
+void inode_clear(struct inode *inode)
 {
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
@@ -329,7 +327,7 @@ void fs_inode_clear(struct fs_inode *inode)
 	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
-void fs_inode_times_set_all_now(struct fs_inode *inode)
+void inode_times_set_all_now(struct inode *inode)
 {
 	ktime_t now = ktime_realtime();
 	irqstate_t flags;
@@ -341,8 +339,8 @@ void fs_inode_times_set_all_now(struct fs_inode *inode)
 	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
-void fs_inode_times_set(struct fs_inode *inode, const ktime_t *atime,
-			const ktime_t *mtime)
+void inode_times_set(struct inode *inode, const ktime_t *atime,
+		     const ktime_t *mtime)
 {
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
@@ -354,7 +352,7 @@ void fs_inode_times_set(struct fs_inode *inode, const ktime_t *atime,
 	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
-void fs_inode_touch_mtime(struct fs_inode *inode)
+void inode_touch_mtime(struct inode *inode)
 {
 	ktime_t now = ktime_realtime();
 	irqstate_t flags;
@@ -364,7 +362,7 @@ void fs_inode_touch_mtime(struct fs_inode *inode)
 	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
-void fs_inode_touch_ctime(struct fs_inode *inode)
+void inode_touch_ctime(struct inode *inode)
 {
 	ktime_t now = ktime_realtime();
 	irqstate_t flags;
@@ -374,7 +372,7 @@ void fs_inode_touch_ctime(struct fs_inode *inode)
 	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
-void fs_inode_touch_mtime_ctime(struct fs_inode *inode)
+void inode_touch_mtime_ctime(struct inode *inode)
 {
 	ktime_t now = ktime_realtime();
 	irqstate_t flags;
@@ -385,7 +383,7 @@ void fs_inode_touch_mtime_ctime(struct fs_inode *inode)
 	spin_unlock_irqrestore(&inode->lock, flags);
 }
 
-void fs_inode_times_to_kstat(struct fs_inode *inode, struct kstat *ks)
+void inode_times_to_kstat(struct inode *inode, struct kstat *ks)
 {
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 

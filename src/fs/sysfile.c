@@ -41,7 +41,7 @@ u64 sys_read(void)
 	int fd;
 	void *buf;
 	size_t n;
-	struct fs_file *fp;
+	struct file *fp;
 	ssize_t ret;
 	struct thread *task;
 
@@ -52,8 +52,8 @@ u64 sys_read(void)
 		return PTR_ERR(fp);
 	buf = syscall_arg_ptr(1);
 	n = syscall_arg_raw(2);
-	ret = fs_file_read(fp, buf, n);
-	fs_file_put(fp);
+	ret = file_read(fp, buf, n);
+	file_put(fp);
 	return ret;
 }
 
@@ -62,7 +62,7 @@ u64 sys_write(void)
 	int fd;
 	const void *buf;
 	size_t n;
-	struct fs_file *fp;
+	struct file *fp;
 	ssize_t ret;
 	struct thread *task;
 
@@ -72,13 +72,13 @@ u64 sys_write(void)
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 	if (fp->mode & FMODE_DIR) {
-		fs_file_put(fp);
+		file_put(fp);
 		return -EISDIR;
 	}
 	buf = syscall_arg_ptr(1);
 	n = syscall_arg_raw(2);
-	ret = fs_file_write(fp, buf, n);
-	fs_file_put(fp);
+	ret = file_write(fp, buf, n);
+	file_put(fp);
 	return ret;
 }
 
@@ -88,7 +88,7 @@ static u64 readv_writev(bool is_write)
 	const struct iovec *uiov = syscall_arg_ptr(1);
 	int iovcnt = syscall_arg_int(2);
 	struct iovec *iov;
-	struct fs_file *fp;
+	struct file *fp;
 	size_t bytes;
 	ssize_t total = 0;
 
@@ -114,7 +114,7 @@ static u64 readv_writev(bool is_write)
 		return PTR_ERR(fp);
 	}
 	if (is_write && (fp->mode & FMODE_DIR)) {
-		fs_file_put(fp);
+		file_put(fp);
 		kfree(iov);
 		return -EISDIR;
 	}
@@ -132,9 +132,9 @@ static u64 readv_writev(bool is_write)
 		}
 
 		if (is_write)
-			n = fs_file_write(fp, iov[i].iov_base, iov[i].iov_len);
+			n = file_write(fp, iov[i].iov_base, iov[i].iov_len);
 		else
-			n = fs_file_read(fp, iov[i].iov_base, iov[i].iov_len);
+			n = file_read(fp, iov[i].iov_base, iov[i].iov_len);
 
 		if (n < 0) {
 			if (!total)
@@ -146,7 +146,7 @@ static u64 readv_writev(bool is_write)
 			break;
 	}
 
-	fs_file_put(fp);
+	file_put(fp);
 	kfree(iov);
 	return (u64)(long)total;
 }
@@ -164,7 +164,7 @@ u64 sys_writev(void)
 u64 sys_openat(void)
 {
 	int fd;
-	struct fs_file *fp = NULL;
+	struct file *fp = NULL;
 	int dirfd = syscall_arg_raw(0);
 	char *path = syscall_arg_ptr(1);
 	int flags = syscall_arg_raw(2);
@@ -176,7 +176,7 @@ u64 sys_openat(void)
 
 	fd = fdtable_alloc_fd(&current_process()->fdtable, fp);
 	if (fd < 0) {
-		fs_file_put(fp);
+		file_put(fp);
 		return -EMFILE;
 	}
 	return fd;
@@ -200,39 +200,39 @@ u64 sys_execve(void)
 static u64 stat_path_at(int dirfd, const char *path, struct kstat *buf,
 			unsigned int flags)
 {
-	struct fs_path p;
-	struct fs_inode *inode;
+	struct path p;
+	struct inode *inode;
 	int ret;
 
-	ret = fs_path_lookup_at(dirfd, path, flags, &p);
+	ret = path_lookup_at(dirfd, path, flags, &p);
 	if (ret)
 		return ret;
 
 	inode = p.dentry->inode;
 	if (!inode) {
-		fs_path_put(&p);
+		path_put(&p);
 		return -ENOENT;
 	}
 	if (!inode->ops || !inode->ops->getattr) {
-		fs_path_put(&p);
+		path_put(&p);
 		return -EOPNOTSUPP;
 	}
 
 	ret = inode->ops->getattr(&p, buf, 0, 0);
-	fs_path_put(&p);
+	path_put(&p);
 	return ret;
 }
 
 static u64 stat_fd(struct thread *task, int fd, struct kstat *ks)
 {
-	struct fs_file *fp;
+	struct file *fp;
 	int ret;
 
 	fp = fdtable_get_file(&task->process->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
-	ret = fs_file_stat(fp, ks);
-	fs_file_put(fp);
+	ret = file_stat(fp, ks);
+	file_put(fp);
 	return ret;
 }
 
@@ -271,25 +271,25 @@ u64 sys_statx(void)
 static u64 access_path_at(int dirfd, const char *path, int mode,
 			  unsigned int lookup_flags)
 {
-	struct fs_path p;
-	struct fs_inode *inode;
+	struct path p;
+	struct inode *inode;
 	int ret;
 
 	if (mode & ~7)
 		return -EINVAL;
 
-	ret = fs_path_lookup_at(dirfd, path, lookup_flags, &p);
+	ret = path_lookup_at(dirfd, path, lookup_flags, &p);
 	if (ret)
 		return ret;
 
 	inode = p.dentry->inode;
 	if (!inode) {
-		fs_path_put(&p);
+		path_put(&p);
 		return -ENOENT;
 	}
 
 	ret = inode_permission(inode, mode & 7);
-	fs_path_put(&p);
+	path_put(&p);
 	return ret;
 }
 
@@ -315,19 +315,19 @@ u64 sys_fstatfs(void)
 	struct brk_statfs st;
 	struct kstatfs ks;
 	struct thread *task = current_thread();
-	struct fs_file *fp;
+	struct file *fp;
 	int ret;
 
 	fp = fdtable_get_file(&task->process->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 	if (!ubuf) {
-		fs_file_put(fp);
+		file_put(fp);
 		return -EFAULT;
 	}
 
-	ret = fs_statfs(fp->inode->sb, &ks);
-	fs_file_put(fp);
+	ret = statfs(fp->inode->sb, &ks);
+	file_put(fp);
 	if (ret)
 		return ret;
 
@@ -343,25 +343,25 @@ u64 sys_statfs(void)
 	struct brk_statfs *ubuf = syscall_arg_ptr(1);
 	struct brk_statfs st;
 	struct kstatfs ks;
-	struct fs_path p = { 0 };
-	struct fs_inode *inode;
+	struct path p = { 0 };
+	struct inode *inode;
 	int ret;
 
 	if (!ubuf)
 		return -EFAULT;
 
-	ret = fs_path_lookup(path, LOOKUP_FOLLOW, &p);
+	ret = path_lookup(path, LOOKUP_FOLLOW, &p);
 	if (ret)
 		return ret;
 
 	inode = p.dentry ? p.dentry->inode : NULL;
 	if (!inode) {
-		fs_path_put(&p);
+		path_put(&p);
 		return -ENOENT;
 	}
 
-	ret = fs_statfs(inode->sb, &ks);
-	fs_path_put(&p);
+	ret = statfs(inode->sb, &ks);
+	path_put(&p);
 	if (ret)
 		return ret;
 
@@ -378,7 +378,7 @@ u64 sys_fallocate(void)
 	loff_t offset = (loff_t)syscall_arg_raw(2);
 	loff_t len = (loff_t)syscall_arg_raw(3);
 	struct thread *task = current_thread();
-	struct fs_file *fp;
+	struct file *fp;
 	int ret;
 
 	if (offset < 0 || len <= 0)
@@ -389,12 +389,12 @@ u64 sys_fallocate(void)
 		return PTR_ERR(fp);
 
 	if (!(fp->mode & FMODE_WRITE)) {
-		fs_file_put(fp);
+		file_put(fp);
 		return -EINVAL;
 	}
 
-	ret = fs_file_fallocate(fp, mode, offset, len);
-	fs_file_put(fp);
+	ret = file_fallocate(fp, mode, offset, len);
+	file_put(fp);
 	return ret;
 }
 
@@ -442,10 +442,10 @@ u64 sys_getcwd(void)
 	struct thread *task = current_thread();
 	char *buf = syscall_arg_ptr(0);
 	size_t size = syscall_arg_raw(1);
-	struct fs_path cwd = { 0 };
+	struct path cwd = { 0 };
 	fsinfo_get_cwd(&task->process->fsinfo, &cwd);
-	int ret = fs_path_to_absolute(&cwd, buf, size);
-	fs_path_put(&cwd);
+	int ret = path_to_absolute(&cwd, buf, size);
+	path_put(&cwd);
 	return ret;
 }
 
@@ -453,27 +453,27 @@ u64 sys_chdir(void)
 {
 	char *pathname = syscall_arg_ptr(0);
 	struct thread *task = current_thread();
-	struct fs_path new_path;
+	struct path new_path;
 
-	int err = fs_path_lookup(pathname, LOOKUP_FOLLOW, &new_path);
+	int err = path_lookup(pathname, LOOKUP_FOLLOW, &new_path);
 	if (err)
 		return err;
 
-	struct fs_inode *inode = fs_dentry_inode(new_path.dentry);
+	struct inode *inode = dentry_inode(new_path.dentry);
 
 	if (!inode) {
-		fs_path_put(&new_path);
+		path_put(&new_path);
 		return -ENOENT;
 	}
 
 	if (!S_ISDIR(inode->mode)) {
-		fs_path_put(&new_path);
+		path_put(&new_path);
 		return -ENOTDIR;
 	}
 
 	int perm = inode_permission(inode, MAY_EXEC);
 	if (perm) {
-		fs_path_put(&new_path);
+		path_put(&new_path);
 		return perm;
 	}
 
@@ -484,7 +484,7 @@ u64 sys_chdir(void)
 u64 sys_fchdir(void)
 {
 	int fd;
-	struct fs_file *fp;
+	struct file *fp;
 	struct thread *task = current_thread();
 
 	fd = syscall_arg_int(0);
@@ -493,19 +493,19 @@ u64 sys_fchdir(void)
 		return PTR_ERR(fp);
 
 	if (!(fp->mode & FMODE_DIR)) {
-		fs_file_put(fp);
+		file_put(fp);
 		return -ENOTDIR;
 	}
 
 	int perm = inode_permission(fp->inode, MAY_EXEC);
 	if (perm) {
-		fs_file_put(fp);
+		file_put(fp);
 		return perm;
 	}
 
-	fs_path_get(&fp->path);
+	path_get(&fp->path);
 	fsinfo_update_cwd(&task->process->fsinfo, &fp->path);
-	fs_file_put(fp);
+	file_put(fp);
 	return 0;
 }
 
@@ -602,7 +602,7 @@ u64 sys_dup3(void)
 u64 sys_lseek(void)
 {
 	int fd = 0;
-	struct fs_file *fp = NULL;
+	struct file *fp = NULL;
 	int ret;
 	off_t off;
 	int whence;
@@ -615,19 +615,19 @@ u64 sys_lseek(void)
 	off = syscall_arg_raw(1);
 	whence = syscall_arg_int(2);
 
-	ret = fs_file_lseek(fp, off, whence);
-	fs_file_put(fp);
+	ret = file_lseek(fp, off, whence);
+	file_put(fp);
 	return ret;
 }
 
 struct getdents_context {
-	struct fs_dir_iterator ctx;
+	struct dir_iterator ctx;
 	u8 *buf;
 	size_t size;
 	size_t pos;
 };
 
-static bool getdents_filldir(struct fs_dir_iterator *ctx, const char *name,
+static bool getdents_filldir(struct dir_iterator *ctx, const char *name,
 			     int namelen, loff_t offset, u64 ino,
 			     unsigned int d_type)
 {
@@ -660,7 +660,7 @@ static bool getdents_filldir(struct fs_dir_iterator *ctx, const char *name,
 u64 sys_getdents(void)
 {
 	int fd = -1;
-	struct fs_file *fp = NULL;
+	struct file *fp = NULL;
 	void *buf;
 	size_t size;
 	int flags;
@@ -679,19 +679,19 @@ u64 sys_getdents(void)
 		return PTR_ERR(fp);
 
 	if (!(fp->mode & FMODE_DIR)) {
-		fs_file_put(fp);
+		file_put(fp);
 		return -ENOTDIR;
 	}
 
-	struct fs_inode *inode = fs_dentry_inode(fp->path.dentry);
-	const struct fs_file_ops *fop = fp->ops;
+	struct inode *inode = dentry_inode(fp->path.dentry);
+	const struct file_ops *fop = fp->ops;
 
 	if (!inode) {
-		fs_file_put(fp);
+		file_put(fp);
 		return -ENOENT;
 	}
 	if (!fop->iterate_shared) {
-		fs_file_put(fp);
+		file_put(fp);
 		return -EOPNOTSUPP;
 	}
 
@@ -710,20 +710,20 @@ u64 sys_getdents(void)
 	sleeplock_release(&inode->rwsem);
 	if (err) {
 		sleeplock_release(&fp->pos_lock);
-		fs_file_put(fp);
+		file_put(fp);
 		return err;
 	}
 
 	fp->pos = ctx.ctx.pos;
 	sleeplock_release(&fp->pos_lock);
-	fs_file_put(fp);
+	file_put(fp);
 
 	return ctx.pos;
 }
 
 u64 sys_ioctl(void)
 {
-	struct fs_file *fp;
+	struct file *fp;
 	int fd;
 
 	fd = syscall_arg_int(0);
@@ -733,8 +733,8 @@ u64 sys_ioctl(void)
 
 	unsigned int cmd = (unsigned int)syscall_arg_raw(1);
 	unsigned long arg = (unsigned long)syscall_arg_raw(2);
-	long ret = fs_file_ioctl(fp, cmd, arg);
-	fs_file_put(fp);
+	long ret = file_ioctl(fp, cmd, arg);
+	file_put(fp);
 	return (u64)(long)ret;
 }
 
@@ -742,7 +742,7 @@ u64 sys_ftruncate(void)
 {
 	int fd = syscall_arg_int(0);
 	loff_t length = (loff_t)syscall_arg_raw(1);
-	struct fs_file *fp;
+	struct file *fp;
 	int ret;
 
 	if (length < 0)
@@ -753,12 +753,12 @@ u64 sys_ftruncate(void)
 		return PTR_ERR(fp);
 
 	if (!(fp->mode & FMODE_WRITE)) {
-		fs_file_put(fp);
+		file_put(fp);
 		return -EINVAL;
 	}
 
-	ret = fs_file_truncate(fp, length);
-	fs_file_put(fp);
+	ret = file_truncate(fp, length);
+	file_put(fp);
 	return ret;
 }
 
@@ -766,49 +766,49 @@ u64 sys_truncate(void)
 {
 	const char *pathname = syscall_arg_ptr(0);
 	loff_t length = (loff_t)syscall_arg_raw(1);
-	struct fs_iattr attr = {
+	struct iattr attr = {
 		.valid = ATTR_SIZE,
 		.size = length,
 	};
-	struct fs_path path;
-	struct fs_inode *inode;
+	struct path path;
+	struct inode *inode;
 	int err;
 
 	if (length < 0)
 		return -EINVAL;
 
-	err = fs_path_lookup(pathname, LOOKUP_FOLLOW, &path);
+	err = path_lookup(pathname, LOOKUP_FOLLOW, &path);
 	if (err)
 		return err;
 
 	inode = path.dentry->inode;
 	if (!inode) {
-		fs_path_put(&path);
+		path_put(&path);
 		return -ENOENT;
 	}
 	if (!S_ISREG(inode->mode)) {
-		fs_path_put(&path);
+		path_put(&path);
 		return S_ISDIR(inode->mode) ? -EISDIR : -EINVAL;
 	}
 	if (!inode->ops || !inode->ops->setattr) {
-		fs_path_put(&path);
+		path_put(&path);
 		return -EOPNOTSUPP;
 	}
 
 	int perm = inode_permission(inode, MAY_WRITE);
 	if (perm) {
-		fs_path_put(&path);
+		path_put(&path);
 		return perm;
 	}
 
-	fs_remove_inode_privs(inode, path.dentry);
+	remove_inode_privs(inode, path.dentry);
 
 	err = inode->ops->setattr(path.dentry, &attr);
-	fs_path_put(&path);
+	path_put(&path);
 	return err;
 }
 
-static int check_setattr_perm(struct fs_inode *inode, struct fs_iattr *attr)
+static int check_setattr_perm(struct inode *inode, struct iattr *attr)
 {
 	if (!inode)
 		return -ENOENT;
@@ -824,17 +824,17 @@ static int check_setattr_perm(struct fs_inode *inode, struct fs_iattr *attr)
 	return 0;
 }
 
-static int setattr_path_at(int dirfd, const char *path, struct fs_iattr *attr,
+static int setattr_path_at(int dirfd, const char *path, struct iattr *attr,
 			   unsigned int lookup_flags)
 {
-	struct fs_path p;
-	struct fs_inode *inode;
+	struct path p;
+	struct inode *inode;
 	int err;
 
 	if (!path)
 		return -EINVAL;
 
-	err = fs_path_lookup_at(dirfd, path, lookup_flags, &p);
+	err = path_lookup_at(dirfd, path, lookup_flags, &p);
 	if (err)
 		return err;
 
@@ -855,13 +855,13 @@ static int setattr_path_at(int dirfd, const char *path, struct fs_iattr *attr,
 	err = inode->ops->setattr(p.dentry, attr);
 
 out:
-	fs_path_put(&p);
+	path_put(&p);
 	return err;
 }
 
-static int setattr_fd(int fd, struct fs_iattr *attr)
+static int setattr_fd(int fd, struct iattr *attr)
 {
-	struct fs_file *fp;
+	struct file *fp;
 	int err;
 
 	fp = fdtable_get_file(&current_process()->fdtable, fd);
@@ -884,11 +884,11 @@ static int setattr_fd(int fd, struct fs_iattr *attr)
 	err = fp->inode->ops->setattr(fp->path.dentry, attr);
 
 out:
-	fs_file_put(fp);
+	file_put(fp);
 	return err;
 }
 
-static int times_from_user_timespec(struct fs_iattr *attr,
+static int times_from_user_timespec(struct iattr *attr,
 				    const struct timespec times[2])
 {
 	if (!times) {
@@ -929,7 +929,7 @@ static int set_times_path_at(int dirfd, const char *path,
 			     const struct timespec times[2],
 			     unsigned int lookup_flags)
 {
-	struct fs_iattr attr = { 0 };
+	struct iattr attr = { 0 };
 	int err;
 
 	err = times_from_user_timespec(&attr, times);
@@ -941,7 +941,7 @@ static int set_times_path_at(int dirfd, const char *path,
 
 static int set_times_fd(int fd, const struct timespec times[2])
 {
-	struct fs_iattr attr = { 0 };
+	struct iattr attr = { 0 };
 	int err;
 
 	err = times_from_user_timespec(&attr, times);
@@ -958,7 +958,7 @@ u64 sys_fchmodat(void)
 	umode_t mode = syscall_arg_raw(2);
 	int flags = syscall_arg_int(3);
 	unsigned int lookup_flags;
-	struct fs_iattr attr = {
+	struct iattr attr = {
 		.valid = ATTR_MODE,
 		.mode = mode & 07777,
 	};
@@ -972,7 +972,7 @@ u64 sys_fchmodat(void)
 	return setattr_path_at(dirfd, path, &attr, lookup_flags);
 }
 
-static void chown_attr_init(struct fs_iattr *attr, long uid, long gid)
+static void chown_attr_init(struct iattr *attr, long uid, long gid)
 {
 	memset(attr, 0, sizeof(*attr));
 
@@ -993,7 +993,7 @@ u64 sys_fchownat(void)
 	long uid = syscall_arg_int(2);
 	long gid = syscall_arg_int(3);
 	int flags = syscall_arg_raw(4);
-	struct fs_iattr attr;
+	struct iattr attr;
 	unsigned int lookup_flags;
 
 	chown_attr_init(&attr, uid, gid);
@@ -1035,7 +1035,7 @@ u64 sys_utimensat(void)
 
 static u64 do_fsync(int datasync)
 {
-	struct fs_file *fp = NULL;
+	struct file *fp = NULL;
 	int ret;
 	int fd;
 
@@ -1047,12 +1047,12 @@ static u64 do_fsync(int datasync)
 	/* Filesystems with nothing to persist (pipes, tmpfs, ...) have no
 	 * ->fsync; treat the request as a successful no-op. */
 	if (!fp->ops || !fp->ops->fsync) {
-		fs_file_put(fp);
+		file_put(fp);
 		return 0;
 	}
 
 	ret = fp->ops->fsync(fp, 0, -1, datasync);
-	fs_file_put(fp);
+	file_put(fp);
 	return ret;
 }
 

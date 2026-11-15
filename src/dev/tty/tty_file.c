@@ -7,7 +7,7 @@
 
 #include "tty_internal.h"
 
-static int tty_file_open(struct fs_inode *inode, struct fs_file *file)
+static int tty_file_open(struct inode *inode, struct file *file)
 {
 	/*
 	 * The file keeps chrdev_fops as its dispatch table so that the
@@ -28,7 +28,7 @@ static int tty_file_open(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static int tty_file_release(struct fs_inode *inode, struct fs_file *file)
+static int tty_file_release(struct inode *inode, struct file *file)
 {
 	(void)inode;
 
@@ -40,7 +40,7 @@ static int tty_file_release(struct fs_inode *inode, struct fs_file *file)
 	return 0;
 }
 
-static ssize_t tty_file_read(struct fs_file *file, char *buf, size_t size,
+static ssize_t tty_file_read(struct file *file, char *buf, size_t size,
 			     loff_t *pos)
 {
 	(void)pos;
@@ -50,8 +50,8 @@ static ssize_t tty_file_read(struct fs_file *file, char *buf, size_t size,
 	return tty_read(tty, buf, size);
 }
 
-static ssize_t tty_file_write(struct fs_file *file, const char *buf,
-			      size_t size, loff_t *pos)
+static ssize_t tty_file_write(struct file *file, const char *buf, size_t size,
+			      loff_t *pos)
 {
 	(void)pos;
 	struct tty *tty = file->private_data;
@@ -60,7 +60,7 @@ static ssize_t tty_file_write(struct fs_file *file, const char *buf,
 	return tty_write(tty, buf, size);
 }
 
-static loff_t tty_file_llseek(struct fs_file *file, loff_t offset, int whence)
+static loff_t tty_file_llseek(struct file *file, loff_t offset, int whence)
 {
 	(void)whence;
 	(void)offset;
@@ -68,15 +68,14 @@ static loff_t tty_file_llseek(struct fs_file *file, loff_t offset, int whence)
 	return 0;
 }
 
-static int tty_file_iterate_shared(struct fs_file *file,
-				   struct fs_dir_iterator *ctx)
+static int tty_file_iterate_shared(struct file *file, struct dir_iterator *ctx)
 {
 	(void)file;
 	(void)ctx;
 	return -ENOTDIR;
 }
 
-static int tty_file_sync(struct fs_file *file, loff_t start, loff_t end,
+static int tty_file_sync(struct file *file, loff_t start, loff_t end,
 			 int datasync)
 {
 	(void)file;
@@ -86,13 +85,13 @@ static int tty_file_sync(struct fs_file *file, loff_t start, loff_t end,
 	return 0;
 }
 
-static int tty_file_flush(struct fs_file *file)
+static int tty_file_flush(struct file *file)
 {
 	(void)file;
 	return 0;
 }
 
-static long tty_file_ioctl(struct fs_file *file, unsigned int cmd,
+static long tty_file_ioctl(struct file *file, unsigned int cmd,
 			   unsigned long arg)
 {
 	struct tty *tty = file->private_data;
@@ -100,7 +99,7 @@ static long tty_file_ioctl(struct fs_file *file, unsigned int cmd,
 	return tty_ioctl(tty, cmd, arg);
 }
 
-static unsigned int tty_file_poll(struct fs_file *file, unsigned int events)
+static unsigned int tty_file_poll(struct file *file, unsigned int events)
 {
 	struct tty *tty = file->private_data;
 	struct tty_port *port;
@@ -136,7 +135,7 @@ static unsigned int tty_file_poll(struct fs_file *file, unsigned int events)
 	return rev & (events | POLLERR | POLLHUP);
 }
 
-const struct fs_file_ops tty_fops = {
+const struct file_ops tty_fops = {
 	.open = tty_file_open,
 	.release = tty_file_release,
 	.read = tty_file_read,

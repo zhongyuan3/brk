@@ -157,8 +157,7 @@ int devtmpfs_start(void)
 	return 0;
 }
 
-static int devtmpfs_mount(struct fs_mount_args *args,
-			  struct fs_mount_result *result)
+static int devtmpfs_mount(struct mount_args *args, struct mount_result *result)
 {
 	/*
 	 * Storage and inode operations are shared with tmpfs.  devtmpfs adds
@@ -167,7 +166,7 @@ static int devtmpfs_mount(struct fs_mount_args *args,
 	return tmpfs_fs_type.mount(args, result);
 }
 
-struct fs_driver devtmpfs_fs_type = {
+struct file_system_type devtmpfs_fs_type = {
 	.name = "devtmpfs",
 	.mount = devtmpfs_mount,
 	.lock = SPINLOCK_INITIALIZER("devtmpfs_fs_lock"),

@@ -138,12 +138,12 @@ void chrdev_free_region(unsigned major, unsigned minor, unsigned count)
 	devno_free_region(&cd_devno, major, minor, count);
 }
 
-static struct char_dev *chrdev_file_dev(struct fs_file *file)
+static struct char_dev *chrdev_file_dev(struct file *file)
 {
 	return (struct char_dev *)file->dev_private;
 }
 
-static int chrdev_open(struct fs_inode *inode, struct fs_file *file)
+static int chrdev_open(struct inode *inode, struct file *file)
 {
 	struct char_dev *cd;
 	int err;
@@ -166,7 +166,7 @@ static int chrdev_open(struct fs_inode *inode, struct fs_file *file)
 	return err;
 }
 
-static int chrdev_release(struct fs_inode *inode, struct fs_file *file)
+static int chrdev_release(struct inode *inode, struct file *file)
 {
 	struct char_dev *cd = chrdev_file_dev(file);
 	int err = 0;
@@ -182,7 +182,7 @@ static int chrdev_release(struct fs_inode *inode, struct fs_file *file)
 	return err;
 }
 
-static ssize_t chrdev_read(struct fs_file *file, char *buf, size_t size,
+static ssize_t chrdev_read(struct file *file, char *buf, size_t size,
 			   loff_t *pos)
 {
 	struct char_dev *cd = chrdev_file_dev(file);
@@ -192,7 +192,7 @@ static ssize_t chrdev_read(struct fs_file *file, char *buf, size_t size,
 	return cd->fops->read(file, buf, size, pos);
 }
 
-static ssize_t chrdev_write(struct fs_file *file, const char *buf, size_t size,
+static ssize_t chrdev_write(struct file *file, const char *buf, size_t size,
 			    loff_t *pos)
 {
 	struct char_dev *cd = chrdev_file_dev(file);
@@ -202,7 +202,7 @@ static ssize_t chrdev_write(struct fs_file *file, const char *buf, size_t size,
 	return cd->fops->write(file, buf, size, pos);
 }
 
-static loff_t chrdev_llseek(struct fs_file *file, loff_t offset, int whence)
+static loff_t chrdev_llseek(struct file *file, loff_t offset, int whence)
 {
 	struct char_dev *cd = chrdev_file_dev(file);
 
@@ -211,8 +211,7 @@ static loff_t chrdev_llseek(struct fs_file *file, loff_t offset, int whence)
 	return cd->fops->llseek(file, offset, whence);
 }
 
-static int chrdev_iterate_shared(struct fs_file *file,
-				 struct fs_dir_iterator *ctx)
+static int chrdev_iterate_shared(struct file *file, struct dir_iterator *ctx)
 {
 	struct char_dev *cd = chrdev_file_dev(file);
 
@@ -221,7 +220,7 @@ static int chrdev_iterate_shared(struct fs_file *file,
 	return cd->fops->iterate_shared(file, ctx);
 }
 
-static int chrdev_fsync(struct fs_file *file, loff_t start, loff_t end,
+static int chrdev_fsync(struct file *file, loff_t start, loff_t end,
 			int datasync)
 {
 	struct char_dev *cd = chrdev_file_dev(file);
@@ -231,7 +230,7 @@ static int chrdev_fsync(struct fs_file *file, loff_t start, loff_t end,
 	return cd->fops->fsync(file, start, end, datasync);
 }
 
-static int chrdev_flush(struct fs_file *file)
+static int chrdev_flush(struct file *file)
 {
 	struct char_dev *cd = chrdev_file_dev(file);
 
@@ -240,8 +239,7 @@ static int chrdev_flush(struct fs_file *file)
 	return cd->fops->flush(file);
 }
 
-static long chrdev_ioctl(struct fs_file *file, unsigned int cmd,
-			 unsigned long arg)
+static long chrdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct char_dev *cd = chrdev_file_dev(file);
 
@@ -250,7 +248,7 @@ static long chrdev_ioctl(struct fs_file *file, unsigned int cmd,
 	return cd->fops->ioctl(file, cmd, arg);
 }
 
-const struct fs_file_ops chrdev_fops = {
+const struct file_ops chrdev_fops = {
 	.open = chrdev_open,
 	.release = chrdev_release,
 	.read = chrdev_read,

@@ -10,7 +10,7 @@ bool capable(int cap)
 	return process_has_cap(current_process(), cap);
 }
 
-int inode_permission(const struct fs_inode *inode, int mask)
+int inode_permission(const struct inode *inode, int mask)
 {
 	struct process *process = current_process();
 	umode_t mode;
@@ -57,7 +57,7 @@ int inode_permission(const struct fs_inode *inode, int mask)
 	return (perm & (umode_t)mask) == (umode_t)mask ? 0 : -EACCES;
 }
 
-bool inode_owner_or_capable(const struct fs_inode *inode)
+bool inode_owner_or_capable(const struct inode *inode)
 {
 	struct process *process = current_process();
 	bool cap_owner;
