@@ -361,7 +361,14 @@ static void thread_sleep_common(void *chan, spinlock_t *lock,
 	assert(lock->locked);
 	assert(preempt_count() == 0);
 
-	if (process_group_exiting(thread->process)) {
+	/*
+	 * A thread that is already running its own exit path must still be
+	 * allowed to block.  The exit path releases files and evicts inodes,
+	 * which can require filesystem writeback; aborting those sleeps here
+	 * would leave the affected objects half torn down (e.g. an inode stuck
+	 * in I_FREEING) while the thread disappears.
+	 */
+	if (!thread->in_exit && process_group_exiting(thread->process)) {
 		raw_spin_unlock(lock);
 		thread_exit(process_group_exit_status(thread->process));
 	}
@@ -524,6 +531,12 @@ void thread_exit(int status)
 	irqstate_t flags;
 	bool last;
 	bool reparented = false;
+
+	/*
+	 * The teardown below can block on filesystem I/O.  Do not let the
+	 * exit_group check in thread_sleep_common() abort those waits.
+	 */
+	thread->in_exit = true;
 
 	futex_cleanup_thread(thread);
 

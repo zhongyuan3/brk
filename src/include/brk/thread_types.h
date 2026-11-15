@@ -96,6 +96,8 @@ struct thread {
 
 	bool newly_forked; /* no lock protection */
 	bool is_init_thread; /* static boot/idle thread, never destroyed */
+	/* Set while the thread runs its own exit path. */
+	bool in_exit; /* no lock protection */
 	void (*kthrd_fn)(void *); /* no lock protection */
 	void *kthrd_data; /* no lock protection */
 };
