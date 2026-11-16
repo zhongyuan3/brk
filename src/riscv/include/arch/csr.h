@@ -1,6 +1,7 @@
 #ifndef ARCH_CSR_H
 #define ARCH_CSR_H
 
+#include <arch/asm/pgtable_config.h>
 #include <brk/types.h>
 #include <stdint.h>
 
@@ -44,8 +45,10 @@ static inline unsigned long read_satp(void)
 
 static inline u64 make_satp(u64 pt)
 {
-	/* Sv39: mode 8 (bits 63:60), 44-bit PPN (bits 43:0). */
-	return ((u64)8 << 60) | (pt >> 12);
+	/* Sv39/Sv48/Sv57: mode 8/9/10 (bits 63:60), 44-bit PPN (bits 43:0). */
+	u64 mode = 8 + (PGTABLE_LEVELS - 3);
+
+	return (mode << 60) | (pt >> 12);
 }
 
 static inline void write_satp(unsigned long x)

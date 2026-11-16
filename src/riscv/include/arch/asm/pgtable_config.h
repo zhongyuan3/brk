@@ -1,0 +1,37 @@
+#ifndef ARCH_ASM_PGTABLE_CONFIG_H
+#define ARCH_ASM_PGTABLE_CONFIG_H
+
+#ifndef CONFIG_PGTABLE_LEVELS
+#define CONFIG_PGTABLE_LEVELS 3
+#endif
+
+#if CONFIG_PGTABLE_LEVELS == 3
+#define PGTABLE_LEVELS 3
+#define PGDIR_SHIFT 30
+#define P4D_SHIFT PGDIR_SHIFT
+#define PUD_SHIFT PGDIR_SHIFT
+#define HAVE_P4D 0
+#define HAVE_PUD 0
+#elif CONFIG_PGTABLE_LEVELS == 4
+#define PGTABLE_LEVELS 4
+#define PGDIR_SHIFT 39
+#define P4D_SHIFT PGDIR_SHIFT
+#define PUD_SHIFT 30
+#define HAVE_P4D 0
+#define HAVE_PUD 1
+#elif CONFIG_PGTABLE_LEVELS == 5
+#define PGTABLE_LEVELS 5
+#define PGDIR_SHIFT 48
+#define P4D_SHIFT 39
+#define PUD_SHIFT 30
+#define HAVE_P4D 1
+#define HAVE_PUD 1
+#else
+#error "CONFIG_PGTABLE_LEVELS must be 3, 4, or 5"
+#endif
+
+#define PGD_SHIFT PGDIR_SHIFT
+#define PMD_SHIFT 21
+#define PTE_SHIFT 12
+
+#endif

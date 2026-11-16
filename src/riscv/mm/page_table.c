@@ -31,14 +31,6 @@ static void free_pgtable(u64 paddr)
 	page_free(pg, 0);
 }
 
-static pmd_t *pgde_to_pmd_virt(pgd_t *pgdep)
-{
-	p4d_t *p4de = p4d_offset(pgdep, 0);
-	pud_t *pude = pud_offset(p4de, 0);
-
-	return pud_to_pmd(*pude, pgtable_phys_to_virt);
-}
-
 static pte_t *pmde_to_pt_virt(pmd_t pmde)
 {
 	return pmd_to_pt(pmde, pgtable_phys_to_virt);
@@ -52,6 +44,28 @@ pgd_t *pgd_alloc_user(void)
 	memcpy(pgtable, kernel_pgdir, PAGE_SIZE);
 	spin_unlock(&kernel_pgdir_lock);
 	return pgtable;
+}
+
+static int copy_user_large(u64 *dst, u64 src, unsigned int shift,
+			   unsigned int flags)
+{
+	unsigned long size = 1UL << shift;
+	unsigned int order = page_order(size);
+	struct page *pg;
+	u64 dst_pa;
+	u64 src_pa = PGTABLE_LEAF(src);
+
+	if (((unsigned long)PAGE_SIZE << order) != size)
+		return -ENOMEM;
+
+	pg = page_alloc(order);
+	if (!pg)
+		return -ENOMEM;
+	dst_pa = page_to_phys(pg);
+	memcpy((void *)phys_to_virt(dst_pa), (void *)phys_to_virt(src_pa),
+	       size);
+	*dst = PGTABLE_MK(dst_pa) | PTE_V | flags;
+	return 0;
 }
 
 static int copy_user_pt(pte_t *dst, pte_t *src)
@@ -77,30 +91,17 @@ static int copy_user_pt(pte_t *dst, pte_t *src)
 	return 0;
 }
 
-static int copy_user_pmde_large(pmd_t *dst, pmd_t src)
-{
-	struct page *pg = page_alloc(page_order(PAGE_SIZE_2M));
-	if (!pg)
-		return -ENOMEM;
-	u64 dpg_pa = page_to_phys(pg);
-	u64 spg_pa = pmd_leaf(src);
-	void *dpg_va = (void *)phys_to_virt(dpg_pa);
-	void *spg_va = (void *)phys_to_virt(spg_pa);
-	memcpy(dpg_va, spg_va, PAGE_SIZE_2M);
-	pmd_set_leaf(dst, dpg_pa, pmd_flags(src));
-	return 0;
-}
-
 static int copy_user_pmd(pmd_t *dst, pmd_t *src)
 {
-	int err = 0;
+	int err;
 
 	for (size_t i = 0; i < PTRS_PER_PMD; ++i) {
 		if (pmd_none(src[i]))
 			continue;
 
 		if (pmd_is_leaf(src[i])) {
-			err = copy_user_pmde_large(&dst[i], src[i]);
+			err = copy_user_large((u64 *)&dst[i], pmd_val(src[i]),
+					      PMD_SHIFT, pmd_flags(src[i]));
 			if (err)
 				return err;
 			continue;
@@ -122,19 +123,73 @@ static int copy_user_pmd(pmd_t *dst, pmd_t *src)
 	return 0;
 }
 
-static int copy_user_pgde_large(pgd_t *dst, pgd_t src)
+#if HAVE_PUD
+static int copy_user_pud(pud_t *dst, pud_t *src)
 {
-	struct page *dpg = page_alloc(page_order(PAGE_SIZE_1G));
-	if (!dpg)
-		return -ENOMEM;
-	u64 dpg_pa = page_to_phys(dpg);
-	u64 spg_pa = pgd_leaf(src);
-	void *dpg_va = (void *)phys_to_virt(dpg_pa);
-	void *spg_va = (void *)phys_to_virt(spg_pa);
-	memcpy(dpg_va, spg_va, PAGE_SIZE_1G);
-	pgd_set_leaf(dst, dpg_pa, pgd_flags(src));
+	int err;
+
+	for (size_t i = 0; i < PTRS_PER_PUD; ++i) {
+		if (pud_none(src[i]))
+			continue;
+
+		if (pud_is_leaf(src[i])) {
+			err = copy_user_large((u64 *)&dst[i], pud_val(src[i]),
+					      PUD_SHIFT, pud_flags(src[i]));
+			if (err)
+				return err;
+			continue;
+		}
+
+		if (pud_none(dst[i])) {
+			u64 pmd_pa = alloc_pgtable();
+			if (!pmd_pa)
+				return -ENOMEM;
+			pud_set_next(dst + i, pmd_pa);
+		}
+
+		err = copy_user_pmd(pud_to_pmd(dst[i], pgtable_phys_to_virt),
+				    pud_to_pmd(src[i], pgtable_phys_to_virt));
+		if (err)
+			return err;
+	}
+
 	return 0;
 }
+#endif
+
+#if HAVE_P4D
+static int copy_user_p4d(p4d_t *dst, p4d_t *src)
+{
+	int err;
+
+	for (size_t i = 0; i < PTRS_PER_P4D; ++i) {
+		if (p4d_none(src[i]))
+			continue;
+
+		if (p4d_is_leaf(src[i])) {
+			err = copy_user_large((u64 *)&dst[i], p4d_val(src[i]),
+					      P4D_SHIFT, p4d_flags(src[i]));
+			if (err)
+				return err;
+			continue;
+		}
+
+		if (p4d_none(dst[i])) {
+			u64 pud_pa = alloc_pgtable();
+			if (!pud_pa)
+				return -ENOMEM;
+			p4d_set_next(dst + i, pud_pa);
+		}
+
+		err = copy_user_pud(p4d_to_pud(dst[i], pgtable_phys_to_virt),
+				    p4d_to_pud(src[i], pgtable_phys_to_virt));
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+#endif
 
 static int copy_user_pgd(pgd_t *dst, pgd_t *src)
 {
@@ -147,22 +202,31 @@ static int copy_user_pgd(pgd_t *dst, pgd_t *src)
 		if (is_kspace || pgd_none(src[i]))
 			continue;
 
-		if (pud_is_leaf(src[i])) {
-			err = copy_user_pgde_large(&dst[i], src[i]);
+		if (pgd_is_leaf(src[i])) {
+			err = copy_user_large((u64 *)&dst[i], pgd_val(src[i]),
+					      PGDIR_SHIFT, pgd_flags(src[i]));
 			if (err)
 				goto failed;
 			continue;
 		}
 
 		if (pgd_none(dst[i])) {
-			u64 pmd_pa = alloc_pgtable();
-			if (!pmd_pa)
+			u64 next_pa = alloc_pgtable();
+			if (!next_pa)
 				goto failed;
-			pgd_set_next(dst + i, pmd_pa);
+			pgd_set_next(dst + i, next_pa);
 		}
 
-		err = copy_user_pmd(pgde_to_pmd_virt(&dst[i]),
-				    pgde_to_pmd_virt(&src[i]));
+#if HAVE_P4D
+		err = copy_user_p4d((p4d_t *)phys_to_virt(pgd_next(src[i])),
+				    (p4d_t *)phys_to_virt(pgd_next(dst[i])));
+#elif HAVE_PUD
+		err = copy_user_pud((pud_t *)phys_to_virt(pgd_next(src[i])),
+				    (pud_t *)phys_to_virt(pgd_next(dst[i])));
+#else
+		err = copy_user_pmd((pmd_t *)phys_to_virt(pgd_next(src[i])),
+				    (pmd_t *)phys_to_virt(pgd_next(dst[i])));
+#endif
 		if (err)
 			goto failed;
 	}
@@ -179,23 +243,16 @@ int pgd_copy_user(pgd_t *dst, pgd_t *src)
 	return copy_user_pgd(dst, src);
 }
 
-static void destroy_user_pt(pte_t *pt, size_t pgde_idx, size_t pmde_idx)
+static void destroy_user_pt(pte_t *pt)
 {
 	for (size_t i = 0; i < PTRS_PER_PT; ++i) {
-		if (pte_is_valid(pt[i])) {
-			u64 pa = pte_leaf(pt[i]);
-			u64 va = (pgde_idx << PGD_SHIFT) |
-				 (pmde_idx << PMD_SHIFT) | (i << PAGE_SHIFT);
-			if (va & (1UL << 38))
-				va = (~((1UL << 39) - 1)) | va;
-			panic("%s(): pt[%zu] not empty, vaddr=%#" PRIx64
-			      ",paddr=%#" PRIx64 "\n",
-			      __func__, i, va, pa);
-		}
+		if (pte_is_valid(pt[i]))
+			panic("%s(): pt[%zu] not empty, paddr=%#" PRIx64 "\n",
+			      __func__, i, (u64)pte_leaf(pt[i]));
 	}
 }
 
-static void destroy_user_pmd(pmd_t *pmd, size_t pgde_idx)
+static void destroy_user_pmd(pmd_t *pmd)
 {
 	u64 pa;
 	pte_t *pt;
@@ -204,28 +261,64 @@ static void destroy_user_pmd(pmd_t *pmd, size_t pgde_idx)
 		if (pmd_none(pmd[i]))
 			continue;
 
-		if (pmd_is_leaf(pmd[i])) {
-			pa = pmd_leaf(pmd[i]);
-			u64 va = pgde_idx << 30;
-			va = va | (i << 21);
-			if (va & (1UL << 38))
-				va = (~((1UL << 39) - 1)) | va;
-			panic("%s(): pmd[%zu] not empty, vaddr=%#" PRIx64
-			      ",paddr=%#" PRIx64 "\n",
-			      __func__, i, va, pa);
-		}
+		if (pmd_is_leaf(pmd[i]))
+			panic("%s(): pmd[%zu] not empty, paddr=%#" PRIx64 "\n",
+			      __func__, i, (u64)pmd_leaf(pmd[i]));
 
 		pa = pmd_next(pmd[i]);
 		pt = (pte_t *)phys_to_virt(pa);
-		destroy_user_pt(pt, pgde_idx, i);
+		destroy_user_pt(pt);
 		free_pgtable(pa);
 	}
 }
 
-static void destroy_user_pgd(pgd_t *pgd)
+#if HAVE_PUD
+static void destroy_user_pud(pud_t *pud)
 {
 	u64 pa;
 	pmd_t *pmd;
+
+	for (size_t i = 0; i < PTRS_PER_PUD; ++i) {
+		if (pud_none(pud[i]))
+			continue;
+
+		if (pud_is_leaf(pud[i]))
+			panic("%s(): pud[%zu] not empty, paddr=%#" PRIx64 "\n",
+			      __func__, i, (u64)pud_leaf(pud[i]));
+
+		pa = pud_next(pud[i]);
+		pmd = (pmd_t *)phys_to_virt(pa);
+		destroy_user_pmd(pmd);
+		free_pgtable(pa);
+	}
+}
+#endif
+
+#if HAVE_P4D
+static void destroy_user_p4d(p4d_t *p4d)
+{
+	u64 pa;
+	pud_t *pud;
+
+	for (size_t i = 0; i < PTRS_PER_P4D; ++i) {
+		if (p4d_none(p4d[i]))
+			continue;
+
+		if (p4d_is_leaf(p4d[i]))
+			panic("%s(): p4d[%zu] not empty, paddr=%#" PRIx64 "\n",
+			      __func__, i, (u64)p4d_leaf(p4d[i]));
+
+		pa = p4d_next(p4d[i]);
+		pud = (pud_t *)phys_to_virt(pa);
+		destroy_user_pud(pud);
+		free_pgtable(pa);
+	}
+}
+#endif
+
+static void destroy_user_pgd(pgd_t *pgd)
+{
+	u64 pa;
 
 	for (size_t i = 0; i < PTRS_PER_PGD; ++i) {
 		spin_lock(&kernel_pgdir_lock);
@@ -234,19 +327,18 @@ static void destroy_user_pgd(pgd_t *pgd)
 		if (is_kspace || pgd_none(pgd[i]))
 			continue;
 
-		if (pud_is_leaf(pgd[i])) {
-			pa = pgd_leaf(pgd[i]);
-			u64 va = i << 30;
-			if (va & (1UL << 38))
-				va = (~((1UL << 39) - 1)) | va;
-			panic("%s(): pgd[%zu] not empty, vaddr=%#" PRIx64
-			      ",paddr=%#" PRIx64 "\n",
-			      __func__, i, va, pa);
-		}
+		if (pgd_is_leaf(pgd[i]))
+			panic("%s(): pgd[%zu] not empty, paddr=%#" PRIx64 "\n",
+			      __func__, i, (u64)pgd_leaf(pgd[i]));
 
 		pa = pgd_next(pgd[i]);
-		pmd = (pmd_t *)phys_to_virt(pa);
-		destroy_user_pmd(pmd, i);
+#if HAVE_P4D
+		destroy_user_p4d((p4d_t *)phys_to_virt(pa));
+#elif HAVE_PUD
+		destroy_user_pud((pud_t *)phys_to_virt(pa));
+#else
+		destroy_user_pmd((pmd_t *)phys_to_virt(pa));
+#endif
 		free_pgtable(pa);
 	}
 }

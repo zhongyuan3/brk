@@ -514,12 +514,24 @@ static void __unmap_range(unsigned long addr, unsigned long end_addr,
 
 	while (addr < end_addr) {
 		pgde = pgd_offset(pgd, addr);
-		p4de = p4d_offset(pgde, addr);
-		pude = pud_offset(p4de, addr);
+		if (pgd_is_leaf(*pgde)) {
+			assert(end_addr - addr >= (1UL << PGDIR_SHIFT));
+			pgd_clear(pgde);
+			addr += 1UL << PGDIR_SHIFT;
+			continue;
+		}
+		p4de = p4d_offset(pgde, addr, phys_to_virt);
+		if (p4d_is_leaf(*p4de)) {
+			assert(end_addr - addr >= (1UL << P4D_SHIFT));
+			p4d_clear(p4de);
+			addr += 1UL << P4D_SHIFT;
+			continue;
+		}
+		pude = pud_offset(p4de, addr, phys_to_virt);
 		if (pud_is_leaf(*pude)) {
-			assert(end_addr - addr >= PAGE_SIZE_1G);
+			assert(end_addr - addr >= (1UL << PUD_SHIFT));
 			pud_clear(pude);
-			addr += PAGE_SIZE_1G;
+			addr += 1UL << PUD_SHIFT;
 			continue;
 		}
 		assert(!pud_none(*pude));
@@ -549,7 +561,7 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 	pud_t *pude;
 	pmd_t *pmd, *pmde;
 	pte_t *pt, *pte;
-	u64 pmd_pa, pt_pa;
+	u64 table_pa;
 	u64 start_addr = addr;
 	pgd_t *pgd = ctx->root;
 	unsigned int flags = ctx->flags;
@@ -559,22 +571,65 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 
 	for (; addr < end_addr; addr += page_size, paddr += page_size) {
 		pgde = pgd_offset(pgd, addr);
-		p4de = p4d_offset(pgde, addr);
-		pude = pud_offset(p4de, addr);
-		if (page_size == PAGE_SIZE_1G) {
+
+		if (page_size == (1UL << PGDIR_SHIFT)) {
+			assert(pgd_none(*pgde));
+			pgd_set_leaf(pgde, paddr, flags);
+			continue;
+		}
+		assert(!pgd_is_leaf(*pgde));
+
+#if HAVE_P4D
+		if (pgd_none(*pgde)) {
+			table_pa = alloc_frame();
+			if (!table_pa) {
+				__unmap_range(start_addr, addr, ctx);
+				return -ENOMEM;
+			}
+			p4de = phys_to_virt(table_pa);
+			memset(p4de, 0, PAGE_SIZE);
+			pgd_set_next(pgde, table_pa);
+		}
+#endif
+		p4de = p4d_offset(pgde, addr, phys_to_virt);
+
+		if (page_size == (1UL << P4D_SHIFT)) {
+			assert(p4d_none(*p4de));
+			p4d_set_leaf(p4de, paddr, flags);
+			continue;
+		}
+		assert(!p4d_is_leaf(*p4de));
+
+#if HAVE_PUD
+		if (p4d_none(*p4de)) {
+			table_pa = alloc_frame();
+			if (!table_pa) {
+				__unmap_range(start_addr, addr, ctx);
+				return -ENOMEM;
+			}
+			pude = phys_to_virt(table_pa);
+			memset(pude, 0, PAGE_SIZE);
+			p4d_set_next(p4de, table_pa);
+		}
+#endif
+		pude = pud_offset(p4de, addr, phys_to_virt);
+
+		if (page_size == (1UL << PUD_SHIFT)) {
 			assert(pud_none(*pude));
 			pud_set_leaf(pude, paddr, flags);
 			continue;
 		}
+		assert(!pud_is_leaf(*pude));
+
 		if (pud_none(*pude)) {
-			pmd_pa = alloc_frame();
-			if (!pmd_pa) {
+			table_pa = alloc_frame();
+			if (!table_pa) {
 				__unmap_range(start_addr, addr, ctx);
 				return -ENOMEM;
 			}
-			pmd = phys_to_virt(pmd_pa);
+			pmd = phys_to_virt(table_pa);
 			memset(pmd, 0, PAGE_SIZE);
-			pud_set_next(pude, pmd_pa);
+			pud_set_next(pude, table_pa);
 		}
 		pmd = pud_to_pmd(*pude, phys_to_virt);
 		pmde = pmd_offset(pmd, addr);
@@ -584,14 +639,14 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 			continue;
 		}
 		if (pmd_none(*pmde)) {
-			pt_pa = alloc_frame();
-			if (!pt_pa) {
+			table_pa = alloc_frame();
+			if (!table_pa) {
 				__unmap_range(start_addr, addr, ctx);
 				return -ENOMEM;
 			}
-			pt = phys_to_virt(pt_pa);
+			pt = phys_to_virt(table_pa);
 			memset(pt, 0, PAGE_SIZE);
-			pmd_set_next(pmde, pt_pa);
+			pmd_set_next(pmde, table_pa);
 		}
 		pt = pmd_to_pt(*pmde, phys_to_virt);
 		pte = pte_offset(pt, addr);

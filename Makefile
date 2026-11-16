@@ -276,6 +276,7 @@ help:
 	$(Q)echo "  SMP=<n>                (default 3)"
 	$(Q)echo "  M=<size>               (default 128M)"
 	$(Q)echo "  WERROR={0|1}           (default: 1)"
+	$(Q)echo "  PGTABLE_LEVELS={3|4|5} (default: 3, Sv39/Sv48/Sv57)"
 	$(Q)echo "  V=1                    Show full build commands"
 	$(Q)echo "  EXTRA_CFLAGS=...       Additional compiler flags"
 	$(Q)echo "  EXTRA_LDFLAGS=...      Additional linker flags"

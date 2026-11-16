@@ -656,8 +656,12 @@ static pte_t *lookup_pte(struct uvm_space *mm, u64 addr)
 		return NULL;
 
 	pgde = pgd_offset(mm->pgd, addr);
-	p4de = p4d_offset(pgde, addr);
-	pude = pud_offset(p4de, addr);
+	if (pgd_none(*pgde) || pgd_is_leaf(*pgde))
+		return NULL;
+	p4de = p4d_offset(pgde, addr, pgtable_phys_to_virt);
+	if (p4d_none(*p4de) || p4d_is_leaf(*p4de))
+		return NULL;
+	pude = pud_offset(p4de, addr, pgtable_phys_to_virt);
 	if (pud_none(*pude) || pud_is_leaf(*pude))
 		return NULL;
 	pmd = pud_to_pmd(*pude, pgtable_phys_to_virt);

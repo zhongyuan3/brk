@@ -2,8 +2,9 @@
 #define ARCH_ASM_VMLAYOUT_H
 
 #include <arch/asm/page.h>
+#include <arch/asm/pgtable_config.h>
 
-#define USER_SPACE_SIZE_MAX ((1UL << 38) - PAGE_SIZE)
+#define USER_SPACE_SIZE_MAX ((1UL << (PGDIR_SHIFT + 8)) - PAGE_SIZE)
 
 #define PAGE_OFFSET 0xffffffc000000000
 #define LINEAR_MAPPING_SIZE 0x2000000000 /* 128G */
