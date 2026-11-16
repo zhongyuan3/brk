@@ -1,6 +1,7 @@
 #include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/list.h>
+#include <brk/memblock.h>
 #include <brk/min_max.h>
 #include <brk/mm_types.h>
 #include <brk/panic.h>
@@ -28,6 +29,14 @@ static struct pcp_cache pcps[MAX_CPUS];
 pfn_t min_pfn;
 pfn_t max_pfn;
 pfn_t vmemmap_start_pfn;
+
+bool pfn_valid(pfn_t pfn)
+{
+	if (pfn < min_pfn || pfn >= max_pfn)
+		return false;
+
+	return memblock_is_memory(pfn_to_phys(pfn));
+}
 
 unsigned long page_cache_shrink(unsigned long nr_to_reclaim);
 
@@ -202,6 +211,9 @@ static bool page_is_buddy(struct page *pg, struct page *buddy,
 			  unsigned int order)
 {
 	(void)pg;
+
+	if (!buddy)
+		return false;
 
 	if (!(buddy->flags & PAGE_FLAGS_BUDDY))
 		return false;

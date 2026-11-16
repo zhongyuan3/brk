@@ -5,6 +5,7 @@
 #include <arch/asm/vmlayout.h>
 #include <arch/mm.h>
 #include <brk/mm_types.h>
+#include <stdbool.h>
 
 #define PAGE_ORDER_MAX 12
 
@@ -76,9 +77,16 @@ static inline pfn_t find_buddy_pfn(pfn_t pfn, unsigned int order)
 	return pfn ^ (1UL << order);
 }
 
+bool pfn_valid(pfn_t pfn);
+
 static inline struct page *find_buddy_page(struct page *pg, unsigned int order)
 {
-	return pfn_to_page(find_buddy_pfn(page_to_pfn(pg), order));
+	pfn_t buddy_pfn = find_buddy_pfn(page_to_pfn(pg), order);
+
+	if (!pfn_valid(buddy_pfn))
+		return NULL;
+
+	return pfn_to_page(buddy_pfn);
 }
 
 static inline unsigned int page_order(size_t size)
