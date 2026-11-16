@@ -154,6 +154,10 @@ static int phys_mem_init(void)
 
 	phys_offset = memblock_start_of_dram();
 
+	min_pfn = phys_to_pfn(memblock_start_of_dram());
+	max_pfn = phys_to_pfn(memblock_end_of_dram());
+	vmemmap_start_pfn = min_pfn;
+
 	return 0;
 }
 

@@ -25,6 +25,10 @@ static struct buddy_bucket areas[PAGE_ORDER_MAX + 1];
 static SPINLOCK_DEFINE(areas_lock);
 static struct pcp_cache pcps[MAX_CPUS];
 
+pfn_t min_pfn;
+pfn_t max_pfn;
+pfn_t vmemmap_start_pfn;
+
 unsigned long page_cache_shrink(unsigned long nr_to_reclaim);
 
 static bool page_is_buddy(struct page *pg, struct page *buddy,
