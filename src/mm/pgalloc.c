@@ -263,8 +263,42 @@ void page_put(struct page *pg)
 	page_free(pg, 0);
 }
 
+#ifndef NDEBUG
+static void page_alloc_check_pfn_conversions(void)
+{
+	struct memblock_region *rgn;
+
+	for_each_mem_region(rgn)
+	{
+		pfn_t start = PFN_UP(rgn->base);
+		pfn_t end = PFN_DOWN(rgn->base + rgn->size);
+
+		for (pfn_t pfn = start; pfn < end; ++pfn) {
+			struct page *pg = pfn_to_page(pfn);
+
+			assert(pfn_valid(pfn));
+			assert(page_to_pfn(pg) == pfn);
+			assert(page_to_phys(pg) == pfn_to_phys(pfn));
+			assert(phys_to_page(pfn_to_phys(pfn)) == pg);
+			assert(page_to_virt(pg) ==
+			       phys_to_virt(pfn_to_phys(pfn)));
+		}
+	}
+
+	for (pfn_t pfn = min_pfn; pfn < max_pfn; ++pfn) {
+		bool valid = memblock_is_memory(pfn_to_phys(pfn));
+
+		assert(pfn_valid(pfn) == valid);
+	}
+}
+#endif
+
 void page_alloc_init(void)
 {
+#ifndef NDEBUG
+	page_alloc_check_pfn_conversions();
+#endif
+
 	for (int i = 0; i <= PAGE_ORDER_MAX; ++i)
 		list_init(&areas[i].free_list);
 
