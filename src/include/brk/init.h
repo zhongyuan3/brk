@@ -6,7 +6,7 @@ void start_kernel(void);
 
 /* architecture-specific */
 
-__result(int) arch_init(void);
+int arch_init(void);
 void bring_up_secondaries(void);
 
 #endif

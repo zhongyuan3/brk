@@ -11,6 +11,4 @@
 
 #define __section(section) __attribute__((__section__(section)))
 
-#define __result(type) type __must_check
-
 #endif

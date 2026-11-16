@@ -19,7 +19,7 @@ struct tick_handler {
 	bool registered;
 };
 
-__result(int) tick_init(void);
+int tick_init(void);
 void tick_handle_periodic(struct clock_event_device *dev);
 
 u64 tick_get_jiffies(void);

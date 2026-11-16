@@ -73,6 +73,6 @@ int map_user_pages(pgd_t *root, unsigned long addr, size_t size,
 		   unsigned long paddr, unsigned int flags);
 void unmap_user_pages(pgd_t *root, unsigned long addr, size_t size);
 
-__result(int) mm_init(void);
+int mm_init(void);
 
 #endif

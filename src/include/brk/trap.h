@@ -7,7 +7,7 @@ struct trap_frame;
 
 /* architecture-specific */
 
-__result(int) trap_init(void);
+int trap_init(void);
 
 void prepare_to_ret_to_user(struct trap_frame *frame);
 
