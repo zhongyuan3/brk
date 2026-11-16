@@ -644,11 +644,6 @@ static struct uvm_region *find_region_containing(struct uvm_space *mm, u64 addr)
 	return NULL;
 }
 
-static void *pgtable_phys_to_virt(unsigned long paddr)
-{
-	return (void *)(uintptr_t)phys_to_virt(paddr);
-}
-
 static pte_t *lookup_pte(struct uvm_space *mm, u64 addr)
 {
 	pgd_t *pgde;

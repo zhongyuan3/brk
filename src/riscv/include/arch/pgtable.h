@@ -140,6 +140,11 @@ static inline pte_t *pmd_to_pt(pmd_t pmde, void *(*phys_to_virt)(unsigned long))
 	return (pte_t *)phys_to_virt(pmd_next(pmde));
 }
 
+static inline void *pgtable_phys_to_virt(unsigned long paddr)
+{
+	return (void *)(uintptr_t)phys_to_virt(paddr);
+}
+
 static inline u64 pmd_leaf(pmd_t pmd)
 {
 	return (pmd_val(pmd) >> 19) << PMD_SHIFT;
@@ -198,8 +203,8 @@ static inline void pte_clear(pte_t *ptep)
 extern pgd_t kernel_pgdir[];
 extern spinlock_t kernel_pgdir_lock;
 
-pgd_t *create_user_pgtable(void);
-void destroy_user_pgtable(pgd_t *pgd);
-int copy_user_pgtable(pgd_t *dst, pgd_t *src);
+pgd_t *pgd_alloc_user(void);
+void pgd_free_user(pgd_t *pgd);
+int pgd_copy_user(pgd_t *dst, pgd_t *src);
 
 #endif

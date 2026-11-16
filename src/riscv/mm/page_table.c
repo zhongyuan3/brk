@@ -33,15 +33,15 @@ static void free_pgtable(u64 paddr)
 
 static pmd_t *pgde_to_pmd_virt(pgd_t *pgdep)
 {
-	return (pmd_t *)phys_to_virt(pgd_next(*pgdep));
+	return pgd_to_pmd(*pgdep, pgtable_phys_to_virt);
 }
 
 static pte_t *pmde_to_pt_virt(pmd_t pmde)
 {
-	return (pte_t *)phys_to_virt(pmd_next(pmde));
+	return pmd_to_pt(pmde, pgtable_phys_to_virt);
 }
 
-pgd_t *create_user_pgtable(void)
+pgd_t *pgd_alloc_user(void)
 {
 	u64 pa = alloc_pgtable();
 	void *pgtable = (void *)phys_to_virt(pa);
@@ -58,7 +58,7 @@ static int copy_user_pt(pte_t *dst, pte_t *src)
 	struct page *pg;
 
 	for (size_t i = 0; i < PTRS_PER_PT; ++i) {
-		if (!pte_is_valid(src[i]))
+		if (pte_none(src[i]))
 			continue;
 
 		pg = page_alloc(0);
@@ -93,7 +93,7 @@ static int copy_user_pmd(pmd_t *dst, pmd_t *src)
 	int err = 0;
 
 	for (size_t i = 0; i < PTRS_PER_PMD; ++i) {
-		if (!pmd_is_valid(src[i]))
+		if (pmd_none(src[i]))
 			continue;
 
 		if (pmd_is_leaf(src[i])) {
@@ -103,7 +103,7 @@ static int copy_user_pmd(pmd_t *dst, pmd_t *src)
 			continue;
 		}
 
-		if (!pmd_is_valid(dst[i])) {
+		if (pmd_none(dst[i])) {
 			u64 pt_pa = alloc_pgtable();
 			if (!pt_pa)
 				return -ENOMEM;
@@ -141,7 +141,7 @@ static int copy_user_pgd(pgd_t *dst, pgd_t *src)
 		spin_lock(&kernel_pgdir_lock);
 		bool is_kspace = pgd_is_valid(kernel_pgdir[i]);
 		spin_unlock(&kernel_pgdir_lock);
-		if (is_kspace || !pgd_is_valid(src[i]))
+		if (is_kspace || pgd_none(src[i]))
 			continue;
 
 		if (pgd_is_leaf(src[i])) {
@@ -151,7 +151,7 @@ static int copy_user_pgd(pgd_t *dst, pgd_t *src)
 			continue;
 		}
 
-		if (!pgd_is_valid(dst[i])) {
+		if (pgd_none(dst[i])) {
 			u64 pmd_pa = alloc_pgtable();
 			if (!pmd_pa)
 				goto failed;
@@ -167,11 +167,11 @@ static int copy_user_pgd(pgd_t *dst, pgd_t *src)
 	return 0;
 
 failed:
-	destroy_user_pgtable(dst);
+	pgd_free_user(dst);
 	return err;
 }
 
-int copy_user_pgtable(pgd_t *dst, pgd_t *src)
+int pgd_copy_user(pgd_t *dst, pgd_t *src)
 {
 	return copy_user_pgd(dst, src);
 }
@@ -198,7 +198,7 @@ static void destroy_user_pmd(pmd_t *pmd, size_t pgde_idx)
 	pte_t *pt;
 
 	for (size_t i = 0; i < PTRS_PER_PMD; ++i) {
-		if (!pmd_is_valid(pmd[i]))
+		if (pmd_none(pmd[i]))
 			continue;
 
 		if (pmd_is_leaf(pmd[i])) {
@@ -228,7 +228,7 @@ static void destroy_user_pgd(pgd_t *pgd)
 		spin_lock(&kernel_pgdir_lock);
 		bool is_kspace = pgd_is_valid(kernel_pgdir[i]);
 		spin_unlock(&kernel_pgdir_lock);
-		if (is_kspace || !pgd_is_valid(pgd[i]))
+		if (is_kspace || pgd_none(pgd[i]))
 			continue;
 
 		if (pgd_is_leaf(pgd[i])) {
@@ -248,7 +248,7 @@ static void destroy_user_pgd(pgd_t *pgd)
 	}
 }
 
-void destroy_user_pgtable(pgd_t *pgd)
+void pgd_free_user(pgd_t *pgd)
 {
 	destroy_user_pgd(pgd);
 	free_pgtable(virt_to_phys((uintptr_t)pgd));

@@ -41,7 +41,7 @@ struct uvm_space *uvm_space_create(void)
 		return ERR_PTR(-ENOMEM);
 	sleeplock_init(&mm->lock, "uvm_space");
 
-	mm->pgd = create_user_pgtable();
+	mm->pgd = pgd_alloc_user();
 	if (!mm->pgd) {
 		slab_free(&uvms_cache, mm);
 		return ERR_PTR(-ENOMEM);
@@ -51,7 +51,7 @@ struct uvm_space *uvm_space_create(void)
 
 	mm->stack = uvm_region_alloc();
 	if (!mm->stack) {
-		destroy_user_pgtable(mm->pgd);
+		pgd_free_user(mm->pgd);
 		slab_free(&uvms_cache, mm);
 		return ERR_PTR(-ENOMEM);
 	}
@@ -59,7 +59,7 @@ struct uvm_space *uvm_space_create(void)
 	mm->heap = uvm_region_alloc();
 	if (!mm->heap) {
 		uvm_region_free(mm->stack);
-		destroy_user_pgtable(mm->pgd);
+		pgd_free_user(mm->pgd);
 		slab_free(&uvms_cache, mm);
 		return ERR_PTR(-ENOMEM);
 	}
@@ -112,7 +112,7 @@ static void uvm_space_destroy(struct uvm_space *mm)
 	uvm_space_free_segments(mm);
 	uvm_space_free_stack(mm);
 	uvm_space_free_heap(mm);
-	destroy_user_pgtable(mm->pgd);
+	pgd_free_user(mm->pgd);
 	slab_free(&uvms_cache, mm);
 }
 
@@ -650,11 +650,6 @@ static unsigned long alloc_pgtable_frame(void)
 		return 0;
 
 	return page_to_phys(pg);
-}
-
-static void *pgtable_phys_to_virt(unsigned long paddr)
-{
-	return (void *)phys_to_virt(paddr);
 }
 
 static int map_pages_final(pgd_t *root, unsigned long addr, unsigned long size,
