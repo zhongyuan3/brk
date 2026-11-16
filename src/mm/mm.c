@@ -511,7 +511,7 @@ static void __unmap_range(unsigned long addr, unsigned long end_addr,
 	void *(*phys_to_virt)(unsigned long) = ctx->phys_to_virt;
 
 	while (addr < end_addr) {
-		pgde = pgd + pgd_index(addr);
+		pgde = pgd_offset(pgd, addr);
 		if (pgd_is_leaf(*pgde)) {
 			assert(end_addr - addr >= PAGE_SIZE_1G);
 			pgd_clear(pgde);
@@ -519,8 +519,8 @@ static void __unmap_range(unsigned long addr, unsigned long end_addr,
 			continue;
 		}
 		assert(pgd_is_valid(*pgde));
-		pmd = phys_to_virt(pgd_next(*pgde));
-		pmde = pmd + pmd_index(addr);
+		pmd = pgd_to_pmd(*pgde, phys_to_virt);
+		pmde = pmd_offset(pmd, addr);
 		if (pmd_is_leaf(*pmde)) {
 			assert(end_addr - addr >= PAGE_SIZE_2M);
 			pmd_clear(pmde);
@@ -528,8 +528,8 @@ static void __unmap_range(unsigned long addr, unsigned long end_addr,
 			continue;
 		}
 		assert(pmd_is_valid(*pmde));
-		pt = phys_to_virt(pmd_next(*pmde));
-		pte = pt + pte_index(addr);
+		pt = pmd_to_pt(*pmde, phys_to_virt);
+		pte = pte_offset(pt, addr);
 		assert(pte_is_valid(*pte));
 		pte_clear(pte);
 		addr += PAGE_SIZE;
@@ -552,13 +552,13 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 	unsigned long end_addr = addr + size;
 
 	for (; addr < end_addr; addr += page_size, paddr += page_size) {
-		pgde = pgd + pgd_index(addr);
+		pgde = pgd_offset(pgd, addr);
 		if (page_size == PAGE_SIZE_1G) {
 			assert(!pgd_is_valid(*pgde));
 			pgd_set_leaf(pgde, paddr, flags);
 			continue;
 		}
-		if (!pgd_is_valid(*pgde)) {
+		if (pgd_none(*pgde)) {
 			pmd_pa = alloc_frame();
 			if (!pmd_pa) {
 				__unmap_range(start_addr, addr, ctx);
@@ -567,16 +567,15 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 			pmd = phys_to_virt(pmd_pa);
 			memset(pmd, 0, PAGE_SIZE);
 			pgd_set_next(pgde, pmd_pa);
-		} else {
-			pmd = phys_to_virt(pgd_next(*pgde));
 		}
-		pmde = pmd + pmd_index(addr);
+		pmd = pgd_to_pmd(*pgde, phys_to_virt);
+		pmde = pmd_offset(pmd, addr);
 		if (page_size == PAGE_SIZE_2M) {
 			assert(!pmd_is_valid(*pmde));
 			pmd_set_leaf(pmde, paddr, flags);
 			continue;
 		}
-		if (!pmd_is_valid(*pmde)) {
+		if (pmd_none(*pmde)) {
 			pt_pa = alloc_frame();
 			if (!pt_pa) {
 				__unmap_range(start_addr, addr, ctx);
@@ -585,10 +584,9 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 			pt = phys_to_virt(pt_pa);
 			memset(pt, 0, PAGE_SIZE);
 			pmd_set_next(pmde, pt_pa);
-		} else {
-			pt = phys_to_virt(pmd_next(*pmde));
 		}
-		pte = pt + pte_index(addr);
+		pt = pmd_to_pt(*pmde, phys_to_virt);
+		pte = pte_offset(pt, addr);
 		assert(!pte_is_valid(*pte));
 		pte_set_leaf(pte, paddr, flags);
 	}

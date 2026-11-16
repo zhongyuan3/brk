@@ -644,6 +644,11 @@ static struct uvm_region *find_region_containing(struct uvm_space *mm, u64 addr)
 	return NULL;
 }
 
+static void *pgtable_phys_to_virt(unsigned long paddr)
+{
+	return (void *)(uintptr_t)phys_to_virt(paddr);
+}
+
 static pte_t *lookup_pte(struct uvm_space *mm, u64 addr)
 {
 	pgd_t *pgde;
@@ -653,16 +658,16 @@ static pte_t *lookup_pte(struct uvm_space *mm, u64 addr)
 	if (!mm)
 		return NULL;
 
-	pgde = &mm->pgd[pgd_index(addr)];
-	if (!pgd_is_valid(*pgde) || pgd_is_leaf(*pgde))
+	pgde = pgd_offset(mm->pgd, addr);
+	if (pgd_none(*pgde) || pgd_is_leaf(*pgde))
 		return NULL;
-	pmd = (pmd_t *)phys_to_virt(pgd_next(*pgde));
-	pmde = &pmd[pmd_index(addr)];
-	if (!pmd_is_valid(*pmde) || pmd_is_leaf(*pmde))
+	pmd = pgd_to_pmd(*pgde, pgtable_phys_to_virt);
+	pmde = pmd_offset(pmd, addr);
+	if (pmd_none(*pmde) || pmd_is_leaf(*pmde))
 		return NULL;
-	pt = (pte_t *)phys_to_virt(pmd_next(*pmde));
-	pte = &pt[pte_index(addr)];
-	if (!pte_is_valid(*pte))
+	pt = pmd_to_pt(*pmde, pgtable_phys_to_virt);
+	pte = pte_offset(pt, addr);
+	if (pte_none(*pte))
 		return NULL;
 	return pte;
 }
@@ -670,20 +675,9 @@ static pte_t *lookup_pte(struct uvm_space *mm, u64 addr)
 static bool update_present_pte(struct uvm_space *mm, u64 addr,
 			       unsigned int flags)
 {
-	pgd_t *pgde;
-	pmd_t *pmd, *pmde;
-	pte_t *pt, *pte;
+	pte_t *pte = lookup_pte(mm, addr);
 
-	pgde = &mm->pgd[pgd_index(addr)];
-	if (!pgd_is_valid(*pgde) || pgd_is_leaf(*pgde))
-		return false;
-	pmd = (pmd_t *)phys_to_virt(pgd_next(*pgde));
-	pmde = &pmd[pmd_index(addr)];
-	if (!pmd_is_valid(*pmde) || pmd_is_leaf(*pmde))
-		return false;
-	pt = (pte_t *)phys_to_virt(pmd_next(*pmde));
-	pte = &pt[pte_index(addr)];
-	if (!pte_is_valid(*pte))
+	if (!pte)
 		return false;
 
 	/*
@@ -970,23 +964,13 @@ bool uvm_pte_is_cow(struct uvm_space *mm, u64 addr)
 
 int uvm_pte_flags(struct uvm_space *mm, u64 addr, unsigned int *flags)
 {
-	pgd_t *pgde;
-	pmd_t *pmd, *pmde;
-	pte_t *pt, *pte;
+	pte_t *pte;
 
 	if (!mm || !flags)
 		return -EINVAL;
 
-	pgde = &mm->pgd[pgd_index(addr)];
-	if (!pgd_is_valid(*pgde) || pgd_is_leaf(*pgde))
-		return -ENOMEM;
-	pmd = (pmd_t *)phys_to_virt(pgd_next(*pgde));
-	pmde = &pmd[pmd_index(addr)];
-	if (!pmd_is_valid(*pmde) || pmd_is_leaf(*pmde))
-		return -ENOMEM;
-	pt = (pte_t *)phys_to_virt(pmd_next(*pmde));
-	pte = &pt[pte_index(addr)];
-	if (!pte_is_valid(*pte))
+	pte = lookup_pte(mm, addr);
+	if (!pte)
 		return -ENOMEM;
 
 	*flags = pte_flags(*pte) & (PTE_R | PTE_W | PTE_X);

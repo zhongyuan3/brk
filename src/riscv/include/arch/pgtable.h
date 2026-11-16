@@ -2,6 +2,7 @@
 #define ARCH_PGTABLE_H
 
 #include <arch/asm/page.h>
+#include <arch/mm.h>
 #include <arch/pgtable_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
@@ -41,9 +42,19 @@ static inline bool pgd_is_leaf(pgd_t pgd)
 	return pgd_is_valid(pgd) && pgd_flags(pgd) != PTE_V;
 }
 
+static inline bool pgd_none(pgd_t pgd)
+{
+	return !pgd_is_valid(pgd);
+}
+
 static inline size_t pgd_index(u64 vaddr)
 {
 	return (vaddr >> PGD_SHIFT) & (PTRS_PER_PGD - 1);
+}
+
+static inline pgd_t *pgd_offset(pgd_t *pgd, u64 vaddr)
+{
+	return &pgd[pgd_index(vaddr)];
 }
 
 static inline void pgd_set_next(pgd_t *pgdp, u64 pmd_phys)
@@ -59,6 +70,12 @@ static inline void pgd_set_leaf(pgd_t *pgdp, u64 phys, unsigned int flags)
 static inline u64 pgd_next(pgd_t pgd)
 {
 	return (pgd_val(pgd) >> 10) << PAGE_SHIFT;
+}
+
+static inline pmd_t *pgd_to_pmd(pgd_t pgde,
+				void *(*phys_to_virt)(unsigned long))
+{
+	return (pmd_t *)phys_to_virt(pgd_next(pgde));
 }
 
 static inline u64 pgd_leaf(pgd_t pgd)
@@ -88,9 +105,19 @@ static inline bool pmd_is_leaf(pmd_t pmd)
 	return pmd_is_valid(pmd) && pmd_flags(pmd) != PTE_V;
 }
 
+static inline bool pmd_none(pmd_t pmd)
+{
+	return !pmd_is_valid(pmd);
+}
+
 static inline size_t pmd_index(u64 vaddr)
 {
 	return (vaddr >> PMD_SHIFT) & (PTRS_PER_PMD - 1);
+}
+
+static inline pmd_t *pmd_offset(pmd_t *pmd, u64 vaddr)
+{
+	return &pmd[pmd_index(vaddr)];
 }
 
 static inline void pmd_set_next(pmd_t *pmdp, u64 pt_phys)
@@ -106,6 +133,11 @@ static inline void pmd_set_leaf(pmd_t *pmdp, u64 phys, unsigned int flags)
 static inline u64 pmd_next(pmd_t pmd)
 {
 	return (pmd_val(pmd) >> 10) << PAGE_SHIFT;
+}
+
+static inline pte_t *pmd_to_pt(pmd_t pmde, void *(*phys_to_virt)(unsigned long))
+{
+	return (pte_t *)phys_to_virt(pmd_next(pmde));
 }
 
 static inline u64 pmd_leaf(pmd_t pmd)
@@ -133,9 +165,19 @@ static inline bool pte_is_valid(pte_t pte)
 	return pte_flags(pte) & PTE_V;
 }
 
+static inline bool pte_none(pte_t pte)
+{
+	return !pte_is_valid(pte);
+}
+
 static inline size_t pte_index(u64 vaddr)
 {
 	return (vaddr >> PTE_SHIFT) & (PTRS_PER_PT - 1);
+}
+
+static inline pte_t *pte_offset(pte_t *pt, u64 vaddr)
+{
+	return &pt[pte_index(vaddr)];
 }
 
 static inline void pte_set_leaf(pte_t *ptep, u64 phys, unsigned int flags)
