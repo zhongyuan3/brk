@@ -23,6 +23,8 @@
 #include <stddef.h>
 #include <string.h>
 
+static_assert(VMEMMAP_START % PAGE_SIZE == 0);
+
 unsigned long phys_offset;
 
 unsigned long early_pgdir_rsvd_page_next;
@@ -307,10 +309,12 @@ static void vmemmap_map_range(u64 start_pfn, u64 end_pfn,
 
 	if (start_pfn >= end_pfn)
 		return;
+	if (start_pfn < vmemmap_start_pfn || end_pfn > max_pfn)
+		panic("mm: vmemmap: invalid pfn range [%lu,%lu)\n",
+		      (unsigned long)start_pfn, (unsigned long)end_pfn);
 
 	va_start = align_down((unsigned long)pfn_to_page(start_pfn), PAGE_SIZE);
 	va_end = align_up((unsigned long)pfn_to_page(end_pfn), PAGE_SIZE);
-
 	/*
 	 * Adjacent physical ranges may share the last vmemmap page.  The
 	 * previous mapping already provides zeroed struct pages for that
@@ -341,6 +345,25 @@ static void vmemmap_map_range(u64 start_pfn, u64 end_pfn,
 		panic("mm: vmemmap: map_pages() failed\n");
 
 	*mapped_end = va_end;
+}
+
+static void vmemmap_check_capacity(void)
+{
+	u64 nr_pfns;
+	u64 bytes;
+
+	if (max_pfn < vmemmap_start_pfn)
+		panic("mm: vmemmap: invalid pfn bounds [%lu,%lu)\n",
+		      (unsigned long)vmemmap_start_pfn, (unsigned long)max_pfn);
+
+	nr_pfns = (u64)(max_pfn - vmemmap_start_pfn);
+	if (nr_pfns > UINT64_MAX / sizeof(struct page))
+		panic("mm: vmemmap: pfn range overflow\n");
+
+	bytes = nr_pfns * sizeof(struct page);
+	if (bytes > (u64)VMEMMAP_SIZE)
+		panic("mm: vmemmap: need %lu bytes, available %lu\n",
+		      (unsigned long)bytes, (unsigned long)VMEMMAP_SIZE);
 }
 
 static void vmemmap_init(void)
@@ -405,6 +428,7 @@ int paging_init(void)
 	final_pgtable_init();
 	load_final_page_table();
 	of_set_fdt(phys_to_virt(boot_info.dtb_pa));
+	vmemmap_check_capacity();
 	vmemmap_init();
 
 	return 0;
