@@ -3,6 +3,7 @@
 #include <brk/printk.h>
 #include <brk/types.h>
 #include <libfdt.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <uapi/errno.h>
 
@@ -131,16 +132,31 @@ static int for_each_reg(int node, int addr_cells, int size_cells,
 	return 0;
 }
 
-static int of_memblock_add_or_reserve(u64 addr, size_t size, void *add)
+struct of_memblock_op {
+	bool add;
+	bool nomap;
+};
+
+static int of_memblock_add_or_reserve(u64 addr, size_t size, void *arg)
 {
-	if (!add)
-		return memblock_reserve(addr, size);
-	else
+	struct of_memblock_op *op = arg;
+	int err;
+
+	if (op->add)
 		return memblock_add(addr, size);
+
+	err = memblock_reserve(addr, size);
+	if (err)
+		return err;
+	if (op->nomap)
+		return memblock_mark_nomap(addr, size);
+
+	return 0;
 }
 
 int of_scan_memory(void)
 {
+	struct of_memblock_op op = { .add = true };
 	int err;
 	int node;
 	int addr_cells, size_cells;
@@ -154,7 +170,7 @@ int of_scan_memory(void)
 		return err;
 
 	return for_each_reg(node, addr_cells, size_cells,
-			    of_memblock_add_or_reserve, (void *)1);
+			    of_memblock_add_or_reserve, &op);
 }
 
 int of_scan_reserved_memory(void)
@@ -174,8 +190,14 @@ int of_scan_reserved_memory(void)
 		return err;
 
 	fdt_for_each_subnode(subnode, fdt, node) {
+		struct of_memblock_op op = {
+			.add = false,
+			.nomap = fdt_getprop(fdt, subnode, "no-map", NULL) !=
+				 NULL,
+		};
+
 		err = for_each_reg(subnode, addr_cells, size_cells,
-				   of_memblock_add_or_reserve, (void *)0);
+				   of_memblock_add_or_reserve, &op);
 		if (err)
 			return err;
 	}

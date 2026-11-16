@@ -292,33 +292,95 @@ static void *phys_to_virt_after_final(unsigned long paddr)
 	return (void *)phys_to_virt(paddr);
 }
 
+static void vmemmap_map_range(u64 start_pfn, u64 end_pfn,
+			      unsigned long *mapped_end)
+{
+	struct map_pages_context ctx;
+	unsigned long va_start;
+	unsigned long va_end;
+	unsigned long paddr;
+	size_t size;
+
+	if (start_pfn >= end_pfn)
+		return;
+
+	va_start = align_down((unsigned long)pfn_to_page(start_pfn), PAGE_SIZE);
+	va_end = align_up((unsigned long)pfn_to_page(end_pfn), PAGE_SIZE);
+
+	/*
+	 * Adjacent physical ranges may share the last vmemmap page.  The
+	 * previous mapping already provides zeroed struct pages for that
+	 * overlap, so only map the range that is still unmapped.
+	 */
+	if (va_start < *mapped_end)
+		va_start = *mapped_end;
+	if (va_start >= va_end)
+		return;
+
+	size = va_end - va_start;
+	paddr = memblock_phys_alloc(size, PAGE_SIZE);
+	assert(paddr);
+	memset((void *)phys_to_virt(paddr), 0, size);
+
+	pr_debug("vmemmap: va=%#lx,pa=%#lx,sz=%lu\n", va_start, paddr, size);
+
+	ctx = (struct map_pages_context){
+		.root = kernel_pgdir,
+		.addr = (void *)va_start,
+		.paddr = paddr,
+		.size = size,
+		.flags = PTE_R | PTE_W,
+		.alloc_frame = alloc_frame_after_final,
+		.phys_to_virt = phys_to_virt_after_final,
+	};
+	if (map_pages(&ctx))
+		panic("mm: vmemmap: map_pages() failed\n");
+
+	*mapped_end = va_end;
+}
+
 static void vmemmap_init(void)
 {
-	u64 idx;
-	unsigned long start, end;
-	size_t sz;
-	unsigned long paddr;
-	unsigned long vaddr;
+	struct memblock_region *rgn;
+	unsigned long mapped_end = 0;
+	u64 start_pa = 0;
+	u64 end_pa = 0;
+	bool have_span = false;
 
-	for_each_mem_pfn_range(idx, start, end) {
-		sz = align_up((end - start) * sizeof(struct page), PAGE_SIZE);
-		paddr = memblock_phys_alloc(sz, PAGE_SIZE);
-		assert(paddr);
-		memset((void *)phys_to_virt(paddr), 0, sz);
-		vaddr = (unsigned long)pfn_to_page(start);
-		pr_debug("vmemmap: va=%#lx,pa=%#lx,sz=%lu\n", vaddr, paddr, sz);
-		struct map_pages_context ctx = {
-			.root = kernel_pgdir,
-			.addr = (void *)vaddr,
-			.paddr = paddr,
-			.size = sz,
-			.flags = PTE_R | PTE_W,
-			.alloc_frame = alloc_frame_after_final,
-			.phys_to_virt = phys_to_virt_after_final,
-		};
-		if (map_pages(&ctx))
-			panic("mm: vmemmap: map_pages() failed\n");
+	/*
+	 * Coalesce adjacent memory regions before mapping.  Region flags may
+	 * split one contiguous physical range (for example around NOMAP
+	 * memory), but vmemmap still covers all physical memory.
+	 */
+	for_each_mem_region(rgn)
+	{
+		u64 rstart = align_up(rgn->base, PAGE_SIZE);
+		u64 rend = align_down(rgn->base + rgn->size, PAGE_SIZE);
+
+		if (rstart >= rend)
+			continue;
+
+		if (!have_span) {
+			start_pa = rstart;
+			end_pa = rend;
+			have_span = true;
+			continue;
+		}
+
+		if (rstart == end_pa) {
+			end_pa = rend;
+			continue;
+		}
+
+		vmemmap_map_range(phys_to_pfn(start_pa), phys_to_pfn(end_pa),
+				  &mapped_end);
+		start_pa = rstart;
+		end_pa = rend;
 	}
+
+	if (have_span)
+		vmemmap_map_range(phys_to_pfn(start_pa), phys_to_pfn(end_pa),
+				  &mapped_end);
 }
 
 void load_final_page_table(void)

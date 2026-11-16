@@ -6,13 +6,19 @@
 #include <stddef.h>
 
 /*
- * Simplified memblock implementation: single NUMA node and no region flags
- * yet.  Names and semantics follow the Linux boot-time memory API for the
- * subset implemented here.
+ * Simplified memblock implementation: single NUMA node.  Names and semantics
+ * follow the Linux boot-time memory API for the subset implemented here.
  */
 
 #define INIT_MEMBLOCK_MEMORY_REGIONS 128
 #define INIT_MEMBLOCK_RESERVED_REGIONS 128
+
+enum memblock_flags {
+	MEMBLOCK_NONE = 0,
+	MEMBLOCK_HOTPLUG = 1 << 0,
+	MEMBLOCK_MIRROR = 1 << 1,
+	MEMBLOCK_NOMAP = 1 << 2,
+};
 
 /*
  * Special end values for memblock_find_in_range() and the physical allocator.
@@ -25,6 +31,7 @@
 struct memblock_region {
 	u64 base;
 	u64 size;
+	enum memblock_flags flags;
 };
 
 struct memblock_type {
@@ -49,6 +56,17 @@ int memblock_reserve(u64 base, u64 size);
 int memblock_remove(u64 base, u64 size);
 /* Release a physical range previously reserved by memblock. */
 int memblock_phys_free(u64 base, u64 size);
+
+/* Set or clear region attribute flags for [base, base + size). */
+int memblock_setclr_flag(struct memblock_type *type, u64 base, u64 size,
+			 int set, int flag);
+int memblock_mark_nomap(u64 base, u64 size);
+int memblock_clear_nomap(u64 base, u64 size);
+
+static inline bool memblock_is_nomap(const struct memblock_region *rgn)
+{
+	return rgn->flags & MEMBLOCK_NOMAP;
+}
 
 /* Find a free physical range without reserving it. */
 u64 memblock_find_in_range(u64 start, u64 end, u64 size, u64 align);
@@ -81,45 +99,48 @@ int memblock_validate(void);
 void memblock_free_all(void);
 
 void __next_mem_range(u64 *pidx, const struct memblock_type *type_a,
-		      const struct memblock_type *type_b, u64 *pstart,
-		      u64 *pend);
+		      const struct memblock_type *type_b,
+		      enum memblock_flags flags, u64 *pstart, u64 *pend);
 void __next_mem_range_rev(u64 *pidx, const struct memblock_type *type_a,
-			  const struct memblock_type *type_b, u64 *pstart,
-			  u64 *pend);
+			  const struct memblock_type *type_b,
+			  enum memblock_flags flags, u64 *pstart, u64 *pend);
 void __next_mem_pfn_range(u64 *pidx, u64 *pstart, u64 *pend);
 
-#define __for_each_mem_range(idx, type_a, type_b, start, end)               \
-	for ((idx) = 0,                                                     \
-	    __next_mem_range(&(idx), (type_a), (type_b), &(start), &(end)); \
-	     (idx) != UINT64_MAX;                                           \
-	     __next_mem_range(&(idx), (type_a), (type_b), &(start), &(end)))
+#define __for_each_mem_range(idx, type_a, type_b, flags, start, end)           \
+	for ((idx) = 0, __next_mem_range(&(idx), (type_a), (type_b), (flags),  \
+					 &(start), &(end));                    \
+	     (idx) != UINT64_MAX; __next_mem_range(&(idx), (type_a), (type_b), \
+						   (flags), &(start), &(end)))
 
-#define __for_each_mem_range_rev(idx, type_a, type_b, start, end)      \
-	for ((idx) = UINT64_MAX,                                       \
-	    __next_mem_range_rev(&(idx), (type_a), (type_b), &(start), \
-				 &(end));                              \
-	     (idx) != UINT64_MAX; __next_mem_range_rev(                \
-		     &(idx), (type_a), (type_b), &(start), &(end)))
+#define __for_each_mem_range_rev(idx, type_a, type_b, flags, start, end) \
+	for ((idx) = UINT64_MAX,                                         \
+	    __next_mem_range_rev(&(idx), (type_a), (type_b), (flags),    \
+				 &(start), &(end));                      \
+	     (idx) != UINT64_MAX; __next_mem_range_rev(                  \
+		     &(idx), (type_a), (type_b), (flags), &(start), &(end)))
 
-/* Iterate over all memory regions. */
-#define for_each_mem_range(idx, start, end) \
-	__for_each_mem_range(idx, &memblock.memory, NULL, start, end)
+/* Iterate over memory regions, excluding NOMAP memory by default. */
+#define for_each_mem_range(idx, start, end)                              \
+	__for_each_mem_range(idx, &memblock.memory, NULL, MEMBLOCK_NONE, \
+			     start, end)
 
-#define for_each_mem_range_rev(idx, start, end) \
-	__for_each_mem_range_rev(idx, &memblock.memory, NULL, start, end)
+#define for_each_mem_range_rev(idx, start, end)                              \
+	__for_each_mem_range_rev(idx, &memblock.memory, NULL, MEMBLOCK_NONE, \
+				 start, end)
 
 /* Iterate over free (memory && !reserved) regions. */
-#define for_each_free_mem_range(idx, start, end)                               \
-	__for_each_mem_range(idx, &memblock.memory, &memblock.reserved, start, \
-			     end)
+#define for_each_free_mem_range(idx, start, end)                        \
+	__for_each_mem_range(idx, &memblock.memory, &memblock.reserved, \
+			     MEMBLOCK_NONE, start, end)
 
 #define for_each_free_mem_range_rev(idx, start, end)                        \
 	__for_each_mem_range_rev(idx, &memblock.memory, &memblock.reserved, \
-				 start, end)
+				 MEMBLOCK_NONE, start, end)
 
 /* Iterate over reserved regions. */
-#define for_each_reserved_mem_range(idx, start, end) \
-	__for_each_mem_range(idx, &memblock.reserved, NULL, start, end)
+#define for_each_reserved_mem_range(idx, start, end)                       \
+	__for_each_mem_range(idx, &memblock.reserved, NULL, MEMBLOCK_NONE, \
+			     start, end)
 
 #define for_each_mem_region(rgn)              \
 	for ((rgn) = memblock.memory.regions; \

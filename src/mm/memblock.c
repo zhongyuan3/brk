@@ -43,7 +43,7 @@ static void memblock_move_regions(struct memblock_type *type, size_t to,
 }
 
 static int memblock_insert_region(struct memblock_type *type, size_t idx,
-				  u64 base, u64 size)
+				  u64 base, u64 size, enum memblock_flags flags)
 {
 	if (!size || idx > type->cnt)
 		return -EINVAL;
@@ -57,6 +57,7 @@ static int memblock_insert_region(struct memblock_type *type, size_t idx,
 
 	type->regions[idx].base = base;
 	type->regions[idx].size = size;
+	type->regions[idx].flags = flags;
 	type->cnt++;
 	type->total_size += size;
 	return 0;
@@ -83,7 +84,8 @@ static void memblock_merge_regions(struct memblock_type *type)
 		struct memblock_region *this = &type->regions[idx];
 		struct memblock_region *next = &type->regions[idx + 1];
 
-		if (this->base + this->size == next->base) {
+		if (this->base + this->size == next->base &&
+		    this->flags == next->flags) {
 			this->size += next->size;
 			memblock_move_regions(type, idx + 1, idx + 2,
 					      type->cnt - idx - 2);
@@ -116,8 +118,13 @@ static int memblock_validate_type(const struct memblock_type *type)
 			const struct memblock_region *next =
 				&type->regions[idx + 1];
 
-			/* Regions must be sorted, non-overlapping and merged. */
-			if (rgn->base + rgn->size >= next->base)
+			/* Regions must be sorted and non-overlapping. */
+			if (rgn->base + rgn->size > next->base)
+				return -EINVAL;
+
+			/* Neighbouring compatible regions must be merged. */
+			if (rgn->base + rgn->size == next->base &&
+			    rgn->flags == next->flags)
 				return -EINVAL;
 		}
 	}
@@ -139,7 +146,8 @@ int memblock_validate(void)
 	return memblock_validate_type(&memblock.reserved);
 }
 
-static int memblock_add_region(struct memblock_type *type, u64 base, u64 size)
+static int memblock_add_region(struct memblock_type *type, u64 base, u64 size,
+			       enum memblock_flags flags)
 {
 	size_t idx;
 	size_t nr_new;
@@ -175,8 +183,8 @@ repeat:
 		if (base < rbase) {
 			nr_new++;
 			if (insert) {
-				err = memblock_insert_region(type, idx++, base,
-							     rbase - base);
+				err = memblock_insert_region(
+					type, idx++, base, rbase - base, flags);
 				if (err)
 					return err;
 			}
@@ -189,7 +197,7 @@ repeat:
 		nr_new++;
 		if (insert) {
 			err = memblock_insert_region(type, idx, base,
-						     end - base);
+						     end - base, flags);
 			if (err)
 				return err;
 		}
@@ -211,12 +219,13 @@ repeat:
 
 int memblock_add(u64 base, u64 size)
 {
-	return memblock_add_region(&memblock.memory, base, size);
+	return memblock_add_region(&memblock.memory, base, size, MEMBLOCK_NONE);
 }
 
 int memblock_reserve(u64 base, u64 size)
 {
-	return memblock_add_region(&memblock.reserved, base, size);
+	return memblock_add_region(&memblock.reserved, base, size,
+				   MEMBLOCK_NONE);
 }
 
 static int memblock_remove_range(struct memblock_type *type, u64 base, u64 size)
@@ -266,7 +275,8 @@ static int memblock_remove_range(struct memblock_type *type, u64 base, u64 size)
 		}
 
 		/* Split the region: rbase < base < end < rend. */
-		err = memblock_insert_region(type, idx + 1, end, rend - end);
+		err = memblock_insert_region(type, idx + 1, end, rend - end,
+					     rgn->flags);
 		if (err)
 			return err;
 		type->regions[idx].size = base - rbase;
@@ -296,6 +306,135 @@ int memblock_phys_free(u64 base, u64 size)
 	}
 
 	return memblock_remove_range(&memblock.reserved, base, size);
+}
+
+static int memblock_split_at(struct memblock_type *type, size_t idx, u64 addr)
+{
+	struct memblock_region *rgn = &type->regions[idx];
+	u64 rbase = rgn->base;
+	u64 rend = rbase + rgn->size;
+	u64 right = rend - addr;
+	int err;
+
+	if (addr <= rbase || addr >= rend)
+		return 0;
+
+	err = memblock_insert_region(type, idx + 1, addr, right, rgn->flags);
+	if (err)
+		return err;
+
+	/*
+	 * Inserting the right part added it to total_size.  The original
+	 * region's size is replaced by the left part, so subtract the right
+	 * part again to keep total_size unchanged.
+	 */
+	type->total_size -= right;
+	rgn->size = addr - rbase;
+	return 0;
+}
+
+static int memblock_isolate_range(struct memblock_type *type, u64 base,
+				  u64 size, size_t *start_rgn, size_t *end_rgn)
+{
+	size_t first = type->cnt;
+	size_t last = type->cnt;
+	u64 end;
+	int err;
+
+	if (!size) {
+		for (first = 0; first < type->cnt; ++first) {
+			if (type->regions[first].base >= base)
+				break;
+		}
+		*start_rgn = first;
+		*end_rgn = first;
+		return 0;
+	}
+
+	if (base + size < base)
+		return -EINVAL;
+	end = base + size;
+
+	for (size_t idx = 0; idx < type->cnt; ++idx) {
+		struct memblock_region *rgn = &type->regions[idx];
+		u64 rend = rgn->base + rgn->size;
+
+		if (rgn->base >= base)
+			break;
+		if (base < rend) {
+			err = memblock_split_at(type, idx, base);
+			if (err)
+				return err;
+			break;
+		}
+	}
+
+	for (size_t idx = 0; idx < type->cnt; ++idx) {
+		struct memblock_region *rgn = &type->regions[idx];
+		u64 rend = rgn->base + rgn->size;
+
+		if (rgn->base >= end)
+			break;
+		if (end < rend) {
+			err = memblock_split_at(type, idx, end);
+			if (err)
+				return err;
+			break;
+		}
+	}
+
+	for (first = 0; first < type->cnt; ++first) {
+		if (type->regions[first].base >= base)
+			break;
+	}
+	for (last = first; last < type->cnt; ++last) {
+		if (type->regions[last].base >= end)
+			break;
+	}
+
+	*start_rgn = first;
+	*end_rgn = last;
+	return 0;
+}
+
+int memblock_setclr_flag(struct memblock_type *type, u64 base, u64 size,
+			 int set, int flag)
+{
+	enum memblock_flags mask = (enum memblock_flags)flag;
+	size_t start_rgn, end_rgn;
+	int err;
+
+	if (!size)
+		return 0;
+	if (base + size < base)
+		return -EINVAL;
+
+	err = memblock_isolate_range(type, base, size, &start_rgn, &end_rgn);
+	if (err)
+		return err;
+
+	for (size_t idx = start_rgn; idx < end_rgn; ++idx) {
+		if (set)
+			type->regions[idx].flags |= mask;
+		else
+			type->regions[idx].flags &= ~mask;
+	}
+
+	memblock_merge_regions(type);
+	assert(memblock_validate() == 0);
+	return 0;
+}
+
+int memblock_mark_nomap(u64 base, u64 size)
+{
+	return memblock_setclr_flag(&memblock.memory, base, size, 1,
+				    MEMBLOCK_NOMAP);
+}
+
+int memblock_clear_nomap(u64 base, u64 size)
+{
+	return memblock_setclr_flag(&memblock.memory, base, size, 0,
+				    MEMBLOCK_NOMAP);
 }
 
 static const struct memblock_region *
@@ -493,9 +632,23 @@ void memblock_set_bottom_up(bool bottom_up)
 	memblock.bottom_up = bottom_up;
 }
 
+static bool memblock_should_skip_region(const struct memblock_type *type,
+					const struct memblock_region *rgn,
+					enum memblock_flags flags)
+{
+	if (type != &memblock.memory)
+		return false;
+
+	/* NOMAP memory must be requested explicitly. */
+	if (!(flags & MEMBLOCK_NOMAP) && memblock_is_nomap(rgn))
+		return true;
+
+	return false;
+}
+
 void __next_mem_range(u64 *pidx, const struct memblock_type *type_a,
-		      const struct memblock_type *type_b, u64 *pstart,
-		      u64 *pend)
+		      const struct memblock_type *type_b,
+		      enum memblock_flags flags, u64 *pstart, u64 *pend)
 {
 	u32 idx_a = *pidx & 0xffffffff;
 	u32 idx_b = *pidx >> 32;
@@ -504,6 +657,9 @@ void __next_mem_range(u64 *pidx, const struct memblock_type *type_a,
 		const struct memblock_region *a = &type_a->regions[idx_a];
 		u64 astart = a->base;
 		u64 aend = astart + a->size;
+
+		if (memblock_should_skip_region(type_a, a, flags))
+			continue;
 
 		for (;;) {
 			u64 bstart;
@@ -561,8 +717,8 @@ void __next_mem_range(u64 *pidx, const struct memblock_type *type_a,
 }
 
 void __next_mem_range_rev(u64 *pidx, const struct memblock_type *type_a,
-			  const struct memblock_type *type_b, u64 *pstart,
-			  u64 *pend)
+			  const struct memblock_type *type_b,
+			  enum memblock_flags flags, u64 *pstart, u64 *pend)
 {
 	u32 idx_a;
 	u32 idx_b;
@@ -590,6 +746,14 @@ void __next_mem_range_rev(u64 *pidx, const struct memblock_type *type_a,
 		a = &type_a->regions[idx_a];
 		astart = a->base;
 		aend = astart + a->size;
+
+		if (memblock_should_skip_region(type_a, a, flags)) {
+			if (!idx_a)
+				goto done;
+			idx_a--;
+			idx_b = type_b ? (u32)type_b->cnt : 0;
+			continue;
+		}
 
 		if (!type_b) {
 			if (pstart)
