@@ -505,6 +505,8 @@ static void __unmap_range(unsigned long addr, unsigned long end_addr,
 			  const struct map_pages_context *ctx)
 {
 	pgd_t *pgde;
+	p4d_t *p4de;
+	pud_t *pude;
 	pmd_t *pmd, *pmde;
 	pte_t *pt, *pte;
 	pgd_t *pgd = ctx->root;
@@ -512,14 +514,16 @@ static void __unmap_range(unsigned long addr, unsigned long end_addr,
 
 	while (addr < end_addr) {
 		pgde = pgd_offset(pgd, addr);
-		if (pgd_is_leaf(*pgde)) {
+		p4de = p4d_offset(pgde, addr);
+		pude = pud_offset(p4de, addr);
+		if (pud_is_leaf(*pude)) {
 			assert(end_addr - addr >= PAGE_SIZE_1G);
-			pgd_clear(pgde);
+			pud_clear(pude);
 			addr += PAGE_SIZE_1G;
 			continue;
 		}
-		assert(pgd_is_valid(*pgde));
-		pmd = pgd_to_pmd(*pgde, phys_to_virt);
+		assert(!pud_none(*pude));
+		pmd = pud_to_pmd(*pude, phys_to_virt);
 		pmde = pmd_offset(pmd, addr);
 		if (pmd_is_leaf(*pmde)) {
 			assert(end_addr - addr >= PAGE_SIZE_2M);
@@ -541,6 +545,8 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 				const struct map_pages_context *ctx)
 {
 	pgd_t *pgde;
+	p4d_t *p4de;
+	pud_t *pude;
 	pmd_t *pmd, *pmde;
 	pte_t *pt, *pte;
 	u64 pmd_pa, pt_pa;
@@ -553,12 +559,14 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 
 	for (; addr < end_addr; addr += page_size, paddr += page_size) {
 		pgde = pgd_offset(pgd, addr);
+		p4de = p4d_offset(pgde, addr);
+		pude = pud_offset(p4de, addr);
 		if (page_size == PAGE_SIZE_1G) {
-			assert(!pgd_is_valid(*pgde));
-			pgd_set_leaf(pgde, paddr, flags);
+			assert(pud_none(*pude));
+			pud_set_leaf(pude, paddr, flags);
 			continue;
 		}
-		if (pgd_none(*pgde)) {
+		if (pud_none(*pude)) {
 			pmd_pa = alloc_frame();
 			if (!pmd_pa) {
 				__unmap_range(start_addr, addr, ctx);
@@ -566,9 +574,9 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 			}
 			pmd = phys_to_virt(pmd_pa);
 			memset(pmd, 0, PAGE_SIZE);
-			pgd_set_next(pgde, pmd_pa);
+			pud_set_next(pude, pmd_pa);
 		}
-		pmd = pgd_to_pmd(*pgde, phys_to_virt);
+		pmd = pud_to_pmd(*pude, phys_to_virt);
 		pmde = pmd_offset(pmd, addr);
 		if (page_size == PAGE_SIZE_2M) {
 			assert(!pmd_is_valid(*pmde));

@@ -647,6 +647,8 @@ static struct uvm_region *find_region_containing(struct uvm_space *mm, u64 addr)
 static pte_t *lookup_pte(struct uvm_space *mm, u64 addr)
 {
 	pgd_t *pgde;
+	p4d_t *p4de;
+	pud_t *pude;
 	pmd_t *pmd, *pmde;
 	pte_t *pt, *pte;
 
@@ -654,9 +656,11 @@ static pte_t *lookup_pte(struct uvm_space *mm, u64 addr)
 		return NULL;
 
 	pgde = pgd_offset(mm->pgd, addr);
-	if (pgd_none(*pgde) || pgd_is_leaf(*pgde))
+	p4de = p4d_offset(pgde, addr);
+	pude = pud_offset(p4de, addr);
+	if (pud_none(*pude) || pud_is_leaf(*pude))
 		return NULL;
-	pmd = pgd_to_pmd(*pgde, pgtable_phys_to_virt);
+	pmd = pud_to_pmd(*pude, pgtable_phys_to_virt);
 	pmde = pmd_offset(pmd, addr);
 	if (pmd_none(*pmde) || pmd_is_leaf(*pmde))
 		return NULL;

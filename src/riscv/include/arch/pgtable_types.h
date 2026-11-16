@@ -11,6 +11,15 @@ typedef struct {
 } pgd_t;
 #define pgd_val(x) ((x).pgd)
 
+/*
+ * Sv39 folds P4D and PUD into the top-level PGD entry.  Keep separate type
+ * names so the page-table walk can follow the Linux-style level order.
+ */
+typedef pgd_t p4d_t;
+typedef pgd_t pud_t;
+#define p4d_val(x) pgd_val(x)
+#define pud_val(x) pgd_val(x)
+
 typedef struct {
 	u64 pmd;
 } pmd_t;

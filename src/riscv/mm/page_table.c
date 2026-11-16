@@ -33,7 +33,10 @@ static void free_pgtable(u64 paddr)
 
 static pmd_t *pgde_to_pmd_virt(pgd_t *pgdep)
 {
-	return pgd_to_pmd(*pgdep, pgtable_phys_to_virt);
+	p4d_t *p4de = p4d_offset(pgdep, 0);
+	pud_t *pude = pud_offset(p4de, 0);
+
+	return pud_to_pmd(*pude, pgtable_phys_to_virt);
 }
 
 static pte_t *pmde_to_pt_virt(pmd_t pmde)
@@ -144,7 +147,7 @@ static int copy_user_pgd(pgd_t *dst, pgd_t *src)
 		if (is_kspace || pgd_none(src[i]))
 			continue;
 
-		if (pgd_is_leaf(src[i])) {
+		if (pud_is_leaf(src[i])) {
 			err = copy_user_pgde_large(&dst[i], src[i]);
 			if (err)
 				goto failed;
@@ -231,7 +234,7 @@ static void destroy_user_pgd(pgd_t *pgd)
 		if (is_kspace || pgd_none(pgd[i]))
 			continue;
 
-		if (pgd_is_leaf(pgd[i])) {
+		if (pud_is_leaf(pgd[i])) {
 			pa = pgd_leaf(pgd[i]);
 			u64 va = i << 30;
 			if (va & (1UL << 38))

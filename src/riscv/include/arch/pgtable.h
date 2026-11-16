@@ -20,9 +20,15 @@
 #define PTE_COW 256 /* Software: page is shared and must be copied on write */
 
 /* Sv39: three-level page table with 1GiB and 2MiB superpages. */
+#define PGTABLE_LEVELS 3
 #define PGD_SHIFT 30
+#define PGDIR_SHIFT PGD_SHIFT
+#define P4D_SHIFT PGDIR_SHIFT
+#define PUD_SHIFT PGDIR_SHIFT
 #define PMD_SHIFT 21
 #define PTRS_PER_PMD (PAGE_SIZE / sizeof(pmd_t))
+#define PTRS_PER_P4D 1
+#define PTRS_PER_PUD 1
 /* Number of entries in the page global directory */
 #define PTRS_PER_PGD (PAGE_SIZE / sizeof(pgd_t))
 #define PGD_FLAGS_MASK 0x3ff
@@ -57,6 +63,18 @@ static inline pgd_t *pgd_offset(pgd_t *pgd, u64 vaddr)
 	return &pgd[pgd_index(vaddr)];
 }
 
+static inline p4d_t *p4d_offset(pgd_t *pgde, u64 vaddr)
+{
+	(void)vaddr;
+	return (p4d_t *)pgde;
+}
+
+static inline pud_t *pud_offset(p4d_t *p4de, u64 vaddr)
+{
+	(void)vaddr;
+	return (pud_t *)p4de;
+}
+
 static inline void pgd_set_next(pgd_t *pgdp, u64 pmd_phys)
 {
 	pgd_val(*pgdp) = ((pmd_phys >> PAGE_SHIFT) << 10) | PTE_V;
@@ -72,12 +90,6 @@ static inline u64 pgd_next(pgd_t pgd)
 	return (pgd_val(pgd) >> 10) << PAGE_SHIFT;
 }
 
-static inline pmd_t *pgd_to_pmd(pgd_t pgde,
-				void *(*phys_to_virt)(unsigned long))
-{
-	return (pmd_t *)phys_to_virt(pgd_next(pgde));
-}
-
 static inline u64 pgd_leaf(pgd_t pgd)
 {
 	return (pgd_val(pgd) >> 28) << PGD_SHIFT;
@@ -86,6 +98,48 @@ static inline u64 pgd_leaf(pgd_t pgd)
 static inline void pgd_clear(pgd_t *pgdp)
 {
 	pgd_val(*pgdp) = 0;
+}
+
+/* Folded Sv39 P4D/PUD operations. */
+static inline bool p4d_none(p4d_t p4d)
+{
+	return pgd_none(p4d);
+}
+
+static inline bool p4d_is_leaf(p4d_t p4d)
+{
+	return pgd_is_leaf(p4d);
+}
+
+static inline bool pud_none(pud_t pud)
+{
+	return pgd_none(pud);
+}
+
+static inline bool pud_is_leaf(pud_t pud)
+{
+	return pgd_is_leaf(pud);
+}
+
+static inline void pud_set_next(pud_t *pude, u64 pmd_phys)
+{
+	pgd_set_next((pgd_t *)pude, pmd_phys);
+}
+
+static inline void pud_set_leaf(pud_t *pude, u64 phys, unsigned int flags)
+{
+	pgd_set_leaf((pgd_t *)pude, phys, flags);
+}
+
+static inline void pud_clear(pud_t *pude)
+{
+	pgd_clear((pgd_t *)pude);
+}
+
+static inline pmd_t *pud_to_pmd(pud_t pude,
+				void *(*phys_to_virt)(unsigned long))
+{
+	return (pmd_t *)phys_to_virt(pgd_next(pude));
 }
 
 #define PMD_FLAGS_MASK 0x3ff
