@@ -1,2 +1,2 @@
 obj-y += init.o
-obj-y += page_table.o
+obj-y += pgtable.o
