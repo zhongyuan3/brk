@@ -148,7 +148,7 @@ struct virtio_blk_config {
 #define VIRTIO_BLK_DEFAULT_QUEUE_SIZE 16
 
 struct virtio_blk_io_desc {
-	u64 buf_phys;
+	dma_addr_t buf_phys;
 	u64 sector;
 	size_t sec_count;
 	bool is_write;

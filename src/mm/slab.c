@@ -44,8 +44,9 @@ static int slab_add_page(struct slab_allocator *allocator)
 
 	slab_mark_page_range(pg, allocator->page_order, allocator);
 
-	u64 addr = page_to_virt(pg);
-	u64 end_addr = addr + (1 << (PAGE_SHIFT + allocator->page_order));
+	virt_addr_t addr = page_to_virt(pg);
+	virt_addr_t end_addr =
+		addr + (1UL << (PAGE_SHIFT + allocator->page_order));
 
 	if (!is_aligned(addr, align))
 		addr = align_up(addr, align);

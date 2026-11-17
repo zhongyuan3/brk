@@ -16,7 +16,7 @@
 
 struct virtio_mmio_device {
 	struct virtio_device vdev;
-	u64 phys_base;
+	phys_addr_t phys_base;
 	size_t size;
 	u8 *mem_base;
 };
@@ -29,15 +29,15 @@ to_virtio_mmio(struct virtio_device *vdev)
 	return container_of(vdev, struct virtio_mmio_device, vdev);
 }
 
-static u64 virtio_mmio_base(struct virtio_device *vdev)
+static virt_addr_t virtio_mmio_base(struct virtio_device *vdev)
 {
 	return (uintptr_t)to_virtio_mmio(vdev)->mem_base;
 }
 
 static void virtio_mmio_write_addr(struct virtio_device *vdev, u32 low_off,
-				   u32 high_off, u64 addr)
+				   u32 high_off, dma_addr_t addr)
 {
-	u64 base = virtio_mmio_base(vdev);
+	virt_addr_t base = virtio_mmio_base(vdev);
 
 	writel(addr & 0xffffffff, base + low_off);
 	writel(addr >> 32, base + high_off);
@@ -45,7 +45,7 @@ static void virtio_mmio_write_addr(struct virtio_device *vdev, u32 low_off,
 
 static int virtio_mmio_probe(struct virtio_device *vdev)
 {
-	u64 base = virtio_mmio_base(vdev);
+	virt_addr_t base = virtio_mmio_base(vdev);
 
 	if (readl(base + VIRTIO_MAGIC_VALUE_OFFSET) != VIRTIO_MAGIC_VALUE)
 		return -EINVAL;
@@ -85,7 +85,7 @@ static int virtio_mmio_set_features(struct virtio_device *vdev, u32 features)
 static int virtio_mmio_setup_queue(struct virtio_device *vdev, u32 queue_id,
 				   struct virtq *vq, u32 queue_size)
 {
-	u64 base = virtio_mmio_base(vdev);
+	virt_addr_t base = virtio_mmio_base(vdev);
 	u32 queue_size_max;
 
 	writel(queue_id, base + VIRTIO_QUEUE_SEL_OFFSET);
@@ -126,7 +126,7 @@ static void virtio_mmio_notify(struct virtio_device *vdev, u32 queue_id)
 
 static u32 virtio_mmio_ack_interrupt(struct virtio_device *vdev)
 {
-	u64 base = virtio_mmio_base(vdev);
+	virt_addr_t base = virtio_mmio_base(vdev);
 	u32 status;
 
 	status = readl(base + VIRTIO_INTERRUPT_STATUS_OFFSET) & 0x3;
@@ -138,7 +138,7 @@ static int virtio_mmio_read_config(struct virtio_device *vdev, void *buf,
 				   size_t size, u32 offset)
 {
 	struct virtio_mmio_device *mmio = to_virtio_mmio(vdev);
-	u64 base;
+	virt_addr_t base;
 
 	if (offset >= mmio->size || offset + size > mmio->size)
 		return -EINVAL;
@@ -161,7 +161,7 @@ static const struct virtio_ops virtio_mmio_ops = {
 	.read_config = virtio_mmio_read_config,
 };
 
-struct virtio_device *virtio_mmio_dev_create(u64 phys_base, size_t size,
+struct virtio_device *virtio_mmio_dev_create(phys_addr_t phys_base, size_t size,
 					     u32 irq)
 {
 	struct virtio_mmio_device *mmio;

@@ -23,7 +23,7 @@
 /* Virtqueue descriptors: 16 bytes.
  * These can chain together via "next". */
 struct virtq_desc {
-	u64 addr;
+	dma_addr_t addr;
 	u32 len;
 	u16 flags;
 	u16 next;

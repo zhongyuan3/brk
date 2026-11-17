@@ -172,7 +172,7 @@ static int plic_probe(const struct device_node *node)
 	struct resource res;
 	struct sifive_plic *p;
 	u32 ndev;
-	u64 addr;
+	phys_addr_t addr;
 	size_t size;
 
 	if (of_address_to_resource(node, 0, &res))

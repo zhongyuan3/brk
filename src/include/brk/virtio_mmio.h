@@ -6,7 +6,7 @@
 
 void virtio_mmio_platform_init(void);
 
-struct virtio_device *virtio_mmio_dev_create(u64 phys_base, size_t size,
+struct virtio_device *virtio_mmio_dev_create(phys_addr_t phys_base, size_t size,
 					     u32 irq);
 void virtio_mmio_dev_destroy(struct virtio_device *dev);
 

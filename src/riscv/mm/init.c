@@ -180,7 +180,7 @@ static void map_free_memory_early(void)
 	}
 }
 
-void setup_vm_early(unsigned long dtb_pa, bool boot)
+void setup_vm_early(phys_addr_t dtb_pa, bool boot)
 {
 	if (boot) {
 		__setup_vm_early(dtb_pa);
@@ -507,7 +507,7 @@ int paging_init(void)
 
 void switch_pgtable(pgd_t *pgd)
 {
-	u64 paddr = virt_to_phys((uintptr_t)pgd);
+	phys_addr_t paddr = virt_to_phys((virt_addr_t)pgd);
 	u64 satp = make_satp(paddr);
 	write_satp(satp);
 	sfence_vma();

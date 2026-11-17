@@ -69,7 +69,7 @@ static int of_platform_device_create(struct device_node *node)
 	return 0;
 }
 
-static u64 of_platform_node_address(const struct device_node *node)
+static phys_addr_t of_platform_node_address(const struct device_node *node)
 {
 	struct resource res;
 
@@ -81,8 +81,8 @@ static u64 of_platform_node_address(const struct device_node *node)
 static int of_platform_node_cmp(const struct device_node *a,
 				const struct device_node *b)
 {
-	u64 a_addr = of_platform_node_address(a);
-	u64 b_addr = of_platform_node_address(b);
+	phys_addr_t a_addr = of_platform_node_address(a);
+	phys_addr_t b_addr = of_platform_node_address(b);
 
 	if (a_addr < b_addr)
 		return -1;
