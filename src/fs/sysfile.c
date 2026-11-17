@@ -124,7 +124,7 @@ static u64 readv_writev(bool is_write)
 
 		if (!iov[i].iov_len)
 			continue;
-		if (!user_range_ok((u64)(uintptr_t)iov[i].iov_base,
+		if (!user_range_ok((user_addr_t)(uintptr_t)iov[i].iov_base,
 				   iov[i].iov_len)) {
 			if (!total)
 				total = -EFAULT;

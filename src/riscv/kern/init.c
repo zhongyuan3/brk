@@ -77,7 +77,7 @@ int arch_init(void)
 
 static void smp_wake_secondary_harts(unsigned long boot_hart_id)
 {
-	unsigned long start_addr = symbol_phys(_secondary_start);
+	phys_addr_t start_addr = symbol_phys(_secondary_start);
 
 	for (unsigned long id = 0; id < nr_harts; ++id) {
 		if (id != boot_hart_id)

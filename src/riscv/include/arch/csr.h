@@ -43,7 +43,7 @@ static inline unsigned long read_satp(void)
 	return x;
 }
 
-static inline u64 make_satp(u64 pt)
+static inline u64 make_satp(phys_addr_t pt)
 {
 	/* Sv39/Sv48/Sv57: mode 8/9/10 (bits 63:60), 44-bit PPN (bits 43:0). */
 	u64 mode = 8 + (PGTABLE_LEVELS - 3);

@@ -197,7 +197,7 @@ found:
 struct page *page_zalloc(unsigned int order)
 {
 	struct page *pg;
-	u64 virt;
+	virt_addr_t virt;
 
 	pg = page_alloc(order);
 	if (!pg)

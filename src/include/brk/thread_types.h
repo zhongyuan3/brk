@@ -60,7 +60,7 @@ struct thread {
 	/* protected by @lock */
 	void *chan;
 	/* protected by @lock */
-	unsigned long kernel_sp;
+	virt_addr_t kernel_sp;
 	/* protected by @lock */
 	enum thread_state state;
 	/* protected by @lock */

@@ -170,7 +170,7 @@ static struct thread *thread_create_in(struct process *process,
 				       void (*fn)(void), bool main)
 {
 	struct thread *thread;
-	unsigned long kernel_sp;
+	virt_addr_t kernel_sp;
 	struct context *ctx;
 
 	thread = thread_alloc();
@@ -831,7 +831,7 @@ bool process_get_info(pid_t pid, struct process_info *info)
 	unsigned int nr_threads;
 	u64 utime;
 	u64 ktime;
-	u64 brk;
+	user_addr_t brk;
 	char name[PROCESS_NAME_MAX];
 	bool killed = false;
 

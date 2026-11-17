@@ -66,7 +66,7 @@
 
 #define PGTABLE_NEXT(x) (((x) >> 10) << PAGE_SHIFT)
 #define PGTABLE_LEAF(x) (((x) >> 10) << PAGE_SHIFT)
-#define PGTABLE_MK(x) (((u64)(x) >> PAGE_SHIFT) << 10)
+#define PGTABLE_MK(x) (((phys_addr_t)(x) >> PAGE_SHIFT) << 10)
 
 static inline size_t pgd_index(virt_addr_t vaddr)
 {
@@ -179,47 +179,47 @@ static inline void pte_set_leaf(pte_t *ptep, u64 phys, unsigned int flags)
 	pte_val(*ptep) = PGTABLE_MK(phys) | PTE_V | flags;
 }
 
-static inline u64 pgd_next(pgd_t pgd)
+static inline phys_addr_t pgd_next(pgd_t pgd)
 {
 	return PGTABLE_NEXT(pgd_val(pgd));
 }
 
-static inline u64 p4d_next(p4d_t p4d)
+static inline phys_addr_t p4d_next(p4d_t p4d)
 {
 	return PGTABLE_NEXT(p4d_val(p4d));
 }
 
-static inline u64 pud_next(pud_t pud)
+static inline phys_addr_t pud_next(pud_t pud)
 {
 	return PGTABLE_NEXT(pud_val(pud));
 }
 
-static inline u64 pmd_next(pmd_t pmd)
+static inline phys_addr_t pmd_next(pmd_t pmd)
 {
 	return PGTABLE_NEXT(pmd_val(pmd));
 }
 
-static inline u64 pgd_leaf(pgd_t pgd)
+static inline phys_addr_t pgd_leaf(pgd_t pgd)
 {
 	return PGTABLE_LEAF(pgd_val(pgd));
 }
 
-static inline u64 p4d_leaf(p4d_t p4d)
+static inline phys_addr_t p4d_leaf(p4d_t p4d)
 {
 	return PGTABLE_LEAF(p4d_val(p4d));
 }
 
-static inline u64 pud_leaf(pud_t pud)
+static inline phys_addr_t pud_leaf(pud_t pud)
 {
 	return PGTABLE_LEAF(pud_val(pud));
 }
 
-static inline u64 pmd_leaf(pmd_t pmd)
+static inline phys_addr_t pmd_leaf(pmd_t pmd)
 {
 	return PGTABLE_LEAF(pmd_val(pmd));
 }
 
-static inline u64 pte_leaf(pte_t pte)
+static inline phys_addr_t pte_leaf(pte_t pte)
 {
 	return PGTABLE_LEAF(pte_val(pte));
 }

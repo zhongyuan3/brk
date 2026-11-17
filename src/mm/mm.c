@@ -565,9 +565,9 @@ static int map_fixed_size_pages(virt_addr_t addr, phys_addr_t paddr,
 	virt_addr_t start_addr = addr;
 	pgd_t *pgd = ctx->root;
 	unsigned int flags = ctx->flags;
-	unsigned long (*alloc_frame)(void) = ctx->alloc_frame;
+	phys_addr_t (*alloc_frame)(void) = ctx->alloc_frame;
 	void *(*phys_to_virt)(phys_addr_t) = ctx->phys_to_virt;
-	unsigned long end_addr = addr + size;
+	virt_addr_t end_addr = addr + size;
 
 	for (; addr < end_addr; addr += page_size, paddr += page_size) {
 		pgde = pgd_offset(pgd, addr);

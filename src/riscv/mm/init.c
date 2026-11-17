@@ -83,7 +83,7 @@ static void __setup_vm_early(phys_addr_t dtb_pa)
 	unsigned int flags;
 
 	early_pgdir_rsvd_page_next =
-		(unsigned long)early_pgdir_rsvd_pages + PAGE_SIZE;
+		(virt_addr_t)early_pgdir_rsvd_pages + PAGE_SIZE;
 
 	kern_end = align_up(_EKERNEL, PAGE_SIZE_2M);
 	size = kern_end - _SKERNEL;
@@ -186,7 +186,7 @@ void setup_vm_early(phys_addr_t dtb_pa, bool boot)
 		__setup_vm_early(dtb_pa);
 	}
 
-	write_satp(make_satp((unsigned long)early_pgdir_rsvd_pages));
+	write_satp(make_satp((phys_addr_t)(uintptr_t)early_pgdir_rsvd_pages));
 	sfence_vma();
 	fence_i();
 }
