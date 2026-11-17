@@ -21,7 +21,7 @@ void cpu_idle(void)
 	asm volatile("wfi");
 }
 
-unsigned long arch_boot_stack_top(cpuid_t cpuid)
+virt_addr_t arch_boot_stack_top(cpuid_t cpuid)
 {
 	return (unsigned long)init_stack_rsvd_pages +
 	       ((unsigned long)cpuid + 1) *

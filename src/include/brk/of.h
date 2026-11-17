@@ -40,8 +40,8 @@ struct device_node {
 	list_for_each_entry(child, &(parent)->children, sibling)
 
 /* Early boot: raw FDT backing store and physical-memory scans. */
-void of_set_fdt(unsigned long addr);
-size_t of_get_fdt_size(unsigned long addr);
+void of_set_fdt(phys_addr_t addr);
+size_t of_get_fdt_size(phys_addr_t addr);
 int of_scan_memory(void);
 int of_scan_reserved_memory(void);
 

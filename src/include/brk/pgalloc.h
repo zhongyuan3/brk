@@ -9,11 +9,10 @@
 
 #define PAGE_ORDER_MAX 12
 
-typedef unsigned long pfn_t;
-
-#define PFN_DOWN(addr) ((pfn_t)((u64)(addr) >> PAGE_SHIFT))
-#define PFN_UP(addr) ((pfn_t)(((u64)(addr) + PAGE_SIZE - 1) >> PAGE_SHIFT))
-#define PFN_PHYS(pfn) ((u64)(pfn) << PAGE_SHIFT)
+#define PFN_DOWN(addr) ((pfn_t)((phys_addr_t)(addr) >> PAGE_SHIFT))
+#define PFN_UP(addr) \
+	((pfn_t)(((phys_addr_t)(addr) + PAGE_SIZE - 1) >> PAGE_SHIFT))
+#define PFN_PHYS(pfn) ((phys_addr_t)(pfn) << PAGE_SHIFT)
 
 extern pfn_t min_pfn;
 extern pfn_t max_pfn;
@@ -31,12 +30,12 @@ extern pfn_t vmemmap_start_pfn;
 #define PAGE_FLAGS_NEW_FREE_PAGE \
 	(PAGE_FLAGS_BUDDY | PAGE_FLAGS_HEAD | PAGE_FLAGS_FREE)
 
-static inline pfn_t phys_to_pfn(u64 paddr)
+static inline pfn_t phys_to_pfn(phys_addr_t paddr)
 {
 	return PFN_DOWN(paddr);
 }
 
-static inline u64 pfn_to_phys(pfn_t pfn)
+static inline phys_addr_t pfn_to_phys(pfn_t pfn)
 {
 	return PFN_PHYS(pfn);
 }
@@ -52,22 +51,22 @@ static inline struct page *pfn_to_page(pfn_t pfn)
 	return (struct page *)VMEMMAP_START + (pfn - vmemmap_start_pfn);
 }
 
-static inline u64 page_to_phys(const struct page *pg)
+static inline phys_addr_t page_to_phys(const struct page *pg)
 {
 	return pfn_to_phys(page_to_pfn(pg));
 }
 
-static inline struct page *phys_to_page(u64 paddr)
+static inline struct page *phys_to_page(phys_addr_t paddr)
 {
 	return pfn_to_page(phys_to_pfn(paddr));
 }
 
-static inline uintptr_t page_to_virt(const struct page *pg)
+static inline virt_addr_t page_to_virt(const struct page *pg)
 {
 	return phys_to_virt(page_to_phys(pg));
 }
 
-static inline struct page *virt_to_page(uintptr_t vaddr)
+static inline struct page *virt_to_page(virt_addr_t vaddr)
 {
 	return phys_to_page(virt_to_phys(vaddr));
 }

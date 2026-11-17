@@ -1,10 +1,12 @@
 #ifndef ARCH_BOOT_INFO_H
 #define ARCH_BOOT_INFO_H
 
+#include <brk/types.h>
+
 extern struct boot_info {
-	unsigned long kernel_image_offset;
+	virt_addr_t kernel_image_offset;
 	unsigned long boot_hart_id;
-	unsigned long dtb_pa;
+	phys_addr_t dtb_pa;
 } boot_info;
 
 #endif

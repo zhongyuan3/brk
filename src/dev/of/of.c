@@ -573,8 +573,8 @@ static u64 of_read_cells(const u32 **pp, int cells)
 	return value;
 }
 
-static int of_translate_address(const struct device_node *node, u64 address,
-				u64 *out)
+static int of_translate_address(const struct device_node *node,
+				phys_addr_t address, phys_addr_t *out)
 {
 	const struct device_node *bus;
 	const struct device_node *parent;
@@ -609,9 +609,9 @@ static int of_translate_address(const struct device_node *node, u64 address,
 
 	for (int i = 0; i < ranges->length / entry_bytes; i++) {
 		const u32 *entry = (const u32 *)ranges->value + i * entry_cells;
-		u64 child_base = of_read_cells(&entry, child_cells);
-		u64 parent_base = of_read_cells(&entry, parent_cells);
-		u64 size = of_read_cells(&entry, size_cells);
+		phys_addr_t child_base = of_read_cells(&entry, child_cells);
+		phys_addr_t parent_base = of_read_cells(&entry, parent_cells);
+		phys_size_t size = of_read_cells(&entry, size_cells);
 
 		if (address >= child_base && address < child_base + size)
 			return of_translate_address(
@@ -626,9 +626,9 @@ int of_address_to_resource(const struct device_node *node, int index,
 	const struct property *reg;
 	const struct device_node *parent;
 	const u32 *p;
-	u64 address;
-	u64 size;
-	u64 translated;
+	phys_addr_t address;
+	phys_size_t size;
+	phys_addr_t translated;
 	int addr_cells, size_cells;
 	int cell_count;
 	size_t needed;

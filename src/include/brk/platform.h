@@ -29,8 +29,8 @@ static inline struct platform_device *to_platform_device(struct device *dev)
 }
 
 int platform_device_register_simple(const char *name, const char *compatible,
-				    u64 phys_base, u64 size, u32 irq,
-				    void *pdata);
+				    phys_addr_t phys_base, phys_size_t size,
+				    u32 irq, void *pdata);
 void platform_device_unregister(struct platform_device *pdev);
 void platform_device_release(struct device *dev);
 struct resource *platform_get_resource(struct platform_device *pdev,

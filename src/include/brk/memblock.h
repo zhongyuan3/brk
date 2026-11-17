@@ -68,10 +68,10 @@ enum memblock_flags {
  */
 struct memblock_region {
 	/** @brief Physical base address. */
-	u64 base;
+	phys_addr_t base;
 
 	/** @brief Region size in bytes. */
-	u64 size;
+	phys_size_t size;
 
 	/** @brief Region attributes, see @ref memblock_flags. */
 	enum memblock_flags flags;
@@ -97,7 +97,7 @@ struct memblock_type {
 	size_t cnt;
 
 	/** @brief Total size of all regions in bytes. */
-	u64 total_size;
+	phys_size_t total_size;
 };
 
 /**
@@ -108,7 +108,7 @@ struct memblock {
 	bool bottom_up;
 
 	/** @brief Upper bound used by @ref MEMBLOCK_ALLOC_ACCESSIBLE. */
-	u64 current_limit;
+	phys_addr_t current_limit;
 
 	/** @brief Physical memory available to the kernel. */
 	struct memblock_type memory;
@@ -133,7 +133,7 @@ extern struct memblock memblock;
  *
  * @return 0 on success, negative errno on failure.
  */
-int memblock_add(u64 base, u64 size);
+int memblock_add(phys_addr_t base, phys_size_t size);
 
 /**
  * @brief Reserve a physical memory range.
@@ -146,7 +146,7 @@ int memblock_add(u64 base, u64 size);
  *
  * @return 0 on success, negative errno on failure.
  */
-int memblock_reserve(u64 base, u64 size);
+int memblock_reserve(phys_addr_t base, phys_size_t size);
 
 /**
  * @brief Remove a range from the memory type.
@@ -160,7 +160,7 @@ int memblock_reserve(u64 base, u64 size);
  *
  * @return 0 on success, negative errno on failure.
  */
-int memblock_remove(u64 base, u64 size);
+int memblock_remove(phys_addr_t base, phys_size_t size);
 
 /**
  * @brief Enable automatic region-array growth.
@@ -187,7 +187,7 @@ void memblock_allow_resize(void);
  *
  * @return 0 on success, negative errno on failure.
  */
-int memblock_phys_free(u64 base, u64 size);
+int memblock_phys_free(phys_addr_t base, phys_size_t size);
 
 /**
  * @brief Set or clear region flags for a physical range.
@@ -203,8 +203,8 @@ int memblock_phys_free(u64 base, u64 size);
  *
  * @return 0 on success, negative errno on failure.
  */
-int memblock_setclr_flag(struct memblock_type *type, u64 base, u64 size,
-			 int set, int flag);
+int memblock_setclr_flag(struct memblock_type *type, phys_addr_t base,
+			 phys_size_t size, int set, int flag);
 
 /**
  * @brief Mark a memory range as not directly mapped.
@@ -218,7 +218,7 @@ int memblock_setclr_flag(struct memblock_type *type, u64 base, u64 size,
  *
  * @return 0 on success, negative errno on failure.
  */
-int memblock_mark_nomap(u64 base, u64 size);
+int memblock_mark_nomap(phys_addr_t base, phys_size_t size);
 
 /**
  * @brief Clear the NOMAP flag for a memory range.
@@ -228,7 +228,7 @@ int memblock_mark_nomap(u64 base, u64 size);
  *
  * @return 0 on success, negative errno on failure.
  */
-int memblock_clear_nomap(u64 base, u64 size);
+int memblock_clear_nomap(phys_addr_t base, phys_size_t size);
 
 /**
  * @brief Test whether a region has the NOMAP flag.
@@ -256,7 +256,8 @@ static inline bool memblock_is_nomap(const struct memblock_region *rgn)
  *
  * @return Physical address on success, 0 on failure.
  */
-u64 memblock_find_in_range(u64 start, u64 end, u64 size, u64 align);
+phys_addr_t memblock_find_in_range(phys_addr_t start, phys_addr_t end,
+				   phys_size_t size, phys_size_t align);
 
 /**
  * @brief Allocate physical memory.
@@ -269,7 +270,7 @@ u64 memblock_find_in_range(u64 start, u64 end, u64 size, u64 align);
  *
  * @return Physical address on success, 0 on failure.
  */
-u64 memblock_phys_alloc(u64 size, u64 align);
+phys_addr_t memblock_phys_alloc(phys_size_t size, phys_size_t align);
 
 /**
  * @brief Allocate physical memory inside a range.
@@ -284,7 +285,8 @@ u64 memblock_phys_alloc(u64 size, u64 align);
  *
  * @return Physical address on success, 0 on failure.
  */
-u64 memblock_phys_alloc_range(u64 size, u64 align, u64 start, u64 end);
+phys_addr_t memblock_phys_alloc_range(phys_size_t size, phys_size_t align,
+				      phys_addr_t start, phys_addr_t end);
 
 /**
  * @brief Return the base of the first memory region.
@@ -292,7 +294,7 @@ u64 memblock_phys_alloc_range(u64 size, u64 align, u64 start, u64 end);
  * @return Physical base address of the first memory region, or 0 if the memory
  *         type is empty.
  */
-u64 memblock_start_of_dram(void);
+phys_addr_t memblock_start_of_dram(void);
 
 /**
  * @brief Return the end of the last memory region.
@@ -300,21 +302,21 @@ u64 memblock_start_of_dram(void);
  * @return End address of the highest memory region, or 0 if the memory type is
  *         empty.
  */
-u64 memblock_end_of_dram(void);
+phys_addr_t memblock_end_of_dram(void);
 
 /**
  * @brief Return the total size of the memory type.
  *
  * @return Total size of all memory regions in bytes.
  */
-u64 memblock_memory_size(void);
+phys_size_t memblock_memory_size(void);
 
 /**
  * @brief Return the total size of the reserved type.
  *
  * @return Total size of all reserved regions in bytes.
  */
-u64 memblock_reserved_size(void);
+phys_size_t memblock_reserved_size(void);
 
 /**
  * @brief Test whether an address belongs to memory.
@@ -323,7 +325,7 @@ u64 memblock_reserved_size(void);
  *
  * @return true if @p addr is covered by a memory region.
  */
-bool memblock_is_memory(u64 addr);
+bool memblock_is_memory(phys_addr_t addr);
 
 /**
  * @brief Test whether an address belongs to reserved memory.
@@ -332,7 +334,7 @@ bool memblock_is_memory(u64 addr);
  *
  * @return true if @p addr is covered by a reserved region.
  */
-bool memblock_is_reserved(u64 addr);
+bool memblock_is_reserved(phys_addr_t addr);
 
 /**
  * @brief Test whether a range is a subset of memory.
@@ -342,7 +344,7 @@ bool memblock_is_reserved(u64 addr);
  *
  * @return true if the range is fully contained in a single memory region.
  */
-bool memblock_is_region_memory(u64 base, u64 size);
+bool memblock_is_region_memory(phys_addr_t base, phys_size_t size);
 
 /**
  * @brief Test whether a range intersects reserved memory.
@@ -352,7 +354,7 @@ bool memblock_is_region_memory(u64 base, u64 size);
  *
  * @return true if the range intersects any reserved region.
  */
-bool memblock_is_region_reserved(u64 base, u64 size);
+bool memblock_is_region_reserved(phys_addr_t base, phys_size_t size);
 
 /**
  * @brief Test whether a range overlaps a memblock type.
@@ -363,8 +365,8 @@ bool memblock_is_region_reserved(u64 base, u64 size);
  *
  * @return true if the range overlaps any region in @p type.
  */
-bool memblock_overlaps_region(const struct memblock_type *type, u64 base,
-			      u64 size);
+bool memblock_overlaps_region(const struct memblock_type *type,
+			      phys_addr_t base, phys_size_t size);
 
 /**
  * @brief Set the accessible allocation limit.
@@ -374,14 +376,14 @@ bool memblock_overlaps_region(const struct memblock_type *type, u64 base,
  *
  * @param[in] limit New physical allocation limit.
  */
-void memblock_set_current_limit(u64 limit);
+void memblock_set_current_limit(phys_addr_t limit);
 
 /**
  * @brief Read the accessible allocation limit.
  *
  * @return Current physical allocation limit.
  */
-u64 memblock_get_current_limit(void);
+phys_addr_t memblock_get_current_limit(void);
 
 /**
  * @brief Query the allocation direction.
@@ -435,7 +437,8 @@ void memblock_free_all(void);
  */
 void __next_mem_range(u64 *pidx, const struct memblock_type *type_a,
 		      const struct memblock_type *type_b,
-		      enum memblock_flags flags, u64 *pstart, u64 *pend);
+		      enum memblock_flags flags, phys_addr_t *pstart,
+		      phys_addr_t *pend);
 
 /**
  * @brief Reverse iterate over type_a ranges not covered by type_b.
@@ -452,7 +455,8 @@ void __next_mem_range(u64 *pidx, const struct memblock_type *type_a,
  */
 void __next_mem_range_rev(u64 *pidx, const struct memblock_type *type_a,
 			  const struct memblock_type *type_b,
-			  enum memblock_flags flags, u64 *pstart, u64 *pend);
+			  enum memblock_flags flags, phys_addr_t *pstart,
+			  phys_addr_t *pend);
 
 /**
  * @brief Iterate over configured memory PFN ranges.
@@ -464,7 +468,7 @@ void __next_mem_range_rev(u64 *pidx, const struct memblock_type *type_a,
  * @param[out] pstart Output start PFN; may be NULL.
  * @param[out] pend Output end PFN; may be NULL.
  */
-void __next_mem_pfn_range(u64 *pidx, u64 *pstart, u64 *pend);
+void __next_mem_pfn_range(u64 *pidx, pfn_t *pstart, pfn_t *pend);
 
 /**
  * @brief Generic typed memblock range iterator.

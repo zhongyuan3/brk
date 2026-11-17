@@ -5,7 +5,7 @@
 #include <brk/vmalloc.h>
 #include <stdint.h>
 
-void *ioremap(u64 paddr, size_t size, unsigned int flags)
+void *ioremap(phys_addr_t paddr, size_t size, unsigned int flags)
 {
 	size = align_up(size, PAGE_SIZE);
 	void *virt = vmalloc_nomap(size);

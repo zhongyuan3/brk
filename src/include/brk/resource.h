@@ -7,13 +7,13 @@
 #define IORESOURCE_IRQ (1u << 1)
 
 struct resource {
-	u64 start;
-	u64 end;
+	resource_size_t start;
+	resource_size_t end;
 	unsigned long flags;
 	const char *name;
 };
 
-static inline u64 resource_size(const struct resource *res)
+static inline resource_size_t resource_size(const struct resource *res)
 {
 	if (!res || res->end < res->start)
 		return 0;

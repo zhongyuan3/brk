@@ -1,6 +1,7 @@
 #ifndef BRK_TYPES_H
 #define BRK_TYPES_H
 
+#include <brk/addr.h>
 #include <uapi/types.h>
 
 /*

@@ -18,12 +18,12 @@
  */
 static void *fdt;
 
-void of_set_fdt(unsigned long addr)
+void of_set_fdt(phys_addr_t addr)
 {
 	fdt = (void *)addr;
 }
 
-size_t of_get_fdt_size(unsigned long addr)
+size_t of_get_fdt_size(phys_addr_t addr)
 {
 	return fdt_totalsize((const void *)addr);
 }
@@ -100,10 +100,13 @@ static int get_parent_addr_cells(int node, int *addr_cells, int *size_cells)
 }
 
 static int for_each_reg(int node, int addr_cells, int size_cells,
-			int (*fn)(u64 addr, size_t size, void *arg), void *arg)
+			int (*fn)(phys_addr_t addr, phys_size_t size,
+				  void *arg),
+			void *arg)
 {
 	const u32 *reg;
-	u64 addr, size;
+	phys_addr_t addr;
+	phys_size_t size;
 	int len = 0;
 	int reg_bytes = (addr_cells + size_cells) * sizeof(u32);
 	int err;
@@ -137,7 +140,8 @@ struct of_memblock_op {
 	bool nomap;
 };
 
-static int of_memblock_add_or_reserve(u64 addr, size_t size, void *arg)
+static int of_memblock_add_or_reserve(phys_addr_t addr, phys_size_t size,
+				      void *arg)
 {
 	struct of_memblock_op *op = arg;
 	int err;

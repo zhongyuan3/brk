@@ -57,8 +57,8 @@ void platform_device_release(struct device *dev)
 }
 
 int platform_device_register_simple(const char *name, const char *compatible,
-				    u64 phys_base, u64 size, u32 irq,
-				    void *pdata)
+				    phys_addr_t phys_base, phys_size_t size,
+				    u32 irq, void *pdata)
 {
 	struct platform_device *pdev;
 	unsigned int nr = 0;

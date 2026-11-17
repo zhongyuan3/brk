@@ -25,9 +25,9 @@
 
 static_assert(VMEMMAP_START % PAGE_SIZE == 0);
 
-unsigned long phys_offset;
+phys_addr_t phys_offset;
 
-unsigned long early_pgdir_rsvd_page_next;
+virt_addr_t early_pgdir_rsvd_page_next;
 
 static unsigned long alloc_early_pgdir_rsvd_page(void)
 {
