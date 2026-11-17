@@ -54,24 +54,24 @@ void uvm_region_release(struct uvm_region *region);
 
 struct map_pages_context {
 	pgd_t *root;
-	void *addr;
-	unsigned long paddr;
-	unsigned long size;
+	virt_addr_t addr;
+	phys_addr_t paddr;
+	phys_size_t size;
 	unsigned int flags;
-	unsigned long (*alloc_frame)(void);
-	void *(*phys_to_virt)(unsigned long);
+	phys_addr_t (*alloc_frame)(void);
+	void *(*phys_to_virt)(phys_addr_t);
 };
 
 int map_pages(const struct map_pages_context *ctx);
-void unmap_pages(pgd_t *root, void *addr, unsigned long size);
+void unmap_pages(pgd_t *root, virt_addr_t addr, phys_size_t size);
 
 /* Convenience wrappers for final mappings, where page_alloc() is usable. */
-int map_kernel_pages(unsigned long addr, size_t size, unsigned long paddr,
+int map_kernel_pages(virt_addr_t addr, phys_size_t size, phys_addr_t paddr,
 		     unsigned int flags);
-void unmap_kernel_pages(unsigned long addr, size_t size);
-int map_user_pages(pgd_t *root, unsigned long addr, size_t size,
-		   unsigned long paddr, unsigned int flags);
-void unmap_user_pages(pgd_t *root, unsigned long addr, size_t size);
+void unmap_kernel_pages(virt_addr_t addr, phys_size_t size);
+int map_user_pages(pgd_t *root, virt_addr_t addr, phys_size_t size,
+		   phys_addr_t paddr, unsigned int flags);
+void unmap_user_pages(pgd_t *root, virt_addr_t addr, phys_size_t size);
 
 int mm_init(void);
 

@@ -12,7 +12,7 @@ void *ioremap(phys_addr_t paddr, size_t size, unsigned int flags)
 	if (!virt)
 		return NULL;
 
-	if (map_kernel_pages((uintptr_t)virt, size, paddr, flags)) {
+	if (map_kernel_pages((virt_addr_t)virt, size, paddr, flags)) {
 		vfree_nomap(virt);
 		return NULL;
 	}

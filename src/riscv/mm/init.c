@@ -29,13 +29,13 @@ phys_addr_t phys_offset;
 
 virt_addr_t early_pgdir_rsvd_page_next;
 
-static unsigned long alloc_early_pgdir_rsvd_page(void)
+static phys_addr_t alloc_early_pgdir_rsvd_page(void)
 {
-	unsigned long base = (unsigned long)early_pgdir_rsvd_pages;
-	unsigned long end = base + NR_EARLY_PGDIR_RSVD_PAGES * PAGE_SIZE;
+	phys_addr_t base = (phys_addr_t)(uintptr_t)early_pgdir_rsvd_pages;
+	phys_addr_t end = base + NR_EARLY_PGDIR_RSVD_PAGES * PAGE_SIZE;
 
 	if (early_pgdir_rsvd_page_next < end) {
-		unsigned long addr = early_pgdir_rsvd_page_next;
+		phys_addr_t addr = (phys_addr_t)early_pgdir_rsvd_page_next;
 		early_pgdir_rsvd_page_next += PAGE_SIZE;
 		return addr;
 	}
@@ -45,22 +45,22 @@ static unsigned long alloc_early_pgdir_rsvd_page(void)
 	}
 }
 
-static unsigned long alloc_early_pgtable(void)
+static phys_addr_t alloc_early_pgtable(void)
 {
 	return alloc_early_pgdir_rsvd_page();
 }
 
-static void *early_phys_to_virt(unsigned long paddr)
+static void *early_phys_to_virt(phys_addr_t paddr)
 {
 	return (void *)paddr;
 }
 
-static void map_early(unsigned long addr, unsigned long paddr,
-		      unsigned long size, unsigned int flags)
+static void map_early(virt_addr_t addr, phys_addr_t paddr, phys_size_t size,
+		      unsigned int flags)
 {
 	struct map_pages_context ctx = {
 		.root = (pgd_t *)early_pgdir_rsvd_pages,
-		.addr = (void *)addr,
+		.addr = addr,
 		.paddr = paddr,
 		.size = size,
 		.flags = flags,
@@ -76,10 +76,10 @@ static void map_early(unsigned long addr, unsigned long paddr,
 	}
 }
 
-static void __setup_vm_early(unsigned long dtb_pa)
+static void __setup_vm_early(phys_addr_t dtb_pa)
 {
-	unsigned long kern_end;
-	unsigned long size;
+	virt_addr_t kern_end;
+	phys_size_t size;
 	unsigned int flags;
 
 	early_pgdir_rsvd_page_next =
@@ -94,7 +94,7 @@ static void __setup_vm_early(unsigned long dtb_pa)
 	/* Map the kernel link address to the physical load address. */
 	map_early(KERNEL_LINK_ADDR, _SKERNEL, size, flags);
 
-	unsigned long dtb_end = dtb_pa + of_get_fdt_size(dtb_pa);
+	phys_addr_t dtb_end = dtb_pa + of_get_fdt_size(dtb_pa);
 	if (dtb_pa >= _SKERNEL && dtb_end <= kern_end)
 		return;
 
@@ -103,31 +103,31 @@ static void __setup_vm_early(unsigned long dtb_pa)
 	else
 		dtb_pa = max(dtb_pa, kern_end);
 
-	unsigned long map_start = align_down(dtb_pa, PAGE_SIZE_2M);
-	unsigned long map_end = align_up(dtb_end, PAGE_SIZE_2M);
+	phys_addr_t map_start = align_down(dtb_pa, PAGE_SIZE_2M);
+	phys_addr_t map_end = align_up(dtb_end, PAGE_SIZE_2M);
 	size = map_end - map_start;
 	flags = PTE_R | PTE_W;
 	map_early(map_start, map_start, size, flags);
 }
 
-static void map_early_phys_range(u64 start, u64 end)
+static void map_early_phys_range(phys_addr_t start, phys_addr_t end)
 {
-	unsigned long vstart = align_up((unsigned long)start, PAGE_SIZE);
-	unsigned long vend = align_down((unsigned long)end, PAGE_SIZE);
-	unsigned long size;
+	phys_addr_t vstart = align_up(start, PAGE_SIZE);
+	phys_addr_t vend = align_down(end, PAGE_SIZE);
+	phys_size_t size;
 
 	if (vstart >= vend)
 		return;
 
 	size = vend - vstart;
-	map_early(vstart, vstart, size, PTE_R | PTE_W);
+	map_early((virt_addr_t)vstart, vstart, size, PTE_R | PTE_W);
 }
 
-static void map_early_free_range(u64 start, u64 end)
+static void map_early_free_range(phys_addr_t start, phys_addr_t end)
 {
 	struct early_span {
-		u64 start;
-		u64 end;
+		phys_addr_t start;
+		phys_addr_t end;
 	} spans[2] = {
 		{ _SKERNEL_PHYS, align_up(_EKERNEL_PHYS, PAGE_SIZE_2M) },
 		{ align_down(boot_info.dtb_pa, PAGE_SIZE_2M),
@@ -163,7 +163,7 @@ static void map_early_free_range(u64 start, u64 end)
 static void map_free_memory_early(void)
 {
 	u64 idx;
-	u64 start, end;
+	phys_addr_t start, end;
 
 	for_each_free_mem_range(idx, start, end)
 	{
@@ -235,23 +235,23 @@ static int phys_mem_init(void)
 
 struct mapping_region {
 	const char *name;
-	unsigned long addr;
-	unsigned long paddr;
-	unsigned long size;
+	virt_addr_t addr;
+	phys_addr_t paddr;
+	phys_size_t size;
 	unsigned int flags;
 	bool do_map;
 };
 
-static unsigned long alloc_frame_before_final(void)
+static phys_addr_t alloc_frame_before_final(void)
 {
-	unsigned long addr = memblock_phys_alloc(PAGE_SIZE, PAGE_SIZE);
+	phys_addr_t addr = memblock_phys_alloc(PAGE_SIZE, PAGE_SIZE);
 
 	return addr;
 }
 
-static void *phys_to_virt_before_final(unsigned long paddr)
+static void *phys_to_virt_before_final(phys_addr_t paddr)
 {
-	return (void *)paddr;
+	return (void *)(uintptr_t)paddr;
 }
 
 static void final_pgtable_init(void)
@@ -259,8 +259,8 @@ static void final_pgtable_init(void)
 	u64 idx = 0;
 	struct mapping_region *rngs;
 	size_t rngs_cnt = 0;
-	size_t rngs_size;
-	unsigned long start, end;
+	phys_size_t rngs_size;
+	phys_addr_t start, end;
 
 	for_each_free_mem_range(idx, start, end)
 	{
@@ -303,8 +303,8 @@ static void final_pgtable_init(void)
 	rngs[3].flags = PTE_R | PTE_W;
 	rngs[3].do_map = true;
 	rngs[4].name = "tmp_rngs_list";
-	rngs[4].addr = phys_to_virt((unsigned long)rngs);
-	rngs[4].paddr = (unsigned long)rngs;
+	rngs[4].addr = phys_to_virt((phys_addr_t)(uintptr_t)rngs);
+	rngs[4].paddr = (phys_addr_t)(uintptr_t)rngs;
 	rngs[4].size = rngs_size;
 	rngs[4].flags = PTE_R | PTE_W;
 	rngs[4].do_map = true;
@@ -328,10 +328,9 @@ static void final_pgtable_init(void)
 		i += 1;
 	}
 	for (i = 5; i < rngs_cnt; ++i) {
-		unsigned long aligned_addr = align_up(rngs[i].addr, PAGE_SIZE);
-		unsigned long aligned_paddr =
-			align_up(rngs[i].paddr, PAGE_SIZE);
-		unsigned long aligned_end_addr =
+		virt_addr_t aligned_addr = align_up(rngs[i].addr, PAGE_SIZE);
+		phys_addr_t aligned_paddr = align_up(rngs[i].paddr, PAGE_SIZE);
+		virt_addr_t aligned_end_addr =
 			align_up(rngs[i].addr + rngs[i].size, PAGE_SIZE);
 		rngs[i].addr = aligned_addr;
 		rngs[i].paddr = aligned_paddr;
@@ -347,7 +346,7 @@ static void final_pgtable_init(void)
 
 		struct map_pages_context ctx = {
 			.root = kernel_pgdir,
-			.addr = (void *)rngs[i].addr,
+			.addr = rngs[i].addr,
 			.paddr = rngs[i].paddr,
 			.size = rngs[i].size,
 			.flags = rngs[i].flags,
@@ -358,24 +357,24 @@ static void final_pgtable_init(void)
 	}
 }
 
-static unsigned long alloc_frame_after_final(void)
+static phys_addr_t alloc_frame_after_final(void)
 {
 	return memblock_phys_alloc(PAGE_SIZE, PAGE_SIZE);
 }
 
-static void *phys_to_virt_after_final(unsigned long paddr)
+static void *phys_to_virt_after_final(phys_addr_t paddr)
 {
 	return (void *)phys_to_virt(paddr);
 }
 
-static void vmemmap_map_range(u64 start_pfn, u64 end_pfn,
-			      unsigned long *mapped_end)
+static void vmemmap_map_range(pfn_t start_pfn, pfn_t end_pfn,
+			      virt_addr_t *mapped_end)
 {
 	struct map_pages_context ctx;
-	unsigned long va_start;
-	unsigned long va_end;
-	unsigned long paddr;
-	size_t size;
+	virt_addr_t va_start;
+	virt_addr_t va_end;
+	phys_addr_t paddr;
+	phys_size_t size;
 
 	if (start_pfn >= end_pfn)
 		return;
@@ -383,8 +382,8 @@ static void vmemmap_map_range(u64 start_pfn, u64 end_pfn,
 		panic("mm: vmemmap: invalid pfn range [%lu,%lu)\n",
 		      (unsigned long)start_pfn, (unsigned long)end_pfn);
 
-	va_start = align_down((unsigned long)pfn_to_page(start_pfn), PAGE_SIZE);
-	va_end = align_up((unsigned long)pfn_to_page(end_pfn), PAGE_SIZE);
+	va_start = align_down((virt_addr_t)pfn_to_page(start_pfn), PAGE_SIZE);
+	va_end = align_up((virt_addr_t)pfn_to_page(end_pfn), PAGE_SIZE);
 	/*
 	 * Adjacent physical ranges may share the last vmemmap page.  The
 	 * previous mapping already provides zeroed struct pages for that
@@ -398,13 +397,13 @@ static void vmemmap_map_range(u64 start_pfn, u64 end_pfn,
 	size = va_end - va_start;
 	paddr = memblock_phys_alloc(size, PAGE_SIZE);
 	assert(paddr);
-	memset((void *)phys_to_virt(paddr), 0, size);
+	memset((void *)(uintptr_t)phys_to_virt(paddr), 0, size);
 
 	pr_debug("vmemmap: va=%#lx,pa=%#lx,sz=%lu\n", va_start, paddr, size);
 
 	ctx = (struct map_pages_context){
 		.root = kernel_pgdir,
-		.addr = (void *)va_start,
+		.addr = va_start,
 		.paddr = paddr,
 		.size = size,
 		.flags = PTE_R | PTE_W,
@@ -419,14 +418,14 @@ static void vmemmap_map_range(u64 start_pfn, u64 end_pfn,
 
 static void vmemmap_check_capacity(void)
 {
-	u64 nr_pfns;
-	u64 bytes;
+	phys_size_t nr_pfns;
+	phys_size_t bytes;
 
 	if (max_pfn < vmemmap_start_pfn)
 		panic("mm: vmemmap: invalid pfn bounds [%lu,%lu)\n",
 		      (unsigned long)vmemmap_start_pfn, (unsigned long)max_pfn);
 
-	nr_pfns = (u64)(max_pfn - vmemmap_start_pfn);
+	nr_pfns = max_pfn - vmemmap_start_pfn;
 	if (nr_pfns > UINT64_MAX / sizeof(struct page))
 		panic("mm: vmemmap: pfn range overflow\n");
 
@@ -439,9 +438,9 @@ static void vmemmap_check_capacity(void)
 static void vmemmap_init(void)
 {
 	struct memblock_region *rgn;
-	unsigned long mapped_end = 0;
-	u64 start_pa = 0;
-	u64 end_pa = 0;
+	virt_addr_t mapped_end = 0;
+	phys_addr_t start_pa = 0;
+	phys_addr_t end_pa = 0;
 	bool have_span = false;
 
 	/*
@@ -451,8 +450,8 @@ static void vmemmap_init(void)
 	 */
 	for_each_mem_region(rgn)
 	{
-		u64 rstart = align_up(rgn->base, PAGE_SIZE);
-		u64 rend = align_down(rgn->base + rgn->size, PAGE_SIZE);
+		phys_addr_t rstart = align_up(rgn->base, PAGE_SIZE);
+		phys_addr_t rend = align_down(rgn->base + rgn->size, PAGE_SIZE);
 
 		if (rstart >= rend)
 			continue;

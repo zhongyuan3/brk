@@ -68,38 +68,38 @@
 #define PGTABLE_LEAF(x) (((x) >> 10) << PAGE_SHIFT)
 #define PGTABLE_MK(x) (((u64)(x) >> PAGE_SHIFT) << 10)
 
-static inline size_t pgd_index(u64 vaddr)
+static inline size_t pgd_index(virt_addr_t vaddr)
 {
 	return (vaddr >> PGDIR_SHIFT) & (PTRS_PER_PGD - 1);
 }
 
-static inline size_t p4d_index(u64 vaddr)
+static inline size_t p4d_index(virt_addr_t vaddr)
 {
 	return (vaddr >> P4D_SHIFT) & (PTRS_PER_P4D - 1);
 }
 
-static inline size_t pud_index(u64 vaddr)
+static inline size_t pud_index(virt_addr_t vaddr)
 {
 	return (vaddr >> PUD_SHIFT) & (PTRS_PER_PUD - 1);
 }
 
-static inline size_t pmd_index(u64 vaddr)
+static inline size_t pmd_index(virt_addr_t vaddr)
 {
 	return (vaddr >> PMD_SHIFT) & (PTRS_PER_PMD - 1);
 }
 
-static inline size_t pte_index(u64 vaddr)
+static inline size_t pte_index(virt_addr_t vaddr)
 {
 	return (vaddr >> PTE_SHIFT) & (PTRS_PER_PT - 1);
 }
 
-static inline pgd_t *pgd_offset(pgd_t *pgd, u64 vaddr)
+static inline pgd_t *pgd_offset(pgd_t *pgd, virt_addr_t vaddr)
 {
 	return &pgd[pgd_index(vaddr)];
 }
 
 static inline p4d_t *p4d_offset(pgd_t *pgde, u64 vaddr,
-				void *(*phys_to_virt)(unsigned long))
+				void *(*phys_to_virt)(phys_addr_t))
 {
 #if HAVE_P4D
 	return (p4d_t *)phys_to_virt(PGTABLE_NEXT(pgd_val(*pgde))) +
@@ -112,7 +112,7 @@ static inline p4d_t *p4d_offset(pgd_t *pgde, u64 vaddr,
 }
 
 static inline pud_t *pud_offset(p4d_t *p4de, u64 vaddr,
-				void *(*phys_to_virt)(unsigned long))
+				void *(*phys_to_virt)(phys_addr_t))
 {
 #if HAVE_PUD
 	return (pud_t *)phys_to_virt(PGTABLE_NEXT(p4d_val(*p4de))) +
@@ -124,12 +124,12 @@ static inline pud_t *pud_offset(p4d_t *p4de, u64 vaddr,
 #endif
 }
 
-static inline pmd_t *pmd_offset(pmd_t *pmd, u64 vaddr)
+static inline pmd_t *pmd_offset(pmd_t *pmd, virt_addr_t vaddr)
 {
 	return &pmd[pmd_index(vaddr)];
 }
 
-static inline pte_t *pte_offset(pte_t *pt, u64 vaddr)
+static inline pte_t *pte_offset(pte_t *pt, virt_addr_t vaddr)
 {
 	return &pt[pte_index(vaddr)];
 }
@@ -249,24 +249,22 @@ static inline void pte_clear(pte_t *ptep)
 	pte_val(*ptep) = 0;
 }
 
-static inline pud_t *p4d_to_pud(p4d_t p4de,
-				void *(*phys_to_virt)(unsigned long))
+static inline pud_t *p4d_to_pud(p4d_t p4de, void *(*phys_to_virt)(phys_addr_t))
 {
 	return (pud_t *)phys_to_virt(p4d_next(p4de));
 }
 
-static inline pmd_t *pud_to_pmd(pud_t pude,
-				void *(*phys_to_virt)(unsigned long))
+static inline pmd_t *pud_to_pmd(pud_t pude, void *(*phys_to_virt)(phys_addr_t))
 {
 	return (pmd_t *)phys_to_virt(pud_next(pude));
 }
 
-static inline pte_t *pmd_to_pt(pmd_t pmde, void *(*phys_to_virt)(unsigned long))
+static inline pte_t *pmd_to_pt(pmd_t pmde, void *(*phys_to_virt)(phys_addr_t))
 {
 	return (pte_t *)phys_to_virt(pmd_next(pmde));
 }
 
-static inline void *pgtable_phys_to_virt(unsigned long paddr)
+static inline void *pgtable_phys_to_virt(phys_addr_t paddr)
 {
 	return (void *)(uintptr_t)phys_to_virt(paddr);
 }

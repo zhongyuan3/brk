@@ -501,7 +501,7 @@ void uvm_region_free(struct uvm_region *region)
 	kfree(region);
 }
 
-static void __unmap_range(unsigned long addr, unsigned long end_addr,
+static void __unmap_range(virt_addr_t addr, virt_addr_t end_addr,
 			  const struct map_pages_context *ctx)
 {
 	pgd_t *pgde;
@@ -510,7 +510,7 @@ static void __unmap_range(unsigned long addr, unsigned long end_addr,
 	pmd_t *pmd, *pmde;
 	pte_t *pt, *pte;
 	pgd_t *pgd = ctx->root;
-	void *(*phys_to_virt)(unsigned long) = ctx->phys_to_virt;
+	void *(*phys_to_virt)(phys_addr_t) = ctx->phys_to_virt;
 
 	while (addr < end_addr) {
 		pgde = pgd_offset(pgd, addr);
@@ -552,8 +552,8 @@ static void __unmap_range(unsigned long addr, unsigned long end_addr,
 	}
 }
 
-static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
-				unsigned long size, size_t page_size,
+static int map_fixed_size_pages(virt_addr_t addr, phys_addr_t paddr,
+				phys_size_t size, phys_size_t page_size,
 				const struct map_pages_context *ctx)
 {
 	pgd_t *pgde;
@@ -561,12 +561,12 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 	pud_t *pude;
 	pmd_t *pmd, *pmde;
 	pte_t *pt, *pte;
-	u64 table_pa;
-	u64 start_addr = addr;
+	phys_addr_t table_pa;
+	virt_addr_t start_addr = addr;
 	pgd_t *pgd = ctx->root;
 	unsigned int flags = ctx->flags;
 	unsigned long (*alloc_frame)(void) = ctx->alloc_frame;
-	void *(*phys_to_virt)(unsigned long) = ctx->phys_to_virt;
+	void *(*phys_to_virt)(phys_addr_t) = ctx->phys_to_virt;
 	unsigned long end_addr = addr + size;
 
 	for (; addr < end_addr; addr += page_size, paddr += page_size) {
@@ -659,13 +659,13 @@ static int map_fixed_size_pages(unsigned long addr, unsigned long paddr,
 
 int map_pages(const struct map_pages_context *ctx)
 {
-	size_t rem_size;
-	size_t page_size;
+	phys_size_t rem_size;
+	phys_size_t page_size;
 	int err;
-	unsigned long addr = (unsigned long)ctx->addr;
-	unsigned long end_addr;
-	unsigned long size = ctx->size;
-	unsigned long paddr = ctx->paddr;
+	virt_addr_t addr = ctx->addr;
+	virt_addr_t end_addr;
+	phys_size_t size = ctx->size;
+	phys_addr_t paddr = ctx->paddr;
 
 	assert(ctx->root);
 	assert(ctx->alloc_frame);
@@ -705,7 +705,7 @@ int map_pages(const struct map_pages_context *ctx)
 	return 0;
 }
 
-static unsigned long alloc_pgtable_frame(void)
+static phys_addr_t alloc_pgtable_frame(void)
 {
 	struct page *pg = page_alloc(0);
 
@@ -715,12 +715,12 @@ static unsigned long alloc_pgtable_frame(void)
 	return page_to_phys(pg);
 }
 
-static int map_pages_final(pgd_t *root, unsigned long addr, unsigned long size,
-			   unsigned long paddr, unsigned int flags)
+static int map_pages_final(pgd_t *root, virt_addr_t addr, phys_size_t size,
+			   phys_addr_t paddr, unsigned int flags)
 {
 	struct map_pages_context ctx = {
 		.root = root,
-		.addr = (void *)addr,
+		.addr = addr,
 		.paddr = paddr,
 		.size = size,
 		.flags = flags,
@@ -731,20 +731,20 @@ static int map_pages_final(pgd_t *root, unsigned long addr, unsigned long size,
 	return map_pages(&ctx);
 }
 
-void unmap_pages(pgd_t *root, void *addr, unsigned long size)
+void unmap_pages(pgd_t *root, virt_addr_t addr, phys_size_t size)
 {
 	struct map_pages_context ctx = {
 		.root = root,
 		.phys_to_virt = pgtable_phys_to_virt,
 	};
-	unsigned long start = (unsigned long)addr;
+	virt_addr_t start = addr;
 
 	assert(is_aligned(start, PAGE_SIZE));
 	assert(is_aligned(size, PAGE_SIZE));
 	__unmap_range(start, start + size, &ctx);
 }
 
-int map_kernel_pages(unsigned long addr, size_t size, unsigned long paddr,
+int map_kernel_pages(virt_addr_t addr, phys_size_t size, phys_addr_t paddr,
 		     unsigned int flags)
 {
 	int err;
@@ -756,23 +756,23 @@ int map_kernel_pages(unsigned long addr, size_t size, unsigned long paddr,
 	return err;
 }
 
-void unmap_kernel_pages(unsigned long addr, size_t size)
+void unmap_kernel_pages(virt_addr_t addr, phys_size_t size)
 {
 	spin_lock(&kernel_pgdir_lock);
-	unmap_pages(kernel_pgdir, (void *)addr, size);
+	unmap_pages(kernel_pgdir, addr, size);
 	spin_unlock(&kernel_pgdir_lock);
 }
 
-int map_user_pages(pgd_t *root, unsigned long addr, size_t size,
-		   unsigned long paddr, unsigned int flags)
+int map_user_pages(pgd_t *root, virt_addr_t addr, phys_size_t size,
+		   phys_addr_t paddr, unsigned int flags)
 {
 	size = align_up(size, PAGE_SIZE);
 	return map_pages_final(root, addr, size, paddr, flags | PTE_U);
 }
 
-void unmap_user_pages(pgd_t *root, unsigned long addr, size_t size)
+void unmap_user_pages(pgd_t *root, virt_addr_t addr, phys_size_t size)
 {
-	unmap_pages(root, (void *)addr, size);
+	unmap_pages(root, addr, size);
 }
 
 int mm_init(void)

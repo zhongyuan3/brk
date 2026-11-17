@@ -15,7 +15,7 @@
 
 struct vmalloc_region {
 	struct list_head list;
-	u64 addr;
+	virt_addr_t addr;
 	size_t size;
 	struct page **pages;
 	size_t nr_pages;
@@ -41,7 +41,7 @@ static void vmalloc_region_free(struct vmalloc_region *area)
 	slab_free(&vma_cache, area);
 }
 
-static struct vmalloc_region *find_vm_area(u64 addr)
+static struct vmalloc_region *find_vm_area(virt_addr_t addr)
 {
 	struct vmalloc_region *area;
 
@@ -140,7 +140,7 @@ void *vmalloc(size_t size)
 	area->nr_pages = npgs;
 
 	size_t i = 0;
-	u64 vaddr = area->addr;
+	virt_addr_t vaddr = area->addr;
 	for (; i < npgs; ++i) {
 		struct page *pg = page_alloc(0);
 		if (!pg)
@@ -174,7 +174,7 @@ void vfree(void *ptr)
 	struct vmalloc_region *area;
 
 	spin_lock(&vma_lock);
-	area = find_vm_area((uintptr_t)ptr);
+	area = find_vm_area((virt_addr_t)(uintptr_t)ptr);
 	if (!area || area->is_free) {
 		spin_unlock(&vma_lock);
 		return;
@@ -208,7 +208,7 @@ void vfree_nomap(void *ptr)
 	struct vmalloc_region *area;
 
 	spin_lock(&vma_lock);
-	area = find_vm_area((uintptr_t)ptr);
+	area = find_vm_area((virt_addr_t)(uintptr_t)ptr);
 	if (!area || area->is_free) {
 		spin_unlock(&vma_lock);
 		return;

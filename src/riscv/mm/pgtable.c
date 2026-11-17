@@ -14,17 +14,17 @@
 
 SPINLOCK_DEFINE(kernel_pgdir_lock);
 
-static u64 alloc_pgtable(void)
+static phys_addr_t alloc_pgtable(void)
 {
 	struct page *pg = page_alloc(0);
 	if (!pg)
 		return 0;
-	u64 pa = page_to_phys(pg);
+	phys_addr_t pa = page_to_phys(pg);
 	memset((void *)phys_to_virt(pa), 0, PAGE_SIZE);
 	return pa;
 }
 
-static void free_pgtable(u64 paddr)
+static void free_pgtable(phys_addr_t paddr)
 {
 	struct page *pg = phys_to_page(paddr);
 	assert(pg);
@@ -38,7 +38,7 @@ static pte_t *pmde_to_pt_virt(pmd_t pmde)
 
 pgd_t *pgd_alloc_user(void)
 {
-	u64 pa = alloc_pgtable();
+	phys_addr_t pa = alloc_pgtable();
 	void *pgtable = (void *)phys_to_virt(pa);
 	spin_lock(&kernel_pgdir_lock);
 	memcpy(pgtable, kernel_pgdir, PAGE_SIZE);
@@ -52,8 +52,8 @@ static int copy_user_large(u64 *dst, u64 src, unsigned int shift,
 	unsigned long size = 1UL << shift;
 	unsigned int order = page_order(size);
 	struct page *pg;
-	u64 dst_pa;
-	u64 src_pa = PGTABLE_LEAF(src);
+	phys_addr_t dst_pa;
+	phys_addr_t src_pa = PGTABLE_LEAF(src);
 
 	if (((unsigned long)PAGE_SIZE << order) != size)
 		return -ENOMEM;
@@ -70,8 +70,8 @@ static int copy_user_large(u64 *dst, u64 src, unsigned int shift,
 
 static int copy_user_pt(pte_t *dst, pte_t *src)
 {
-	u64 spg_pa;
-	u64 dpg_pa;
+	phys_addr_t spg_pa;
+	phys_addr_t dpg_pa;
 	struct page *pg;
 
 	for (size_t i = 0; i < PTRS_PER_PT; ++i) {
@@ -108,7 +108,7 @@ static int copy_user_pmd(pmd_t *dst, pmd_t *src)
 		}
 
 		if (pmd_none(dst[i])) {
-			u64 pt_pa = alloc_pgtable();
+			phys_addr_t pt_pa = alloc_pgtable();
 			if (!pt_pa)
 				return -ENOMEM;
 			pmd_set_next(dst + i, pt_pa);
@@ -141,7 +141,7 @@ static int copy_user_pud(pud_t *dst, pud_t *src)
 		}
 
 		if (pud_none(dst[i])) {
-			u64 pmd_pa = alloc_pgtable();
+			phys_addr_t pmd_pa = alloc_pgtable();
 			if (!pmd_pa)
 				return -ENOMEM;
 			pud_set_next(dst + i, pmd_pa);
@@ -175,7 +175,7 @@ static int copy_user_p4d(p4d_t *dst, p4d_t *src)
 		}
 
 		if (p4d_none(dst[i])) {
-			u64 pud_pa = alloc_pgtable();
+			phys_addr_t pud_pa = alloc_pgtable();
 			if (!pud_pa)
 				return -ENOMEM;
 			p4d_set_next(dst + i, pud_pa);
@@ -211,7 +211,7 @@ static int copy_user_pgd(pgd_t *dst, pgd_t *src)
 		}
 
 		if (pgd_none(dst[i])) {
-			u64 next_pa = alloc_pgtable();
+			phys_addr_t next_pa = alloc_pgtable();
 			if (!next_pa)
 				goto failed;
 			pgd_set_next(dst + i, next_pa);
@@ -254,7 +254,7 @@ static void destroy_user_pt(pte_t *pt)
 
 static void destroy_user_pmd(pmd_t *pmd)
 {
-	u64 pa;
+	phys_addr_t pa;
 	pte_t *pt;
 
 	for (size_t i = 0; i < PTRS_PER_PMD; ++i) {
@@ -275,7 +275,7 @@ static void destroy_user_pmd(pmd_t *pmd)
 #if HAVE_PUD
 static void destroy_user_pud(pud_t *pud)
 {
-	u64 pa;
+	phys_addr_t pa;
 	pmd_t *pmd;
 
 	for (size_t i = 0; i < PTRS_PER_PUD; ++i) {
@@ -297,7 +297,7 @@ static void destroy_user_pud(pud_t *pud)
 #if HAVE_P4D
 static void destroy_user_p4d(p4d_t *p4d)
 {
-	u64 pa;
+	phys_addr_t pa;
 	pud_t *pud;
 
 	for (size_t i = 0; i < PTRS_PER_P4D; ++i) {
@@ -318,7 +318,7 @@ static void destroy_user_p4d(p4d_t *p4d)
 
 static void destroy_user_pgd(pgd_t *pgd)
 {
-	u64 pa;
+	phys_addr_t pa;
 
 	for (size_t i = 0; i < PTRS_PER_PGD; ++i) {
 		spin_lock(&kernel_pgdir_lock);
