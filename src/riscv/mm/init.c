@@ -498,6 +498,7 @@ int paging_init(void)
 	map_free_memory_early();
 	final_pgtable_init();
 	load_final_page_table();
+	memblock_allow_resize();
 	of_set_fdt(phys_to_virt(boot_info.dtb_pa));
 	vmemmap_check_capacity();
 	vmemmap_init();

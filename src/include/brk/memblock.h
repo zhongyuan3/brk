@@ -54,6 +54,8 @@ extern struct memblock memblock;
 int memblock_add(u64 base, u64 size);
 int memblock_reserve(u64 base, u64 size);
 int memblock_remove(u64 base, u64 size);
+/* Enable automatic growth after the final direct map is active. */
+void memblock_allow_resize(void);
 /* Release a physical range previously reserved by memblock. */
 int memblock_phys_free(u64 base, u64 size);
 

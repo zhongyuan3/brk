@@ -17,6 +17,7 @@ static struct memblock_region memory[INIT_MEMBLOCK_MEMORY_REGIONS];
 static struct memblock_region reserved[INIT_MEMBLOCK_RESERVED_REGIONS];
 static bool memblock_alloc_enabled = true;
 static bool memblock_free_all_done;
+static bool memblock_can_resize;
 
 static void memblock_free_to_buddy(u64 start, u64 end);
 
@@ -146,6 +147,103 @@ int memblock_validate(void)
 	return memblock_validate_type(&memblock.reserved);
 }
 
+void memblock_allow_resize(void)
+{
+	memblock_can_resize = true;
+}
+
+static int memblock_grow_array(struct memblock_type *type, u64 avoid_start,
+			       u64 avoid_size)
+{
+	struct memblock_region *old_regions = type->regions;
+	struct memblock_region *new_regions;
+	size_t old_max = type->max;
+	size_t new_max;
+	size_t old_bytes;
+	size_t new_bytes;
+	size_t alloc_bytes;
+	u64 avoid_end;
+	u64 new_pa = 0;
+	int err;
+
+	if (!memblock_can_resize || !memblock_alloc_enabled)
+		return -ENOMEM;
+	if (old_max > (SIZE_MAX - 1) / 2)
+		return -ENOMEM;
+
+	/*
+	 * +1 guarantees enough free slots for reserving the new array even in
+	 * the worst case where its range creates cnt + 1 new regions.
+	 */
+	new_max = old_max * 2 + 1;
+	old_bytes = old_max * sizeof(*old_regions);
+	new_bytes = new_max * sizeof(*new_regions);
+	if (new_max && new_bytes / sizeof(*new_regions) != new_max)
+		return -ENOMEM;
+
+	alloc_bytes = align_up(new_bytes, PAGE_SIZE);
+	if (alloc_bytes < new_bytes)
+		return -ENOMEM;
+
+	if (avoid_size) {
+		if (avoid_start + avoid_size < avoid_start)
+			return -EINVAL;
+		avoid_end = avoid_start + avoid_size;
+
+		if (avoid_start)
+			new_pa = memblock_find_in_range(0, avoid_start,
+							alloc_bytes, PAGE_SIZE);
+		if (!new_pa && avoid_end < memblock.current_limit)
+			new_pa = memblock_find_in_range(avoid_end,
+							memblock.current_limit,
+							alloc_bytes, PAGE_SIZE);
+	} else {
+		new_pa = memblock_find_in_range(0, memblock.current_limit,
+						alloc_bytes, PAGE_SIZE);
+	}
+
+	if (!new_pa)
+		return -ENOMEM;
+
+	new_regions = (struct memblock_region *)phys_to_virt(new_pa);
+	memset(new_regions, 0, alloc_bytes);
+	memcpy(new_regions, old_regions, old_bytes);
+
+	/*
+	 * Growing reserved itself must install the larger array before
+	 * reserving the new array, because the old reserved array may be full.
+	 * Growing memory can reserve the new array first, since the memory
+	 * type still has the old (valid) array.
+	 */
+	if (type == &memblock.reserved) {
+		type->regions = new_regions;
+		type->max = new_max;
+
+		err = memblock_reserve(new_pa, alloc_bytes);
+		if (err) {
+			type->regions = old_regions;
+			type->max = old_max;
+			return err;
+		}
+	} else {
+		err = memblock_reserve(new_pa, alloc_bytes);
+		if (err)
+			return err;
+
+		type->regions = new_regions;
+		type->max = new_max;
+	}
+
+	if (old_regions != memory && old_regions != reserved) {
+		u64 old_pa = virt_to_phys((uintptr_t)old_regions);
+		size_t old_alloc_bytes = align_up(old_bytes, PAGE_SIZE);
+
+		(void)memblock_phys_free(old_pa, old_alloc_bytes);
+	}
+
+	return 0;
+}
+
 static int memblock_add_region(struct memblock_type *type, u64 base, u64 size,
 			       enum memblock_flags flags)
 {
@@ -204,8 +302,11 @@ repeat:
 	}
 
 	if (!insert) {
-		if (nr_new > type->max - type->cnt)
-			return -ENOMEM;
+		while (nr_new > type->max - type->cnt) {
+			err = memblock_grow_array(type, old_base, size);
+			if (err)
+				return err;
+		}
 		if (!nr_new)
 			return 0;
 		insert = true;
@@ -238,6 +339,11 @@ static int memblock_remove_range(struct memblock_type *type, u64 base, u64 size)
 		return 0;
 	if (base + size < base)
 		return -EINVAL;
+	if (type->cnt >= type->max) {
+		err = memblock_grow_array(type, 0, 0);
+		if (err)
+			return err;
+	}
 
 	end = base + size;
 
@@ -353,6 +459,13 @@ static int memblock_isolate_range(struct memblock_type *type, u64 base,
 
 	if (base + size < base)
 		return -EINVAL;
+
+	while (type->cnt + 2 > type->max) {
+		err = memblock_grow_array(type, base, size);
+		if (err)
+			return err;
+	}
+
 	end = base + size;
 
 	for (size_t idx = 0; idx < type->cnt; ++idx) {
@@ -876,6 +989,7 @@ void memblock_free_all(void)
 
 	memblock_free_all_done = true;
 	memblock_alloc_enabled = false;
+	memblock_can_resize = false;
 
 	assert(memblock_validate() == 0);
 
