@@ -1,3 +1,12 @@
+/**
+ * @file mm/memblock.c
+ * @brief Boot-time physical memory allocator.
+ *
+ * The memory and reserved arrays start in .bss.  Once the final direct map is
+ * active, @ref memblock_allow_resize() permits them to be replaced by larger
+ * arrays allocated from memblock itself.
+ */
+
 #include <arch/asm/page.h>
 #include <brk/align.h>
 #include <brk/assert.h>
@@ -97,6 +106,16 @@ static void memblock_merge_regions(struct memblock_type *type)
 	}
 }
 
+/**
+ * @brief Validate one memblock type.
+ *
+ * Regions must be sorted, non-overlapping, have no address/size overflow, and
+ * be minimally merged when their flags match.
+ *
+ * @param[in] type Memblock type to validate.
+ *
+ * @return 0 on success, negative errno on failure.
+ */
 static int memblock_validate_type(const struct memblock_type *type)
 {
 	u64 total_size = 0;
@@ -152,6 +171,23 @@ void memblock_allow_resize(void)
 	memblock_can_resize = true;
 }
 
+/**
+ * @brief Grow a memblock type's region array.
+ *
+ * The array is allocated with @ref memblock_find_in_range() rather than
+ * @ref memblock_phys_alloc() to avoid recursively reserving an entry in a full
+ * reserved array.
+ *
+ * @p avoid_start and @p avoid_size describe a pending range that must not
+ * overlap the new array.  This is used when the reserved array is grown to
+ * reserve the new memory-array allocation itself.
+ *
+ * @param[in,out] type Memblock type whose array should grow.
+ * @param[in] avoid_start Start of a range the new array must avoid.
+ * @param[in] avoid_size Size of the range to avoid.
+ *
+ * @return 0 on success, negative errno on failure.
+ */
 static int memblock_grow_array(struct memblock_type *type, u64 avoid_start,
 			       u64 avoid_size)
 {
@@ -244,6 +280,24 @@ static int memblock_grow_array(struct memblock_type *type, u64 avoid_start,
 	return 0;
 }
 
+/**
+ * @brief Add a range to a memblock type.
+ *
+ * The new range may overlap existing regions.  Existing regions are never
+ * modified; only the parts not already covered are inserted.  This keeps the
+ * type sorted, non-overlapping and minimally merged, as required by the Linux
+ * memblock API.
+ *
+ * The first pass counts how many new regions are needed.  If the region array
+ * is too small, @ref memblock_grow_array() is called and the pass is repeated.
+ *
+ * @param[in,out] type Memblock type to modify.
+ * @param[in] base Physical base address.
+ * @param[in] size Range size in bytes.
+ * @param[in] flags Flags for newly inserted regions.
+ *
+ * @return 0 on success, negative errno on failure.
+ */
 static int memblock_add_region(struct memblock_type *type, u64 base, u64 size,
 			       enum memblock_flags flags)
 {
@@ -329,6 +383,19 @@ int memblock_reserve(u64 base, u64 size)
 				   MEMBLOCK_NONE);
 }
 
+/**
+ * @brief Remove a range from a memblock type.
+ *
+ * Regions fully covered by the range are dropped; partial overlaps are
+ * truncated or split.  The caller chooses whether this operates on memory or
+ * reserved.
+ *
+ * @param[in,out] type Memblock type to modify.
+ * @param[in] base Physical base address.
+ * @param[in] size Range size in bytes.
+ *
+ * @return 0 on success, negative errno on failure.
+ */
 static int memblock_remove_range(struct memblock_type *type, u64 base, u64 size)
 {
 	size_t idx = 0;
@@ -414,6 +481,18 @@ int memblock_phys_free(u64 base, u64 size)
 	return memblock_remove_range(&memblock.reserved, base, size);
 }
 
+/**
+ * @brief Split a region at a given address.
+ *
+ * Preserve the region flags and keep @c total_size unchanged.  The right half
+ * is inserted at @p idx + 1.
+ *
+ * @param[in,out] type Memblock type containing the region.
+ * @param[in] idx Index of the region to split.
+ * @param[in] addr Address at which to split.
+ *
+ * @return 0 on success, negative errno on failure.
+ */
 static int memblock_split_at(struct memblock_type *type, size_t idx, u64 addr)
 {
 	struct memblock_region *rgn = &type->regions[idx];
@@ -439,6 +518,20 @@ static int memblock_split_at(struct memblock_type *type, size_t idx, u64 addr)
 	return 0;
 }
 
+/**
+ * @brief Isolate a range into disjoint memblock regions.
+ *
+ * Split all regions crossing the range boundaries and return the index range
+ * of regions fully inside that range.  At most two extra regions are created.
+ *
+ * @param[in,out] type Memblock type to isolate the range in.
+ * @param[in] base Range base address.
+ * @param[in] size Range size in bytes.
+ * @param[out] start_rgn Index of the first region inside the range.
+ * @param[out] end_rgn Index of the first region after the range.
+ *
+ * @return 0 on success, negative errno on failure.
+ */
 static int memblock_isolate_range(struct memblock_type *type, u64 base,
 				  u64 size, size_t *start_rgn, size_t *end_rgn)
 {
@@ -550,6 +643,15 @@ int memblock_clear_nomap(u64 base, u64 size)
 				    MEMBLOCK_NOMAP);
 }
 
+/**
+ * @brief Find the region containing an address.
+ *
+ * @param[in] type Memblock type to search.
+ * @param[in] addr Physical address.
+ *
+ * @return Matching region, or NULL for an address outside the type, including
+ *         addresses in a memory hole.
+ */
 static const struct memblock_region *
 memblock_search(const struct memblock_type *type, u64 addr)
 {
@@ -571,6 +673,19 @@ memblock_search(const struct memblock_type *type, u64 addr)
 	return NULL;
 }
 
+/**
+ * @brief Find a free range without reserving it.
+ *
+ * Allocation starts from the low or high end according to
+ * @c memblock.bottom_up.
+ *
+ * @param[in] start Lower bound of the candidate range.
+ * @param[in] end Upper bound, or @ref MEMBLOCK_ALLOC_ACCESSIBLE.
+ * @param[in] size Size of the free range to find.
+ * @param[in] align Alignment of the returned address.
+ *
+ * @return Physical address on success, 0 on failure.
+ */
 u64 memblock_find_in_range(u64 start, u64 end, u64 size, u64 align)
 {
 	u64 idx;
@@ -745,6 +860,18 @@ void memblock_set_bottom_up(bool bottom_up)
 	memblock.bottom_up = bottom_up;
 }
 
+/**
+ * @brief Decide whether an iterator should skip a region.
+ *
+ * NOMAP memory is not usable for ordinary direct-mapped allocations.  It is
+ * skipped unless the caller explicitly asks for it with @ref MEMBLOCK_NOMAP.
+ *
+ * @param[in] type Type being iterated.
+ * @param[in] rgn Region being considered.
+ * @param[in] flags Flags explicitly requested by the caller.
+ *
+ * @return true if the region should be skipped.
+ */
 static bool memblock_should_skip_region(const struct memblock_type *type,
 					const struct memblock_region *rgn,
 					enum memblock_flags flags)
@@ -940,6 +1067,15 @@ void __next_mem_pfn_range(u64 *pidx, u64 *pstart, u64 *pend)
 		*pidx = UINT64_MAX;
 }
 
+/**
+ * @brief Free a physical range to the buddy allocator.
+ *
+ * Called only after @ref memblock_free_all(), so the range is no longer tracked
+ * by memblock.  The range is aligned inward to page boundaries.
+ *
+ * @param[in] start Start of the range.
+ * @param[in] end End of the range.
+ */
 static void memblock_free_to_buddy(u64 start, u64 end)
 {
 	unsigned int order;
@@ -979,6 +1115,13 @@ static void memblock_free_to_buddy(u64 start, u64 end)
 	}
 }
 
+/**
+ * @brief Release all free memory to the buddy allocator.
+ *
+ * Reserved ranges stay reserved, memblock allocation is disabled, and
+ * automatic array resizing is turned off.  This is the point where memblock
+ * hands over to the buddy allocator.
+ */
 void memblock_free_all(void)
 {
 	u64 idx;
