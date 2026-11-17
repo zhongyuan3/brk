@@ -110,6 +110,76 @@ static void __setup_vm_early(unsigned long dtb_pa)
 	map_early(map_start, map_start, size, flags);
 }
 
+static void map_early_phys_range(u64 start, u64 end)
+{
+	unsigned long vstart = align_up((unsigned long)start, PAGE_SIZE);
+	unsigned long vend = align_down((unsigned long)end, PAGE_SIZE);
+	unsigned long size;
+
+	if (vstart >= vend)
+		return;
+
+	size = vend - vstart;
+	map_early(vstart, vstart, size, PTE_R | PTE_W);
+}
+
+static void map_early_free_range(u64 start, u64 end)
+{
+	struct early_span {
+		u64 start;
+		u64 end;
+	} spans[2] = {
+		{ _SKERNEL_PHYS, align_up(_EKERNEL_PHYS, PAGE_SIZE_2M) },
+		{ align_down(boot_info.dtb_pa, PAGE_SIZE_2M),
+		  align_up(boot_info.dtb_pa + of_get_fdt_size(boot_info.dtb_pa),
+			   PAGE_SIZE_2M) },
+	};
+	struct early_span tmp;
+
+	if (spans[0].start > spans[1].start) {
+		tmp = spans[0];
+		spans[0] = spans[1];
+		spans[1] = tmp;
+	}
+
+	for (size_t i = 0; i < 2; ++i) {
+		if (end <= spans[i].start)
+			break;
+
+		if (start < spans[i].start)
+			map_early_phys_range(start, min(end, spans[i].start));
+
+		if (end <= spans[i].end)
+			return;
+
+		if (start < spans[i].end)
+			start = spans[i].end;
+	}
+
+	if (start < end)
+		map_early_phys_range(start, end);
+}
+
+static void map_free_memory_early(void)
+{
+	u64 idx;
+	u64 start, end;
+
+	for_each_free_mem_range(idx, start, end)
+	{
+		/*
+		 * The final page table is built with memblock allocations.
+		 * Until it is loaded, any allocated frame must be addressable
+		 * through the early page table.  Identity-map every free
+		 * physical range so those frames are always accessible.
+		 *
+		 * Skip ranges already covered by the early kernel/DTB
+		 * mappings, otherwise map_pages() would see valid entries.
+		 */
+		map_early_free_range(start, end);
+	}
+}
+
 void setup_vm_early(unsigned long dtb_pa, bool boot)
 {
 	if (boot) {
@@ -425,6 +495,7 @@ int paging_init(void)
 	if (err != 0)
 		return err;
 
+	map_free_memory_early();
 	final_pgtable_init();
 	load_final_page_table();
 	of_set_fdt(phys_to_virt(boot_info.dtb_pa));
