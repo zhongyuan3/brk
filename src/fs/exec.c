@@ -121,9 +121,9 @@ static int exec_accum_strings(char **arr, size_t *total_size,
 	return 0;
 }
 
-static u64 random_ustack(void)
+static user_addr_t random_ustack(void)
 {
-	uintptr_t ustack_top = USER_SPACE_SIZE_MAX;
+	user_addr_t ustack_top = USER_SPACE_SIZE_MAX;
 
 	rand_seed(ktime_get_mono_ns());
 	ustack_top -= (rand_u32() % 32 + 1) * PAGE_SIZE;
@@ -131,7 +131,8 @@ static u64 random_ustack(void)
 	return ustack_top;
 }
 
-static uintptr_t stack_push_ptr_slots(uintptr_t *ksp, uintptr_t *sp, int nptr)
+static user_addr_t stack_push_ptr_slots(virt_addr_t *ksp, user_addr_t *sp,
+					int nptr)
 {
 	size_t n = (size_t)(nptr + 1) * sizeof(char *);
 
@@ -142,8 +143,8 @@ static uintptr_t stack_push_ptr_slots(uintptr_t *ksp, uintptr_t *sp, int nptr)
 	return *sp;
 }
 
-static void copy_exec_strings(char **src, int n, uintptr_t *k_pos,
-			      uintptr_t *u_pos, char **dst_ptr_array)
+static void copy_exec_strings(char **src, int n, virt_addr_t *k_pos,
+			      user_addr_t *u_pos, char **dst_ptr_array)
 {
 	for (int i = 0; i < n; ++i) {
 		size_t l = strlen(src[i]) + 1;
@@ -155,21 +156,21 @@ static void copy_exec_strings(char **src, int n, uintptr_t *k_pos,
 	}
 }
 
-static void push_args(struct exec_args *args, uintptr_t *psp,
-		      uintptr_t stack_virt, struct thread *task)
+static void push_args(struct exec_args *args, user_addr_t *psp,
+		      virt_addr_t stack_virt, struct thread *task)
 {
-	uintptr_t sp = *psp;
-	uintptr_t ksp = stack_virt + USTACK_SIZE;
+	user_addr_t sp = *psp;
+	virt_addr_t ksp = stack_virt + USTACK_SIZE;
 
 	ksp -= args->envp_size;
 	sp -= args->envp_size;
-	uintptr_t envp_strs_kstart = ksp;
-	uintptr_t envp_strs_ustart = sp;
+	virt_addr_t envp_strs_kstart = ksp;
+	user_addr_t envp_strs_ustart = sp;
 
 	ksp -= args->argv_size;
 	sp -= args->argv_size;
-	uintptr_t argv_strs_kstart = ksp;
-	uintptr_t argv_strs_ustart = sp;
+	virt_addr_t argv_strs_kstart = ksp;
+	user_addr_t argv_strs_ustart = sp;
 
 	trap_frame_set_arg(task->frame, 2,
 			   stack_push_ptr_slots(&ksp, &sp, args->envc));
@@ -217,10 +218,10 @@ static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 	size_t npgs = vma->size >> PAGE_SHIFT;
 	struct page **pgs = kcalloc(npgs, sizeof(struct page *));
 	size_t i = 0;
-	u64 addr = vma->addr;
+	user_addr_t addr = vma->addr;
 	unsigned int flags = vma->flags;
-	u64 seg_vstart = ph->p_vaddr;
-	u64 seg_fend = ph->p_vaddr + ph->p_filesz;
+	user_addr_t seg_vstart = ph->p_vaddr;
+	user_addr_t seg_fend = ph->p_vaddr + ph->p_filesz;
 
 	if (!pgs)
 		return -ENOMEM;
@@ -232,12 +233,13 @@ static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 			err = -ENOMEM;
 			goto failed;
 		}
-		u64 pa = page_to_phys(pg);
-		void *va = (void *)phys_to_virt(pa);
-		u64 page_lo = addr;
-		u64 page_hi = addr + PAGE_SIZE;
-		u64 file_lo = page_lo > seg_vstart ? page_lo : seg_vstart;
-		u64 file_hi = page_hi < seg_fend ? page_hi : seg_fend;
+		phys_addr_t pa = page_to_phys(pg);
+		void *va = (void *)(uintptr_t)phys_to_virt(pa);
+		user_addr_t page_lo = addr;
+		user_addr_t page_hi = addr + PAGE_SIZE;
+		user_addr_t file_lo = page_lo > seg_vstart ? page_lo :
+							     seg_vstart;
+		user_addr_t file_hi = page_hi < seg_fend ? page_hi : seg_fend;
 
 		memset(va, 0, PAGE_SIZE);
 		if (file_lo < file_hi) {
@@ -268,7 +270,7 @@ static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 	return 0;
 
 failed:
-	for (u64 a = vma->addr; a < addr; a += PAGE_SIZE)
+	for (user_addr_t a = vma->addr; a < addr; a += PAGE_SIZE)
 		unmap_user_pages(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = 0; j < i; ++j) {
 		assert(pgs[j]);
@@ -280,7 +282,7 @@ failed:
 
 static int load_seg(struct uvm_space *mm, struct elf_phdr *ph, struct file *fp)
 {
-	u64 start, end;
+	user_addr_t start, end;
 	struct uvm_region *vma;
 	int err;
 
@@ -306,13 +308,13 @@ static int load_seg(struct uvm_space *mm, struct elf_phdr *ph, struct file *fp)
 	return 0;
 }
 
-static u64 find_brk(struct uvm_space *mm)
+static user_addr_t find_brk(struct uvm_space *mm)
 {
 	struct uvm_region *vma = NULL;
-	u64 brk = 0;
+	user_addr_t brk = 0;
 
 	list_for_each_entry(vma, &mm->seg, list) {
-		u64 end = vma->addr + vma->size;
+		user_addr_t end = vma->addr + vma->size;
 
 		if (end >= brk)
 			brk = end;
@@ -324,8 +326,8 @@ static int map_stack(struct uvm_space *mm)
 {
 	struct page *pg = page_alloc(USTACK_PAGE_ORDER);
 	struct page **pgs;
-	u64 pa;
-	u64 base;
+	phys_addr_t pa;
+	user_addr_t base;
 	int err;
 
 	if (!pg)
@@ -424,10 +426,10 @@ static int __do_execve(const char *path, struct exec_args *args)
 		goto err;
 
 	{
-		uintptr_t sp = new_mm->stack->addr + new_mm->stack->size;
+		user_addr_t sp = new_mm->stack->addr + new_mm->stack->size;
 		struct page *stack_pg = new_mm->stack->pages[0];
-		u64 stack_phys = page_to_phys(stack_pg);
-		uintptr_t stack_virt = phys_to_virt(stack_phys);
+		phys_addr_t stack_phys = page_to_phys(stack_pg);
+		virt_addr_t stack_virt = phys_to_virt(stack_phys);
 
 		push_args(args, &sp, stack_virt, task);
 		strlcpy(process->name, args->argv[0], sizeof(process->name));

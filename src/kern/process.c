@@ -81,7 +81,7 @@ void thread_cache_init(void)
 		  "thread_cache");
 }
 
-static u64 kstack_alloc(void)
+static virt_addr_t kstack_alloc(void)
 {
 	struct page *pg = page_alloc(KSTACK_PAGE_ORDER);
 	if (!pg)
@@ -89,7 +89,7 @@ static u64 kstack_alloc(void)
 	return page_to_virt(pg);
 }
 
-static void kstack_free(u64 stack)
+static void kstack_free(virt_addr_t stack)
 {
 	struct page *pg = virt_to_page((uintptr_t)stack);
 	assert(pg);
@@ -260,8 +260,9 @@ struct thread *thread_create(struct process *process, void (*fn)(void *),
 	return thread;
 }
 
-struct thread *thread_create_user(struct process *process, u64 stack, u64 entry,
-				  u64 arg, u64 tls, int *clear_tid)
+struct thread *thread_create_user(struct process *process, user_addr_t stack,
+				  user_addr_t entry, user_addr_t arg,
+				  user_addr_t tls, int *clear_tid)
 {
 	struct thread *thread;
 	struct thread *current = current_thread();

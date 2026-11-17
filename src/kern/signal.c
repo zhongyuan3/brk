@@ -45,7 +45,7 @@ static bool sig_default_terminate(int sig)
 	}
 }
 
-static bool user_access_ok(u64 addr, size_t len)
+static bool user_access_ok(user_addr_t addr, size_t len)
 {
 	return addr + len <= USER_SPACE_SIZE_MAX;
 }
@@ -367,7 +367,7 @@ static bool setup_signal_frame_locked(struct thread *thread, int sig,
 				      u64 handler)
 {
 	struct process *process = thread->process;
-	u64 sp;
+	user_addr_t sp;
 	struct user_sigframe *frame;
 
 	sp = trap_frame_get_sp(thread->frame);

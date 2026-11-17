@@ -183,7 +183,7 @@ void uvm_region_unmap_range(struct uvm_space *mm, struct uvm_region *region,
 
 	for (size_t i = 0; i < nr; i++) {
 		size_t idx = start + i;
-		u64 addr = region->addr + idx * PAGE_SIZE;
+		user_addr_t addr = region->addr + idx * PAGE_SIZE;
 
 		if (uvm_page_is_mapped(mm, addr))
 			unmap_user_pages(mm->pgd, addr, PAGE_SIZE);
@@ -196,7 +196,7 @@ static int uvm_space_copy_region(struct uvm_region *dst, struct uvm_region *src,
 {
 	size_t npgs = src->nr_pages;
 	size_t i = 0;
-	u64 addr = src->addr;
+	user_addr_t addr = src->addr;
 	size_t size = src->size;
 	int err = 0;
 
@@ -283,7 +283,7 @@ failed_shared:
 	for (i = 0; i < npgs; i++) {
 		struct page *src_pg = src->pages[i];
 		unsigned int flags;
-		u64 page_addr = src->addr + i * PAGE_SIZE;
+		user_addr_t page_addr = src->addr + i * PAGE_SIZE;
 
 		if (!src_pg)
 			continue;
@@ -350,7 +350,7 @@ failed_shared:
 
 failed:
 	for (size_t j = 0; j <= i && j < npgs; ++j) {
-		u64 page_addr = src->addr + j * PAGE_SIZE;
+		user_addr_t page_addr = src->addr + j * PAGE_SIZE;
 
 		if (!pgs[j])
 			continue;
@@ -416,7 +416,7 @@ static int uvm_space_copy_stack(struct uvm_space *dst, struct uvm_space *src)
 		return -ENOMEM;
 	}
 
-	u64 pa = page_to_phys(pg);
+	phys_addr_t pa = page_to_phys(pg);
 	unsigned int flags;
 	int err = uvm_pte_flags(src, src->stack->addr, &flags);
 

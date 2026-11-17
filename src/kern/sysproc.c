@@ -109,7 +109,8 @@ u64 sys_thread_create(void)
 	struct thread *thread;
 	void *uargs = syscall_arg_ptr(0);
 
-	if (!uargs || !user_range_ok((u64)(uintptr_t)uargs, sizeof(args)))
+	if (!uargs ||
+	    !user_range_ok((user_addr_t)(uintptr_t)uargs, sizeof(args)))
 		return -EFAULT;
 	if (copy_from_user(&args, uargs, sizeof(args)))
 		return -EFAULT;

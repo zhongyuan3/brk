@@ -43,7 +43,7 @@ struct page {
 
 struct uvm_region {
 	struct list_head list;
-	u64 addr;
+	user_addr_t addr;
 	size_t size;
 	/* Demand-paged anonymous pages; entries are NULL until faulted. */
 	struct page **pages;
@@ -63,9 +63,9 @@ struct uvm_space {
 	struct list_head seg;
 	struct uvm_region *stack;
 	struct uvm_region *heap;
-	u64 brk;
+	user_addr_t brk;
 	/* Top-down mmap allocation cursor, below the user stack. */
-	u64 mmap_top;
+	user_addr_t mmap_top;
 	/* Serializes all address-space mutations across threads. */
 	sleeplock_t lock;
 };
