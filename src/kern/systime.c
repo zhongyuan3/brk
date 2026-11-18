@@ -72,7 +72,7 @@ u64 sys_clock_settime(void)
 	if (copy_from_user(&ts, ut, sizeof(ts)))
 		return -EFAULT;
 	if (ts.tv_sec < 0 || ts.tv_nsec < 0 ||
-	    ts.tv_nsec >= (__kernel_long_t)NS_PER_SEC)
+	    ts.tv_nsec >= (__brk_long_t)NS_PER_SEC)
 		return -EINVAL;
 
 	ktime_t t = ktime_from_timespec(&ts);
@@ -99,7 +99,7 @@ u64 sys_clock_nanosleep(void)
 	if (copy_from_user(&req, ureq, sizeof(req)))
 		return -EFAULT;
 	if (req.tv_sec < 0 || req.tv_nsec < 0 ||
-	    req.tv_nsec >= (__kernel_long_t)NS_PER_SEC)
+	    req.tv_nsec >= (__brk_long_t)NS_PER_SEC)
 		return -EINVAL;
 
 	target = ktime_from_timespec(&req);

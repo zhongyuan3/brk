@@ -18,8 +18,8 @@
  * into POSIX struct posix_dent / struct dirent.
  */
 struct brk_dirent {
-	__kernel_ino_t d_ino;
-	__u32 d_reclen;
+	__brk_ino_t d_ino;
+	__brk_u32 d_reclen;
 	unsigned char d_type;
 	char d_name[];
 };

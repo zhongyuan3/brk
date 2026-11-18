@@ -63,9 +63,9 @@ static int futex_timeout_deadline(const struct timespec *utimeout,
 	if (copy_from_user(&ts, utimeout, sizeof(ts)))
 		return -EFAULT;
 	if (ts.tv_sec < 0 || ts.tv_nsec < 0 ||
-	    ts.tv_nsec >= (__kernel_long_t)NS_PER_SEC)
+	    ts.tv_nsec >= (__brk_long_t)NS_PER_SEC)
 		return -EINVAL;
-	if (ts.tv_sec > (__kernel_time_t)(0x7fffffffffffffffLL / NS_PER_SEC))
+	if (ts.tv_sec > (__brk_time_t)(0x7fffffffffffffffLL / NS_PER_SEC))
 		return -EINVAL;
 
 	target = ktime_from_timespec(&ts);

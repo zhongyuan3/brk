@@ -19,8 +19,8 @@ static inline ktime_t ktime_from_timespec(const struct timespec *ts)
 
 static inline void ktime_to_timespec(ktime_t t, struct timespec *ts)
 {
-	ts->tv_sec = (__kernel_time_t)(t / (ktime_t)NS_PER_SEC);
-	ts->tv_nsec = (__kernel_long_t)(t % (ktime_t)NS_PER_SEC);
+	ts->tv_sec = (__brk_time_t)(t / (ktime_t)NS_PER_SEC);
+	ts->tv_nsec = (__brk_long_t)(t % (ktime_t)NS_PER_SEC);
 }
 
 static inline ktime_t ktime_from_timeval(const struct timeval *tv)
@@ -31,12 +31,12 @@ static inline ktime_t ktime_from_timeval(const struct timeval *tv)
 
 static inline void ktime_to_timeval(ktime_t t, struct timeval *tv)
 {
-	tv->tv_sec = (__kernel_time_t)(t / (ktime_t)NS_PER_SEC);
-	tv->tv_usec = (__kernel_suseconds_t)((t % (ktime_t)NS_PER_SEC) /
-					     (ktime_t)NS_PER_US);
+	tv->tv_sec = (__brk_time_t)(t / (ktime_t)NS_PER_SEC);
+	tv->tv_usec = (__brk_suseconds_t)((t % (ktime_t)NS_PER_SEC) /
+					  (ktime_t)NS_PER_US);
 }
 
-static inline __s64 ktime_to_sec(ktime_t t)
+static inline __brk_s64 ktime_to_sec(ktime_t t)
 {
 	return t / (ktime_t)NS_PER_SEC;
 }
@@ -46,7 +46,7 @@ static inline long ktime_to_nsec(ktime_t t)
 	return (long)(t % (ktime_t)NS_PER_SEC);
 }
 
-static inline ktime_t ktime_from_sec_nsec(__s64 sec, long nsec)
+static inline ktime_t ktime_from_sec_nsec(__brk_s64 sec, long nsec)
 {
 	return (ktime_t)sec * (ktime_t)NS_PER_SEC + (ktime_t)nsec;
 }

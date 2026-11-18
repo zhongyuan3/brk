@@ -5,9 +5,9 @@
 
 #define NCCS 32
 
-typedef __u8 cc_t;
-typedef __u32 speed_t;
-typedef __u32 tcflag_t;
+typedef __brk_u8 cc_t;
+typedef __brk_u32 speed_t;
+typedef __brk_u32 tcflag_t;
 
 struct termios {
 	tcflag_t c_iflag;

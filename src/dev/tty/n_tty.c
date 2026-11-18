@@ -599,9 +599,9 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 				err = -EINTR;
 				goto out;
 			}
-			(void)ktime_nanosleep(
-				(ktime_t)N_TTY_TX_BUSY_PAUSE_MS * NS_PER_MS,
-				NULL);
+			(void)ktime_nanosleep((ktime_t)N_TTY_TX_BUSY_PAUSE_MS *
+						      NS_PER_MS,
+					      NULL);
 			continue;
 		}
 

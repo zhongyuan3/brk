@@ -4,10 +4,10 @@
 #include <uapi/types.h>
 
 struct winsize {
-	__u16 ws_row;
-	__u16 ws_col;
-	__u16 ws_xpixel;
-	__u16 ws_ypixel;
+	__brk_u16 ws_row;
+	__brk_u16 ws_col;
+	__brk_u16 ws_xpixel;
+	__brk_u16 ws_ypixel;
 };
 
 #define TIOCGWINSZ 0x5413u

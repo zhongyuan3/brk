@@ -8,16 +8,16 @@
  * getresuid/getppid family from this structure.
  */
 struct brk_proc {
-	__kernel_pid_t pid;
-	__kernel_pid_t ppid;
-	__kernel_pid_t pgid;
-	__kernel_pid_t sid;
-	__kernel_uid_t uid;
-	__kernel_uid_t euid;
-	__kernel_uid_t suid;
-	__kernel_gid_t gid;
-	__kernel_gid_t egid;
-	__kernel_gid_t sgid;
+	__brk_pid_t pid;
+	__brk_pid_t ppid;
+	__brk_pid_t pgid;
+	__brk_pid_t sid;
+	__brk_uid_t uid;
+	__brk_uid_t euid;
+	__brk_uid_t suid;
+	__brk_gid_t gid;
+	__brk_gid_t egid;
+	__brk_gid_t sgid;
 };
 
 /*
@@ -26,12 +26,12 @@ struct brk_proc {
  * creator's tp.  @clear_tid, when non-NULL, is cleared to zero on exit.
  */
 struct brk_thread_create_args {
-	__kernel_ulong_t stack;
-	__kernel_ulong_t entry;
-	__kernel_ulong_t arg;
-	__kernel_ulong_t tls;
-	__kernel_ulong_t clear_tid;
-	__kernel_ulong_t flags; /* reserved, must be zero */
+	__brk_ulong_t stack;
+	__brk_ulong_t entry;
+	__brk_ulong_t arg;
+	__brk_ulong_t tls;
+	__brk_ulong_t clear_tid;
+	__brk_ulong_t flags; /* reserved, must be zero */
 };
 
 #endif

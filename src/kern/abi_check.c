@@ -21,26 +21,28 @@
 
 _Static_assert(sizeof(ktime_t) == 8, "ktime_t is not 64-bit");
 
-_Static_assert(__builtin_types_compatible_p(s8, __s8), "s8 and __s8 differ");
-_Static_assert(__builtin_types_compatible_p(s16, __s16),
-	       "s16 and __s16 differ");
-_Static_assert(__builtin_types_compatible_p(s32, __s32),
-	       "s32 and __s32 differ");
-_Static_assert(__builtin_types_compatible_p(s64, __s64),
-	       "s64 and __s64 differ");
-_Static_assert(__builtin_types_compatible_p(u8, __u8), "u8 and __u8 differ");
-_Static_assert(__builtin_types_compatible_p(u16, __u16),
-	       "u16 and __u16 differ");
-_Static_assert(__builtin_types_compatible_p(u32, __u32),
-	       "u32 and __u32 differ");
-_Static_assert(__builtin_types_compatible_p(u64, __u64),
-	       "u64 and __u64 differ");
-_Static_assert(__builtin_types_compatible_p(size_t, __kernel_size_t),
-	       "size_t and __kernel_size_t differ");
-_Static_assert(__builtin_types_compatible_p(ptrdiff_t, __kernel_ssize_t),
-	       "ptrdiff_t and __kernel_ssize_t differ");
-_Static_assert(__builtin_types_compatible_p(uintptr_t, __kernel_ulong_t),
-	       "uintptr_t and __kernel_ulong_t differ");
+_Static_assert(__builtin_types_compatible_p(s8, __brk_s8),
+	       "s8 and __brk_s8 differ");
+_Static_assert(__builtin_types_compatible_p(s16, __brk_s16),
+	       "s16 and __brk_s16 differ");
+_Static_assert(__builtin_types_compatible_p(s32, __brk_s32),
+	       "s32 and __brk_s32 differ");
+_Static_assert(__builtin_types_compatible_p(s64, __brk_s64),
+	       "s64 and __brk_s64 differ");
+_Static_assert(__builtin_types_compatible_p(u8, __brk_u8),
+	       "u8 and __brk_u8 differ");
+_Static_assert(__builtin_types_compatible_p(u16, __brk_u16),
+	       "u16 and __brk_u16 differ");
+_Static_assert(__builtin_types_compatible_p(u32, __brk_u32),
+	       "u32 and __brk_u32 differ");
+_Static_assert(__builtin_types_compatible_p(u64, __brk_u64),
+	       "u64 and __brk_u64 differ");
+_Static_assert(__builtin_types_compatible_p(size_t, __brk_size_t),
+	       "size_t and __brk_size_t differ");
+_Static_assert(__builtin_types_compatible_p(ptrdiff_t, __brk_ssize_t),
+	       "ptrdiff_t and __brk_ssize_t differ");
+_Static_assert(__builtin_types_compatible_p(uintptr_t, __brk_ulong_t),
+	       "uintptr_t and __brk_ulong_t differ");
 
 _Static_assert(sizeof(struct stat) == 128, "struct stat ABI changed");
 _Static_assert(offsetof(struct stat, st_ino) == 8, "struct stat ABI changed");

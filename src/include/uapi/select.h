@@ -5,7 +5,7 @@
 
 #define FD_SETSIZE 1024
 
-typedef __u64 fd_mask;
+typedef __brk_u64 fd_mask;
 
 #define FD_NFDBITS (8 * sizeof(fd_mask))
 

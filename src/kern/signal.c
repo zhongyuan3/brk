@@ -638,7 +638,7 @@ u64 sys_sigtimedwait(void)
 		if (copy_from_user(&req, utimeout, sizeof(req)))
 			return -EFAULT;
 		if (req.tv_sec < 0 || req.tv_nsec < 0 ||
-		    req.tv_nsec >= (__kernel_long_t)NS_PER_SEC)
+		    req.tv_nsec >= (__brk_long_t)NS_PER_SEC)
 			return -EINVAL;
 		deadline = (s64)ktime_get_mono_ns() + ktime_from_timespec(&req);
 		timed = true;

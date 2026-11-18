@@ -63,14 +63,14 @@ struct ifconf {
 
 struct ifstats {
 	char ifs_name[IFNAMSIZ];
-	__u64 rx_packets;
-	__u64 tx_packets;
-	__u64 rx_bytes;
-	__u64 tx_bytes;
-	__u64 rx_errors;
-	__u64 tx_errors;
-	__u64 rx_dropped;
-	__u64 tx_dropped;
+	__brk_u64 rx_packets;
+	__brk_u64 tx_packets;
+	__brk_u64 rx_bytes;
+	__brk_u64 tx_bytes;
+	__brk_u64 rx_errors;
+	__brk_u64 tx_errors;
+	__brk_u64 rx_dropped;
+	__brk_u64 tx_dropped;
 };
 
 struct rtentry {

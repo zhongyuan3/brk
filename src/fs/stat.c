@@ -5,9 +5,9 @@ void kstat_to_statx(const struct kstat *ks, struct statx *stx)
 {
 	memset(stx, 0, sizeof(*stx));
 
-	stx->stx_dev = (__u64)ks->dev;
+	stx->stx_dev = (__brk_u64)ks->dev;
 	stx->stx_ino = ks->ino;
-	stx->stx_rdev = (__u64)ks->rdev;
+	stx->stx_rdev = (__brk_u64)ks->rdev;
 	stx->stx_size = ks->size;
 	stx->stx_blocks = ks->blocks;
 	stx->stx_atime_ns = ks->atime;
@@ -17,7 +17,7 @@ void kstat_to_statx(const struct kstat *ks, struct statx *stx)
 	stx->stx_nlink = ks->nlink;
 	stx->stx_uid = ks->uid;
 	stx->stx_gid = ks->gid;
-	stx->stx_blksize = (__s32)ks->blksize;
+	stx->stx_blksize = (__brk_s32)ks->blksize;
 }
 
 void kstatfs_to_statfs(const struct kstatfs *ks, struct brk_statfs *st)

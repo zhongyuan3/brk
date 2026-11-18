@@ -6,14 +6,14 @@
 #define _LINUX_CAPABILITY_VERSION_3 0x20080522
 
 struct cap_header {
-	__u32 version;
-	__s32 pid;
+	__brk_u32 version;
+	__brk_s32 pid;
 };
 
 struct cap_data {
-	__u32 effective;
-	__u32 permitted;
-	__u32 inheritable;
+	__brk_u32 effective;
+	__brk_u32 permitted;
+	__brk_u32 inheritable;
 };
 
 #define CAP_CHOWN 0

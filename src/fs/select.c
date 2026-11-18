@@ -103,7 +103,7 @@ static int timespec_to_ms(const struct timespec *ts, int *ms)
 	u64 v;
 
 	if (ts->tv_sec < 0 || ts->tv_nsec < 0 ||
-	    ts->tv_nsec >= (__kernel_long_t)NS_PER_SEC)
+	    ts->tv_nsec >= (__brk_long_t)NS_PER_SEC)
 		return -EINVAL;
 
 	v = (u64)ts->tv_sec * MS_PER_SEC;

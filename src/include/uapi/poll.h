@@ -3,12 +3,12 @@
 
 #include <uapi/types.h>
 
-typedef __kernel_ulong_t nfds_t;
+typedef __brk_ulong_t nfds_t;
 
 struct pollfd {
-	__s32 fd;
-	__s16 events;
-	__s16 revents;
+	__brk_s32 fd;
+	__brk_s16 events;
+	__brk_s16 revents;
 };
 
 #define POLLIN 0x0001

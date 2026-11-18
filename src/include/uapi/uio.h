@@ -7,7 +7,7 @@
 
 struct iovec {
 	void *iov_base;
-	__kernel_size_t iov_len;
+	__brk_size_t iov_len;
 };
 
 #endif

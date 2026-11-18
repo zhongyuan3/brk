@@ -41,12 +41,12 @@
 #define SA_RESTART 0x10000000
 #define SA_NODEFER 0x40000000
 
-typedef __kernel_ulong_t sigset_t;
+typedef __brk_ulong_t sigset_t;
 
 struct sigaction {
 	void (*sa_handler)(int);
 	sigset_t sa_mask;
-	__kernel_ulong_t sa_flags;
+	__brk_ulong_t sa_flags;
 };
 
 /* waitid() id types. */
@@ -83,8 +83,8 @@ typedef struct {
 	int si_errno;
 	int si_code;
 	int __pad0;
-	__kernel_pid_t si_pid;
-	__kernel_uid_t si_uid;
+	__brk_pid_t si_pid;
+	__brk_uid_t si_uid;
 	int si_status;
 	int __pad1;
 	sigval_t si_value;

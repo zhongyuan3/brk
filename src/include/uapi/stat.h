@@ -43,26 +43,26 @@
 #define UTIME_OMIT ((1l << 30) - 2l)
 
 struct stat {
-	__u64 st_dev; /* Device.  */
-	__u64 st_ino; /* File serial number.  */
-	__u32 st_mode; /* File mode.  */
-	__u32 st_nlink; /* Link count.  */
-	__u32 st_uid; /* User ID of the file's owner.  */
-	__u32 st_gid; /* Group ID of the file's group. */
-	__u64 st_rdev; /* Device number, if device.  */
-	__u64 __pad1;
-	__s64 st_size; /* Size of file, in bytes.  */
-	__s32 st_blksize; /* Optimal block size for I/O.  */
-	__s32 __pad2;
-	__s64 st_blocks; /* Number 512-byte blocks allocated. */
-	__s64 st_atime; /* Time of last access.  */
-	__u64 st_atime_nsec;
-	__s64 st_mtime; /* Time of last modification.  */
-	__u64 st_mtime_nsec;
-	__s64 st_ctime; /* Time of last status change.  */
-	__u64 st_ctime_nsec;
-	__u32 __unused4;
-	__u32 __unused5;
+	__brk_u64 st_dev; /* Device.  */
+	__brk_u64 st_ino; /* File serial number.  */
+	__brk_u32 st_mode; /* File mode.  */
+	__brk_u32 st_nlink; /* Link count.  */
+	__brk_u32 st_uid; /* User ID of the file's owner.  */
+	__brk_u32 st_gid; /* Group ID of the file's group. */
+	__brk_u64 st_rdev; /* Device number, if device.  */
+	__brk_u64 __pad1;
+	__brk_s64 st_size; /* Size of file, in bytes.  */
+	__brk_s32 st_blksize; /* Optimal block size for I/O.  */
+	__brk_s32 __pad2;
+	__brk_s64 st_blocks; /* Number 512-byte blocks allocated. */
+	__brk_s64 st_atime; /* Time of last access.  */
+	__brk_u64 st_atime_nsec;
+	__brk_s64 st_mtime; /* Time of last modification.  */
+	__brk_u64 st_mtime_nsec;
+	__brk_s64 st_ctime; /* Time of last status change.  */
+	__brk_u64 st_ctime_nsec;
+	__brk_u32 __unused4;
+	__brk_u32 __unused5;
 };
 
 /*
@@ -71,20 +71,20 @@ struct stat {
  * Timestamps are nanoseconds since the realtime epoch.
  */
 struct statx {
-	__u64 stx_dev;
-	__u64 stx_ino;
-	__u64 stx_rdev;
-	__s64 stx_size;
-	__s64 stx_blocks;
-	__s64 stx_atime_ns;
-	__s64 stx_mtime_ns;
-	__s64 stx_ctime_ns;
-	__u32 stx_mode;
-	__u32 stx_nlink;
-	__u32 stx_uid;
-	__u32 stx_gid;
-	__s32 stx_blksize;
-	__u32 __spare;
+	__brk_u64 stx_dev;
+	__brk_u64 stx_ino;
+	__brk_u64 stx_rdev;
+	__brk_s64 stx_size;
+	__brk_s64 stx_blocks;
+	__brk_s64 stx_atime_ns;
+	__brk_s64 stx_mtime_ns;
+	__brk_s64 stx_ctime_ns;
+	__brk_u32 stx_mode;
+	__brk_u32 stx_nlink;
+	__brk_u32 stx_uid;
+	__brk_u32 stx_gid;
+	__brk_s32 stx_blksize;
+	__brk_u32 __spare;
 };
 
 #endif
