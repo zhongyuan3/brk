@@ -12,6 +12,11 @@
 
 #define VTIME_UNIT_NS 100000000ULL /* 0.1 second */
 
+/* Driver put_char reported -EBUSY: pause briefly and retry.  A blocking
+ * tty write waits for the transmitter like a terminal draining under
+ * flow control; signals abort the write with the bytes already sent. */
+#define N_TTY_TX_BUSY_PAUSE_MS 1
+
 void tty_termios_defaults(struct termios *t)
 {
 	memset(t, 0, sizeof(*t));
@@ -583,6 +588,23 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 		spin_unlock_irqrestore(&port->lock, flags);
 
 		total += i;
+
+		/*
+		 * The driver reports a temporarily busy transmitter.  Wait
+		 * with interrupts enabled and replay the bytes that were
+		 * not sent (total was only advanced past the sent ones).
+		 */
+		if (err == -EBUSY) {
+			if (thread_abort_pending(task)) {
+				err = -EINTR;
+				goto out;
+			}
+			(void)ktime_nanosleep(
+				(ktime_t)N_TTY_TX_BUSY_PAUSE_MS * NS_PER_MS,
+				NULL);
+			continue;
+		}
+
 		if (err)
 			break;
 	}

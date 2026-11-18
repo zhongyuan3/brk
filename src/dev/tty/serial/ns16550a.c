@@ -39,6 +39,14 @@
 #define MSR 6 /* Modem Status Register */
 #define SPR 7 /* ScratchPad Register */
 
+/*
+ * Poll bound for the transmitter to drain.  A character takes roughly
+ * 260us at 38.4Kbaud, so a few thousand LSR polls cover it with margin.
+ * Longer stalls (e.g. a slow terminal backend) are not spun on here:
+ * n_tty retries put_char with sleeps so that interrupts stay live.
+ */
+#define NS16550A_TX_POLLS 2000
+
 struct ns16550a_device *ns16550a_device_alloc(void)
 {
 	struct ns16550a_device *dev = kzalloc(sizeof(*dev));
@@ -237,15 +245,32 @@ static struct platform_driver ns16550a_platform_driver = {
 	},
 };
 
+/* Caller must hold dev->lock. */
+static bool ns16550a_device_tx_ready(struct ns16550a_device *dev)
+{
+	for (int i = 0; i < NS16550A_TX_POLLS; i++) {
+		if (ns16550a_device_read_reg(dev, LSR) & LSR_TX_IDLE)
+			return true;
+	}
+
+	return false;
+}
+
 static int ns16550a_device_putc(struct ns16550a_device *dev, int c)
 {
-	int ret = 0;
+	int ret = -EBUSY;
 	irqstate_t flags = spin_lock_irqsave(&dev->lock);
 
-	if (ns16550a_device_read_reg(dev, LSR) & LSR_TX_IDLE)
+	/*
+	 * Wait for the transmitter instead of giving up: the callers have
+	 * no way to replay a silently lost byte, and a lost byte corrupts
+	 * the output stream.
+	 */
+	if (ns16550a_device_tx_ready(dev)) {
 		ns16550a_device_write_reg(dev, THR, c);
-	else
-		ret = -EBUSY;
+		ret = 0;
+	}
+
 	spin_unlock_irqrestore(&dev->lock, flags);
 	return ret;
 }
@@ -258,12 +283,9 @@ static int ns16550a_device_putc_atomic(struct ns16550a_device *dev, int c)
 	if (!spin_trylock_irqsave(&dev->lock, &flags))
 		return -EBUSY;
 
-	for (int i = 0; i < 100000; i++) {
-		if (ns16550a_device_read_reg(dev, LSR) & LSR_TX_IDLE) {
-			ns16550a_device_write_reg(dev, THR, c);
-			ret = 0;
-			break;
-		}
+	if (ns16550a_device_tx_ready(dev)) {
+		ns16550a_device_write_reg(dev, THR, c);
+		ret = 0;
 	}
 
 	spin_unlock_irqrestore(&dev->lock, flags);
@@ -298,17 +320,26 @@ static struct console ns16550a_console = {
 static int ns16550a_tty_put_char(struct tty *tty, int c)
 {
 	struct ns16550a_device *dev = tty->port->client_data;
+
 	if (!dev)
 		return -EIO;
 
+	/*
+	 * Propagate failures so n_tty can turn them into a short write()
+	 * and the caller can retry the missing bytes.
+	 */
 	if (c == TTY_VIS_BACKSPACE) {
-		ns16550a_device_putc(dev, '\b');
-		ns16550a_device_putc(dev, ' ');
-		ns16550a_device_putc(dev, '\b');
-	} else {
-		ns16550a_device_putc(dev, c);
+		int err = ns16550a_device_putc(dev, '\b');
+
+		if (err)
+			return err;
+		err = ns16550a_device_putc(dev, ' ');
+		if (err)
+			return err;
+		return ns16550a_device_putc(dev, '\b');
 	}
-	return 0;
+
+	return ns16550a_device_putc(dev, c);
 }
 
 static const struct tty_ops ns16550a_ops = {
