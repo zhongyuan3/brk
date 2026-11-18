@@ -3,8 +3,6 @@
 
 #include <uapi/types.h>
 
-typedef __brk_ulong_t nfds_t;
-
 struct pollfd {
 	__brk_s32 fd;
 	__brk_s16 events;

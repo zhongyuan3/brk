@@ -41,11 +41,9 @@
 #define SA_RESTART 0x10000000
 #define SA_NODEFER 0x40000000
 
-typedef __brk_ulong_t sigset_t;
-
 struct sigaction {
 	void (*sa_handler)(int);
-	sigset_t sa_mask;
+	__brk_ulong_t sa_mask;
 	__brk_ulong_t sa_flags;
 };
 

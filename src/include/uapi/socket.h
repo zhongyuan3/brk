@@ -3,9 +3,6 @@
 
 #include <uapi/types.h>
 
-typedef __brk_u16 sa_family_t;
-typedef __brk_u32 socklen_t;
-
 #define AF_UNSPEC 0
 #define AF_INET 2
 
@@ -38,7 +35,7 @@ typedef __brk_u32 socklen_t;
 #define SHUT_RDWR 2
 
 struct sockaddr {
-	sa_family_t sa_family;
+	__brk_sa_family_t sa_family;
 	char sa_data[14];
 };
 
@@ -47,7 +44,7 @@ struct in_addr {
 };
 
 struct sockaddr_in {
-	sa_family_t sin_family;
+	__brk_sa_family_t sin_family;
 	__brk_u16 sin_port;
 	struct in_addr sin_addr;
 	__brk_u8 sin_zero[8];

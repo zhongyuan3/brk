@@ -5,19 +5,15 @@
 
 #define NCCS 32
 
-typedef __brk_u8 cc_t;
-typedef __brk_u32 speed_t;
-typedef __brk_u32 tcflag_t;
-
 struct termios {
-	tcflag_t c_iflag;
-	tcflag_t c_oflag;
-	tcflag_t c_cflag;
-	tcflag_t c_lflag;
-	cc_t c_line;
-	cc_t c_cc[NCCS];
-	speed_t c_ispeed;
-	speed_t c_ospeed;
+	__brk_u32 c_iflag;
+	__brk_u32 c_oflag;
+	__brk_u32 c_cflag;
+	__brk_u32 c_lflag;
+	__brk_u8 c_line;
+	__brk_u8 c_cc[NCCS];
+	__brk_u32 c_ispeed;
+	__brk_u32 c_ospeed;
 };
 
 /* c_cc indices */

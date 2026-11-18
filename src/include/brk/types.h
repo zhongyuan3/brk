@@ -40,6 +40,16 @@ typedef unsigned int umode_t;
 typedef unsigned int kuid_t;
 typedef unsigned int kgid_t;
 
+/* Signal mask bit set; one bit per signal number. */
+typedef __brk_ulong_t sigset_t;
+
+/*
+ * Address spaces are deliberately separated so that address arithmetic
+ * cannot be mixed up accidentally.  Architecture code may override the
+ * width of the physical and DMA addresses; virtual and user addresses
+ * always follow the pointer width.
+ */
+
 /** @brief Physical address. */
 typedef __UINT64_TYPE__ phys_addr_t;
 

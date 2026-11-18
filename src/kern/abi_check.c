@@ -21,6 +21,16 @@
 
 _Static_assert(sizeof(ktime_t) == 8, "ktime_t is not 64-bit");
 
+_Static_assert(sizeof(phys_addr_t) == 8, "phys_addr_t is not 64-bit");
+_Static_assert(sizeof(phys_size_t) == 8, "phys_size_t is not 64-bit");
+_Static_assert(sizeof(resource_size_t) == 8, "resource_size_t is not 64-bit");
+_Static_assert(sizeof(dma_addr_t) == 8, "dma_addr_t is not 64-bit");
+_Static_assert(sizeof(pfn_t) == 8, "pfn_t is not 64-bit");
+_Static_assert(sizeof(virt_addr_t) == sizeof(void *),
+	       "virt_addr_t is not pointer-sized");
+_Static_assert(sizeof(user_addr_t) == sizeof(void *),
+	       "user_addr_t is not pointer-sized");
+
 _Static_assert(__builtin_types_compatible_p(s8, __brk_s8),
 	       "s8 and __brk_s8 differ");
 _Static_assert(__builtin_types_compatible_p(s16, __brk_s16),
@@ -57,6 +67,14 @@ _Static_assert(sizeof(struct timeval) == 16, "struct timeval ABI changed");
 _Static_assert(sizeof(struct rusage) == 144, "struct rusage ABI changed");
 _Static_assert(sizeof(struct sigaction) == 24, "struct sigaction ABI changed");
 _Static_assert(sizeof(struct tms) == 32, "struct tms ABI changed");
+
+_Static_assert(sizeof(struct termios) == 60, "struct termios ABI changed");
+_Static_assert(offsetof(struct termios, c_cc) == 17,
+	       "struct termios ABI changed");
+_Static_assert(offsetof(struct termios, c_ispeed) == 52,
+	       "struct termios ABI changed");
+_Static_assert(offsetof(struct termios, c_ospeed) == 56,
+	       "struct termios ABI changed");
 
 _Static_assert(sizeof(ino_t) == 8, "ino_t is not 64-bit");
 _Static_assert(sizeof(struct brk_dirent) == 16,

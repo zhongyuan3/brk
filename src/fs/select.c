@@ -67,7 +67,8 @@ static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 	}
 }
 
-static u64 poll_common(struct pollfd *ufds, nfds_t nfds, int timeout_ms)
+static u64 poll_common(struct pollfd *ufds, unsigned long nfds,
+		       int timeout_ms)
 {
 	struct pollfd *fds = NULL;
 	size_t bytes = 0;
@@ -131,7 +132,7 @@ static int apply_sigmask(const sigset_t *uset, sigset_t *oldmask)
 u64 sys_ppoll(void)
 {
 	struct pollfd *ufds = syscall_arg_ptr(0);
-	nfds_t nfds = (nfds_t)syscall_arg_raw(1);
+	unsigned long nfds = (unsigned long)syscall_arg_raw(1);
 	const struct timespec *utimeout = syscall_arg_ptr(2);
 	const sigset_t *usigmask = syscall_arg_ptr(3);
 	struct timespec ts;
