@@ -443,6 +443,10 @@ static int __do_execve(const char *path, struct exec_args *args)
 		signal_reset(process, task);
 		trap_frame_set_pc(task->frame, elf_hdr.e_entry);
 		trap_frame_set_sp(task->frame, sp);
+		/* The new image starts with a clean FP state: cleared registers
+		 * and the default round-to-nearest-even mode in fcsr. */
+		memset(task->frame->f, 0, sizeof(task->frame->f));
+		task->frame->fcsr = 0;
 
 		irqstate_t cred_flags = spin_lock_irqsave(&process->cred_lock);
 

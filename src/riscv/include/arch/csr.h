@@ -24,6 +24,16 @@ static inline void write_tp(uintptr_t x)
 #define SSTATUS_UIE (1 << 0) /* User Interrupt Enable */
 #define SSTATUS_SUM (1 << 18) /* Permit Supervisor User Memory access */
 
+/* Floating-point state, sstatus[14:13].  Initial allows user FP code to run
+ * (hardware promotes it to Dirty on the first FP write); trap_entry saves
+ * and restores f0-f31/fcsr on every user <-> kernel transition so the
+ * scheduler may preempt FP-heavy tasks freely. */
+#define SSTATUS_FS_OFF (0u << 13)
+#define SSTATUS_FS_INITIAL (1u << 13)
+#define SSTATUS_FS_CLEAN (2u << 13)
+#define SSTATUS_FS_DIRTY (3u << 13)
+#define SSTATUS_FS_MASK (3u << 13)
+
 static inline unsigned long read_sstatus(void)
 {
 	unsigned long x;

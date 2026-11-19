@@ -29,6 +29,46 @@ trap_entry:
 	sd x5, 16(sp)
 	sd x4, 32(sp)
 	ld tp, __RISCV_TRAP_FRAME_KERNEL_TP(sp)
+
+	# Save the user floating-point context. sstatus.FS is Initial or Dirty
+	# here (set by prepare_to_ret_to_user before the first user entry and
+	# promoted to Dirty by the user's own FP writes), so kernel FP
+	# instructions execute legally. Saving the FP state here and restoring
+	# it in ret_from_trap keeps FP registers intact across preemption.
+	fsd f0,  __RISCV_TRAP_FRAME_FP+0(sp)
+	fsd f1,  __RISCV_TRAP_FRAME_FP+8(sp)
+	fsd f2,  __RISCV_TRAP_FRAME_FP+16(sp)
+	fsd f3,  __RISCV_TRAP_FRAME_FP+24(sp)
+	fsd f4,  __RISCV_TRAP_FRAME_FP+32(sp)
+	fsd f5,  __RISCV_TRAP_FRAME_FP+40(sp)
+	fsd f6,  __RISCV_TRAP_FRAME_FP+48(sp)
+	fsd f7,  __RISCV_TRAP_FRAME_FP+56(sp)
+	fsd f8,  __RISCV_TRAP_FRAME_FP+64(sp)
+	fsd f9,  __RISCV_TRAP_FRAME_FP+72(sp)
+	fsd f10, __RISCV_TRAP_FRAME_FP+80(sp)
+	fsd f11, __RISCV_TRAP_FRAME_FP+88(sp)
+	fsd f12, __RISCV_TRAP_FRAME_FP+96(sp)
+	fsd f13, __RISCV_TRAP_FRAME_FP+104(sp)
+	fsd f14, __RISCV_TRAP_FRAME_FP+112(sp)
+	fsd f15, __RISCV_TRAP_FRAME_FP+120(sp)
+	fsd f16, __RISCV_TRAP_FRAME_FP+128(sp)
+	fsd f17, __RISCV_TRAP_FRAME_FP+136(sp)
+	fsd f18, __RISCV_TRAP_FRAME_FP+144(sp)
+	fsd f19, __RISCV_TRAP_FRAME_FP+152(sp)
+	fsd f20, __RISCV_TRAP_FRAME_FP+160(sp)
+	fsd f21, __RISCV_TRAP_FRAME_FP+168(sp)
+	fsd f22, __RISCV_TRAP_FRAME_FP+176(sp)
+	fsd f23, __RISCV_TRAP_FRAME_FP+184(sp)
+	fsd f24, __RISCV_TRAP_FRAME_FP+192(sp)
+	fsd f25, __RISCV_TRAP_FRAME_FP+200(sp)
+	fsd f26, __RISCV_TRAP_FRAME_FP+208(sp)
+	fsd f27, __RISCV_TRAP_FRAME_FP+216(sp)
+	fsd f28, __RISCV_TRAP_FRAME_FP+224(sp)
+	fsd f29, __RISCV_TRAP_FRAME_FP+232(sp)
+	fsd f30, __RISCV_TRAP_FRAME_FP+240(sp)
+	fsd f31, __RISCV_TRAP_FRAME_FP+248(sp)
+	frcsr x5
+	sd x5, __RISCV_TRAP_FRAME_FCSR(sp)
 	j .Ltrap_save_regs_no_tp
 
 .Ltrap_save_regs:
@@ -121,6 +161,43 @@ ret_from_trap:
 	bnez x5, .Ltrap_ret_kernel
 	addi x5, sp, __RISCV_TRAP_FRAME_SIZE
 	csrw sscratch, x5
+
+	# Return to user mode: restore the user's floating-point context.
+	# Kernel-mode returns skip this; the kernel has no FP state of its own.
+	fld f0,  __RISCV_TRAP_FRAME_FP+0(sp)
+	fld f1,  __RISCV_TRAP_FRAME_FP+8(sp)
+	fld f2,  __RISCV_TRAP_FRAME_FP+16(sp)
+	fld f3,  __RISCV_TRAP_FRAME_FP+24(sp)
+	fld f4,  __RISCV_TRAP_FRAME_FP+32(sp)
+	fld f5,  __RISCV_TRAP_FRAME_FP+40(sp)
+	fld f6,  __RISCV_TRAP_FRAME_FP+48(sp)
+	fld f7,  __RISCV_TRAP_FRAME_FP+56(sp)
+	fld f8,  __RISCV_TRAP_FRAME_FP+64(sp)
+	fld f9,  __RISCV_TRAP_FRAME_FP+72(sp)
+	fld f10, __RISCV_TRAP_FRAME_FP+80(sp)
+	fld f11, __RISCV_TRAP_FRAME_FP+88(sp)
+	fld f12, __RISCV_TRAP_FRAME_FP+96(sp)
+	fld f13, __RISCV_TRAP_FRAME_FP+104(sp)
+	fld f14, __RISCV_TRAP_FRAME_FP+112(sp)
+	fld f15, __RISCV_TRAP_FRAME_FP+120(sp)
+	fld f16, __RISCV_TRAP_FRAME_FP+128(sp)
+	fld f17, __RISCV_TRAP_FRAME_FP+136(sp)
+	fld f18, __RISCV_TRAP_FRAME_FP+144(sp)
+	fld f19, __RISCV_TRAP_FRAME_FP+152(sp)
+	fld f20, __RISCV_TRAP_FRAME_FP+160(sp)
+	fld f21, __RISCV_TRAP_FRAME_FP+168(sp)
+	fld f22, __RISCV_TRAP_FRAME_FP+176(sp)
+	fld f23, __RISCV_TRAP_FRAME_FP+184(sp)
+	fld f24, __RISCV_TRAP_FRAME_FP+192(sp)
+	fld f25, __RISCV_TRAP_FRAME_FP+200(sp)
+	fld f26, __RISCV_TRAP_FRAME_FP+208(sp)
+	fld f27, __RISCV_TRAP_FRAME_FP+216(sp)
+	fld f28, __RISCV_TRAP_FRAME_FP+224(sp)
+	fld f29, __RISCV_TRAP_FRAME_FP+232(sp)
+	fld f30, __RISCV_TRAP_FRAME_FP+240(sp)
+	fld f31, __RISCV_TRAP_FRAME_FP+248(sp)
+	ld x5, __RISCV_TRAP_FRAME_FCSR(sp)
+	fscsr x5
 	j .Ltrap_ret_done
 .Ltrap_ret_kernel:
 	csrw sscratch, zero

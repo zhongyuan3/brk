@@ -67,6 +67,15 @@ struct trap_frame {
 
 	/* Keep the frame 16-byte aligned. */
 	/* 296 */ unsigned long __pad;
+
+	/*
+	 * User floating-point context, saved only on user <-> kernel
+	 * transitions. fcsr holds the accrued exception flags and the
+	 * rounding mode; zero is the power-on state (round-to-nearest-even).
+	 */
+	unsigned long f[32];
+	/* 560 */ unsigned long fcsr;
+	/* 568 */ unsigned long __pad2;
 };
 
 #define TRAP_FRAME_SIZE sizeof(struct trap_frame)
@@ -83,6 +92,10 @@ static_assert(offsetof(struct trap_frame, sepc) == 264,
 	      "'struct trap_frame' sepc offset mismatch");
 static_assert(offsetof(struct trap_frame, kernel_tp) == 288,
 	      "'struct trap_frame' kernel_tp offset mismatch");
+static_assert(offsetof(struct trap_frame, f) == __RISCV_TRAP_FRAME_FP,
+	      "'struct trap_frame' fp area offset mismatch");
+static_assert(offsetof(struct trap_frame, fcsr) == __RISCV_TRAP_FRAME_FCSR,
+	      "'struct trap_frame' fcsr offset mismatch");
 
 static inline void trap_frame_set_kernel_tp(struct trap_frame *frame,
 					    unsigned long value)

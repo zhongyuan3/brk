@@ -344,5 +344,13 @@ void prepare_to_ret_to_user(struct trap_frame *frame)
 	sstatus |= SSTATUS_SPIE;
 	sstatus &= ~SSTATUS_SIE;
 	sstatus &= ~SSTATUS_SUM;
+	/* User code may use the FP registers: make sure the FP state is
+	 * enabled. Initial permits execution and hardware promotes it to
+	 * Dirty on the first user FP write. Keep an already-Dirty state
+	 * untouched. */
+	if ((sstatus & SSTATUS_FS_MASK) == SSTATUS_FS_OFF) {
+		sstatus &= ~SSTATUS_FS_MASK;
+		sstatus |= SSTATUS_FS_INITIAL;
+	}
 	frame->sstatus = sstatus;
 }
