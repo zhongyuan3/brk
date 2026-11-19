@@ -36,11 +36,12 @@ ROOTFS_IMG ?= $(BOARD_BUILD_ROOT)/rootfs.img
 USER_BIN_DIR := $(USER_ROOT)/build/bin
 
 # Inputs that determine the rootfs contents.  Rebuild the image when userland
-# sources, headers, binaries, tests, or the packaging script change.
+# sources, headers, binaries, tests, vendored code, or the packaging script
+# change.
 ROOTFS_DEPS := $(USER_ROOT)/scripts/mkrootfs.sh $(USER_ROOT)/Makefile \
 	$(wildcard $(USER_BIN_DIR)/*) \
 	$(shell find $(USER_ROOT)/src $(USER_ROOT)/etc $(USER_ROOT)/tests \
-		-type f 2>/dev/null)
+		$(USER_ROOT)/vendor -type f 2>/dev/null)
 
 CROSS_COMPILE ?=
 
