@@ -12,7 +12,7 @@
  *
  * The FDT is unflattened during arch_init(), before the page allocator is
  * available.  Nodes, properties, names and property values are copied into
- * one memblock allocation and stay valid for the lifetime of the kernel.
+ * one mchain allocation and stay valid for the lifetime of the kernel.
  * After of_init() no code outside dev/of should touch the raw FDT.
  */
 struct property {

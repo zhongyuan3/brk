@@ -11,7 +11,7 @@
 #include <arch/sbi.h>
 #include <brk/align.h>
 #include <brk/assert.h>
-#include <brk/memblock.h>
+#include <brk/mchain.h>
 #include <brk/min_max.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
@@ -162,13 +162,13 @@ static void map_early_free_range(phys_addr_t start, phys_addr_t end)
 
 static void map_free_memory_early(void)
 {
-	u64 idx;
+	struct mchain_iter it;
 	phys_addr_t start, end;
 
-	for_each_free_mem_range(idx, start, end)
-	{
+	mchain_iter_init(&it, 0, MCHAIN_ANY_ADDR, MCHAIN_NID_ANY, 0);
+	while (mchain_iter_next(&it, &start, &end)) {
 		/*
-		 * The final page table is built with memblock allocations.
+		 * The final page table is built with mchain allocations.
 		 * Until it is loaded, any allocated frame must be addressable
 		 * through the early page table.  Identity-map every free
 		 * physical range so those frames are always accessible.
@@ -206,28 +206,30 @@ static int phys_mem_init(void)
 	/*
 	 * Keep the firmware/bootloader area below the kernel image out of the
 	 * allocator.  Older code used a min_addr on every allocation; reserving
-	 * the range makes the Linux-style memblock_phys_alloc() safe.
+	 * the range makes the mchain allocator safe.
 	 */
-	u64 dram_start = memblock_start_of_dram();
+	u64 dram_start = mchain_start_of_dram();
 	if (dram_start < _SKERNEL_PHYS) {
-		err = memblock_reserve(dram_start, _SKERNEL_PHYS - dram_start);
+		err = mchain_reserve(dram_start, _SKERNEL_PHYS - dram_start, 0,
+				     MCHAIN_NID_ANY);
 		if (err)
 			return err;
 	}
 
-	err = memblock_reserve(_SKERNEL_PHYS, _KERNEL_SIZE);
+	err = mchain_reserve(_SKERNEL_PHYS, _KERNEL_SIZE, 0, MCHAIN_NID_ANY);
 	if (err)
 		return err;
 
-	err = memblock_reserve(boot_info.dtb_pa,
-			       of_get_fdt_size(boot_info.dtb_pa));
+	err = mchain_reserve(boot_info.dtb_pa,
+			     of_get_fdt_size(boot_info.dtb_pa), 0,
+			     MCHAIN_NID_ANY);
 	if (err)
 		return err;
 
-	phys_offset = memblock_start_of_dram();
+	phys_offset = mchain_start_of_dram();
 
-	min_pfn = phys_to_pfn(memblock_start_of_dram());
-	max_pfn = phys_to_pfn(memblock_end_of_dram());
+	min_pfn = phys_to_pfn(mchain_start_of_dram());
+	max_pfn = phys_to_pfn(mchain_end_of_dram());
 	vmemmap_start_pfn = min_pfn;
 
 	return 0;
@@ -244,9 +246,8 @@ struct mapping_region {
 
 static phys_addr_t alloc_frame_before_final(void)
 {
-	phys_addr_t addr = memblock_phys_alloc(PAGE_SIZE, PAGE_SIZE);
-
-	return addr;
+	return mchain_alloc(PAGE_SIZE, PAGE_SIZE, 0, MCHAIN_ANY_ADDR,
+			    MCHAIN_NID_ANY, 0);
 }
 
 static void *phys_to_virt_before_final(phys_addr_t paddr)
@@ -256,21 +257,21 @@ static void *phys_to_virt_before_final(phys_addr_t paddr)
 
 static void final_pgtable_init(void)
 {
-	u64 idx = 0;
+	struct mchain_iter it;
 	struct mapping_region *rngs;
 	size_t rngs_cnt = 0;
 	phys_size_t rngs_size;
 	phys_addr_t start, end;
 
-	for_each_free_mem_range(idx, start, end)
-	{
+	mchain_iter_init(&it, 0, MCHAIN_ANY_ADDR, MCHAIN_NID_ANY, 0);
+	while (mchain_iter_next(&it, &start, &end))
 		rngs_cnt += 1;
-	}
 	rngs_cnt += 7;
 
 	rngs_size = sizeof(struct mapping_region) * rngs_cnt;
 	rngs_size = align_up(rngs_size, PAGE_SIZE);
-	rngs = (void *)memblock_phys_alloc(rngs_size, PAGE_SIZE);
+	rngs = (void *)mchain_alloc(rngs_size, PAGE_SIZE, 0, MCHAIN_ANY_ADDR,
+				    MCHAIN_NID_ANY, 0);
 	if (rngs == NULL) {
 		sbi_console_putstr("rngs == NULL!\n");
 		while (1) {
@@ -316,8 +317,8 @@ static void final_pgtable_init(void)
 	rngs[5].flags = PTE_R | PTE_W;
 	rngs[5].do_map = true;
 	size_t i = 6;
-	for_each_free_mem_range(idx, start, end)
-	{
+	mchain_iter_init(&it, 0, MCHAIN_ANY_ADDR, MCHAIN_NID_ANY, 0);
+	while (mchain_iter_next(&it, &start, &end)) {
 		pr_debug("start=%#lx,end=%#lx\n", start, end);
 		rngs[i].name = "free_memory";
 		rngs[i].addr = phys_to_virt(start);
@@ -359,7 +360,8 @@ static void final_pgtable_init(void)
 
 static phys_addr_t alloc_frame_after_final(void)
 {
-	return memblock_phys_alloc(PAGE_SIZE, PAGE_SIZE);
+	return mchain_alloc(PAGE_SIZE, PAGE_SIZE, 0, MCHAIN_ANY_ADDR,
+			    MCHAIN_NID_ANY, 0);
 }
 
 static void *phys_to_virt_after_final(phys_addr_t paddr)
@@ -395,7 +397,8 @@ static void vmemmap_map_range(pfn_t start_pfn, pfn_t end_pfn,
 		return;
 
 	size = va_end - va_start;
-	paddr = memblock_phys_alloc(size, PAGE_SIZE);
+	paddr = mchain_alloc(size, PAGE_SIZE, 0, MCHAIN_ANY_ADDR,
+			     MCHAIN_NID_ANY, 0);
 	assert(paddr);
 	memset((void *)(uintptr_t)phys_to_virt(paddr), 0, size);
 
@@ -437,46 +440,48 @@ static void vmemmap_check_capacity(void)
 
 static void vmemmap_init(void)
 {
-	struct memblock_region *rgn;
+	struct mchain_entry *entry;
 	virt_addr_t mapped_end = 0;
-	phys_addr_t start_pa = 0;
-	phys_addr_t end_pa = 0;
-	bool have_span = false;
+	phys_addr_t cur = 0;
 
 	/*
-	 * Coalesce adjacent memory regions before mapping.  Region flags may
-	 * split one contiguous physical range (for example around NOMAP
-	 * memory), but vmemmap still covers all physical memory.
+	 * vmemmap_map_range() allocates page-table pages from mchain, which
+	 * splits FREE entries while this walk is in progress.  Do not keep a
+	 * saved next index: rescan from the head for the first entry whose end
+	 * is above the physical cursor.  The union of all entries is stable
+	 * even though allocations split individual free ranges.
 	 */
-	for_each_mem_region(rgn)
-	{
-		phys_addr_t rstart = align_up(rgn->base, PAGE_SIZE);
-		phys_addr_t rend = align_down(rgn->base + rgn->size, PAGE_SIZE);
+	for (;;) {
+		phys_addr_t entry_end;
+		phys_addr_t rstart;
+		phys_addr_t rend;
+		int idx;
 
-		if (rstart >= rend)
-			continue;
+		entry = NULL;
+		for (idx = mchain_pool_instance.head; idx != -1;
+		     idx = mchain_pool_instance.entries[idx].next) {
+			struct mchain_entry *candidate =
+				&mchain_pool_instance.entries[idx];
 
-		if (!have_span) {
-			start_pa = rstart;
-			end_pa = rend;
-			have_span = true;
-			continue;
+			if (candidate->base + candidate->size > cur) {
+				entry = candidate;
+				break;
+			}
 		}
 
-		if (rstart == end_pa) {
-			end_pa = rend;
-			continue;
-		}
+		if (!entry)
+			break;
 
-		vmemmap_map_range(phys_to_pfn(start_pa), phys_to_pfn(end_pa),
-				  &mapped_end);
-		start_pa = rstart;
-		end_pa = rend;
+		entry_end = entry->base + entry->size;
+		rstart = align_up(entry->base, PAGE_SIZE);
+		rend = align_down(entry_end, PAGE_SIZE);
+
+		if (rstart < rend)
+			vmemmap_map_range(phys_to_pfn(rstart),
+					  phys_to_pfn(rend), &mapped_end);
+
+		cur = entry_end;
 	}
-
-	if (have_span)
-		vmemmap_map_range(phys_to_pfn(start_pa), phys_to_pfn(end_pa),
-				  &mapped_end);
 }
 
 void load_final_page_table(void)
@@ -497,7 +502,7 @@ int paging_init(void)
 	map_free_memory_early();
 	final_pgtable_init();
 	load_final_page_table();
-	memblock_allow_resize();
+	mchain_allow_grow();
 	of_set_fdt(phys_to_virt(boot_info.dtb_pa));
 	vmemmap_check_capacity();
 	vmemmap_init();

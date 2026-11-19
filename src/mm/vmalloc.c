@@ -3,7 +3,6 @@
 #include <brk/assert.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
-#include <brk/memblock.h>
 #include <brk/mm.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>

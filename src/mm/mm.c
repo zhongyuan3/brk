@@ -8,7 +8,7 @@
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
-#include <brk/memblock.h>
+#include <brk/mchain.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
 #include <brk/pagecache.h>
@@ -775,10 +775,30 @@ void unmap_user_pages(pgd_t *root, virt_addr_t addr, phys_size_t size)
 	unmap_pages(root, addr, size);
 }
 
+static void mchain_release_to_buddy(void)
+{
+	struct mchain_iter it;
+	phys_addr_t start;
+	phys_addr_t end;
+
+#ifndef NDEBUG
+	assert(mchain_validate() == 0);
+#endif
+
+	/*
+	 * Freeze first so the iterator cannot race with an mchain allocation,
+	 * then hand every remaining FREE range to the buddy allocator.
+	 */
+	mchain_freeze();
+	mchain_iter_init(&it, 0, MCHAIN_ANY_ADDR, MCHAIN_NID_ANY, 0);
+	while (mchain_iter_next(&it, &start, &end))
+		page_free_phys_range(start, end - start);
+}
+
 int mm_init(void)
 {
 	page_alloc_init();
-	memblock_free_all();
+	mchain_release_to_buddy();
 	kmalloc_init();
 	vmalloc_init();
 

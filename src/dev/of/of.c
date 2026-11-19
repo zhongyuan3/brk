@@ -3,7 +3,7 @@
 #include <brk/align.h>
 #include <brk/irqdomain.h>
 #include <brk/list.h>
-#include <brk/memblock.h>
+#include <brk/mchain.h>
 #include <brk/of.h>
 #include <brk/printk.h>
 #include <brk/string.h>
@@ -16,7 +16,7 @@
 
 #define OF_PATH_MAX 512
 #define OF_MAX_NCELLS 4
-#define OF_MEMBLOCK_ALIGN 8
+#define OF_MCHAIN_ALIGN 8
 #define OF_VALUE_ALIGN 4
 
 static struct device_node *of_root_node;
@@ -51,14 +51,15 @@ of_find_property_raw(const struct device_node *node, const char *name)
 	return NULL;
 }
 
-static void *of_memblock_alloc(size_t size)
+static void *of_mchain_alloc(size_t size)
 {
 	u64 pa;
 
 	if (!size)
 		return NULL;
 
-	pa = memblock_phys_alloc(size, OF_MEMBLOCK_ALIGN);
+	pa = mchain_alloc(size, PAGE_SIZE, 0, MCHAIN_ANY_ADDR, MCHAIN_NID_ANY,
+			  0);
 	if (!pa)
 		return NULL;
 
@@ -247,12 +248,12 @@ int of_init(void)
 
 	nodes_size = info.nr_nodes * sizeof(struct device_node);
 	props_size = info.nr_props * sizeof(struct property);
-	props_offset = align_up(nodes_size, OF_MEMBLOCK_ALIGN);
-	text_offset = align_up(props_offset + props_size, OF_MEMBLOCK_ALIGN);
+	props_offset = align_up(nodes_size, OF_MCHAIN_ALIGN);
+	text_offset = align_up(props_offset + props_size, OF_MCHAIN_ALIGN);
 	value_offset = align_up(text_offset + info.text_size, OF_VALUE_ALIGN);
 	total_size = value_offset + info.value_size;
 
-	block = of_memblock_alloc(total_size);
+	block = of_mchain_alloc(total_size);
 	if (!block)
 		return -ENOMEM;
 	memset(block, 0, total_size);

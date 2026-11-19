@@ -101,6 +101,7 @@ void page_alloc_init(void);
 struct page *page_alloc(unsigned int order);
 struct page *page_zalloc(unsigned int order);
 void page_free(struct page *pg, unsigned int order);
+void page_free_phys_range(phys_addr_t start, phys_size_t size);
 
 /* Reference counting for pages that may be shared by COW mappings. */
 void page_get(struct page *pg);

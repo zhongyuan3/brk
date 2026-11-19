@@ -1,7 +1,8 @@
+#include <brk/align.h>
 #include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/list.h>
-#include <brk/memblock.h>
+#include <brk/mchain.h>
 #include <brk/min_max.h>
 #include <brk/mm_types.h>
 #include <brk/panic.h>
@@ -35,7 +36,7 @@ bool pfn_valid(pfn_t pfn)
 	if (pfn < min_pfn || pfn >= max_pfn)
 		return false;
 
-	return memblock_is_memory(pfn_to_phys(pfn));
+	return mchain_is_memory(pfn_to_phys(pfn));
 }
 
 unsigned long page_cache_shrink(unsigned long nr_to_reclaim);
@@ -248,6 +249,53 @@ void page_free(struct page *pg, unsigned int order)
 	__page_free_to_buddy(pg, order);
 }
 
+/**
+ * @brief Free a physical range to the buddy allocator.
+ *
+ * The range is aligned inward to page boundaries and split into the largest
+ * naturally aligned chunks that fit.  This is used when the early allocator
+ * hands its free memory over to the buddy allocator.
+ *
+ * @param[in] start Start of the physical range.
+ * @param[in] size Size of the range in bytes.
+ */
+void page_free_phys_range(phys_addr_t start, phys_size_t size)
+{
+	phys_addr_t end;
+
+	if (!size || start + size < start)
+		return;
+
+	end = align_down(start + size, PAGE_SIZE);
+	start = align_up(start, PAGE_SIZE);
+
+	while (start < end) {
+		unsigned int order = page_order(end - start);
+		size_t chunk_size;
+		size_t npgs;
+		struct page *pg;
+
+		if (order > PAGE_ORDER_MAX)
+			order = PAGE_ORDER_MAX;
+
+		for (;;) {
+			chunk_size = (size_t)1 << (PAGE_SHIFT + order);
+			if (is_aligned(start, chunk_size) &&
+			    chunk_size <= end - start)
+				break;
+			--order;
+		}
+
+		npgs = (size_t)1 << order;
+		pg = pfn_to_page(phys_to_pfn(start));
+		assert(pg);
+		pg->flags = PAGE_FLAGS_NEW_PAGE;
+		page_free(pg, order);
+
+		start += npgs << PAGE_SHIFT;
+	}
+}
+
 void page_get(struct page *pg)
 {
 	if (pg)
@@ -266,12 +314,16 @@ void page_put(struct page *pg)
 #ifndef NDEBUG
 static void page_alloc_check_pfn_conversions(void)
 {
-	struct memblock_region *rgn;
+	struct mchain_entry *entry;
+	int idx;
 
-	for_each_mem_region(rgn)
-	{
-		pfn_t start = PFN_UP(rgn->base);
-		pfn_t end = PFN_DOWN(rgn->base + rgn->size);
+	for (idx = mchain_pool_instance.head; idx != -1; idx = entry->next) {
+		pfn_t start;
+		pfn_t end;
+
+		entry = &mchain_pool_instance.entries[idx];
+		start = PFN_UP(entry->base);
+		end = PFN_DOWN(entry->base + entry->size);
 
 		for (pfn_t pfn = start; pfn < end; ++pfn) {
 			struct page *pg = pfn_to_page(pfn);
@@ -286,7 +338,7 @@ static void page_alloc_check_pfn_conversions(void)
 	}
 
 	for (pfn_t pfn = min_pfn; pfn < max_pfn; ++pfn) {
-		bool valid = memblock_is_memory(pfn_to_phys(pfn));
+		bool valid = mchain_is_memory(pfn_to_phys(pfn));
 
 		assert(pfn_valid(pfn) == valid);
 	}

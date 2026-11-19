@@ -1,6 +1,6 @@
 obj-y += mm.o
 obj-y += mmap.o
-obj-y += memblock.o
+obj-y += mchain.o
 obj-y += pgalloc.o
 obj-y += slab.o
 obj-y += vmalloc.o

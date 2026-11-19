@@ -1,5 +1,5 @@
 #define pr_fmt(fmt) "of: " fmt
-#include <brk/memblock.h>
+#include <brk/mchain.h>
 #include <brk/printk.h>
 #include <brk/types.h>
 #include <libfdt.h>
@@ -135,32 +135,26 @@ static int for_each_reg(int node, int addr_cells, int size_cells,
 	return 0;
 }
 
-struct of_memblock_op {
+struct of_mchain_op {
 	bool add;
 	bool nomap;
 };
 
-static int of_memblock_add_or_reserve(phys_addr_t addr, phys_size_t size,
-				      void *arg)
+static int of_mchain_add_or_reserve(phys_addr_t addr, phys_size_t size,
+				    void *arg)
 {
-	struct of_memblock_op *op = arg;
-	int err;
+	struct of_mchain_op *op = arg;
+	unsigned int attrs = op->nomap ? MCHAIN_ATTR_NOMAP : 0;
 
 	if (op->add)
-		return memblock_add(addr, size);
+		return mchain_add(addr, size, 0, MCHAIN_NID_ANY);
 
-	err = memblock_reserve(addr, size);
-	if (err)
-		return err;
-	if (op->nomap)
-		return memblock_mark_nomap(addr, size);
-
-	return 0;
+	return mchain_reserve(addr, size, attrs, MCHAIN_NID_ANY);
 }
 
 int of_scan_memory(void)
 {
-	struct of_memblock_op op = { .add = true };
+	struct of_mchain_op op = { .add = true };
 	int err;
 	int node;
 	int addr_cells, size_cells;
@@ -174,7 +168,7 @@ int of_scan_memory(void)
 		return err;
 
 	return for_each_reg(node, addr_cells, size_cells,
-			    of_memblock_add_or_reserve, &op);
+			    of_mchain_add_or_reserve, &op);
 }
 
 int of_scan_reserved_memory(void)
@@ -194,14 +188,14 @@ int of_scan_reserved_memory(void)
 		return err;
 
 	fdt_for_each_subnode(subnode, fdt, node) {
-		struct of_memblock_op op = {
+		struct of_mchain_op op = {
 			.add = false,
 			.nomap = fdt_getprop(fdt, subnode, "no-map", NULL) !=
 				 NULL,
 		};
 
 		err = for_each_reg(subnode, addr_cells, size_cells,
-				   of_memblock_add_or_reserve, &op);
+				   of_mchain_add_or_reserve, &op);
 		if (err)
 			return err;
 	}
