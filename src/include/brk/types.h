@@ -41,7 +41,7 @@ typedef unsigned int kuid_t;
 typedef unsigned int kgid_t;
 
 /* Signal mask bit set; one bit per signal number. */
-typedef __brk_ulong_t sigset_t;
+typedef __brk_sigset_t sigset_t;
 
 /*
  * Address spaces are deliberately separated so that address arithmetic

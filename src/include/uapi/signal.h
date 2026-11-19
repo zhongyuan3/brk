@@ -43,7 +43,7 @@
 
 struct sigaction {
 	void (*sa_handler)(int);
-	__brk_ulong_t sa_mask;
+	__brk_sigset_t sa_mask;
 	__brk_ulong_t sa_flags;
 };
 

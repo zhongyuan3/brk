@@ -6,14 +6,14 @@
 #define NCCS 32
 
 struct termios {
-	__brk_u32 c_iflag;
-	__brk_u32 c_oflag;
-	__brk_u32 c_cflag;
-	__brk_u32 c_lflag;
-	__brk_u8 c_line;
-	__brk_u8 c_cc[NCCS];
-	__brk_u32 c_ispeed;
-	__brk_u32 c_ospeed;
+	__brk_tcflag_t c_iflag;
+	__brk_tcflag_t c_oflag;
+	__brk_tcflag_t c_cflag;
+	__brk_tcflag_t c_lflag;
+	__brk_cc_t c_line;
+	__brk_cc_t c_cc[NCCS];
+	__brk_speed_t c_ispeed;
+	__brk_speed_t c_ospeed;
 };
 
 /* c_cc indices */

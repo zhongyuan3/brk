@@ -31,6 +31,15 @@ _Static_assert(sizeof(virt_addr_t) == sizeof(void *),
 _Static_assert(sizeof(user_addr_t) == sizeof(void *),
 	       "user_addr_t is not pointer-sized");
 
+_Static_assert(__builtin_types_compatible_p(sigset_t, __brk_sigset_t),
+	       "sigset_t and __brk_sigset_t differ");
+_Static_assert(sizeof(__brk_sigset_t) == 8, "__brk_sigset_t is not 64-bit");
+_Static_assert(sizeof(__brk_fd_mask_t) == 8, "__brk_fd_mask_t is not 64-bit");
+_Static_assert(sizeof(__brk_nfds_t) == 8, "__brk_nfds_t is not 64-bit");
+_Static_assert(sizeof(__brk_cc_t) == 1, "__brk_cc_t is not 8-bit");
+_Static_assert(sizeof(__brk_speed_t) == 4, "__brk_speed_t is not 32-bit");
+_Static_assert(sizeof(__brk_tcflag_t) == 4, "__brk_tcflag_t is not 32-bit");
+
 _Static_assert(__builtin_types_compatible_p(s8, __brk_s8),
 	       "s8 and __brk_s8 differ");
 _Static_assert(__builtin_types_compatible_p(s16, __brk_s16),

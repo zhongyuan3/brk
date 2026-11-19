@@ -70,4 +70,16 @@ typedef __brk_long_t __brk_blksize_t;
 typedef __brk_u16 __brk_sa_family_t;
 typedef __brk_u32 __brk_socklen_t;
 
+/*
+ * The POSIX spellings of these ABI types live in libc (and, for the
+ * kernel, in <brk/types.h>); both derive them from the reserved forms
+ * below so that every width is declared exactly once.
+ */
+typedef __brk_ulong_t __brk_sigset_t;
+typedef __brk_u64 __brk_fd_mask_t;
+typedef __brk_ulong_t __brk_nfds_t;
+typedef __brk_u8 __brk_cc_t;
+typedef __brk_u32 __brk_speed_t;
+typedef __brk_u32 __brk_tcflag_t;
+
 #endif
