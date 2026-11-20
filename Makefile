@@ -22,7 +22,7 @@ LDFLAGS ?=
 LDFLAGS_FINAL :=
 
 ifeq ($(ARCH),riscv)
-include src/$(ARCH)/config.mk
+include src/arch/$(ARCH)/config.mk
 else
 $(error Unsupported architecture '$(ARCH)')
 endif
@@ -109,7 +109,7 @@ KBUILD_CFLAGS += -std=gnu11
 KBUILD_CFLAGS += -nostdinc
 KBUILD_CFLAGS += -MMD
 KBUILD_CFLAGS += -MP
-KBUILD_CFLAGS += -Isrc/$(ARCH)/include
+KBUILD_CFLAGS += -Isrc/arch/$(ARCH)/include
 KBUILD_CFLAGS += -Isrc/include
 KBUILD_CFLAGS += -Ivendor/libfdt
 
@@ -182,7 +182,7 @@ $(FLAGS_CONFIG): FORCE
 endif
 endif
 
-LINKER_SCRIPT_SRC := src/$(ARCH)/kern/brk.ld.S
+LINKER_SCRIPT_SRC := src/arch/$(ARCH)/kern/brk.ld.S
 LINKER_SCRIPT := $(KERNEL_BUILD_ROOT)/brk.ld
 LINKER_SCRIPT_DEP := $(LINKER_SCRIPT).d
 KERNEL_ELF := $(KERNEL_BUILD_ROOT)/brk
