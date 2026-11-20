@@ -18,9 +18,9 @@
   - [Table of Contents](#table-of-contents)
   - [What the heck is this?](#what-the-heck-is-this)
   - [Inspiration \& Origins](#inspiration--origins)
-  - [Build \& Run (At Your Own Risk)](#build--run-at-your-own-risk)
+  - [Build](#build)
     - [Prerequisites](#prerequisites)
-    - [Quick Start](#quick-start)
+    - [Building the Kernel](#building-the-kernel)
     - [Useful Helpers](#useful-helpers)
     - [Useful Variables](#useful-variables)
   - [License](#license)
@@ -44,23 +44,17 @@ I'm not trying to reinvent the wheel here. BRK stands firmly on the shoulders of
 
 **In short: xv6 taught me how to start; Linux taught me how far I need to go.**
 
-## Build & Run (At Your Own Risk)
-
-If you are morbidly curious to see what a "barely running kernel" looks like, you can try spinning it up in a RISC-V environment.
+## Build
 
 ### Prerequisites
 
 - `riscv64-unknown-elf-toolchain` (or any RISC-V cross-compiler)
-- `QEMU` (System mode, `qemu-system-riscv64`)
 
-### Quick Start
+### Building the Kernel
 
 ```sh
 # Build the kernel (debug by default)
 make CROSS_COMPILE=riscv64-unknown-elf-
-
-# Build and boot in QEMU (also rebuilds the root filesystem)
-make run CROSS_COMPILE=riscv64-unknown-elf-
 
 # Release build
 make BUILD=release CROSS_COMPILE=riscv64-unknown-elf-
@@ -70,7 +64,6 @@ make BUILD=release CROSS_COMPILE=riscv64-unknown-elf-
 
 ```sh
 make help           # list all available targets
-make rootfs         # build the root filesystem
 make size           # show kernel size
 make disasm         # disassemble the kernel
 ```
@@ -79,11 +72,13 @@ make disasm         # disassemble the kernel
 
 | Variable                                 | Description                                               |
 | ---------------------------------------- | --------------------------------------------------------- |
-| `BUILD=debug\|release`                   | Build type                                                |
-| `SMP=<n>` / `M=<size>`                   | Configure QEMU CPU count and RAM size                     |
+| `BUILD=debug\|release`                   | Kernel build type                                         |
+| `BUILD_ROOT=<path>`                      | Kernel build directory, default `build`                   |
 | `V=1`                                    | Show full compiler/linker commands                        |
 | `EXTRA_CFLAGS=...` / `EXTRA_LDFLAGS=...` | Temporarily append compile/link flags                     |
 | `WERROR=0`                               | Keep warnings non-fatal while bringing up a new toolchain |
+| `PGTABLE_LEVELS={3\|4\|5}`               | Page-table levels, default `3`                            |
+| `LINK_CHECK={0\|1}`                      | Warn about linker orphan sections                         |
 
 ## License
 

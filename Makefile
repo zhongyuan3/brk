@@ -1,8 +1,6 @@
 .DEFAULT_GOAL := all
 
 BUILD_ROOT ?= build
-USER_ROOT ?= ../brk-user
-BOARD_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)
 
 MAKEFLAGS += --no-print-directory
 
@@ -29,19 +27,7 @@ endif
 
 BUILD ?= debug
 WERROR ?= 1
-M ?= 128M
-SMP ?= 3
 KERNEL_BUILD_ROOT ?= $(BUILD_ROOT)/$(ARCH)/$(BUILD)
-ROOTFS_IMG ?= $(BOARD_BUILD_ROOT)/rootfs.img
-USER_BIN_DIR := $(USER_ROOT)/build/bin
-
-# Inputs that determine the rootfs contents.  Rebuild the image when userland
-# sources, headers, binaries, tests, vendored code, or the packaging script
-# change.
-ROOTFS_DEPS := $(USER_ROOT)/scripts/mkrootfs.sh $(USER_ROOT)/Makefile \
-	$(wildcard $(USER_BIN_DIR)/*) \
-	$(shell find $(USER_ROOT)/src $(USER_ROOT)/etc $(USER_ROOT)/tests \
-		$(USER_ROOT)/vendor -type f 2>/dev/null)
 
 CROSS_COMPILE ?=
 
@@ -63,7 +49,6 @@ endif
 OBJCOPY ?= $(CROSS_COMPILE)objcopy
 OBJDUMP ?= $(CROSS_COMPILE)objdump
 SIZE ?= $(CROSS_COMPILE)size
-GDB ?= $(CROSS_COMPILE)gdb
 
 KBUILD_CFLAGS += -Wall
 KBUILD_CFLAGS += -Wextra
@@ -134,7 +119,7 @@ ifeq ($(MAKECMDGOALS),)
 KERNEL_GOALS := all
 else
 KERNEL_GOALS := $(filter-out clean clean-kernel help headers-check \
-	format format-check dtb dts rootfs hooks,$(MAKECMDGOALS))
+	format format-check hooks,$(MAKECMDGOALS))
 endif
 
 # Fail early with a useful message instead of a wall of compiler errors.
@@ -208,20 +193,9 @@ core-y += vendor
 
 BUILT_IN_OBJS := $(addprefix $(KERNEL_BUILD_ROOT)/,$(patsubst %,%/built-in.o,$(core-y)))
 
-QEMU_OPTS += -m $(M)
-QEMU_OPTS += -smp $(SMP)
-QEMU_OPTS += -bios default
-QEMU_OPTS += -drive file=$(ROOTFS_IMG),if=none,format=raw,id=x0
-QEMU_OPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
-QEMU_OPTS += -global virtio-mmio.force-legacy=false
-QEMU_OPTS += -netdev user,id=net0
-QEMU_OPTS += -device virtio-net-device,netdev=net0,bus=virtio-mmio-bus.1
-
-QEMU_OPTS += $(EXTRA_QEMU_OPTS)
-
 .DELETE_ON_ERROR:
 
-.PHONY: all brk run gdb-server gdb-client rootfs clean clean-kernel \
+.PHONY: all brk clean clean-kernel \
 	format format-check compile_commands size disasm syncconfig \
 	distclean hooks help FORCE
 
@@ -261,12 +235,6 @@ help:
 	$(Q)echo "  format                 Format C sources with clang-format"
 	$(Q)echo "  format-check           Check C source formatting (no writes)"
 	$(Q)echo "  compile_commands       Regenerate compile_commands.json (needs bear)"
-	$(Q)echo "  run                    Build rootfs + boot kernel in QEMU"
-	$(Q)echo "  debug                  QEMU with interrupt tracing"
-	$(Q)echo "  gdb-server             QEMU + GDB stub"
-	$(Q)echo "  gdb-client             Connect GDB to :1234"
-	$(Q)echo "  rootfs                 Build the root filesystem via $(USER_ROOT)"
-	$(Q)echo "  dtb / dts              Dump the QEMU virt device tree"
 	$(Q)echo "  size / disasm          Show kernel size / disassembly"
 	$(Q)echo "  syncconfig             Force build-flag regeneration"
 	$(Q)echo "  hooks                  Enable the Conventional Commit hook"
@@ -279,15 +247,11 @@ help:
 	$(Q)echo "  CROSS_COMPILE=<prefix>"
 	$(Q)echo "  BUILD={debug|release}  (default: debug)"
 	$(Q)echo "  BUILD_ROOT=<path>      (default: build)"
-	$(Q)echo "  USER_ROOT=<path>       (default: ../brk-user)"
-	$(Q)echo "  SMP=<n>                (default 3)"
-	$(Q)echo "  M=<size>               (default 128M)"
 	$(Q)echo "  WERROR={0|1}           (default: 1)"
 	$(Q)echo "  PGTABLE_LEVELS={3|4|5} (default: 3, Sv39/Sv48/Sv57)"
 	$(Q)echo "  V=1                    Show full build commands"
 	$(Q)echo "  EXTRA_CFLAGS=...       Additional compiler flags"
 	$(Q)echo "  EXTRA_LDFLAGS=...      Additional linker flags"
-	$(Q)echo "  EXTRA_QEMU_OPTS=...    Additional QEMU flags"
 	$(Q)echo "  LINK_CHECK={0|1}       Warn about linker orphan sections"
 
 $(LINKER_SCRIPT): $(LINKER_SCRIPT_SRC) $(FLAGS_DEP) \
@@ -349,22 +313,6 @@ $(KERNEL_BUILD_ROOT)/vendor/%.o: FORCE
 		build=$(call object_build,vendor) \
 		KERNEL_BUILD_ROOT=$(KERNEL_BUILD_ROOT) FLAGS_STAMP=$(FLAGS_STAMP)
 
-run: $(ROOTFS_IMG) $(KERNEL_ELF)
-	$(Q)$(QEMU) $(QEMU_OPTS) -kernel $(KERNEL_ELF)
-
-gdb-server: $(ROOTFS_IMG) $(KERNEL_ELF)
-	$(Q)$(QEMU) $(QEMU_OPTS) -S -s -kernel $(KERNEL_ELF)
-
-gdb-client: $(KERNEL_ELF)
-	$(Q)$(GDB) --tui -quiet -ex "target remote :1234" $(KERNEL_ELF)
-
-rootfs:
-	$(Q)rm -f $(ROOTFS_IMG)
-	$(Q)KERNEL_ROOT="$(CURDIR)" $(USER_ROOT)/scripts/mkrootfs.sh "$(ROOTFS_IMG)"
-
-$(ROOTFS_IMG): $(ROOTFS_DEPS)
-	$(Q)KERNEL_ROOT="$(CURDIR)" $(USER_ROOT)/scripts/mkrootfs.sh "$@"
-
 clean:
 	$(Q)$(RM) -r $(BUILD_ROOT)
 
@@ -373,27 +321,6 @@ clean-kernel:
 
 distclean: clean
 	$(Q)$(RM) compile_commands.json
-
-.PHONY: debug
-debug: $(ROOTFS_IMG) $(KERNEL_ELF)
-	$(Q)$(QEMU) $(QEMU_OPTS) -kernel $(KERNEL_ELF) -d int
-
-DTB := $(BOARD_BUILD_ROOT)/qemu_virt.dtb
-DTS := $(BOARD_BUILD_ROOT)/qemu_virt.dts
-
-.PHONY: dtb dts
-dtb: $(DTB)
-
-$(DTB):
-	$(Q)mkdir -p $(dir $@)
-	$(Q)$(QEMU) -M virt,dumpdtb=$@
-
-dts: $(DTS)
-
-$(DTS): $(DTB)
-	@command -v dtc >/dev/null 2>&1 || \
-		{ echo "error: dtc not found in PATH" >&2; exit 1; }
-	$(Q)dtc -I dtb -O dts $< -o $@
 
 ifneq ($(KERNEL_GOALS),)
 -include $(FLAGS_CONFIG)
