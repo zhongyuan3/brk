@@ -182,7 +182,7 @@ $(FLAGS_CONFIG): FORCE
 endif
 endif
 
-LINKER_SCRIPT_SRC := src/arch/$(ARCH)/kern/brk.ld.S
+LINKER_SCRIPT_SRC := src/arch/$(ARCH)/kernel/brk.ld.S
 LINKER_SCRIPT := $(KERNEL_BUILD_ROOT)/brk.ld
 LINKER_SCRIPT_DEP := $(LINKER_SCRIPT).d
 KERNEL_ELF := $(KERNEL_BUILD_ROOT)/brk

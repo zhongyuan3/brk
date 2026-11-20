@@ -1,2 +1,2 @@
-subdir-y += kern
+subdir-y += kernel
 subdir-y += mm

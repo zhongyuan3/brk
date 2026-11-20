@@ -1,5 +1,5 @@
 subdir-y := arch/$(ARCH)
-subdir-y += kern
+subdir-y += kernel
 subdir-y += mm
 subdir-y += drivers
 subdir-y += fs
