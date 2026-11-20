@@ -6,7 +6,7 @@
  * defines the same underlying types under __u* / __s* names, and brk/types.h
  * aliases them as u8/u32/... on top of __u*.  The headers stay separate so
  * that vendor code and userland can use <stdint.h> without pulling in the
- * kernel UAPI; src/kernel/abi_check.c asserts that the names denote the same
+ * kernel UAPI; kernel/abi_check.c asserts that the names denote the same
  * types.
  */
 

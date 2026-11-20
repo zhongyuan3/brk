@@ -17,7 +17,7 @@
  *
  * The C-standard names (u32, size_t, ...) live in
  * <stdint.h> and are intentionally separate typedefs: both use
- * the same compiler predefined type macros, and src/kernel/abi_check.c
+ * the same compiler predefined type macros, and kernel/abi_check.c
  * asserts that the two spellings remain type-compatible.  Do not include
  * <stdint.h> from this header: UAPI must stay self-contained.
  */

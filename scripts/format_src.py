@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-format-src.py - Recursively format C sources and headers under src/.
+format-src.py - Recursively format C sources and headers in the kernel tree.
 
 Applies the project's .clang-format (Linux kernel style) to every *.c and *.h
-file found under src/, skipping vendor/ directories anywhere in the tree.
-Requires clang-format >= 11.
+file found under the repository root, skipping vendor/, build/, and .git/
+directories. Requires clang-format >= 11.
 
 Usage: scripts/format-src.py [--dry-run|--check] [path]
   --dry-run   Only list the files that would be formatted.
   --check     Check formatting without modifying files.
-  path        Directory to format (default: <repo>/src).
+  path        Directory to format (default: <repo>).
 """
 
 import os
@@ -43,11 +43,11 @@ def parse_args(argv):
 
 
 def collect_files(srcdir):
-    """Collect *.c and *.h files under srcdir, pruning any vendor/ directory."""
+    """Collect *.c and *.h files under srcdir, pruning generated trees."""
     files = []
+    skipped = {"vendor", "build", ".git", ".cache"}
     for dirpath, dirnames, filenames in os.walk(srcdir):
-        # Prune any directory named 'vendor' in the tree.
-        dirnames[:] = [d for d in dirnames if d != "vendor"]
+        dirnames[:] = [d for d in dirnames if d not in skipped]
         for fn in filenames:
             if fn.endswith((".c", ".h")):
                 files.append(os.path.join(dirpath, fn))
@@ -89,7 +89,7 @@ def run_clang_format(clang_format, files, extra_args, parallel):
 def main():
     dry_run, check, srcdir = parse_args(sys.argv[1:])
 
-    srcdir = srcdir or os.path.join(ROOT, "src")
+    srcdir = srcdir or ROOT
     srcdir = os.path.abspath(srcdir)
 
     clang_format = shutil.which("clang-format")

@@ -12,7 +12,7 @@ driver       concrete hardware or function drivers
 ## Directory map
 
 ```text
-dev/
+drivers/
 ├── core/                 device model and services
 │   ├── device.c          device/bus/driver, probe, reference counting
 │   ├── devno.c           dev_t major/minor allocator
@@ -24,7 +24,7 @@ dev/
 ├── char/                 character-device core
 ├── tty/                  tty core, line discipline and serial drivers
 ├── block/                block I/O core, gendisk and block drivers
-├── net/                  network device drivers (net core lives in src/net)
+├── net/                  network device drivers (net core: top-level net/)
 ├── irqchip/              interrupt controller drivers
 └── rtc/                  RTC drivers
 ```

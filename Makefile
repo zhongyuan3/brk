@@ -22,7 +22,7 @@ LDFLAGS ?=
 LDFLAGS_FINAL :=
 
 ifeq ($(ARCH),riscv)
-include src/arch/$(ARCH)/config.mk
+include arch/$(ARCH)/config.mk
 else
 $(error Unsupported architecture '$(ARCH)')
 endif
@@ -109,8 +109,8 @@ KBUILD_CFLAGS += -std=gnu11
 KBUILD_CFLAGS += -nostdinc
 KBUILD_CFLAGS += -MMD
 KBUILD_CFLAGS += -MP
-KBUILD_CFLAGS += -Isrc/arch/$(ARCH)/include
-KBUILD_CFLAGS += -Isrc/include
+KBUILD_CFLAGS += -Iarch/$(ARCH)/include
+KBUILD_CFLAGS += -Iinclude
 KBUILD_CFLAGS += -Ivendor/libfdt
 
 KBUILD_LDFLAGS += -z max-page-size=4096
@@ -182,7 +182,7 @@ $(FLAGS_CONFIG): FORCE
 endif
 endif
 
-LINKER_SCRIPT_SRC := src/arch/$(ARCH)/kernel/brk.ld.S
+LINKER_SCRIPT_SRC := arch/$(ARCH)/kernel/brk.ld.S
 LINKER_SCRIPT := $(KERNEL_BUILD_ROOT)/brk.ld
 LINKER_SCRIPT_DEP := $(LINKER_SCRIPT).d
 KERNEL_ELF := $(KERNEL_BUILD_ROOT)/brk
@@ -197,7 +197,13 @@ ifeq ($(LINK_CHECK),1)
 LDFLAGS_FINAL += --orphan-handling=warn
 endif
 
-core-y := src
+core-y := arch/$(ARCH)
+core-y += kernel
+core-y += mm
+core-y += drivers
+core-y += fs
+core-y += net
+core-y += lib
 core-y += vendor
 
 BUILT_IN_OBJS := $(addprefix $(KERNEL_BUILD_ROOT)/,$(patsubst %,%/built-in.o,$(core-y)))
@@ -252,8 +258,8 @@ hooks:
 help:
 	$(Q)echo "Targets:"
 	$(Q)echo "  all / brk              Build the kernel (SMP capable)"
-	$(Q)echo "  format                 Format src/ with clang-format"
-	$(Q)echo "  format-check           Check src/ formatting (no writes)"
+	$(Q)echo "  format                 Format C sources with clang-format"
+	$(Q)echo "  format-check           Check C source formatting (no writes)"
 	$(Q)echo "  compile_commands       Regenerate compile_commands.json (needs bear)"
 	$(Q)echo "  run                    Build rootfs + boot kernel in QEMU"
 	$(Q)echo "  debug                  QEMU with interrupt tracing"
@@ -301,14 +307,46 @@ $(KERNEL_BUILD_ROOT)/%/built-in.o: FORCE
 
 # Single-object convenience targets.  They build the whole directory, which
 # is cheap and keeps the recursive Makefile logic in one place.
-$(KERNEL_BUILD_ROOT)/src/%.o: FORCE
+object_build = $(1)$(patsubst %/,%,/$(subst ./,,$(dir $*)))
+
+$(KERNEL_BUILD_ROOT)/arch/$(ARCH)/%.o: FORCE
 	$(Q)$(MAKE) -f scripts/Makefile.build \
-		build=src/$(patsubst %/,%,$(dir $*)) \
+		build=$(call object_build,arch/$(ARCH)) \
+		KERNEL_BUILD_ROOT=$(KERNEL_BUILD_ROOT) FLAGS_STAMP=$(FLAGS_STAMP)
+
+$(KERNEL_BUILD_ROOT)/kernel/%.o: FORCE
+	$(Q)$(MAKE) -f scripts/Makefile.build \
+		build=$(call object_build,kernel) \
+		KERNEL_BUILD_ROOT=$(KERNEL_BUILD_ROOT) FLAGS_STAMP=$(FLAGS_STAMP)
+
+$(KERNEL_BUILD_ROOT)/mm/%.o: FORCE
+	$(Q)$(MAKE) -f scripts/Makefile.build \
+		build=$(call object_build,mm) \
+		KERNEL_BUILD_ROOT=$(KERNEL_BUILD_ROOT) FLAGS_STAMP=$(FLAGS_STAMP)
+
+$(KERNEL_BUILD_ROOT)/drivers/%.o: FORCE
+	$(Q)$(MAKE) -f scripts/Makefile.build \
+		build=$(call object_build,drivers) \
+		KERNEL_BUILD_ROOT=$(KERNEL_BUILD_ROOT) FLAGS_STAMP=$(FLAGS_STAMP)
+
+$(KERNEL_BUILD_ROOT)/fs/%.o: FORCE
+	$(Q)$(MAKE) -f scripts/Makefile.build \
+		build=$(call object_build,fs) \
+		KERNEL_BUILD_ROOT=$(KERNEL_BUILD_ROOT) FLAGS_STAMP=$(FLAGS_STAMP)
+
+$(KERNEL_BUILD_ROOT)/net/%.o: FORCE
+	$(Q)$(MAKE) -f scripts/Makefile.build \
+		build=$(call object_build,net) \
+		KERNEL_BUILD_ROOT=$(KERNEL_BUILD_ROOT) FLAGS_STAMP=$(FLAGS_STAMP)
+
+$(KERNEL_BUILD_ROOT)/lib/%.o: FORCE
+	$(Q)$(MAKE) -f scripts/Makefile.build \
+		build=$(call object_build,lib) \
 		KERNEL_BUILD_ROOT=$(KERNEL_BUILD_ROOT) FLAGS_STAMP=$(FLAGS_STAMP)
 
 $(KERNEL_BUILD_ROOT)/vendor/%.o: FORCE
 	$(Q)$(MAKE) -f scripts/Makefile.build \
-		build=vendor/$(patsubst %/,%,$(dir $*)) \
+		build=$(call object_build,vendor) \
 		KERNEL_BUILD_ROOT=$(KERNEL_BUILD_ROOT) FLAGS_STAMP=$(FLAGS_STAMP)
 
 run: $(ROOTFS_IMG) $(KERNEL_ELF)
