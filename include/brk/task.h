@@ -21,7 +21,6 @@
 #include <uapi/limits.h>
 #include <uapi/resource.h>
 #include <uapi/signal.h>
-#include <uapi/times.h>
 #include <uapi/types.h>
 
 #endif

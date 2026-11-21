@@ -17,7 +17,7 @@
  * flow control; signals abort the write with the bytes already sent. */
 #define N_TTY_TX_BUSY_PAUSE_MS 1
 
-void tty_termios_defaults(struct termios *t)
+void tty_termios_defaults(struct __brk_termios *t)
 {
 	memset(t, 0, sizeof(*t));
 	t->c_iflag = ICRNL | IXON;
@@ -53,7 +53,7 @@ static void n_tty_put(struct tty *tty, int c)
 /* Apply output post-processing.  Used by both write() and input echo. */
 static void n_tty_output(struct tty *tty, int c)
 {
-	struct termios *t = &tty->port->termios;
+	struct __brk_termios *t = &tty->port->termios;
 
 	if (t->c_lflag & FLUSHO)
 		return;
@@ -68,7 +68,7 @@ static void n_tty_output(struct tty *tty, int c)
 
 static void n_tty_echo_char(struct tty *tty, int c)
 {
-	struct termios *t = &tty->port->termios;
+	struct __brk_termios *t = &tty->port->termios;
 
 	if (!(t->c_lflag & ECHO))
 		return;
@@ -104,7 +104,7 @@ static bool n_tty_background(struct tty_port *port, struct thread *task)
 static void n_tty_signal(struct tty *tty, int sig, int c)
 {
 	struct tty_port *port = tty->port;
-	struct termios *t = &port->termios;
+	struct __brk_termios *t = &port->termios;
 
 	if (!(t->c_lflag & ISIG))
 		return;
@@ -128,7 +128,7 @@ static void n_tty_signal(struct tty *tty, int sig, int c)
 /* Store one byte without interpreting it as an editing character. */
 static void n_tty_store(struct tty *tty, u8 c)
 {
-	struct termios *t = &tty->port->termios;
+	struct __brk_termios *t = &tty->port->termios;
 	bool canonical = (t->c_lflag & ICANON) != 0;
 
 	if (tty->rx_e - tty->rx_r >= tty->rx_size) {
@@ -150,7 +150,7 @@ static void n_tty_store(struct tty *tty, u8 c)
 
 static void n_tty_werase(struct tty *tty)
 {
-	struct termios *t = &tty->port->termios;
+	struct __brk_termios *t = &tty->port->termios;
 	size_t start = tty->rx_w;
 	size_t end = tty->rx_e;
 
@@ -177,7 +177,7 @@ static void n_tty_werase(struct tty *tty)
 
 static void n_tty_reprint(struct tty *tty)
 {
-	struct termios *t = &tty->port->termios;
+	struct __brk_termios *t = &tty->port->termios;
 
 	if (!(t->c_lflag & ECHO))
 		return;
@@ -194,7 +194,7 @@ static void n_tty_reprint(struct tty *tty)
 static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 {
 	struct tty_port *port = tty->port;
-	struct termios *t = &port->termios;
+	struct __brk_termios *t = &port->termios;
 	irqstate_t flags = spin_lock_irqsave(&port->lock);
 
 	for (size_t i = 0; i < size; ++i) {
@@ -568,7 +568,7 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 		irqstate_t flags = spin_lock_irqsave(&port->lock);
 		for (i = 0; i < chunk; ++i) {
 			int c = tmp[i];
-			struct termios *t = &port->termios;
+			struct __brk_termios *t = &port->termios;
 
 			if (t->c_lflag & FLUSHO)
 				continue;
@@ -622,7 +622,7 @@ out:
 static long n_tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 {
 	struct tty_port *port = tty->port;
-	struct termios t;
+	struct __brk_termios t;
 	int avail;
 	irqstate_t flags;
 

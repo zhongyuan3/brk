@@ -85,9 +85,9 @@ u64 sys_write(void)
 static u64 readv_writev(bool is_write)
 {
 	int fd = syscall_arg_int(0);
-	const struct iovec *uiov = syscall_arg_ptr(1);
+	const struct __brk_iovec *uiov = syscall_arg_ptr(1);
 	int iovcnt = syscall_arg_int(2);
-	struct iovec *iov;
+	struct __brk_iovec *iov;
 	struct file *fp;
 	size_t bytes;
 	ssize_t total = 0;
@@ -241,8 +241,8 @@ u64 sys_statx(void)
 	int dirfd = syscall_arg_int(0);
 	const char *path = syscall_arg_ptr(1);
 	int flags = syscall_arg_int(2);
-	struct statx *ubuf = syscall_arg_ptr(3);
-	struct statx stx;
+	struct __brk_statx *ubuf = syscall_arg_ptr(3);
+	struct __brk_statx stx;
 	struct kstat ks;
 	int ret;
 
@@ -311,8 +311,8 @@ u64 sys_faccessat(void)
 u64 sys_fstatfs(void)
 {
 	int fd = syscall_arg_int(0);
-	struct brk_statfs *ubuf = syscall_arg_ptr(1);
-	struct brk_statfs st;
+	struct __brk_statfs *ubuf = syscall_arg_ptr(1);
+	struct __brk_statfs st;
 	struct kstatfs ks;
 	struct thread *task = current_thread();
 	struct file *fp;
@@ -340,8 +340,8 @@ u64 sys_fstatfs(void)
 u64 sys_statfs(void)
 {
 	const char *path = syscall_arg_ptr(0);
-	struct brk_statfs *ubuf = syscall_arg_ptr(1);
-	struct brk_statfs st;
+	struct __brk_statfs *ubuf = syscall_arg_ptr(1);
+	struct __brk_statfs st;
 	struct kstatfs ks;
 	struct path p = { 0 };
 	struct inode *inode;
@@ -418,8 +418,8 @@ u64 sys_unlinkat(void)
 
 u64 sys_sysinfo(void)
 {
-	struct brk_sysinfo *ubuf = syscall_arg_ptr(0);
-	struct brk_sysinfo info = { 0 };
+	struct __brk_sysinfo *ubuf = syscall_arg_ptr(0);
+	struct __brk_sysinfo info = { 0 };
 
 	if (!ubuf)
 		return -EFAULT;
@@ -632,7 +632,7 @@ static bool getdents_filldir(struct dir_iterator *ctx, const char *name,
 			     unsigned int d_type)
 {
 	struct getdents_context *gctx;
-	struct brk_dirent *de;
+	struct __brk_dirent *de;
 
 	(void)offset;
 
@@ -640,13 +640,13 @@ static bool getdents_filldir(struct dir_iterator *ctx, const char *name,
 	if (gctx->pos > gctx->size)
 		return false;
 
-	size_t len = offsetof(struct brk_dirent, d_name) + namelen + 1;
-	len = align_up(len, alignof(struct brk_dirent));
+	size_t len = offsetof(struct __brk_dirent, d_name) + namelen + 1;
+	len = align_up(len, alignof(struct __brk_dirent));
 
 	if (len > gctx->size - gctx->pos || len > 0xffffffffu)
 		return false;
 
-	de = (struct brk_dirent *)(gctx->buf + gctx->pos);
+	de = (struct __brk_dirent *)(gctx->buf + gctx->pos);
 	de->d_ino = ino;
 	de->d_reclen = (u32)len;
 	de->d_type = d_type;
@@ -889,7 +889,7 @@ out:
 }
 
 static int times_from_user_timespec(struct iattr *attr,
-				    const struct timespec times[2])
+				    const struct __brk_timespec times[2])
 {
 	if (!times) {
 		ktime_t now = ktime_realtime();
@@ -901,7 +901,7 @@ static int times_from_user_timespec(struct iattr *attr,
 	}
 
 	for (int i = 0; i < 2; i++) {
-		const struct timespec *ts = &times[i];
+		const struct __brk_timespec *ts = &times[i];
 		ktime_t t;
 
 		if (ts->tv_nsec == UTIME_OMIT)
@@ -926,7 +926,7 @@ static int times_from_user_timespec(struct iattr *attr,
 }
 
 static int set_times_path_at(int dirfd, const char *path,
-			     const struct timespec times[2],
+			     const struct __brk_timespec times[2],
 			     unsigned int lookup_flags)
 {
 	struct iattr attr = { 0 };
@@ -939,7 +939,7 @@ static int set_times_path_at(int dirfd, const char *path,
 	return setattr_path_at(dirfd, path, &attr, lookup_flags);
 }
 
-static int set_times_fd(int fd, const struct timespec times[2])
+static int set_times_fd(int fd, const struct __brk_timespec times[2])
 {
 	struct iattr attr = { 0 };
 	int err;
@@ -1014,9 +1014,9 @@ u64 sys_utimensat(void)
 {
 	int dirfd = syscall_arg_int(0);
 	const char *path = syscall_arg_ptr(1);
-	const struct timespec *utimes = syscall_arg_ptr(2);
+	const struct __brk_timespec *utimes = syscall_arg_ptr(2);
 	int flags = syscall_arg_raw(3);
-	struct timespec ts[2];
+	struct __brk_timespec ts[2];
 
 	if (flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH))
 		return -EINVAL;

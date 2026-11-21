@@ -8,7 +8,7 @@
  * clock_getres() from this structure.  Padding is explicit so the layout does
  * not depend on compiler-specific tail padding.
  */
-struct brk_sysinfo {
+struct __brk_sysinfo {
 	char sysname[65];
 	char release[65];
 	char machine[65];

@@ -5,7 +5,7 @@
 
 #define IOV_MAX 1024
 
-struct iovec {
+struct __brk_iovec {
 	void *iov_base;
 	__brk_size_t iov_len;
 };

@@ -13,13 +13,12 @@
 #include <uapi/errno.h>
 #include <uapi/limits.h>
 #include <uapi/poll.h>
-#include <uapi/select.h>
 #include <uapi/signal.h>
 #include <uapi/time.h>
 
 #define POLL_SLEEP_NS 10000000ULL
 
-static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
+static int do_poll(struct __brk_pollfd *fds, unsigned int nfds, int timeout_ms)
 {
 	bool infinite = timeout_ms < 0;
 	u64 deadline = 0;
@@ -67,10 +66,10 @@ static int do_poll(struct pollfd *fds, unsigned int nfds, int timeout_ms)
 	}
 }
 
-static u64 poll_common(struct pollfd *ufds, unsigned long nfds,
+static u64 poll_common(struct __brk_pollfd *ufds, unsigned long nfds,
 		       int timeout_ms)
 {
-	struct pollfd *fds = NULL;
+	struct __brk_pollfd *fds = NULL;
 	size_t bytes = 0;
 	int ret;
 
@@ -99,7 +98,7 @@ static u64 poll_common(struct pollfd *ufds, unsigned long nfds,
 	return ret;
 }
 
-static int timespec_to_ms(const struct timespec *ts, int *ms)
+static int timespec_to_ms(const struct __brk_timespec *ts, int *ms)
 {
 	u64 v;
 
@@ -131,11 +130,11 @@ static int apply_sigmask(const sigset_t *uset, sigset_t *oldmask)
 
 u64 sys_ppoll(void)
 {
-	struct pollfd *ufds = syscall_arg_ptr(0);
+	struct __brk_pollfd *ufds = syscall_arg_ptr(0);
 	unsigned long nfds = (unsigned long)syscall_arg_raw(1);
-	const struct timespec *utimeout = syscall_arg_ptr(2);
+	const struct __brk_timespec *utimeout = syscall_arg_ptr(2);
 	const sigset_t *usigmask = syscall_arg_ptr(3);
-	struct timespec ts;
+	struct __brk_timespec ts;
 	sigset_t oldmask;
 	int timeout_ms = -1;
 	int applied;

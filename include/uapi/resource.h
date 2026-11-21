@@ -11,16 +11,16 @@
  * Kernel-side process time primitive.  All values are nanoseconds, so libc
  * owns the POSIX times()/getrusage() tick and timeval conversions.
  */
-struct brk_times {
+struct __brk_times {
 	__brk_u64 user_ns;
 	__brk_u64 system_ns;
 	__brk_u64 child_user_ns;
 	__brk_u64 child_system_ns;
 };
 
-struct rusage {
-	struct timeval ru_utime; /* user time used */
-	struct timeval ru_stime; /* system time used */
+struct __brk_rusage {
+	struct __brk_timeval ru_utime; /* user time used */
+	struct __brk_timeval ru_stime; /* system time used */
 	__brk_long_t ru_maxrss; /* maximum resident set size */
 	__brk_long_t ru_ixrss; /* integral shared memory size */
 	__brk_long_t ru_idrss; /* integral unshared data size */

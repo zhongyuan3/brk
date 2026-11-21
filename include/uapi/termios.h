@@ -5,7 +5,7 @@
 
 #define NCCS 32
 
-struct termios {
+struct __brk_termios {
 	__brk_tcflag_t c_iflag;
 	__brk_tcflag_t c_oflag;
 	__brk_tcflag_t c_cflag;

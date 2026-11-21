@@ -70,7 +70,7 @@ u64 sys_bind(void)
 	int fd = syscall_arg_int(0);
 	const void *uaddr = syscall_arg_ptr(1);
 	int addrlen = syscall_arg_int(2);
-	struct sockaddr_in sa;
+	struct __brk_sockaddr_in sa;
 	struct file *file;
 	struct socket *sock;
 	int err;
@@ -86,7 +86,7 @@ u64 sys_bind(void)
 	if (err)
 		return err;
 
-	err = sock->ops->bind(sock, (const struct sockaddr *)&sa, addrlen);
+	err = sock->ops->bind(sock, (const struct __brk_sockaddr *)&sa, addrlen);
 	file_put(file);
 	return err;
 }
@@ -96,7 +96,7 @@ u64 sys_connect(void)
 	int fd = syscall_arg_int(0);
 	const void *uaddr = syscall_arg_ptr(1);
 	int addrlen = syscall_arg_int(2);
-	struct sockaddr_in sa;
+	struct __brk_sockaddr_in sa;
 	struct file *file;
 	struct socket *sock;
 	int err;
@@ -112,7 +112,7 @@ u64 sys_connect(void)
 	if (err)
 		return err;
 
-	err = sock->ops->connect(sock, (const struct sockaddr *)&sa, addrlen);
+	err = sock->ops->connect(sock, (const struct __brk_sockaddr *)&sa, addrlen);
 	file_put(file);
 	return err;
 }
@@ -125,7 +125,7 @@ u64 sys_sendto(void)
 	unsigned int flags = syscall_arg_raw(3);
 	const void *uaddr = syscall_arg_ptr(4);
 	int addrlen = syscall_arg_int(5);
-	struct sockaddr_in sa;
+	struct __brk_sockaddr_in sa;
 	struct file *file;
 	struct socket *sock;
 	int err;
@@ -144,7 +144,7 @@ u64 sys_sendto(void)
 		return err;
 
 	err = sock->ops->sendmsg(sock, buf, len,
-				 uaddr ? (const struct sockaddr *)&sa : NULL,
+				 uaddr ? (const struct __brk_sockaddr *)&sa : NULL,
 				 uaddr ? (int)sizeof(sa) : 0, (int)flags);
 	file_put(file);
 	return err;
@@ -158,7 +158,7 @@ u64 sys_recvfrom(void)
 	unsigned int flags = syscall_arg_raw(3);
 	void *uaddr = syscall_arg_ptr(4);
 	int *uaddrlen = syscall_arg_ptr(5);
-	struct sockaddr_in sa;
+	struct __brk_sockaddr_in sa;
 	struct file *file;
 	struct socket *sock;
 	int salen = sizeof(sa);
@@ -177,7 +177,7 @@ u64 sys_recvfrom(void)
 		return err;
 
 	err = sock->ops->recvmsg(sock, buf, len,
-				 uaddr ? (struct sockaddr *)&sa : NULL,
+				 uaddr ? (struct __brk_sockaddr *)&sa : NULL,
 				 uaddr ? &salen : NULL, (int)flags);
 	if (err >= 0 && uaddr && uaddrlen) {
 		int n = min(ulen, salen);
@@ -278,11 +278,11 @@ static u64 sys_accept_common(unsigned int flags)
 	}
 
 	if (uaddr && uaddrlen && newsock->ops->getname) {
-		struct sockaddr_in sa;
+		struct __brk_sockaddr_in sa;
 		int n;
 
 		salen = sizeof(sa);
-		err = newsock->ops->getname(newsock, (struct sockaddr *)&sa,
+		err = newsock->ops->getname(newsock, (struct __brk_sockaddr *)&sa,
 					    &salen, true);
 		if (!err) {
 			n = min(ulen, salen);
@@ -304,7 +304,7 @@ static u64 sys_getname(bool peer)
 	int fd = syscall_arg_int(0);
 	void *uaddr = syscall_arg_ptr(1);
 	int *uaddrlen = syscall_arg_ptr(2);
-	struct sockaddr_in sa;
+	struct __brk_sockaddr_in sa;
 	struct file *file;
 	struct socket *sock;
 	int salen;
@@ -328,7 +328,7 @@ static u64 sys_getname(bool peer)
 	}
 
 	salen = ulen;
-	err = sock->ops->getname(sock, (struct sockaddr *)&sa, &salen, peer);
+	err = sock->ops->getname(sock, (struct __brk_sockaddr *)&sa, &salen, peer);
 	if (!err) {
 		int n = min(ulen, salen);
 

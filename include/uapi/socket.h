@@ -34,19 +34,19 @@
 #define SHUT_WR 1
 #define SHUT_RDWR 2
 
-struct sockaddr {
+struct __brk_sockaddr {
 	__brk_sa_family_t sa_family;
 	char sa_data[14];
 };
 
-struct in_addr {
+struct __brk_in_addr {
 	__brk_u32 s_addr;
 };
 
-struct sockaddr_in {
+struct __brk_sockaddr_in {
 	__brk_sa_family_t sin_family;
 	__brk_u16 sin_port;
-	struct in_addr sin_addr;
+	struct __brk_in_addr sin_addr;
 	__brk_u8 sin_zero[8];
 };
 

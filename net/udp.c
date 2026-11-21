@@ -72,10 +72,10 @@ static int udp_autobind(struct sock *sk)
 	return 0;
 }
 
-static int udp_bind(struct socket *sock, const struct sockaddr *addr,
+static int udp_bind(struct socket *sock, const struct __brk_sockaddr *addr,
 		    int addrlen)
 {
-	const struct sockaddr_in *sin = (const struct sockaddr_in *)addr;
+	const struct __brk_sockaddr_in *sin = (const struct __brk_sockaddr_in *)addr;
 	struct sock *sk = sock->sk;
 	irqstate_t flags;
 	u32 laddr;
@@ -111,10 +111,10 @@ static int udp_bind(struct socket *sock, const struct sockaddr *addr,
 	return 0;
 }
 
-static int udp_connect(struct socket *sock, const struct sockaddr *addr,
+static int udp_connect(struct socket *sock, const struct __brk_sockaddr *addr,
 		       int addrlen)
 {
-	const struct sockaddr_in *sin = (const struct sockaddr_in *)addr;
+	const struct __brk_sockaddr_in *sin = (const struct __brk_sockaddr_in *)addr;
 	struct sock *sk = sock->sk;
 	irqstate_t flags;
 	int err;
@@ -137,7 +137,7 @@ static int udp_connect(struct socket *sock, const struct sockaddr *addr,
 }
 
 static int udp_sendmsg(struct socket *sock, const void *buf, size_t len,
-		       const struct sockaddr *addr, int addrlen, int flags)
+		       const struct __brk_sockaddr *addr, int addrlen, int flags)
 {
 	struct sock *sk = sock->sk;
 	struct net_device *dev;
@@ -156,8 +156,8 @@ static int udp_sendmsg(struct socket *sock, const void *buf, size_t len,
 		return -EINVAL;
 
 	if (addr) {
-		const struct sockaddr_in *sin =
-			(const struct sockaddr_in *)addr;
+		const struct __brk_sockaddr_in *sin =
+			(const struct __brk_sockaddr_in *)addr;
 
 		if (addrlen < (int)sizeof(*sin) || sin->sin_family != AF_INET)
 			return -EINVAL;
@@ -313,7 +313,7 @@ drop:
 }
 
 static int udp_recvmsg(struct socket *sock, void *buf, size_t len,
-		       struct sockaddr *addr, int *addrlen, int msg_flags)
+		       struct __brk_sockaddr *addr, int *addrlen, int msg_flags)
 {
 	struct sock *sk = sock->sk;
 	struct sk_buff *skb;
@@ -349,7 +349,7 @@ static int udp_recvmsg(struct socket *sock, void *buf, size_t len,
 	spin_unlock_irqrestore(&sk->lock, flags);
 
 	if (addr && addrlen) {
-		struct sockaddr_in sin = { 0 };
+		struct __brk_sockaddr_in sin = { 0 };
 		int naddr;
 
 		sin.sin_family = AF_INET;
@@ -413,11 +413,11 @@ static unsigned int udp_poll(struct socket *sock, unsigned int events)
 	return rev & (events | POLLERR | POLLHUP);
 }
 
-static int udp_getname(struct socket *sock, struct sockaddr *addr, int *addrlen,
+static int udp_getname(struct socket *sock, struct __brk_sockaddr *addr, int *addrlen,
 		       bool peer)
 {
 	struct sock *sk = sock->sk;
-	struct sockaddr_in sin = { 0 };
+	struct __brk_sockaddr_in sin = { 0 };
 	int n;
 
 	if (!sk || !addr || !addrlen)

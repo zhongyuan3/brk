@@ -184,10 +184,10 @@ int netdev_set_ipv4(struct net_device *dev, u32 addr, u32 mask, u32 broadcast)
 	return 0;
 }
 
-static int ifreq_get_addr(const struct ifreq *ifr, u32 *addr)
+static int ifreq_get_addr(const struct __brk_ifreq *ifr, u32 *addr)
 {
-	const struct sockaddr_in *sin =
-		(const struct sockaddr_in *)&ifr->ifr_addr;
+	const struct __brk_sockaddr_in *sin =
+		(const struct __brk_sockaddr_in *)&ifr->ifr_addr;
 
 	if (sin->sin_family != AF_INET)
 		return -EINVAL;
@@ -195,18 +195,18 @@ static int ifreq_get_addr(const struct ifreq *ifr, u32 *addr)
 	return 0;
 }
 
-static void ifreq_set_addr(struct ifreq *ifr, u32 addr)
+static void ifreq_set_addr(struct __brk_ifreq *ifr, u32 addr)
 {
-	struct sockaddr_in *sin = (struct sockaddr_in *)&ifr->ifr_addr;
+	struct __brk_sockaddr_in *sin = (struct __brk_sockaddr_in *)&ifr->ifr_addr;
 
 	memset(sin, 0, sizeof(*sin));
 	sin->sin_family = AF_INET;
 	sin->sin_addr.s_addr = addr;
 }
 
-static int sockaddr_to_ipv4(const struct sockaddr *sa, u32 *addr)
+static int sockaddr_to_ipv4(const struct __brk_sockaddr *sa, u32 *addr)
 {
-	const struct sockaddr_in *sin = (const struct sockaddr_in *)sa;
+	const struct __brk_sockaddr_in *sin = (const struct __brk_sockaddr_in *)sa;
 
 	if (sin->sin_family != AF_INET)
 		return -EINVAL;
@@ -216,8 +216,8 @@ static int sockaddr_to_ipv4(const struct sockaddr *sa, u32 *addr)
 
 int netdev_ioctl(unsigned int cmd, unsigned long arg)
 {
-	struct ifreq ifr;
-	struct rtentry rt;
+	struct __brk_ifreq ifr;
+	struct __brk_rtentry rt;
 	struct net_device *dev;
 	u32 addr, mask, gw;
 	bool set_cmd;
@@ -234,8 +234,8 @@ int netdev_ioctl(unsigned int cmd, unsigned long arg)
 		return -EPERM;
 
 	if (cmd == SIOCGIFCONF) {
-		struct ifconf ifc;
-		struct ifreq entries[8];
+		struct __brk_ifconf ifc;
+		struct __brk_ifreq entries[8];
 		unsigned int nr = 0;
 		size_t bytes;
 		irqstate_t flags;
@@ -249,7 +249,7 @@ int netdev_ioctl(unsigned int cmd, unsigned long arg)
 		list_for_each_entry(dev, &netdev_list, dev_list) {
 			if (nr >= 8)
 				break;
-			if ((int)((nr + 1) * sizeof(struct ifreq)) >
+			if ((int)((nr + 1) * sizeof(struct __brk_ifreq)) >
 			    ifc.ifc_len)
 				break;
 			memset(&entries[nr], 0, sizeof(entries[nr]));
@@ -259,7 +259,7 @@ int netdev_ioctl(unsigned int cmd, unsigned long arg)
 		}
 		spin_unlock_irqrestore(&netdev_lock, flags);
 
-		bytes = nr * sizeof(struct ifreq);
+		bytes = nr * sizeof(struct __brk_ifreq);
 		if (bytes && copy_to_user(ifc.ifc_buf, entries, bytes))
 			return -EFAULT;
 		ifc.ifc_len = (int)bytes;
@@ -269,7 +269,7 @@ int netdev_ioctl(unsigned int cmd, unsigned long arg)
 	}
 
 	if (cmd == SIOCGIFSTATS) {
-		struct ifstats stats;
+		struct __brk_ifstats stats;
 
 		if (copy_from_user(&stats, (void *)arg, sizeof(stats)))
 			return -EFAULT;

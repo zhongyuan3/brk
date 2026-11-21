@@ -709,10 +709,10 @@ drop:
 	return send_reset ? 0 : -EINVAL;
 }
 
-static int tcp_bind(struct socket *sock, const struct sockaddr *addr,
+static int tcp_bind(struct socket *sock, const struct __brk_sockaddr *addr,
 		    int addrlen)
 {
-	const struct sockaddr_in *sin = (const struct sockaddr_in *)addr;
+	const struct __brk_sockaddr_in *sin = (const struct __brk_sockaddr_in *)addr;
 	struct tcp_sock *tsk = tcp_from_sock(sock);
 	irqstate_t flags;
 	u32 laddr;
@@ -748,10 +748,10 @@ static int tcp_bind(struct socket *sock, const struct sockaddr *addr,
 	return 0;
 }
 
-static int tcp_connect(struct socket *sock, const struct sockaddr *addr,
+static int tcp_connect(struct socket *sock, const struct __brk_sockaddr *addr,
 		       int addrlen)
 {
-	const struct sockaddr_in *sin = (const struct sockaddr_in *)addr;
+	const struct __brk_sockaddr_in *sin = (const struct __brk_sockaddr_in *)addr;
 	struct tcp_sock *tsk = tcp_from_sock(sock);
 	irqstate_t flags;
 	enum tcp_state st;
@@ -911,7 +911,7 @@ static int tcp_accept(struct socket *sock, struct socket **newsock)
 }
 
 static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
-		       const struct sockaddr *addr, int addrlen, int flags)
+		       const struct __brk_sockaddr *addr, int addrlen, int flags)
 {
 	struct tcp_sock *tsk = tcp_from_sock(sock);
 	bool nonblock = sock->nonblock || (flags & MSG_DONTWAIT);
@@ -1036,7 +1036,7 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 }
 
 static int tcp_recvmsg(struct socket *sock, void *buf, size_t len,
-		       struct sockaddr *addr, int *addrlen, int msg_flags)
+		       struct __brk_sockaddr *addr, int *addrlen, int msg_flags)
 {
 	struct tcp_sock *tsk = tcp_from_sock(sock);
 	struct sock *sk;
@@ -1089,7 +1089,7 @@ static int tcp_recvmsg(struct socket *sock, void *buf, size_t len,
 
 		skb = sk->rcv_queue.head;
 		if (addr && addrlen) {
-			struct sockaddr_in sin = { 0 };
+			struct __brk_sockaddr_in sin = { 0 };
 			int naddr;
 
 			sin.sin_family = AF_INET;
@@ -1207,11 +1207,11 @@ static unsigned int tcp_poll(struct socket *sock, unsigned int events)
 	return rev & (events | POLLERR | POLLHUP);
 }
 
-static int tcp_getname(struct socket *sock, struct sockaddr *addr, int *addrlen,
+static int tcp_getname(struct socket *sock, struct __brk_sockaddr *addr, int *addrlen,
 		       bool peer)
 {
 	struct sock *sk = sock->sk;
-	struct sockaddr_in sin = { 0 };
+	struct __brk_sockaddr_in sin = { 0 };
 	int n;
 
 	if (!sk || !addr || !addrlen)

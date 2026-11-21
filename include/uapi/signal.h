@@ -41,7 +41,7 @@
 #define SA_RESTART 0x10000000
 #define SA_NODEFER 0x40000000
 
-struct sigaction {
+struct __brk_sigaction {
 	void (*sa_handler)(int);
 	__brk_sigset_t sa_mask;
 	__brk_ulong_t sa_flags;
@@ -68,14 +68,14 @@ struct sigaction {
 #define CLD_STOPPED 5
 #define CLD_CONTINUED 6
 
-union sigval {
+union __brk_sigval {
 	int sival_int;
 	void *sival_ptr;
 };
 
-typedef union sigval sigval_t;
+typedef union __brk_sigval __brk_sigval_t;
 
-/* POSIX minimal siginfo_t layout used by waitid(). */
+/* POSIX minimal __brk_siginfo_t layout used by waitid(). */
 typedef struct {
 	int si_signo;
 	int si_errno;
@@ -85,7 +85,7 @@ typedef struct {
 	__brk_uid_t si_uid;
 	int si_status;
 	int __pad1;
-	sigval_t si_value;
-} siginfo_t;
+	__brk_sigval_t si_value;
+} __brk_siginfo_t;
 
 #endif

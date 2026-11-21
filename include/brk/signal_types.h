@@ -5,8 +5,8 @@
 #include <brk/spinlock_types.h>
 #include <uapi/signal.h>
 
-struct sigaction_table {
-	struct sigaction actions[NSIG];
+struct __brk_sigaction_table {
+	struct __brk_sigaction actions[NSIG];
 	spinlock_t lock;
 };
 

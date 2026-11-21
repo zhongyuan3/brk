@@ -8,8 +8,19 @@
 #include <brk/thread_types.h>
 #include <brk/types.h>
 #include <stdbool.h>
-#include <uapi/times.h>
 #include <uapi/types.h>
+
+/*
+ * Kernel-internal tick accounting snapshot.  The user ABI is
+ * struct __brk_times (nanoseconds); this legacy tick view is only
+ * used by process bookkeeping.
+ */
+struct tms {
+	__brk_clock_t tms_utime;
+	__brk_clock_t tms_stime;
+	__brk_clock_t tms_cutime;
+	__brk_clock_t tms_cstime;
+};
 
 #define PROCESS_NAME_MAX 32
 #define NGROUPS_MAX 32
@@ -97,7 +108,7 @@ struct process {
 	struct uvm_space *mm;
 	struct file_desc_table fdtable;
 	struct file_system_info fsinfo;
-	struct sigaction_table sigactions;
+	struct __brk_sigaction_table sigactions;
 	struct process_resource_usage rsrc_usage;
 
 	struct cred cred;

@@ -93,7 +93,7 @@ void tty_receive(struct tty *tty, int c)
 long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 {
 	struct tty_port *port;
-	struct winsize ws;
+	struct __brk_winsize ws;
 	struct thread *task;
 	pid_t pgrp;
 	irqstate_t flags;

@@ -630,7 +630,7 @@ void thread_exit(int status)
 	panic("scheduling zombie\n");
 }
 
-pid_t process_wait(pid_t pid, int *status, int options, struct rusage *rus,
+pid_t process_wait(pid_t pid, int *status, int options, struct __brk_rusage *rus,
 		   kuid_t *uid)
 {
 	struct process *child;

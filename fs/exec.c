@@ -68,7 +68,7 @@ static int exec_read_exact(struct file *fp, u64 off, void *buf, size_t n)
 	return 0;
 }
 
-static int elf_validate_exec_hdr(const struct elf_hdr *h)
+static int elf_validate_exec_hdr(const struct __brk_elf_hdr *h)
 {
 	if (memcmp(h->e_ident, ELFMAG, SELFMAG) != 0)
 		return -ENOEXEC;
@@ -79,7 +79,7 @@ static int elf_validate_exec_hdr(const struct elf_hdr *h)
 	return 0;
 }
 
-static int elf_read_phdr(struct file *f, u64 off, struct elf_phdr *phdr)
+static int elf_read_phdr(struct file *f, u64 off, struct __brk_elf_phdr *phdr)
 {
 	ssize_t r;
 	loff_t ret = file_lseek(f, off, SEEK_SET);
@@ -94,7 +94,7 @@ static int elf_read_phdr(struct file *f, u64 off, struct elf_phdr *phdr)
 	return 0;
 }
 
-static int exec_read_elf_header(struct file *f, struct elf_hdr *elf_hdr)
+static int exec_read_elf_header(struct file *f, struct __brk_elf_hdr *elf_hdr)
 {
 	ssize_t r = file_read(f, elf_hdr, sizeof(*elf_hdr));
 
@@ -212,7 +212,7 @@ static unsigned int flags_to_perm(unsigned int flags)
 }
 
 static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
-		   struct elf_phdr *ph, struct file *fp)
+		   struct __brk_elf_phdr *ph, struct file *fp)
 {
 	int err = 0;
 	size_t npgs = vma->size >> PAGE_SHIFT;
@@ -280,7 +280,7 @@ failed:
 	return err;
 }
 
-static int load_seg(struct uvm_space *mm, struct elf_phdr *ph, struct file *fp)
+static int load_seg(struct uvm_space *mm, struct __brk_elf_phdr *ph, struct file *fp)
 {
 	user_addr_t start, end;
 	struct uvm_region *vma;
@@ -362,8 +362,8 @@ static int map_stack(struct uvm_space *mm)
 
 static int __do_execve(const char *path, struct exec_args *args)
 {
-	struct elf_hdr elf_hdr = { 0 };
-	struct elf_phdr phdr = { 0 };
+	struct __brk_elf_hdr elf_hdr = { 0 };
+	struct __brk_elf_phdr phdr = { 0 };
 	struct process *process = current_process();
 	struct thread *task = current_thread();
 	struct file *f = NULL;

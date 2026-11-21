@@ -42,35 +42,13 @@
 #define UTIME_NOW ((1l << 30) - 1l)
 #define UTIME_OMIT ((1l << 30) - 2l)
 
-struct stat {
-	__brk_u64 st_dev; /* Device.  */
-	__brk_u64 st_ino; /* File serial number.  */
-	__brk_u32 st_mode; /* File mode.  */
-	__brk_u32 st_nlink; /* Link count.  */
-	__brk_u32 st_uid; /* User ID of the file's owner.  */
-	__brk_u32 st_gid; /* Group ID of the file's group. */
-	__brk_u64 st_rdev; /* Device number, if device.  */
-	__brk_u64 __pad1;
-	__brk_s64 st_size; /* Size of file, in bytes.  */
-	__brk_s32 st_blksize; /* Optimal block size for I/O.  */
-	__brk_s32 __pad2;
-	__brk_s64 st_blocks; /* Number 512-byte blocks allocated. */
-	__brk_s64 st_atime; /* Time of last access.  */
-	__brk_u64 st_atime_nsec;
-	__brk_s64 st_mtime; /* Time of last modification.  */
-	__brk_u64 st_mtime_nsec;
-	__brk_s64 st_ctime; /* Time of last status change.  */
-	__brk_u64 st_ctime_nsec;
-	__brk_u32 __unused4;
-	__brk_u32 __unused5;
-};
 
 /*
  * Kernel-side status primitive.  POSIX struct stat is built by libc from
  * this layout so the kernel does not have to track POSIX structure versions.
  * Timestamps are nanoseconds since the realtime epoch.
  */
-struct statx {
+struct __brk_statx {
 	__brk_u64 stx_dev;
 	__brk_u64 stx_ino;
 	__brk_u64 stx_rdev;

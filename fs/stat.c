@@ -1,7 +1,7 @@
 #include <brk/stat.h>
 #include <brk/string.h>
 
-void kstat_to_statx(const struct kstat *ks, struct statx *stx)
+void kstat_to_statx(const struct kstat *ks, struct __brk_statx *stx)
 {
 	memset(stx, 0, sizeof(*stx));
 
@@ -20,7 +20,7 @@ void kstat_to_statx(const struct kstat *ks, struct statx *stx)
 	stx->stx_blksize = (__brk_s32)ks->blksize;
 }
 
-void kstatfs_to_statfs(const struct kstatfs *ks, struct brk_statfs *st)
+void kstatfs_to_statfs(const struct kstatfs *ks, struct __brk_statfs *st)
 {
 	st->type = ks->type;
 	st->bsize = ks->bsize;

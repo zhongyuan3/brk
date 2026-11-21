@@ -44,18 +44,18 @@ struct sock {
 
 struct proto_ops {
 	int (*release)(struct socket *sock);
-	int (*bind)(struct socket *sock, const struct sockaddr *addr,
+	int (*bind)(struct socket *sock, const struct __brk_sockaddr *addr,
 		    int addrlen);
-	int (*connect)(struct socket *sock, const struct sockaddr *addr,
+	int (*connect)(struct socket *sock, const struct __brk_sockaddr *addr,
 		       int addrlen);
 	int (*listen)(struct socket *sock, int backlog);
 	int (*accept)(struct socket *sock, struct socket **newsock);
 	int (*sendmsg)(struct socket *sock, const void *buf, size_t len,
-		       const struct sockaddr *addr, int addrlen, int flags);
+		       const struct __brk_sockaddr *addr, int addrlen, int flags);
 	int (*recvmsg)(struct socket *sock, void *buf, size_t len,
-		       struct sockaddr *addr, int *addrlen, int flags);
+		       struct __brk_sockaddr *addr, int *addrlen, int flags);
 	int (*shutdown)(struct socket *sock, int how);
-	int (*getname)(struct socket *sock, struct sockaddr *addr, int *addrlen,
+	int (*getname)(struct socket *sock, struct __brk_sockaddr *addr, int *addrlen,
 		       bool peer);
 	unsigned int (*poll)(struct socket *sock, unsigned int events);
 };

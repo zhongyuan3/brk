@@ -7,7 +7,7 @@
  * Kernel-side identity snapshot.  libc derives the POSIX getpid/getuid/
  * getresuid/getppid family from this structure.
  */
-struct brk_proc {
+struct __brk_proc {
 	__brk_pid_t pid;
 	__brk_pid_t ppid;
 	__brk_pid_t pgid;
@@ -31,7 +31,7 @@ struct brk_proc {
  * a0 = @arg and sp = @stack.  @tls is written to tp; zero inherits the
  * creator's tp.  @clear_tid, when non-NULL, is cleared to zero on exit.
  */
-struct brk_thread_create_args {
+struct __brk_thread_create_args {
 	__brk_ulong_t stack;
 	__brk_ulong_t entry;
 	__brk_ulong_t arg;

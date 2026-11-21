@@ -49,10 +49,10 @@ static int futex_get_value(u32 *uaddr, u32 *value)
 	return 0;
 }
 
-static int futex_timeout_deadline(const struct timespec *utimeout,
+static int futex_timeout_deadline(const struct __brk_timespec *utimeout,
 				  bool absolute, bool realtime, u64 *deadline)
 {
-	struct timespec ts;
+	struct __brk_timespec ts;
 	ktime_t target;
 	ktime_t now;
 
@@ -91,7 +91,7 @@ static int futex_timeout_deadline(const struct timespec *utimeout,
 }
 
 static int futex_wait_common(u32 *uaddr, u32 val,
-			     const struct timespec *utimeout, u32 bitset,
+			     const struct __brk_timespec *utimeout, u32 bitset,
 			     bool absolute, bool realtime)
 {
 	struct thread *thread = current_thread();
@@ -329,8 +329,8 @@ u64 sys_futex(void)
 	u64 arg_timeout = syscall_arg_raw(3);
 	u32 *uaddr2 = syscall_arg_ptr(4);
 	u32 val3 = (u32)syscall_arg_raw(5);
-	const struct timespec *timeout =
-		(const struct timespec *)(uintptr_t)arg_timeout;
+	const struct __brk_timespec *timeout =
+		(const struct __brk_timespec *)(uintptr_t)arg_timeout;
 	int cmd = op & FUTEX_CMD_MASK;
 	bool realtime = op & FUTEX_CLOCK_REALTIME;
 	int ret;

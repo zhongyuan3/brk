@@ -17,7 +17,7 @@
  * Kernel-side directory entry primitive.  libc converts this compact layout
  * into POSIX struct posix_dent / struct dirent.
  */
-struct brk_dirent {
+struct __brk_dirent {
 	__brk_ino_t d_ino;
 	__brk_u32 d_reclen;
 	unsigned char d_type;

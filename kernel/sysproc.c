@@ -21,7 +21,7 @@ u64 sys_waitid(void)
 {
 	int idtype = syscall_arg_int(0);
 	pid_t id = syscall_arg_int(1);
-	siginfo_t *infop = syscall_arg_ptr(2);
+	__brk_siginfo_t *infop = syscall_arg_ptr(2);
 	int options = syscall_arg_int(3);
 	kuid_t uid = 0;
 	int status = 0;
@@ -54,7 +54,7 @@ u64 sys_waitid(void)
 		return ret;
 
 	if (infop) {
-		siginfo_t si = { 0 };
+		__brk_siginfo_t si = { 0 };
 
 		if (ret == 0) {
 			si.si_signo = 0;
@@ -100,7 +100,7 @@ u64 sys_exit_group(void)
 
 u64 sys_thread_create(void)
 {
-	struct brk_thread_create_args args;
+	struct __brk_thread_create_args args;
 	struct thread *thread;
 	void *uargs = syscall_arg_ptr(0);
 
@@ -150,8 +150,8 @@ u64 sys_sched_yield(void)
 u64 sys_getproc(void)
 {
 	struct process *process = current_process();
-	struct brk_proc *ubuf = syscall_arg_ptr(0);
-	struct brk_proc proc;
+	struct __brk_proc *ubuf = syscall_arg_ptr(0);
+	struct __brk_proc proc;
 	irqstate_t flags;
 
 	flags = spin_lock_irqsave(&process->cred_lock);

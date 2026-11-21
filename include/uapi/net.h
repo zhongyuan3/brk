@@ -31,13 +31,13 @@
 #define RTF_UP 0x0001
 #define RTF_GATEWAY 0x0002
 
-struct ifreq {
+struct __brk_ifreq {
 	char ifr_name[IFNAMSIZ];
 	union {
-		struct sockaddr ifru_addr;
-		struct sockaddr ifru_netmask;
-		struct sockaddr ifru_broadaddr;
-		struct sockaddr ifru_hwaddr;
+		struct __brk_sockaddr ifru_addr;
+		struct __brk_sockaddr ifru_netmask;
+		struct __brk_sockaddr ifru_broadaddr;
+		struct __brk_sockaddr ifru_hwaddr;
 		short ifru_flags;
 		int ifru_mtu;
 	} ifr_ifru;
@@ -50,18 +50,18 @@ struct ifreq {
 #define ifr_flags ifr_ifru.ifru_flags
 #define ifr_mtu ifr_ifru.ifru_mtu
 
-struct ifconf {
+struct __brk_ifconf {
 	int ifc_len;
 	union {
 		char *ifcu_buf;
-		struct ifreq *ifcu_req;
+		struct __brk_ifreq *ifcu_req;
 	} ifc_ifcu;
 };
 
 #define ifc_buf ifc_ifcu.ifcu_buf
 #define ifc_req ifc_ifcu.ifcu_req
 
-struct ifstats {
+struct __brk_ifstats {
 	char ifs_name[IFNAMSIZ];
 	__brk_u64 rx_packets;
 	__brk_u64 tx_packets;
@@ -73,10 +73,10 @@ struct ifstats {
 	__brk_u64 tx_dropped;
 };
 
-struct rtentry {
-	struct sockaddr rt_dst;
-	struct sockaddr rt_gateway;
-	struct sockaddr rt_genmask;
+struct __brk_rtentry {
+	struct __brk_sockaddr rt_dst;
+	struct __brk_sockaddr rt_gateway;
+	struct __brk_sockaddr rt_genmask;
 	unsigned short rt_flags;
 	unsigned short rt_metric;
 	char rt_dev[IFNAMSIZ];

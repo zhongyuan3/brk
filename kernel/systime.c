@@ -39,8 +39,8 @@ static int clock_now(int clockid, ktime_t *now)
 u64 sys_clock_gettime(void)
 {
 	int clockid = syscall_arg_int(0);
-	struct timespec *ut = syscall_arg_ptr(1);
-	struct timespec ts;
+	struct __brk_timespec *ut = syscall_arg_ptr(1);
+	struct __brk_timespec ts;
 	ktime_t now;
 	int ret;
 
@@ -60,8 +60,8 @@ u64 sys_clock_gettime(void)
 u64 sys_clock_settime(void)
 {
 	int clockid = syscall_arg_int(0);
-	const struct timespec *ut = syscall_arg_ptr(1);
-	struct timespec ts;
+	const struct __brk_timespec *ut = syscall_arg_ptr(1);
+	struct __brk_timespec ts;
 
 	if (clockid != CLOCK_REALTIME)
 		return -EINVAL;
@@ -83,9 +83,9 @@ u64 sys_clock_nanosleep(void)
 {
 	int clockid = syscall_arg_int(0);
 	int flags = syscall_arg_int(1);
-	const struct timespec *ureq = syscall_arg_ptr(2);
-	struct timespec *urem = syscall_arg_ptr(3);
-	struct timespec req;
+	const struct __brk_timespec *ureq = syscall_arg_ptr(2);
+	struct __brk_timespec *urem = syscall_arg_ptr(3);
+	struct __brk_timespec req;
 	ktime_t now, target, duration, rem = 0;
 	int ret;
 
@@ -128,8 +128,8 @@ u64 sys_clock_nanosleep(void)
 u64 sys_get_times(void)
 {
 	struct process *process = current_process();
-	struct brk_times *ubuf = syscall_arg_ptr(0);
-	struct brk_times times = {
+	struct __brk_times *ubuf = syscall_arg_ptr(0);
+	struct __brk_times times = {
 		.user_ns = process_get_user_time(process) * TICK_NS,
 		.system_ns = process_get_system_time(process) * TICK_NS,
 		.child_user_ns = process_get_child_user_time(process) * TICK_NS,

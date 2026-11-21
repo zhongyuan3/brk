@@ -5,12 +5,12 @@
 
 #define _LINUX_CAPABILITY_VERSION_3 0x20080522
 
-struct cap_header {
+struct __brk_cap_header {
 	__brk_u32 version;
 	__brk_s32 pid;
 };
 
-struct cap_data {
+struct __brk_cap_data {
 	__brk_u32 effective;
 	__brk_u32 permitted;
 	__brk_u32 inheritable;

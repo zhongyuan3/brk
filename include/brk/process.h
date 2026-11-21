@@ -11,7 +11,6 @@
 #include <brk/thread_types.h>
 #include <brk/types.h>
 #include <uapi/resource.h>
-#include <uapi/times.h>
 #include <uapi/types.h>
 
 struct process_create_args {
@@ -33,7 +32,7 @@ void process_destroy(struct process *process);
 
 int process_fork(void);
 void process_exit_group(int status);
-pid_t process_wait(pid_t pid, int *status, int options, struct rusage *rus,
+pid_t process_wait(pid_t pid, int *status, int options, struct __brk_rusage *rus,
 		   kuid_t *uid);
 
 pid_t process_get_pgid(pid_t pid);

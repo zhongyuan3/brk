@@ -20,7 +20,7 @@
 #define ELFCLASS64 2
 #define EI_CLASS 4
 
-struct elf_hdr {
+struct __brk_elf_hdr {
 	__brk_u8 e_ident[EI_NIDENT];
 	__brk_u16 e_type; /* Object file type */
 	__brk_u16 e_machine; /* Architecture */
@@ -37,7 +37,7 @@ struct elf_hdr {
 	__brk_u16 e_shstrndx; /* Section header string table index */
 };
 
-struct elf_phdr {
+struct __brk_elf_phdr {
 	__brk_u32 p_type;
 	__brk_u32 p_flags;
 	__brk_u64 p_offset; /* Segment file offset */

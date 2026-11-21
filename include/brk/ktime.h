@@ -8,28 +8,28 @@
 #include <uapi/time.h>
 
 /*
- * ktime_t is signed nanoseconds internally.  struct timespec/timeval only
+ * ktime_t is signed nanoseconds internally.  struct __brk_timespec/timeval only
  * appear at the syscall boundary; these helpers are the explicit crossing
  * points.
  */
-static inline ktime_t ktime_from_timespec(const struct timespec *ts)
+static inline ktime_t ktime_from_timespec(const struct __brk_timespec *ts)
 {
 	return (ktime_t)ts->tv_sec * (ktime_t)NS_PER_SEC + (ktime_t)ts->tv_nsec;
 }
 
-static inline void ktime_to_timespec(ktime_t t, struct timespec *ts)
+static inline void ktime_to_timespec(ktime_t t, struct __brk_timespec *ts)
 {
 	ts->tv_sec = (__brk_time_t)(t / (ktime_t)NS_PER_SEC);
 	ts->tv_nsec = (__brk_long_t)(t % (ktime_t)NS_PER_SEC);
 }
 
-static inline ktime_t ktime_from_timeval(const struct timeval *tv)
+static inline ktime_t ktime_from_timeval(const struct __brk_timeval *tv)
 {
 	return (ktime_t)tv->tv_sec * (ktime_t)NS_PER_SEC +
 	       (ktime_t)tv->tv_usec * (ktime_t)NS_PER_US;
 }
 
-static inline void ktime_to_timeval(ktime_t t, struct timeval *tv)
+static inline void ktime_to_timeval(ktime_t t, struct __brk_timeval *tv)
 {
 	tv->tv_sec = (__brk_time_t)(t / (ktime_t)NS_PER_SEC);
 	tv->tv_usec = (__brk_suseconds_t)((t % (ktime_t)NS_PER_SEC) /

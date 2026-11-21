@@ -50,7 +50,7 @@ static bool user_access_ok(user_addr_t addr, size_t len)
 	return addr + len <= USER_SPACE_SIZE_MAX;
 }
 
-static void sigaction_table_reset_locked(struct sigaction_table *table)
+static void sigaction_table_reset_locked(struct __brk_sigaction_table *table)
 {
 	for (int i = 0; i < NSIG; ++i) {
 		table->actions[i].sa_handler = SIG_DFL;
@@ -59,7 +59,7 @@ static void sigaction_table_reset_locked(struct sigaction_table *table)
 	}
 }
 
-void sigaction_table_reset(struct sigaction_table *table)
+void sigaction_table_reset(struct __brk_sigaction_table *table)
 {
 	irqstate_t flags = spin_lock_irqsave(&table->lock);
 
@@ -455,8 +455,8 @@ void signal_deliver_pending(struct thread *thread)
 	}
 }
 
-static void sigaction_table_copy_locked(struct sigaction_table *dst,
-					struct sigaction_table *src)
+static void sigaction_table_copy_locked(struct __brk_sigaction_table *dst,
+					struct __brk_sigaction_table *src)
 {
 	memcpy(dst->actions, src->actions, sizeof(dst->actions));
 }
@@ -507,9 +507,9 @@ unlock_and_return:
 }
 
 int signal_do_sigaction(struct process *process, int sig,
-			const struct sigaction *act, struct sigaction *oact)
+			const struct __brk_sigaction *act, struct __brk_sigaction *oact)
 {
-	struct sigaction_table *table = &process->sigactions;
+	struct __brk_sigaction_table *table = &process->sigactions;
 
 	if (!sig_valid(sig))
 		return -EINVAL;
@@ -560,14 +560,14 @@ int signal_do_sigprocmask(struct thread *thread, int how, const sigset_t *set,
 	return 0;
 }
 
-void sigaction_table_init(struct sigaction_table *table)
+void sigaction_table_init(struct __brk_sigaction_table *table)
 {
 	spinlock_init(&table->lock, "sigaction_table");
 	sigaction_table_reset_locked(table);
 }
 
-void sigaction_table_copy(struct sigaction_table *dst,
-			  struct sigaction_table *src)
+void sigaction_table_copy(struct __brk_sigaction_table *dst,
+			  struct __brk_sigaction_table *src)
 {
 	irqstate_t sflags = spin_lock_irqsave(&src->lock);
 	irqstate_t dflags = spin_lock_irqsave(&dst->lock);
@@ -580,8 +580,8 @@ void sigaction_table_copy(struct sigaction_table *dst,
 u64 sys_set_signal(void)
 {
 	int sig = syscall_arg_int(0);
-	const struct sigaction *act = syscall_arg_ptr(1);
-	struct sigaction *oact = syscall_arg_ptr(2);
+	const struct __brk_sigaction *act = syscall_arg_ptr(1);
+	struct __brk_sigaction *oact = syscall_arg_ptr(2);
 
 	return signal_do_sigaction(current_process(), sig, act, oact);
 }
@@ -617,12 +617,12 @@ u64 sys_get_pending(void)
 u64 sys_wait_signal(void)
 {
 	const sigset_t *uset = syscall_arg_ptr(0);
-	const struct timespec *utimeout = syscall_arg_ptr(1);
-	siginfo_t *uinfo = syscall_arg_ptr(2);
+	const struct __brk_timespec *utimeout = syscall_arg_ptr(1);
+	__brk_siginfo_t *uinfo = syscall_arg_ptr(2);
 	int wflags = syscall_arg_int(3);
 	struct thread *thread = current_thread();
 	sigset_t set;
-	struct timespec req;
+	struct __brk_timespec req;
 	s64 deadline = 0;
 	bool timed = false;
 	irqstate_t flags;
@@ -682,7 +682,7 @@ u64 sys_wait_signal(void)
 			 * signal so an EFAULT does not lose it.
 			 */
 			if (uinfo && !user_range_ok((u64)(uintptr_t)uinfo,
-						    sizeof(siginfo_t))) {
+						    sizeof(__brk_siginfo_t))) {
 				spin_unlock_irqrestore(
 					&thread->process->sigactions.lock,
 					flags);
@@ -722,7 +722,7 @@ u64 sys_wait_signal(void)
 	}
 
 	if (uinfo) {
-		siginfo_t info = { 0 };
+		__brk_siginfo_t info = { 0 };
 
 		info.si_signo = sig;
 		if (copy_to_user(uinfo, &info, sizeof(info)))

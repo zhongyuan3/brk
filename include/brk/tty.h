@@ -51,7 +51,7 @@ struct tty_port {
 	pid_t sid;
 
 	unsigned int open_count;
-	struct termios termios;
+	struct __brk_termios termios;
 	bool dead;
 };
 
@@ -93,7 +93,7 @@ struct tty {
 	bool lnext;
 	bool stopped;
 	bool dead;
-	struct winsize winsize;
+	struct __brk_winsize winsize;
 	refcnt_t refcnt;
 	const struct tty_ldisc_ops *ldisc;
 	sleeplock_t read_lock;
@@ -102,7 +102,7 @@ struct tty {
 
 extern const struct tty_ldisc_ops n_tty_ldisc_ops;
 
-void tty_termios_defaults(struct termios *termios);
+void tty_termios_defaults(struct __brk_termios *termios);
 
 struct tty *tty_alloc(void);
 void tty_free(struct tty *tty);

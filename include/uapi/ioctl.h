@@ -3,7 +3,7 @@
 
 #include <uapi/types.h>
 
-struct winsize {
+struct __brk_winsize {
 	__brk_u16 ws_row;
 	__brk_u16 ws_col;
 	__brk_u16 ws_xpixel;
