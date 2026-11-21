@@ -15,7 +15,6 @@ u64 sys_read(void);
 u64 sys_write(void);
 u64 sys_exit(void);
 u64 sys_exit_group(void);
-u64 sys_gettid(void);
 u64 sys_thread_create(void);
 u64 sys_futex(void);
 u64 sys_close(void);
@@ -71,7 +70,6 @@ u64 sys_set_gid_effective(void);
 u64 sys_set_uid_saved(void);
 u64 sys_set_gid_saved(void);
 u64 sys_getproc(void);
-u64 sys_getgroups(void);
 u64 sys_umask(void);
 u64 sys_fchownat(void);
 

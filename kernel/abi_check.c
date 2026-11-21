@@ -91,10 +91,17 @@ _Static_assert(sizeof(struct brk_dirent) == 16,
 _Static_assert(offsetof(struct brk_dirent, d_name) == 13,
 	       "struct brk_dirent ABI changed");
 
-_Static_assert(sizeof(struct brk_proc) == 40, "struct brk_proc ABI changed");
-_Static_assert(offsetof(struct brk_proc, suid) == 24,
+_Static_assert(sizeof(struct brk_proc) == 176,
 	       "struct brk_proc ABI changed");
-_Static_assert(offsetof(struct brk_proc, sgid) == 36,
+_Static_assert(offsetof(struct brk_proc, tid) == 16,
+	       "struct brk_proc ABI changed");
+_Static_assert(offsetof(struct brk_proc, suid) == 28,
+	       "struct brk_proc ABI changed");
+_Static_assert(offsetof(struct brk_proc, sgid) == 40,
+	       "struct brk_proc ABI changed");
+_Static_assert(offsetof(struct brk_proc, ngroups) == 44,
+	       "struct brk_proc ABI changed");
+_Static_assert(offsetof(struct brk_proc, groups) == 48,
 	       "struct brk_proc ABI changed");
 
 _Static_assert(sizeof(struct brk_sysinfo) == 224,

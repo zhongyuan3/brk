@@ -12,12 +12,18 @@ struct brk_proc {
 	__brk_pid_t ppid;
 	__brk_pid_t pgid;
 	__brk_pid_t sid;
+	__brk_pid_t tid;
 	__brk_uid_t uid;
 	__brk_uid_t euid;
 	__brk_uid_t suid;
 	__brk_gid_t gid;
 	__brk_gid_t egid;
 	__brk_gid_t sgid;
+
+	/* Supplementary group ids, cred.ngroups of them valid. */
+#define BRK_NGROUPS_MAX 32
+	int ngroups;
+	__brk_gid_t groups[BRK_NGROUPS_MAX];
 };
 
 /*

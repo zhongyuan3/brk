@@ -98,11 +98,6 @@ u64 sys_exit_group(void)
 	return 0;
 }
 
-u64 sys_gettid(void)
-{
-	return current_thread()->tid;
-}
-
 u64 sys_thread_create(void)
 {
 	struct brk_thread_create_args args;
@@ -164,12 +159,17 @@ u64 sys_getproc(void)
 	proc.ppid = process->parent ? process->parent->pid : 0;
 	proc.pgid = process->pgid;
 	proc.sid = process->sid;
+	proc.tid = current_thread()->tid;
 	proc.uid = process->cred.uid;
 	proc.euid = process->cred.euid;
 	proc.suid = process->cred.suid;
 	proc.gid = process->cred.gid;
 	proc.egid = process->cred.egid;
 	proc.sgid = process->cred.sgid;
+	proc.ngroups = process->cred.ngroups;
+	if (proc.ngroups > 0)
+		memcpy(proc.groups, process->cred.groups,
+		       sizeof(proc.groups[0]) * (size_t)proc.ngroups);
 	spin_unlock_irqrestore(&process->cred_lock, flags);
 
 	if (!ubuf)
@@ -343,41 +343,6 @@ u64 sys_set_gid_saved(void)
 		process->cred.sgid = (kgid_t)gid;
 	spin_unlock_irqrestore(&process->cred_lock, flags);
 	return (u64)ret;
-}
-
-u64 sys_getgroups(void)
-{
-	struct process *process = current_process();
-	int size = syscall_arg_int(0);
-	u32 *list = syscall_arg_ptr(1);
-	kgid_t groups[NGROUPS_MAX];
-	int ngroups;
-	irqstate_t flags;
-
-	if (size < 0)
-		return -EINVAL;
-
-	flags = spin_lock_irqsave(&process->cred_lock);
-	ngroups = process->cred.ngroups;
-	if (ngroups > 0)
-		memcpy(groups, process->cred.groups,
-		       sizeof(groups[0]) * (size_t)ngroups);
-	spin_unlock_irqrestore(&process->cred_lock, flags);
-
-	if (size == 0)
-		return ngroups;
-	if (size < ngroups)
-		return -EINVAL;
-	if (!list)
-		return -EFAULT;
-
-	for (int i = 0; i < ngroups; i++) {
-		u32 gid = groups[i];
-
-		if (copy_to_user(&list[i], &gid, sizeof(gid)))
-			return -EFAULT;
-	}
-	return ngroups;
 }
 
 u64 sys_umask(void)
