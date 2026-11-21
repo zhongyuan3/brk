@@ -101,7 +101,12 @@ _Static_assert(offsetof(struct __brk_sysinfo, mono_resolution_ns) == 208,
 	       "struct __brk_sysinfo ABI changed");
 
 _Static_assert(sizeof(struct __brk_elf_hdr) == 64, "struct __brk_elf_hdr ABI changed");
-_Static_assert(sizeof(struct __brk_elf_phdr) == 56, "struct __brk_elf_phdr ABI changed");
+_Static_assert(sizeof(struct __brk_elf_phdr) == 56,
+	       "struct __brk_elf_phdr ABI changed");
+_Static_assert(sizeof(struct __brk_elf_dyn) == 16,
+	       "struct __brk_elf_dyn ABI changed");
+_Static_assert(sizeof(struct __brk_elf_rela) == 24,
+	       "struct __brk_elf_rela ABI changed");
 
 _Static_assert(sizeof(struct __brk_cap_header) == 8, "struct __brk_cap_header ABI changed");
 _Static_assert(sizeof(struct __brk_cap_data) == 12, "struct __brk_cap_data ABI changed");

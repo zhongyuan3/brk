@@ -58,10 +58,59 @@ struct __brk_elf_phdr {
 #define PT_PHDR 6
 #define PT_TLS 7 /* Thread local storage segment */
 
+/* OS-specific segment types (0x60000000 .. 0x6fffffff). */
+#define PT_LOOS 0x60000000
+#define PT_HIOS 0x6fffffff
+#define PT_GNU_STACK 0x6474e551u /* stack permission flags */
+#define PT_GNU_RELRO 0x6474e552u /* read-only after relocation */
+
 /* These constants define the permissions on sections in the program
    header, p_flags. */
 #define PF_R 0x4
 #define PF_W 0x2
 #define PF_X 0x1
+
+#define EI_DATA 5		/* data encoding byte of e_ident */
+#define ELFDATA2LSB 1		/* little-endian */
+#define EI_VERSION 6		/* version byte of e_ident */
+#define EV_CURRENT 1
+
+#define EM_RISCV 243		/* RISC-V */
+
+/* RISC-V e_flags: float ABI occupies bits 1:2. */
+#define EF_RISCV_FLOAT_ABI_MASK 0x6
+#define EF_RISCV_FLOAT_ABI_SOFT 0x0
+#define EF_RISCV_FLOAT_ABI_SINGLE 0x2
+#define EF_RISCV_FLOAT_ABI_DOUBLE 0x4
+#define EF_RISCV_FLOAT_ABI_QUAD 0x6
+
+/* Dynamic section tags (the kernel only needs the relocation table
+ * pointers to apply base relocations to PIE images; symbol-level
+ * dynamic linking happens in user space). */
+#define PT_DYNAMIC_WALK
+struct __brk_elf_dyn {
+	__brk_s64 d_tag;
+	union {
+		__brk_u64 d_val;
+		__brk_u64 d_ptr;
+	} d_un;
+};
+
+struct __brk_elf_rela {
+	__brk_u64 r_offset;
+	__brk_u64 r_info;
+	__brk_s64 r_addend;
+};
+
+#define DT_NULL 0
+#define DT_REL 17		/* REL relocations (unsupported on RISC-V) */
+#define DT_RELA 7
+#define DT_RELASZ 8
+#define DT_RELAENT 9
+
+/* RISC-V relocation types. */
+#define R_RISCV_NONE 0
+#define R_RISCV_64 2
+#define R_RISCV_RELATIVE 3
 
 #endif

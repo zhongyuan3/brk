@@ -23,6 +23,7 @@
 #include <brk/timer.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
+#include <uapi/auxv.h>
 #include <uapi/capability.h>
 #include <uapi/elf.h>
 #include <uapi/errno.h>
@@ -68,28 +69,36 @@ static int exec_read_exact(struct file *fp, u64 off, void *buf, size_t n)
 	return 0;
 }
 
+#define EXEC_MAX_PHNUM 256
+#define EXEC_MAX_DYNSZ 4096
+#define EXEC_MAX_RELASZ (1 << 20)
+
 static int elf_validate_exec_hdr(const struct __brk_elf_hdr *h)
 {
 	if (memcmp(h->e_ident, ELFMAG, SELFMAG) != 0)
 		return -ENOEXEC;
 	if (h->e_ident[EI_CLASS] != ELFCLASS64)
 		return -ENOEXEC;
-	if (h->e_type != ET_EXEC)
+	if (h->e_ident[EI_DATA] != ELFDATA2LSB)
 		return -ENOEXEC;
-	return 0;
-}
-
-static int elf_read_phdr(struct file *f, u64 off, struct __brk_elf_phdr *phdr)
-{
-	ssize_t r;
-	loff_t ret = file_lseek(f, off, SEEK_SET);
-
-	if (ret < 0)
-		return -EIO;
-	r = file_read(f, phdr, sizeof(*phdr));
-	if (r < 0)
-		return -EIO;
-	if ((size_t)r != sizeof(*phdr))
+	if (h->e_ident[EI_VERSION] != EV_CURRENT)
+		return -ENOEXEC;
+	if (h->e_version != EV_CURRENT)
+		return -ENOEXEC;
+	if (h->e_type != ET_EXEC && h->e_type != ET_DYN)
+		return -ENOEXEC;
+	if (h->e_machine != EM_RISCV)
+		return -ENOEXEC;
+	if (h->e_phentsize != sizeof(struct __brk_elf_phdr))
+		return -ENOEXEC;
+	if (h->e_phnum == 0 || h->e_phnum > EXEC_MAX_PHNUM)
+		return -ENOEXEC;
+	/*
+	 * The trap path restores full hardware FP state for the new
+	 * image; a soft-float binary would misinterpret it.
+	 */
+	if ((h->e_flags & EF_RISCV_FLOAT_ABI_MASK) ==
+	    EF_RISCV_FLOAT_ABI_SOFT)
 		return -ENOEXEC;
 	return 0;
 }
@@ -156,11 +165,40 @@ static void copy_exec_strings(char **src, int n, virt_addr_t *k_pos,
 	}
 }
 
+struct exec_stack_info {
+	user_addr_t entry;
+	user_addr_t pie_base;
+	kuid_t uid;
+	kuid_t euid;
+	kgid_t gid;
+	kgid_t egid;
+	bool secure;
+	const struct __brk_elf_phdr *phdrs;
+	u16 phnum;
+	user_addr_t phdr_vaddr;	/* runtime PT_PHDR address, 0 = copy */
+};
+
+static user_addr_t stack_reserve(virt_addr_t *ksp, user_addr_t *sp,
+				 size_t n, size_t align)
+{
+	*ksp = align_down(*ksp - n, align);
+	*sp = align_down(*sp - n, align);
+	return *sp;
+}
+
 static void push_args(struct exec_args *args, user_addr_t *psp,
-		      virt_addr_t stack_virt, struct thread *task)
+		      virt_addr_t stack_virt, struct thread *task,
+		      const struct exec_stack_info *info)
 {
 	user_addr_t sp = *psp;
 	virt_addr_t ksp = stack_virt + USTACK_SIZE;
+	struct {
+		user_addr_t key;
+		user_addr_t val;
+	} auxv[16];
+	int naux = 0;
+	user_addr_t rand_uaddr = 0;
+	user_addr_t phdr_uaddr = 0;
 
 	ksp -= args->envp_size;
 	sp -= args->envp_size;
@@ -171,6 +209,58 @@ static void push_args(struct exec_args *args, user_addr_t *psp,
 	sp -= args->argv_size;
 	virt_addr_t argv_strs_kstart = ksp;
 	user_addr_t argv_strs_ustart = sp;
+
+	/*
+	 * Between the strings and the pointer arrays: the auxv blob
+	 * (random bytes and, when the image carries no PT_PHDR, a
+	 * copy of the program header table).
+	 */
+	if (!info->phdr_vaddr) {
+		size_t phsz = (size_t)info->phnum *
+			      sizeof(struct __brk_elf_phdr);
+
+		phdr_uaddr = stack_reserve(&ksp, &sp, phsz, 8);
+		memcpy((void *)ksp, info->phdrs, phsz);
+	}
+
+	rand_uaddr = stack_reserve(&ksp, &sp, 16, 16);
+	for (int i = 0; i < 4; ++i)
+		((u32 *)(uintptr_t)ksp)[i] = rand_u32();
+
+	auxv[naux].key = AT_PHDR;
+	auxv[naux++].val = info->phdr_vaddr ? info->phdr_vaddr :
+					      phdr_uaddr;
+	auxv[naux].key = AT_PHENT;
+	auxv[naux++].val = sizeof(struct __brk_elf_phdr);
+	auxv[naux].key = AT_PHNUM;
+	auxv[naux++].val = info->phnum;
+	auxv[naux].key = AT_PAGESZ;
+	auxv[naux++].val = PAGE_SIZE;
+	auxv[naux].key = AT_BASE;
+	auxv[naux++].val = info->pie_base;
+	auxv[naux].key = AT_FLAGS;
+	auxv[naux++].val = 0;
+	auxv[naux].key = AT_ENTRY;
+	auxv[naux++].val = info->entry;
+	auxv[naux].key = AT_UID;
+	auxv[naux++].val = info->uid;
+	auxv[naux].key = AT_EUID;
+	auxv[naux++].val = info->euid;
+	auxv[naux].key = AT_GID;
+	auxv[naux++].val = info->gid;
+	auxv[naux].key = AT_EGID;
+	auxv[naux++].val = info->egid;
+	auxv[naux].key = AT_SECURE;
+	auxv[naux++].val = info->secure ? 1 : 0;
+	auxv[naux].key = AT_RANDOM;
+	auxv[naux++].val = rand_uaddr;
+	auxv[naux].key = AT_EXECFN;
+	auxv[naux++].val = argv_strs_ustart;
+	auxv[naux].key = AT_NULL;
+	auxv[naux++].val = 0;
+	(void)stack_reserve(&ksp, &sp, (size_t)naux * 2 * sizeof(void *),
+			    8);
+	memcpy((void *)ksp, auxv, (size_t)naux * sizeof(auxv[0]));
 
 	trap_frame_set_arg(task->frame, 2,
 			   stack_push_ptr_slots(&ksp, &sp, args->envc));
@@ -280,6 +370,160 @@ failed:
 	return err;
 }
 
+/*
+ * PIE images (ET_DYN) are placed at a random page-aligned base well
+ * below the randomized stack window: the brk heap grows above the
+ * image and the mmap area fills the space in between.
+ */
+static user_addr_t pick_pie_base(void)
+{
+	user_addr_t zone = 1UL << 30;
+	user_addr_t span = (7UL << 30) >> PAGE_SHIFT;
+
+	return zone + ((user_addr_t)(rand_u32() % span) << PAGE_SHIFT);
+}
+
+/*
+ * Write into a just-mapped user page through the kernel direct map.
+ * Only valid before switch_pgtable(): the pages are still owned by
+ * the fresh address space under construction.
+ */
+static int exec_write_u64(struct uvm_space *mm, user_addr_t addr, u64 val)
+{
+	struct uvm_region *vma;
+
+	list_for_each_entry(vma, &mm->seg, list) {
+		user_addr_t off;
+
+		if (addr < vma->addr || addr + 8 > vma->addr + vma->size)
+			continue;
+		off = addr - vma->addr;
+		if ((off & (PAGE_SIZE - 1)) + 8 > PAGE_SIZE)
+			return -ENOEXEC;
+		if (!vma->pages || (off >> PAGE_SHIFT) >= vma->nr_pages)
+			return -ENOEXEC;
+		*(u64 *)((char *)phys_to_virt(page_to_phys(
+				  vma->pages[off >> PAGE_SHIFT])) +
+			 (off & (PAGE_SIZE - 1))) = val;
+		return 0;
+	}
+	return -ENOEXEC;
+}
+
+/*
+ * Apply the base relocations of a static PIE: every R_RISCV_RELATIVE
+ * slot becomes base + addend.  This is deliberately the only dynamic
+ * entry the kernel understands - no symbol resolution, no DT_NEEDED,
+ * no interpreter.  Anything beyond RELATIVE in a kernel-loaded image
+ * is refused.
+ */
+static u64 dyn_vaddr_to_off(const struct __brk_elf_phdr **loads,
+			    u32 nload, user_addr_t vaddr)
+{
+	for (u32 i = 0; i < nload; ++i) {
+		if (vaddr >= loads[i]->p_vaddr &&
+		    vaddr < loads[i]->p_vaddr + loads[i]->p_memsz)
+			return loads[i]->p_offset + (vaddr -
+						     loads[i]->p_vaddr);
+	}
+	return 0;
+}
+
+static int apply_base_relocs(struct uvm_space *mm, struct file *f,
+			     const struct __brk_elf_phdr *dyn_ph,
+			     const struct __brk_elf_phdr **loads, u32 nload,
+			     user_addr_t base)
+{
+	struct __brk_elf_dyn *dyn;
+	size_t ndyn;
+	user_addr_t rela = 0;
+	size_t relasz = 0;
+	size_t relaent = 0;
+	bool has_rel = false;
+	struct __brk_elf_rela *rela_tab;
+	u64 rela_off;
+	int err;
+	size_t i;
+
+	if (dyn_ph->p_filesz == 0 || dyn_ph->p_filesz > EXEC_MAX_DYNSZ ||
+	    dyn_ph->p_filesz % sizeof(*dyn) != 0)
+		return -ENOEXEC;
+	ndyn = dyn_ph->p_filesz / sizeof(*dyn);
+	dyn = kmalloc(dyn_ph->p_filesz);
+	if (!dyn)
+		return -ENOMEM;
+
+	err = exec_read_exact(f, dyn_ph->p_offset, dyn, dyn_ph->p_filesz);
+	if (err) {
+		kfree(dyn);
+		return err;
+	}
+
+	for (i = 0; i < ndyn; ++i) {
+		switch ((u32)dyn[i].d_tag) {
+		case DT_RELA:
+			rela = (user_addr_t)dyn[i].d_un.d_ptr;
+			break;
+		case DT_RELASZ:
+			relasz = (size_t)dyn[i].d_un.d_val;
+			break;
+		case DT_RELAENT:
+			relaent = (size_t)dyn[i].d_un.d_val;
+			break;
+		case DT_REL:
+			has_rel = true;
+			break;
+		case DT_NULL:
+			goto dyn_done;
+		}
+	}
+dyn_done:
+	kfree(dyn);
+
+	if (has_rel)
+		return -ENOEXEC; /* RISC-V is RELA-only */
+	if (!rela)
+		return 0;
+	if (relaent != sizeof(*rela_tab))
+		return -ENOEXEC;
+	if (relasz == 0 || relasz % relaent != 0 ||
+	    relasz > EXEC_MAX_RELASZ)
+		return -ENOEXEC;
+
+	rela_off = dyn_vaddr_to_off(loads, nload, rela);
+	if (!rela_off)
+		return -ENOEXEC;
+
+	rela_tab = kmalloc(relasz);
+	if (!rela_tab)
+		return -ENOMEM;
+	err = exec_read_exact(f, rela_off, rela_tab, relasz);
+	if (err) {
+		kfree(rela_tab);
+		return err;
+	}
+
+	for (i = 0; i < relasz / relaent; ++i) {
+		const struct __brk_elf_rela *r = &rela_tab[i];
+		u32 type = (u32)(r->r_info & 0xff);
+
+		if (type == R_RISCV_NONE)
+			continue;
+		if (type != R_RISCV_RELATIVE) {
+			kfree(rela_tab);
+			return -ENOEXEC;
+		}
+		err = exec_write_u64(mm, base + r->r_offset,
+				     base + (u64)r->r_addend);
+		if (err) {
+			kfree(rela_tab);
+			return err;
+		}
+	}
+	kfree(rela_tab);
+	return 0;
+}
+
 static int load_seg(struct uvm_space *mm, struct __brk_elf_phdr *ph, struct file *fp)
 {
 	user_addr_t start, end;
@@ -322,7 +566,7 @@ static user_addr_t find_brk(struct uvm_space *mm)
 	return brk;
 }
 
-static int map_stack(struct uvm_space *mm)
+static int map_stack(struct uvm_space *mm, bool want_x)
 {
 	struct page *pg = page_alloc(USTACK_PAGE_ORDER);
 	struct page **pgs;
@@ -341,8 +585,10 @@ static int map_stack(struct uvm_space *mm)
 	}
 
 	pa = page_to_phys(pg);
+	unsigned int stack_perm = PTE_R | PTE_W | (want_x ? PTE_X : 0);
+
 	base = random_ustack();
-	err = map_user_pages(mm->pgd, base, USTACK_SIZE, pa, PTE_R | PTE_W);
+	err = map_user_pages(mm->pgd, base, USTACK_SIZE, pa, stack_perm);
 	if (err) {
 		kfree(pgs);
 		assert(pg);
@@ -353,7 +599,7 @@ static int map_stack(struct uvm_space *mm)
 
 	mm->stack->addr = base;
 	mm->stack->size = USTACK_SIZE;
-	mm->stack->flags = PTE_R | PTE_W;
+	mm->stack->flags = stack_perm;
 	mm->mmap_top = base;
 	mm->stack->pages = pgs;
 	mm->stack->nr_pages = 1;
@@ -363,7 +609,10 @@ static int map_stack(struct uvm_space *mm)
 static int __do_execve(const char *path, struct exec_args *args)
 {
 	struct __brk_elf_hdr elf_hdr = { 0 };
-	struct __brk_elf_phdr phdr = { 0 };
+	struct __brk_elf_phdr *phdrs = NULL;
+	struct exec_stack_info exec_info = { 0 };
+	user_addr_t phdr_vaddr = 0;
+	bool stack_want_x = false;
 	struct process *process = current_process();
 	struct thread *task = current_thread();
 	struct file *f = NULL;
@@ -397,20 +646,172 @@ static int __do_execve(const char *path, struct exec_args *args)
 		goto err;
 	}
 
+	/*
+	 * Read and classify the whole program header table up front:
+	 * nothing is mapped before the image is fully validated.
+	 */
 	{
-		u64 phoff = elf_hdr.e_phoff;
+		const struct __brk_elf_phdr *loads[EXEC_MAX_PHNUM];
+		const struct __brk_elf_phdr *phdr_seg = NULL;
+		const struct __brk_elf_phdr *dyn_seg = NULL;
+		bool stack_x = false;
+		loff_t file_size = f->inode->size;
+		u16 phnum = elf_hdr.e_phnum;
+		user_addr_t pie_base = 0;
+		user_addr_t entry;
+		u32 nload = 0;
+		u32 i, j;
 
-		for (u16 i = 0; i < elf_hdr.e_phnum;
-		     ++i, phoff += sizeof(phdr)) {
-			err = elf_read_phdr(f, phoff, &phdr);
-			if (err)
+		phdrs = kmalloc((size_t)phnum * sizeof(*phdrs));
+		if (!phdrs) {
+			err = -ENOMEM;
+			goto err;
+		}
+		err = exec_read_exact(f, elf_hdr.e_phoff, phdrs,
+				      (size_t)phnum * sizeof(*phdrs));
+		if (err)
+			goto err;
+
+		for (i = 0; i < phnum; ++i) {
+			const struct __brk_elf_phdr *ph = &phdrs[i];
+
+			switch (ph->p_type) {
+			case PT_LOAD:
+				if (ph->p_filesz > ph->p_memsz ||
+				    ph->p_offset > (u64)file_size ||
+				    ph->p_filesz > (u64)file_size -
+						   ph->p_offset ||
+				    ph->p_memsz > USER_SPACE_SIZE_MAX) {
+					err = -ENOEXEC;
+					goto err;
+				}
+				if (ph->p_align >= PAGE_SIZE &&
+				    ph->p_vaddr % ph->p_align !=
+				    ph->p_offset % ph->p_align) {
+					err = -ENOEXEC;
+					goto err;
+				}
+				loads[nload++] = ph;
+				break;
+			case PT_PHDR:
+				phdr_seg = ph;
+				break;
+			case PT_DYNAMIC:
+				if (elf_hdr.e_type != ET_DYN) {
+					err = -ENOEXEC;
+					goto err;
+				}
+				dyn_seg = ph;
+				break;
+			case PT_GNU_STACK:
+				stack_x = !!(ph->p_flags & PF_X);
+				break;
+			case PT_INTERP:
+			case PT_TLS:
+				/* dynamic linking is not implemented */
+				err = -ENOEXEC;
 				goto err;
-			if (phdr.p_type != PT_LOAD)
-				continue;
-			err = load_seg(new_mm, &phdr, f);
+			default:
+				/* PT_NOTE and friends are informational */
+				break;
+			}
+		}
+
+		if (nload == 0) {
+			err = -ENOEXEC;
+			goto err;
+		}
+
+		/* loads in vaddr order, pairwise non-overlapping */
+		for (i = 1; i < nload; ++i) {
+			const struct __brk_elf_phdr *key = loads[i];
+
+			for (j = i; j > 0 &&
+				   loads[j - 1]->p_vaddr > key->p_vaddr;
+			     --j)
+				loads[j] = loads[j - 1];
+			loads[j] = key;
+		}
+		for (i = 1; i < nload; ++i) {
+			user_addr_t prev_end = align_up(loads[i - 1]->p_vaddr +
+							loads[i - 1]->p_memsz,
+							PAGE_SIZE);
+			user_addr_t cur_start =
+				align_down(loads[i]->p_vaddr, PAGE_SIZE);
+
+			if (cur_start < prev_end) {
+				err = -ENOEXEC;
+				goto err;
+			}
+		}
+
+		if (elf_hdr.e_type == ET_DYN)
+			pie_base = pick_pie_base();
+
+		if (pie_base + align_up(loads[nload - 1]->p_vaddr +
+					loads[nload - 1]->p_memsz,
+					PAGE_SIZE) > USER_SPACE_SIZE_MAX) {
+			err = -ENOEXEC;
+			goto err;
+		}
+
+		for (i = 0; i < nload; ++i) {
+			struct __brk_elf_phdr adj = *loads[i];
+
+			adj.p_vaddr += pie_base;
+			err = load_seg(new_mm, &adj, f);
 			if (err)
 				goto err;
 		}
+
+		entry = pie_base + elf_hdr.e_entry;
+		for (i = 0; i < nload; ++i) {
+			if ((loads[i]->p_flags & PF_X) &&
+			    entry >= pie_base + loads[i]->p_vaddr &&
+			    entry < pie_base + loads[i]->p_vaddr +
+					   loads[i]->p_memsz)
+				break;
+		}
+		if (i == nload) {
+			err = -ENOEXEC;
+			goto err;
+		}
+
+		if (dyn_seg) {
+			err = apply_base_relocs(new_mm, f, dyn_seg,
+						loads, nload, pie_base);
+			if (err)
+				goto err;
+		}
+
+		/*
+		 * AT_PHDR: point into the mapped image when the linker
+		 * emitted PT_PHDR, otherwise push_args copies the
+		 * table onto the stack.
+		 */
+		if (phdr_seg) {
+			user_addr_t at = pie_base + phdr_seg->p_vaddr;
+			bool covered = false;
+
+			for (i = 0; i < nload; ++i) {
+				if (at >= pie_base + loads[i]->p_vaddr &&
+				    at + (u64)phnum *
+						    sizeof(*phdrs) <=
+					    pie_base + loads[i]->p_vaddr +
+					    loads[i]->p_memsz) {
+					covered = true;
+					break;
+				}
+			}
+			phdr_vaddr = covered ? at : 0;
+		}
+
+		exec_info.entry = entry;
+		exec_info.pie_base = pie_base;
+		exec_info.phdrs = phdrs;
+		exec_info.phnum = phnum;
+		exec_info.phdr_vaddr = phdr_vaddr;
+		stack_want_x = stack_x;
 	}
 
 	file_put(f);
@@ -421,9 +822,27 @@ static int __do_execve(const char *path, struct exec_args *args)
 	new_mm->heap->flags = PTE_R | PTE_W;
 	new_mm->brk = new_mm->heap->addr;
 
-	err = map_stack(new_mm);
+	err = map_stack(new_mm, stack_want_x);
 	if (err)
 		goto err;
+
+	{
+		irqstate_t cflags = spin_lock_irqsave(&process->cred_lock);
+
+		exec_info.uid = process->cred.uid;
+		exec_info.euid = process->cred.euid;
+		exec_info.gid = process->cred.gid;
+		exec_info.egid = process->cred.egid;
+		if (file_mode & S_ISUID) {
+			exec_info.euid = file_uid;
+			exec_info.secure = true;
+		}
+		if ((file_mode & S_ISGID) && (file_mode & S_IXGRP)) {
+			exec_info.egid = file_gid;
+			exec_info.secure = true;
+		}
+		spin_unlock_irqrestore(&process->cred_lock, cflags);
+	}
 
 	{
 		user_addr_t sp = new_mm->stack->addr + new_mm->stack->size;
@@ -431,7 +850,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 		phys_addr_t stack_phys = page_to_phys(stack_pg);
 		virt_addr_t stack_virt = phys_to_virt(stack_phys);
 
-		push_args(args, &sp, stack_virt, task);
+		push_args(args, &sp, stack_virt, task, &exec_info);
 		strlcpy(process->name, args->argv[0], sizeof(process->name));
 
 		switch_pgtable(new_mm->pgd);
@@ -441,7 +860,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 		process->mm = new_mm;
 		uvm_space_free(old_mm);
 		signal_reset(process, task);
-		trap_frame_set_pc(task->frame, elf_hdr.e_entry);
+		trap_frame_set_pc(task->frame, exec_info.entry);
 		trap_frame_set_sp(task->frame, sp);
 		/* The new image starts with a clean FP state: cleared registers
 		 * and the default round-to-nearest-even mode in fcsr. */
@@ -470,9 +889,18 @@ static int __do_execve(const char *path, struct exec_args *args)
 		spin_unlock_irqrestore(&process->cred_lock, cred_flags);
 	}
 
+	kfree(phdrs);
+	/*
+	 * Process-entry contract: the trap path writes this return
+	 * value into a0, and BRK's crt reads argc from a0 (with argv
+	 * in a1 and envp in a2) - _start's parameter list IS the
+	 * register convention.  The full SysV stack (argc, argv,
+	 * envp, auxv) is there as well for anything that prefers it.
+	 */
 	return args->argc;
 
 err:
+	kfree(phdrs);
 	if (new_mm && !IS_ERR(new_mm))
 		uvm_space_free(new_mm);
 	if (!IS_ERR(f) && f)
