@@ -167,7 +167,7 @@ static void copy_exec_strings(char **src, int n, virt_addr_t *k_pos,
 
 struct exec_stack_info {
 	user_addr_t entry;
-	user_addr_t pie_base;
+	user_addr_t at_base;
 	kuid_t uid;
 	kuid_t euid;
 	kgid_t gid;
@@ -237,7 +237,7 @@ static void push_args(struct exec_args *args, user_addr_t *psp,
 	auxv[naux].key = AT_PAGESZ;
 	auxv[naux++].val = PAGE_SIZE;
 	auxv[naux].key = AT_BASE;
-	auxv[naux++].val = info->pie_base;
+	auxv[naux++].val = info->at_base;
 	auxv[naux].key = AT_FLAGS;
 	auxv[naux++].val = 0;
 	auxv[naux].key = AT_ENTRY;
@@ -373,14 +373,17 @@ failed:
 /*
  * PIE images (ET_DYN) are placed at a random page-aligned base well
  * below the randomized stack window: the brk heap grows above the
- * image and the mmap area fills the space in between.
+ * image and the mmap area fills the space in between.  The main
+ * image and the interpreter draw from disjoint zones so two images
+ * never overlap without any cross-image bookkeeping.
  */
-static user_addr_t pick_pie_base(void)
-{
-	user_addr_t zone = 1UL << 30;
-	user_addr_t span = (7UL << 30) >> PAGE_SHIFT;
+#define PIE_ZONE_LO 0x40000000UL		/* 1 GB */
+#define PIE_ZONE_PAGES ((7UL << 30) >> PAGE_SHIFT)
 
-	return zone + ((user_addr_t)(rand_u32() % span) << PAGE_SHIFT);
+static user_addr_t pick_pie_base(user_addr_t zone_lo)
+{
+	return zone_lo + ((user_addr_t)(rand_u32() % PIE_ZONE_PAGES)
+			  << PAGE_SHIFT);
 }
 
 /*
@@ -432,7 +435,7 @@ static u64 dyn_vaddr_to_off(const struct __brk_elf_phdr **loads,
 static int apply_base_relocs(struct uvm_space *mm, struct file *f,
 			     const struct __brk_elf_phdr *dyn_ph,
 			     const struct __brk_elf_phdr **loads, u32 nload,
-			     user_addr_t base)
+			     user_addr_t base, bool strict)
 {
 	struct __brk_elf_dyn *dyn;
 	size_t ndyn;
@@ -507,11 +510,19 @@ dyn_done:
 		const struct __brk_elf_rela *r = &rela_tab[i];
 		u32 type = (u32)(r->r_info & 0xff);
 
-		if (type == R_RISCV_NONE)
+		if (type == R_RISCV_NONE || type == R_RISCV_RELAX)
 			continue;
 		if (type != R_RISCV_RELATIVE) {
-			kfree(rela_tab);
-			return -ENOEXEC;
+			/*
+			 * Symbol relocations in an image loaded directly
+			 * by the kernel are fatal - unless a dynamic
+			 * linker is on its way to process them.
+			 */
+			if (strict) {
+				kfree(rela_tab);
+				return -ENOEXEC;
+			}
+			continue;
 		}
 		err = exec_write_u64(mm, base + r->r_offset,
 				     base + (u64)r->r_addend);
@@ -606,12 +617,262 @@ static int map_stack(struct uvm_space *mm, bool want_x)
 	return 0;
 }
 
+/*
+ * Validate and map one whole ELF image into @mm: classification,
+ * bounds/overlap checks, random PIE base, entry check and kernel
+ * base relocations.  @is_interp marks the interpreter (no nested
+ * PT_INTERP); @has_interp means a dynamic linker will process the
+ * symbol relocations, so only the strict mode rejects them.
+ */
+struct image_layout {
+	user_addr_t base;
+	user_addr_t entry;
+	user_addr_t phdr_vaddr;
+	bool stack_x;
+};
+
+static int elf_load_image(struct uvm_space *mm, struct file *f,
+			  const struct __brk_elf_hdr *hdr,
+			  const struct __brk_elf_phdr *phdrs,
+			  bool is_interp, bool has_interp,
+			  user_addr_t zone_lo, struct image_layout *out)
+{
+	const struct __brk_elf_phdr *loads[EXEC_MAX_PHNUM];
+	const struct __brk_elf_phdr *phdr_seg = NULL;
+	const struct __brk_elf_phdr *dyn_seg = NULL;
+	bool stack_x = false;
+	loff_t file_size = f->inode->size;
+	u16 phnum = hdr->e_phnum;
+	user_addr_t pie_base = 0;
+	user_addr_t phdr_vaddr = 0;
+	user_addr_t entry;
+	u32 nload = 0;
+	u32 i, j;
+	int err;
+
+for (i = 0; i < phnum; ++i) {
+	const struct __brk_elf_phdr *ph = &phdrs[i];
+
+	switch (ph->p_type) {
+	case PT_LOAD:
+		if (ph->p_filesz > ph->p_memsz ||
+		    ph->p_offset > (u64)file_size ||
+		    ph->p_filesz > (u64)file_size -
+				   ph->p_offset ||
+		    ph->p_memsz > USER_SPACE_SIZE_MAX) {
+			err = -ENOEXEC;
+			goto err;
+		}
+		if (ph->p_align >= PAGE_SIZE &&
+		    ph->p_vaddr % ph->p_align !=
+		    ph->p_offset % ph->p_align) {
+			err = -ENOEXEC;
+			goto err;
+		}
+		loads[nload++] = ph;
+		break;
+	case PT_PHDR:
+		phdr_seg = ph;
+		break;
+	case PT_DYNAMIC:
+		if (hdr->e_type != ET_DYN) {
+			err = -ENOEXEC;
+			goto err;
+		}
+		dyn_seg = ph;
+		break;
+	case PT_GNU_STACK:
+		stack_x = !!(ph->p_flags & PF_X);
+		break;
+	case PT_INTERP:
+		if (is_interp) {
+			err = -ENOEXEC;
+			goto err;
+		}
+		break;
+	case PT_TLS:
+		/* thread-local storage is not implemented */
+		err = -ENOEXEC;
+		goto err;
+	default:
+		/* PT_NOTE and friends are informational */
+		break;
+	}
+}
+
+if (nload == 0) {
+	err = -ENOEXEC;
+	goto err;
+}
+
+/* loads in vaddr order, pairwise non-overlapping */
+for (i = 1; i < nload; ++i) {
+	const struct __brk_elf_phdr *key = loads[i];
+
+	for (j = i; j > 0 &&
+		   loads[j - 1]->p_vaddr > key->p_vaddr;
+	     --j)
+		loads[j] = loads[j - 1];
+	loads[j] = key;
+}
+for (i = 1; i < nload; ++i) {
+	user_addr_t prev_end = align_up(loads[i - 1]->p_vaddr +
+					loads[i - 1]->p_memsz,
+					PAGE_SIZE);
+	user_addr_t cur_start =
+		align_down(loads[i]->p_vaddr, PAGE_SIZE);
+
+	if (cur_start < prev_end) {
+		err = -ENOEXEC;
+		goto err;
+	}
+}
+
+if (hdr->e_type == ET_DYN)
+	pie_base = pick_pie_base(zone_lo);
+
+if (pie_base + align_up(loads[nload - 1]->p_vaddr +
+			loads[nload - 1]->p_memsz,
+			PAGE_SIZE) > USER_SPACE_SIZE_MAX) {
+	err = -ENOEXEC;
+	goto err;
+}
+
+for (i = 0; i < nload; ++i) {
+	struct __brk_elf_phdr adj = *loads[i];
+
+	adj.p_vaddr += pie_base;
+	err = load_seg(mm, &adj, f);
+	if (err)
+		goto err;
+}
+
+entry = pie_base + hdr->e_entry;
+for (i = 0; i < nload; ++i) {
+	if ((loads[i]->p_flags & PF_X) &&
+	    entry >= pie_base + loads[i]->p_vaddr &&
+	    entry < pie_base + loads[i]->p_vaddr +
+			   loads[i]->p_memsz)
+		break;
+}
+if (i == nload) {
+	err = -ENOEXEC;
+	goto err;
+}
+
+if (dyn_seg) {
+	err = apply_base_relocs(mm, f, dyn_seg,
+				 loads, nload, pie_base,
+				 !has_interp);
+	if (err)
+		goto err;
+}
+
+/*
+ * AT_PHDR: point into the mapped image when the linker
+ * emitted PT_PHDR, otherwise push_args copies the
+ * table onto the stack.
+ */
+if (phdr_seg) {
+	user_addr_t at = pie_base + phdr_seg->p_vaddr;
+	bool covered = false;
+
+	for (i = 0; i < nload; ++i) {
+		if (at >= pie_base + loads[i]->p_vaddr &&
+		    at + (u64)phnum *
+				    sizeof(*phdrs) <=
+			    pie_base + loads[i]->p_vaddr +
+			    loads[i]->p_memsz) {
+			covered = true;
+			break;
+		}
+	}
+	phdr_vaddr = covered ? at : 0;
+}
+
+	out->base = pie_base;
+	out->entry = entry;
+	out->phdr_vaddr = phdr_vaddr;
+	out->stack_x = stack_x;
+	return 0;
+
+err:
+	return err;
+}
+
+/*
+ * Open and pre-read the ELF interpreter named by PT_INTERP.  Any
+ * failure to produce a loadable interpreter turns the exec into
+ * ENOEXEC: a dynamic binary without its linker is not executable.
+ */
+static int exec_load_interp(const struct __brk_elf_phdr *ph,
+			   struct file *main_f,
+			   struct file **f_out,
+			   struct __brk_elf_hdr *hdr_out,
+			   struct __brk_elf_phdr **phdrs_out)
+{
+	char *path;
+	struct file *fi;
+	int err;
+
+	if (ph->p_filesz == 0 || ph->p_filesz > 512)
+		return -ENOEXEC;
+	path = kmalloc(ph->p_filesz + 1);
+	if (!path)
+		return -ENOMEM;
+	err = exec_read_exact(main_f, ph->p_offset, path, ph->p_filesz);
+	if (err) {
+		kfree(path);
+		return err;
+	}
+	path[ph->p_filesz] = '\0';
+	if (!memchr(path, '\0', ph->p_filesz)) {
+		kfree(path);
+		return -ENOEXEC;
+	}
+
+	fi = do_openat(AT_FDCWD, path, O_RDONLY, 0);
+	kfree(path);
+	if (IS_ERR(fi))
+		return -ENOEXEC;
+	err = inode_permission(fi->inode, MAY_EXEC);
+	if (err) {
+		file_put(fi);
+		return -ENOEXEC;
+	}
+	err = exec_read_elf_header(fi, hdr_out);
+	if (err) {
+		file_put(fi);
+		return err;
+	}
+	*phdrs_out = kmalloc((size_t)hdr_out->e_phnum *
+			     sizeof(**phdrs_out));
+	if (!*phdrs_out) {
+		file_put(fi);
+		return -ENOMEM;
+	}
+	err = exec_read_exact(fi, hdr_out->e_phoff, *phdrs_out,
+			      (size_t)hdr_out->e_phnum *
+			      sizeof(**phdrs_out));
+	if (err) {
+		kfree(*phdrs_out);
+		*phdrs_out = NULL;
+		file_put(fi);
+		return err;
+	}
+	*f_out = fi;
+	return 0;
+}
+
 static int __do_execve(const char *path, struct exec_args *args)
 {
 	struct __brk_elf_hdr elf_hdr = { 0 };
+	struct __brk_elf_hdr interp_hdr = { 0 };
 	struct __brk_elf_phdr *phdrs = NULL;
+	struct __brk_elf_phdr *interp_phdrs = NULL;
+	struct file *interp_f = NULL;
 	struct exec_stack_info exec_info = { 0 };
-	user_addr_t phdr_vaddr = 0;
+	user_addr_t run_entry = 0;
 	bool stack_want_x = false;
 	struct process *process = current_process();
 	struct thread *task = current_thread();
@@ -640,182 +901,80 @@ static int __do_execve(const char *path, struct exec_args *args)
 	if (err)
 		goto err;
 
+	phdrs = kmalloc((size_t)elf_hdr.e_phnum * sizeof(*phdrs));
+	if (!phdrs) {
+		err = -ENOMEM;
+		goto err;
+	}
+	err = exec_read_exact(f, elf_hdr.e_phoff, phdrs,
+			      (size_t)elf_hdr.e_phnum * sizeof(*phdrs));
+	if (err)
+		goto err;
+
 	new_mm = uvm_space_create();
 	if (IS_ERR(new_mm)) {
 		err = PTR_ERR(new_mm);
 		goto err;
 	}
 
-	/*
-	 * Read and classify the whole program header table up front:
-	 * nothing is mapped before the image is fully validated.
-	 */
-	{
-		const struct __brk_elf_phdr *loads[EXEC_MAX_PHNUM];
-		const struct __brk_elf_phdr *phdr_seg = NULL;
-		const struct __brk_elf_phdr *dyn_seg = NULL;
-		bool stack_x = false;
-		loff_t file_size = f->inode->size;
-		u16 phnum = elf_hdr.e_phnum;
-		user_addr_t pie_base = 0;
-		user_addr_t entry;
-		u32 nload = 0;
-		u32 i, j;
-
-		phdrs = kmalloc((size_t)phnum * sizeof(*phdrs));
-		if (!phdrs) {
-			err = -ENOMEM;
-			goto err;
+	/* first scan: is there a dynamic linker to hand control to? */
+	for (u16 i = 0; i < elf_hdr.e_phnum; ++i) {
+		if (phdrs[i].p_type == PT_INTERP) {
+			err = exec_load_interp(&phdrs[i], f, &interp_f,
+						&interp_hdr, &interp_phdrs);
+			if (err)
+				goto err;
+			break;
 		}
-		err = exec_read_exact(f, elf_hdr.e_phoff, phdrs,
-				      (size_t)phnum * sizeof(*phdrs));
+	}
+
+	new_mm = uvm_space_create();
+	if (IS_ERR(new_mm)) {
+		err = PTR_ERR(new_mm);
+		new_mm = NULL;
+		goto err;
+	}
+
+	if (interp_f) {
+		struct image_layout li = { 0 };
+
+		err = elf_load_image(new_mm, interp_f, &interp_hdr,
+				     interp_phdrs, true, true, PIE_ZONE_LO,
+				     &li);
 		if (err)
 			goto err;
+		exec_info.at_base = li.base;
+		run_entry = li.entry;
+	}
 
-		for (i = 0; i < phnum; ++i) {
-			const struct __brk_elf_phdr *ph = &phdrs[i];
+	{
+		struct image_layout lm = { 0 };
 
-			switch (ph->p_type) {
-			case PT_LOAD:
-				if (ph->p_filesz > ph->p_memsz ||
-				    ph->p_offset > (u64)file_size ||
-				    ph->p_filesz > (u64)file_size -
-						   ph->p_offset ||
-				    ph->p_memsz > USER_SPACE_SIZE_MAX) {
-					err = -ENOEXEC;
-					goto err;
-				}
-				if (ph->p_align >= PAGE_SIZE &&
-				    ph->p_vaddr % ph->p_align !=
-				    ph->p_offset % ph->p_align) {
-					err = -ENOEXEC;
-					goto err;
-				}
-				loads[nload++] = ph;
-				break;
-			case PT_PHDR:
-				phdr_seg = ph;
-				break;
-			case PT_DYNAMIC:
-				if (elf_hdr.e_type != ET_DYN) {
-					err = -ENOEXEC;
-					goto err;
-				}
-				dyn_seg = ph;
-				break;
-			case PT_GNU_STACK:
-				stack_x = !!(ph->p_flags & PF_X);
-				break;
-			case PT_INTERP:
-			case PT_TLS:
-				/* dynamic linking is not implemented */
-				err = -ENOEXEC;
-				goto err;
-			default:
-				/* PT_NOTE and friends are informational */
-				break;
-			}
-		}
-
-		if (nload == 0) {
-			err = -ENOEXEC;
+		err = elf_load_image(new_mm, f, &elf_hdr, phdrs, false,
+				     interp_f != NULL,
+				     interp_f ? PIE_ZONE_LO +
+							(15UL << 30) :
+						PIE_ZONE_LO,
+				     &lm);
+		if (err)
 			goto err;
-		}
-
-		/* loads in vaddr order, pairwise non-overlapping */
-		for (i = 1; i < nload; ++i) {
-			const struct __brk_elf_phdr *key = loads[i];
-
-			for (j = i; j > 0 &&
-				   loads[j - 1]->p_vaddr > key->p_vaddr;
-			     --j)
-				loads[j] = loads[j - 1];
-			loads[j] = key;
-		}
-		for (i = 1; i < nload; ++i) {
-			user_addr_t prev_end = align_up(loads[i - 1]->p_vaddr +
-							loads[i - 1]->p_memsz,
-							PAGE_SIZE);
-			user_addr_t cur_start =
-				align_down(loads[i]->p_vaddr, PAGE_SIZE);
-
-			if (cur_start < prev_end) {
-				err = -ENOEXEC;
-				goto err;
-			}
-		}
-
-		if (elf_hdr.e_type == ET_DYN)
-			pie_base = pick_pie_base();
-
-		if (pie_base + align_up(loads[nload - 1]->p_vaddr +
-					loads[nload - 1]->p_memsz,
-					PAGE_SIZE) > USER_SPACE_SIZE_MAX) {
-			err = -ENOEXEC;
-			goto err;
-		}
-
-		for (i = 0; i < nload; ++i) {
-			struct __brk_elf_phdr adj = *loads[i];
-
-			adj.p_vaddr += pie_base;
-			err = load_seg(new_mm, &adj, f);
-			if (err)
-				goto err;
-		}
-
-		entry = pie_base + elf_hdr.e_entry;
-		for (i = 0; i < nload; ++i) {
-			if ((loads[i]->p_flags & PF_X) &&
-			    entry >= pie_base + loads[i]->p_vaddr &&
-			    entry < pie_base + loads[i]->p_vaddr +
-					   loads[i]->p_memsz)
-				break;
-		}
-		if (i == nload) {
-			err = -ENOEXEC;
-			goto err;
-		}
-
-		if (dyn_seg) {
-			err = apply_base_relocs(new_mm, f, dyn_seg,
-						loads, nload, pie_base);
-			if (err)
-				goto err;
-		}
-
-		/*
-		 * AT_PHDR: point into the mapped image when the linker
-		 * emitted PT_PHDR, otherwise push_args copies the
-		 * table onto the stack.
-		 */
-		if (phdr_seg) {
-			user_addr_t at = pie_base + phdr_seg->p_vaddr;
-			bool covered = false;
-
-			for (i = 0; i < nload; ++i) {
-				if (at >= pie_base + loads[i]->p_vaddr &&
-				    at + (u64)phnum *
-						    sizeof(*phdrs) <=
-					    pie_base + loads[i]->p_vaddr +
-					    loads[i]->p_memsz) {
-					covered = true;
-					break;
-				}
-			}
-			phdr_vaddr = covered ? at : 0;
-		}
-
-		exec_info.entry = entry;
-		exec_info.pie_base = pie_base;
+		exec_info.entry = lm.entry;
 		exec_info.phdrs = phdrs;
-		exec_info.phnum = phnum;
-		exec_info.phdr_vaddr = phdr_vaddr;
-		stack_want_x = stack_x;
+		exec_info.phnum = elf_hdr.e_phnum;
+		exec_info.phdr_vaddr = lm.phdr_vaddr;
+		stack_want_x = lm.stack_x;
+		if (!interp_f)
+			run_entry = lm.entry;
 	}
 
 	file_put(f);
 	f = NULL;
+	if (interp_f) {
+		file_put(interp_f);
+		interp_f = NULL;
+	}
+	kfree(interp_phdrs);
+	interp_phdrs = NULL;
 
 	new_mm->heap->addr = find_brk(new_mm);
 	new_mm->heap->size = 0;
@@ -860,7 +1019,7 @@ static int __do_execve(const char *path, struct exec_args *args)
 		process->mm = new_mm;
 		uvm_space_free(old_mm);
 		signal_reset(process, task);
-		trap_frame_set_pc(task->frame, exec_info.entry);
+		trap_frame_set_pc(task->frame, run_entry);
 		trap_frame_set_sp(task->frame, sp);
 		/* The new image starts with a clean FP state: cleared registers
 		 * and the default round-to-nearest-even mode in fcsr. */
@@ -901,6 +1060,9 @@ static int __do_execve(const char *path, struct exec_args *args)
 
 err:
 	kfree(phdrs);
+	kfree(interp_phdrs);
+	if (interp_f)
+		file_put(interp_f);
 	if (new_mm && !IS_ERR(new_mm))
 		uvm_space_free(new_mm);
 	if (!IS_ERR(f) && f)

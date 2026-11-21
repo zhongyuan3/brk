@@ -103,14 +103,29 @@ struct __brk_elf_rela {
 };
 
 #define DT_NULL 0
+#define DT_NEEDED 1
+#define DT_PLTRELSZ 2
+#define DT_INIT 12
+#define DT_FINI 13
+#define DT_SONAME 14
 #define DT_REL 17		/* REL relocations (unsupported on RISC-V) */
 #define DT_RELA 7
 #define DT_RELASZ 8
 #define DT_RELAENT 9
+#define DT_STRSZ 10
+#define DT_SYMENT 11
+#define DT_INIT_ARRAY 25
+#define DT_INIT_ARRAYSZ 27
+#define DT_JMPREL 23
+#define DT_TEXTREL 22
+#define DT_STRTAB 5
+#define DT_SYMTAB 6
+#define DT_HASH 4
 
 /* RISC-V relocation types. */
 #define R_RISCV_NONE 0
 #define R_RISCV_64 2
 #define R_RISCV_RELATIVE 3
+#define R_RISCV_RELAX 51
 
 #endif
