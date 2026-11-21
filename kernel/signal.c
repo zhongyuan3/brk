@@ -577,7 +577,7 @@ void sigaction_table_copy(struct sigaction_table *dst,
 	spin_unlock_irqrestore(&src->lock, sflags);
 }
 
-u64 sys_sigaction(void)
+u64 sys_set_signal(void)
 {
 	int sig = syscall_arg_int(0);
 	const struct sigaction *act = syscall_arg_ptr(1);
@@ -586,7 +586,7 @@ u64 sys_sigaction(void)
 	return signal_do_sigaction(current_process(), sig, act, oact);
 }
 
-u64 sys_sigprocmask(void)
+u64 sys_set_sigmask(void)
 {
 	int how = syscall_arg_int(0);
 	const sigset_t *set = syscall_arg_ptr(1);
@@ -595,7 +595,7 @@ u64 sys_sigprocmask(void)
 	return signal_do_sigprocmask(current_thread(), how, set, oldset);
 }
 
-u64 sys_sigpending(void)
+u64 sys_get_pending(void)
 {
 	struct thread *thread = current_thread();
 	sigset_t *uset = syscall_arg_ptr(0);
@@ -614,11 +614,12 @@ u64 sys_sigpending(void)
 	return 0;
 }
 
-u64 sys_sigtimedwait(void)
+u64 sys_wait_signal(void)
 {
 	const sigset_t *uset = syscall_arg_ptr(0);
 	const struct timespec *utimeout = syscall_arg_ptr(1);
 	siginfo_t *uinfo = syscall_arg_ptr(2);
+	int wflags = syscall_arg_int(3);
 	struct thread *thread = current_thread();
 	sigset_t set;
 	struct timespec req;
@@ -629,10 +630,33 @@ u64 sys_sigtimedwait(void)
 
 	if (!uset)
 		return -EFAULT;
+	if (wflags & ~SIG_WAIT_SETMASK)
+		return -EINVAL;
 	if (copy_from_user(&set, uset, sizeof(set)))
 		return -EFAULT;
 	if (set & ~(((u64)1 << NSIG) - 1))
 		return -EINVAL;
+
+	if (wflags & SIG_WAIT_SETMASK) {
+		/*
+		 * sigsuspend mode: install @set (KILL/STOP stay
+		 * unblockable) and sleep until a delivery aborts the
+		 * thread.  The temporary mask stays installed while the
+		 * handler runs; libc restores the caller's mask after
+		 * the handler returns, and pause() uses the same path
+		 * with the caller's own mask.
+		 */
+		flags = spin_lock_irqsave(&thread->process->sigactions.lock);
+		set &= ~(1ULL << SIGKILL);
+		set &= ~(1ULL << SIGSTOP);
+		thread->blocked = set;
+		spin_unlock_irqrestore(&thread->process->sigactions.lock,
+				       flags);
+		while (!thread_abort_pending(thread))
+			ktime_nanosleep(NS_PER_MS, NULL);
+
+		return -EINTR;
+	}
 
 	if (utimeout) {
 		if (copy_from_user(&req, utimeout, sizeof(req)))
@@ -708,58 +732,8 @@ u64 sys_sigtimedwait(void)
 	return (u64)sig;
 }
 
-u64 sys_pause(void)
-{
-	struct thread *thread = current_thread();
 
-	while (!thread_abort_pending(thread))
-		ktime_nanosleep(NS_PER_MS, NULL);
-
-	return -EINTR;
-}
-
-u64 sys_sigsuspend(void)
-{
-	const sigset_t *uset = syscall_arg_ptr(0);
-	sigset_t *uoldset = syscall_arg_ptr(1);
-	struct thread *thread = current_thread();
-	sigset_t set;
-	sigset_t oldset;
-	irqstate_t flags;
-
-	if (!uset)
-		return -EFAULT;
-	if (copy_from_user(&set, uset, sizeof(set)))
-		return -EFAULT;
-	if (set & ~(((u64)1 << NSIG) - 1))
-		return -EINVAL;
-
-	flags = spin_lock_irqsave(&thread->process->sigactions.lock);
-	oldset = thread->blocked;
-	spin_unlock_irqrestore(&thread->process->sigactions.lock, flags);
-
-	if (uoldset && copy_to_user(uoldset, &oldset, sizeof(oldset)))
-		return -EFAULT;
-
-	set &= ~(1ULL << SIGKILL);
-	set &= ~(1ULL << SIGSTOP);
-
-	flags = spin_lock_irqsave(&thread->process->sigactions.lock);
-	thread->blocked = set;
-	spin_unlock_irqrestore(&thread->process->sigactions.lock, flags);
-
-	/*
-	 * Leave the temporary mask installed on return: the trap path delivers
-	 * the signal handler with this mask, and libc restores @oldset after
-	 * the handler returns.
-	 */
-	while (!thread_abort_pending(thread))
-		ktime_nanosleep(NS_PER_MS, NULL);
-
-	return -EINTR;
-}
-
-u64 sys_sigreturn(void)
+u64 sys_restore_context(void)
 {
 	return signal_do_sigreturn(current_thread());
 }
