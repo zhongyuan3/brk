@@ -10,6 +10,7 @@
 #include <brk/refcnt.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
+#include <stdint.h>
 
 #define PCP_MAX_ORDER0 64
 

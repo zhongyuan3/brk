@@ -17,16 +17,17 @@
 #include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>
+#include <stdbool.h>
 
 struct boot_info boot_info;
 
 void primary_entry(unsigned long hart_id, unsigned long dtb_pa,
 		   unsigned long kernel_image_offset)
 {
-	cpu_init(hart_id);
+	cpu_init(hart_id, true);
 	setup_trap_entry();
 
-	of_set_fdt(dtb_pa);
+	of_early_set_fdt(dtb_pa);
 
 	boot_info.boot_hart_id = hart_id;
 	boot_info.dtb_pa = dtb_pa;
@@ -37,7 +38,7 @@ void primary_entry(unsigned long hart_id, unsigned long dtb_pa,
 
 void secondary_entry(unsigned long hart_id)
 {
-	cpu_init(hart_id);
+	cpu_init(hart_id, false);
 	setup_trap_entry();
 
 	load_final_page_table();
@@ -50,7 +51,7 @@ void secondary_entry(unsigned long hart_id)
 
 	local_irq_enable();
 
-	pr_info("smp: cpu@%lu online\n", hart_id);
+	pr_info("cpu@%lu online\n", hart_id);
 
 	sched_start();
 }
@@ -59,9 +60,9 @@ void arch_init(void)
 {
 	int err;
 
-	err = paging_init();
+	err = vm_init();
 	if (err)
-		panic("paging_init() failed: err=%d\n", err);
+		panic("vm_init() failed: err=%d\n", err);
 
 	err = of_init();
 	if (err)
@@ -69,7 +70,7 @@ void arch_init(void)
 
 	err = of_scan_cpu();
 	if (err)
-		panic("of_init() failed: err=%d\n", err);
+		panic("of_scan_cpu() failed: err=%d\n", err);
 }
 
 static void smp_wake_secondary_harts(unsigned long boot_hart_id)

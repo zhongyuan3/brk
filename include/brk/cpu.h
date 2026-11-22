@@ -7,6 +7,7 @@
 #include <brk/list.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <stdbool.h>
 
 struct thread;
 
@@ -26,8 +27,7 @@ struct cpu {
 	unsigned int nr_running;
 };
 
-int cpu_init(cpuid_t cpuid);
-void cpu_sched_init(void);
+int cpu_init(cpuid_t cpuid, bool boot);
 struct cpu *this_cpu(void);
 cpuid_t this_cpuid(void);
 cpuid_t this_cpuid_safe(void);

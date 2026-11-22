@@ -18,17 +18,17 @@
  */
 static void *fdt;
 
-void of_set_fdt(phys_addr_t addr)
+void of_early_set_fdt(phys_addr_t addr)
 {
 	fdt = (void *)addr;
 }
 
-size_t of_get_fdt_size(phys_addr_t addr)
+size_t of_early_get_fdt_size(phys_addr_t addr)
 {
 	return fdt_totalsize((const void *)addr);
 }
 
-void *of_early_fdt(void)
+void *of_early_get_fdt(void)
 {
 	return fdt;
 }
@@ -152,7 +152,7 @@ static int of_mchain_add_or_reserve(phys_addr_t addr, phys_size_t size,
 	return mchain_reserve(addr, size, attrs, MCHAIN_NID_ANY);
 }
 
-int of_scan_memory(void)
+int of_early_scan_memory(void)
 {
 	struct of_mchain_op op = { .add = true };
 	int err;
@@ -160,8 +160,10 @@ int of_scan_memory(void)
 	int addr_cells, size_cells;
 
 	node = fdt_path_offset(fdt, "/memory");
-	if (node < 0)
+	if (node < 0) {
+		pr_err("no memory node in the DT\n");
 		return of_fdt_errno(node);
+	}
 
 	err = get_parent_addr_cells(node, &addr_cells, &size_cells);
 	if (err)
@@ -171,7 +173,7 @@ int of_scan_memory(void)
 			    of_mchain_add_or_reserve, &op);
 }
 
-int of_scan_reserved_memory(void)
+int of_early_scan_reserved_memory(void)
 {
 	int err;
 	int node, subnode;

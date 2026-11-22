@@ -9,6 +9,7 @@
 #include <brk/types.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #define PTE_V 1 /* Valid */
 #define PTE_R 2 /* Read */

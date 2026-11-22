@@ -232,7 +232,7 @@ int of_init(void)
 	if (of_initialized)
 		return 0;
 
-	fdt = of_early_fdt();
+	fdt = of_early_get_fdt();
 	if (!fdt)
 		return -ENODEV;
 

@@ -23,7 +23,8 @@
 #include <stddef.h>
 #include <string.h>
 
-static_assert(VMEMMAP_START % PAGE_SIZE == 0);
+static_assert(VMEMMAP_START % PAGE_SIZE == 0,
+	      "VMEMMAP_START is not aligned to PAGE_SIZE");
 
 phys_addr_t phys_offset;
 
@@ -94,7 +95,7 @@ static void __setup_vm_early(phys_addr_t dtb_pa)
 	/* Map the kernel link address to the physical load address. */
 	map_early(KERNEL_LINK_ADDR, _SKERNEL, size, flags);
 
-	phys_addr_t dtb_end = dtb_pa + of_get_fdt_size(dtb_pa);
+	phys_addr_t dtb_end = dtb_pa + of_early_get_fdt_size(dtb_pa);
 	if (dtb_pa >= _SKERNEL && dtb_end <= kern_end)
 		return;
 
@@ -131,7 +132,7 @@ static void map_early_free_range(phys_addr_t start, phys_addr_t end)
 	} spans[2] = {
 		{ _SKERNEL_PHYS, align_up(_EKERNEL_PHYS, PAGE_SIZE_2M) },
 		{ align_down(boot_info.dtb_pa, PAGE_SIZE_2M),
-		  align_up(boot_info.dtb_pa + of_get_fdt_size(boot_info.dtb_pa),
+		  align_up(boot_info.dtb_pa + of_early_get_fdt_size(boot_info.dtb_pa),
 			   PAGE_SIZE_2M) },
 	};
 	struct early_span tmp;
@@ -195,11 +196,11 @@ static int phys_mem_init(void)
 {
 	int err;
 
-	err = of_scan_memory();
+	err = of_early_scan_memory();
 	if (err)
 		return err;
 
-	err = of_scan_reserved_memory();
+	err = of_early_scan_reserved_memory();
 	if (err)
 		return err;
 
@@ -221,7 +222,7 @@ static int phys_mem_init(void)
 		return err;
 
 	err = mchain_reserve(boot_info.dtb_pa,
-			     of_get_fdt_size(boot_info.dtb_pa), 0,
+			     of_early_get_fdt_size(boot_info.dtb_pa), 0,
 			     MCHAIN_NID_ANY);
 	if (err)
 		return err;
@@ -313,7 +314,7 @@ static void final_pgtable_init(void)
 	rngs[5].name = "dtb";
 	rngs[5].addr = phys_to_virt(boot_info.dtb_pa);
 	rngs[5].paddr = boot_info.dtb_pa;
-	rngs[5].size = of_get_fdt_size(boot_info.dtb_pa);
+	rngs[5].size = of_early_get_fdt_size(boot_info.dtb_pa);
 	rngs[5].flags = PTE_R | PTE_W;
 	rngs[5].do_map = true;
 	size_t i = 6;
@@ -491,19 +492,17 @@ void load_final_page_table(void)
 	sfence_vma();
 }
 
-int paging_init(void)
+int vm_init(void)
 {
-	int err;
-
-	err = phys_mem_init();
-	if (err != 0)
+	int err = phys_mem_init();
+	if (err)
 		return err;
 
 	map_free_memory_early();
 	final_pgtable_init();
 	load_final_page_table();
 	mchain_allow_grow();
-	of_set_fdt(phys_to_virt(boot_info.dtb_pa));
+	of_early_set_fdt(phys_to_virt(boot_info.dtb_pa));
 	vmemmap_check_capacity();
 	vmemmap_init();
 

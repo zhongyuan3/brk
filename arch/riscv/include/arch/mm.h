@@ -9,7 +9,6 @@
 #include <brk/asm/cpu.h>
 #include <brk/mm_types.h>
 #include <brk/types.h>
-#include <stdint.h>
 
 extern phys_addr_t phys_offset;
 
@@ -77,7 +76,7 @@ static inline phys_addr_t virt_to_phys(virt_addr_t vaddr)
 	return (phys_addr_t)((vaddr - PAGE_OFFSET) + phys_offset);
 }
 
-int paging_init(void);
+int vm_init(void);
 void load_final_page_table(void);
 
 #endif

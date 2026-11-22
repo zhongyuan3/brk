@@ -9,6 +9,7 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
+#include <stdint.h>
 #include <uapi/errno.h>
 
 static void slab_mark_page_range(struct page *head, unsigned int order,

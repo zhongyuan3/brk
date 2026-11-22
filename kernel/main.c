@@ -39,7 +39,6 @@ void start_kernel(void)
 	trap_init();
 
 	/* Core data structures, buses and registries. */
-	cpu_sched_init();
 	futex_init();
 	process_cache_init();
 	thread_cache_init();

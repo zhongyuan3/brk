@@ -15,6 +15,7 @@
 #include <brk/virtio.h>
 #include <brk/virtio_net.h>
 #include <brk/virtio_queue.h>
+#include <stdint.h>
 #include <uapi/errno.h>
 
 #define VIRTIO_NET_MAX_DEVS 4
