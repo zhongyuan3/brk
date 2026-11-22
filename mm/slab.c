@@ -77,8 +77,6 @@ static int slab_add_page(struct slab_allocator *allocator)
 int slab_init(struct slab_allocator *allocator, size_t size, size_t align,
 	      const char *name)
 {
-	int ret;
-
 	if (size == 0 || align == 0)
 		return -EINVAL;
 
@@ -102,10 +100,7 @@ int slab_init(struct slab_allocator *allocator, size_t size, size_t align,
 
 	list_init(&allocator->slab_list);
 
-	spin_lock(&allocator->lock);
-	ret = slab_add_page(allocator);
-	spin_unlock(&allocator->lock);
-	return ret;
+	return 0;
 }
 
 void slab_deinit(struct slab_allocator *allocator)
