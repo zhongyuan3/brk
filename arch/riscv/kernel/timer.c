@@ -49,7 +49,7 @@ static struct clock_event_device riscv_clockevent = {
 	.set_next_event = riscv_timer_set_next_event,
 };
 
-int timer_init(void)
+void timer_init(void)
 {
 	u32 freq;
 	u64 timer_interval;
@@ -81,8 +81,6 @@ int timer_init(void)
 
 	timer_interval = freq / HZ;
 	pr_debug("timer_interval=%lu (HZ=%d)\n", timer_interval, HZ);
-
-	return 0;
 }
 
 void timer_init_hart(void)

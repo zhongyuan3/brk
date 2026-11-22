@@ -329,12 +329,11 @@ void setup_trap_entry(void)
 	in_early = false;
 }
 
-int trap_init(void)
+void trap_init(void)
 {
 	trap_enable_timer();
 	trap_enable_external();
 	trap_enable_software();
-	return 0;
 }
 
 void prepare_to_ret_to_user(struct trap_frame *frame)

@@ -3,6 +3,6 @@
 
 #include <brk/compiler_attr.h>
 
-int timer_init(void);
+void timer_init(void);
 
 #endif

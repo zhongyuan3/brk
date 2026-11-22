@@ -14,7 +14,7 @@ struct clocksource {
 
 int clocksource_register(struct clocksource *cs);
 struct clocksource *clocksource_select(void);
-int clocksource_init(void);
+void clocksource_init(void);
 
 /* Selected clocksource, or NULL before clocksource_init(). */
 struct clocksource *clocksource_get_current(void);

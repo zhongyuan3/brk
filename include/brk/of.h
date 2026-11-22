@@ -80,7 +80,7 @@ int of_address_to_resource(const struct device_node *node, int index,
 			   struct resource *res);
 int of_irq_get(const struct device_node *node, int index);
 
-int of_platform_populate(void);
+void of_platform_populate(void);
 
 /* Read one big-endian cell from an OF property value. */
 static inline u32 of_read_be32(const void *p)

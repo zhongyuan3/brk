@@ -28,42 +28,15 @@
 #include <brk/virtio_mmio.h>
 #include <brk/virtio_net.h>
 
-/*
- * Every boot initializer is called explicitly here, in dependency order.
- * There is no linker-provided initcall table: adding initialization means
- * adding a call to this function.
- */
 void start_kernel(void)
 {
-	int err;
-
-	err = arch_init();
-	if (err)
-		panic("arch: initialization failed: err=%d\n", err);
-
-	err = mm_init();
-	if (err)
-		panic("mm: initialization failed: err=%d\n", err);
-
-	err = timer_init();
-	if (err)
-		panic("timer: initialization failed: err=%d\n", err);
-
-	err = clocksource_init();
-	if (err)
-		panic("clocksource: initialization failed: err=%d\n", err);
-
-	err = timekeeper_init();
-	if (err)
-		panic("timekeeper: initialization failed: err=%d\n", err);
-
-	err = tick_init();
-	if (err)
-		panic("tick: initialization failed: err=%d\n", err);
-
-	err = trap_init();
-	if (err)
-		panic("trap: initialization failed: err=%d\n", err);
+	arch_init();
+	mm_init();
+	timer_init();
+	clocksource_init();
+	timekeeper_init();
+	tick_init();
+	trap_init();
 
 	/* Core data structures, buses and registries. */
 	cpu_sched_init();
@@ -86,9 +59,7 @@ void start_kernel(void)
 	/* Device tree was built in arch_init(). */
 	irqchip_early_init();
 
-	err = of_platform_populate();
-	if (err)
-		pr_warn("of: platform populate failed: %d\n", err);
+	of_platform_populate();
 
 	/* Platform and transport drivers. */
 	ns16550a_driver_init();

@@ -76,6 +76,6 @@ int map_user_pages(pgd_t *root, virt_addr_t addr, phys_size_t size,
 		   phys_addr_t paddr, unsigned int flags);
 void unmap_user_pages(pgd_t *root, virt_addr_t addr, phys_size_t size);
 
-int mm_init(void);
+void mm_init(void);
 
 #endif

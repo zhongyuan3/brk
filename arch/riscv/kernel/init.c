@@ -44,8 +44,7 @@ void secondary_entry(unsigned long hart_id)
 
 	timer_init_hart();
 
-	if (trap_init())
-		panic("trap: initialization failed on hart %lu\n", hart_id);
+	trap_init();
 
 	irq_init_hart(hart_id);
 
@@ -56,23 +55,21 @@ void secondary_entry(unsigned long hart_id)
 	sched_start();
 }
 
-int arch_init(void)
+void arch_init(void)
 {
 	int err;
 
 	err = paging_init();
 	if (err)
-		return err;
+		panic("paging_init() failed: err=%d\n", err);
 
 	err = of_init();
 	if (err)
-		return err;
+		panic("of_init() failed: err=%d\n", err);
 
 	err = of_scan_cpu();
 	if (err)
-		return err;
-
-	return 0;
+		panic("of_init() failed: err=%d\n", err);
 }
 
 static void smp_wake_secondary_harts(unsigned long boot_hart_id)

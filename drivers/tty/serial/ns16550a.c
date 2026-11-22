@@ -413,7 +413,7 @@ int ns16550a_add_device(struct ns16550a_device *dev, struct device *parent)
 
 	if (first) {
 		ns16550a_console.client_data = dev;
-		console_register(&ns16550a_console, KERN_DEBUG);
+		console_register(&ns16550a_console, KERN_INFO);
 	}
 
 	return 0;

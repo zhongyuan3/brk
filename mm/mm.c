@@ -795,12 +795,10 @@ static void mchain_release_to_buddy(void)
 		page_free_phys_range(start, end - start);
 }
 
-int mm_init(void)
+void mm_init(void)
 {
 	page_alloc_init();
 	mchain_release_to_buddy();
 	kmalloc_init();
 	vmalloc_init();
-
-	return 0;
 }

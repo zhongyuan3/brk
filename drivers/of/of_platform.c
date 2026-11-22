@@ -162,11 +162,7 @@ static int of_platform_populate_children(struct device_node *parent)
 	return err;
 }
 
-int of_platform_populate(void)
+void of_platform_populate(void)
 {
-	struct device_node *root = of_root();
-
-	if (!root)
-		return -ENODEV;
-	return of_platform_populate_children(root);
+	of_platform_populate_children(of_root());
 }

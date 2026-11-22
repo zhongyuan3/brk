@@ -46,14 +46,12 @@ struct clocksource *clocksource_select(void)
 	return best;
 }
 
-int clocksource_init(void)
+void clocksource_init(void)
 {
 	struct clocksource *cs = clocksource_select();
 
-	if (!cs) {
+	if (!cs)
 		pr_err("no source registered\n");
-		return -ENODEV;
-	}
 
 	/*
 	 * Establish the boot-clock epoch before the first timestamped message
@@ -64,7 +62,6 @@ int clocksource_init(void)
 
 	pr_debug("selected %s (%u Hz, rating %u)\n", cs->name, cs->frequency,
 		 cs->rating);
-	return 0;
 }
 
 struct clocksource *clocksource_get_current(void)
