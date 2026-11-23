@@ -322,8 +322,7 @@ struct device_node *of_find_node_by_path(const char *path)
 			p++;
 		len = (size_t)(p - start);
 
-		of_for_each_child(child, node)
-		{
+		of_for_each_child(child, node) {
 			if (of_node_name_is(child, start, len)) {
 				node = child;
 				found = true;
@@ -345,8 +344,7 @@ static struct device_node *of_find_compatible(struct device_node *node,
 	if (of_device_is_compatible(node, compatible))
 		return node;
 
-	of_for_each_child(child, node)
-	{
+	of_for_each_child(child, node) {
 		struct device_node *found =
 			of_find_compatible(child, compatible);
 
@@ -371,8 +369,7 @@ static struct device_node *of_find_phandle(struct device_node *node,
 	if (node->phandle == phandle)
 		return node;
 
-	of_for_each_child(child, node)
-	{
+	of_for_each_child(child, node) {
 		struct device_node *found = of_find_phandle(child, phandle);
 
 		if (found)
@@ -401,8 +398,7 @@ struct device_node *of_get_child_by_name(const struct device_node *node,
 	if (!node || !name)
 		return NULL;
 
-	of_for_each_child(child, node)
-	{
+	of_for_each_child(child, node) {
 		if (!strcmp(child->name, name))
 			return child;
 	}
@@ -684,8 +680,7 @@ int of_scan_cpu(void)
 	if (!node)
 		return -ENOENT;
 
-	of_for_each_child(cpu, node)
-	{
+	of_for_each_child(cpu, node) {
 		type = of_get_property(cpu, "device_type", &len);
 		if (type && len > 0 && !strcmp(type, "cpu"))
 			nr_harts += 1;

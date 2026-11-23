@@ -111,7 +111,8 @@ static void irqchip_probe_node(const struct device_node *node)
 		}
 	}
 
-	of_for_each_child(child, node) irqchip_probe_node(child);
+	of_for_each_child(child, node)
+		irqchip_probe_node(child);
 }
 
 /*

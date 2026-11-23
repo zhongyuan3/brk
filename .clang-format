@@ -64,32 +64,34 @@ DisableFormat: false
 ExperimentalAutoDetectBinPacking: false
 FixNamespaceComments: false
 
+# grep -rhE '^#define[[:space:]]+[^[:space:]]*for_each[^[:space:]]*\(' include/ arch/ vendor/ \
+# | sed -E 's/^#define[[:space:]]+([^[:space:]]*for_each[^[:space:]]*)\(.*$/  - "\1"/' \
+# | LC_ALL=C sort -u
 ForEachMacros:
-    - "list_for_each"
-    - "list_for_each_continue"
-    - "list_for_each_prev"
-    - "list_for_each_safe"
-    - "list_for_each_prev_safe"
-    - "list_for_each_entry"
-    - "list_for_each_entry_reverse"
-    - "list_for_each_entry_continue"
-    - "list_for_each_entry_continue_reverse"
-    - "list_for_each_entry_from"
-    - "list_for_each_entry_safe"
-    - "list_for_each_entry_safe_continue"
-    - "list_for_each_entry_safe_from"
-    - "list_for_each_entry_safe_reverse"
+    - "fdt_for_each_property_offset"
+    - "fdt_for_each_subnode"
     - "hlist_for_each"
-    - "hlist_for_each_safe"
     - "hlist_for_each_entry"
     - "hlist_for_each_entry_continue"
     - "hlist_for_each_entry_from"
     - "hlist_for_each_entry_safe"
-    - "for_each_mem_range"
-    - "for_each_mem_pfn_range"
-    - "for_each_memblock_region"
-    - "fdt_for_each_subnode"
-    - "fdt_for_each_property_offset"
+    - "hlist_for_each_safe"
+    - "list_for_each"
+    - "list_for_each_continue"
+    - "list_for_each_entry"
+    - "list_for_each_entry_continue"
+    - "list_for_each_entry_continue_reverse"
+    - "list_for_each_entry_from"
+    - "list_for_each_entry_from_reverse"
+    - "list_for_each_entry_reverse"
+    - "list_for_each_entry_safe"
+    - "list_for_each_entry_safe_continue"
+    - "list_for_each_entry_safe_from"
+    - "list_for_each_entry_safe_reverse"
+    - "list_for_each_prev"
+    - "list_for_each_prev_safe"
+    - "list_for_each_safe"
+    - "of_for_each_child"
 
 IncludeBlocks: Preserve
 IncludeCategories:

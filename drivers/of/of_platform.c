@@ -116,7 +116,8 @@ static int of_platform_populate_children(struct device_node *parent)
 	size_t i;
 	int err = 0;
 
-	of_for_each_child(node, parent) count++;
+	of_for_each_child(node, parent)
+		count++;
 
 	if (!count)
 		return 0;
@@ -126,8 +127,7 @@ static int of_platform_populate_children(struct device_node *parent)
 		return -ENOMEM;
 
 	i = 0;
-	of_for_each_child(node, parent)
-	{
+	of_for_each_child(node, parent) {
 		if (i < count)
 			nodes[i++] = node;
 	}
