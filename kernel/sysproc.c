@@ -211,16 +211,14 @@ static void update_caps_after_setuid_locked(struct process *process,
 static int uid_slot_ok(const struct cred *cred, int uid)
 {
 	return cred_capable_locked(cred, CAP_SETUID) ||
-	       (kuid_t)uid == cred->uid ||
-	       (kuid_t)uid == cred->euid ||
+	       (kuid_t)uid == cred->uid || (kuid_t)uid == cred->euid ||
 	       (kuid_t)uid == cred->suid;
 }
 
 static int gid_slot_ok(const struct cred *cred, int gid)
 {
 	return cred_capable_locked(cred, CAP_SETGID) ||
-	       (kgid_t)gid == cred->gid ||
-	       (kgid_t)gid == cred->egid ||
+	       (kgid_t)gid == cred->gid || (kgid_t)gid == cred->egid ||
 	       (kgid_t)gid == cred->sgid;
 }
 

@@ -70,12 +70,12 @@ struct __brk_elf_phdr {
 #define PF_W 0x2
 #define PF_X 0x1
 
-#define EI_DATA 5		/* data encoding byte of e_ident */
-#define ELFDATA2LSB 1		/* little-endian */
-#define EI_VERSION 6		/* version byte of e_ident */
+#define EI_DATA 5 /* data encoding byte of e_ident */
+#define ELFDATA2LSB 1 /* little-endian */
+#define EI_VERSION 6 /* version byte of e_ident */
 #define EV_CURRENT 1
 
-#define EM_RISCV 243		/* RISC-V */
+#define EM_RISCV 243 /* RISC-V */
 
 /* RISC-V e_flags: float ABI occupies bits 1:2. */
 #define EF_RISCV_FLOAT_ABI_MASK 0x6
@@ -108,7 +108,7 @@ struct __brk_elf_rela {
 #define DT_INIT 12
 #define DT_FINI 13
 #define DT_SONAME 14
-#define DT_REL 17		/* REL relocations (unsupported on RISC-V) */
+#define DT_REL 17 /* REL relocations (unsupported on RISC-V) */
 #define DT_RELA 7
 #define DT_RELASZ 8
 #define DT_RELAENT 9

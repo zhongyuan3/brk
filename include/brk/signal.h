@@ -31,7 +31,8 @@ void signal_copy(struct process *dst_process, struct thread *dst_thread,
 int signal_do_kill(pid_t pid, int sig);
 u64 signal_do_sigreturn(struct thread *thread);
 int signal_do_sigaction(struct process *process, int sig,
-			const struct __brk_sigaction *act, struct __brk_sigaction *oact);
+			const struct __brk_sigaction *act,
+			struct __brk_sigaction *oact);
 int signal_do_sigprocmask(struct thread *thread, int how, const sigset_t *set,
 			  sigset_t *oldset);
 

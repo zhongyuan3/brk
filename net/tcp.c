@@ -712,7 +712,8 @@ drop:
 static int tcp_bind(struct socket *sock, const struct __brk_sockaddr *addr,
 		    int addrlen)
 {
-	const struct __brk_sockaddr_in *sin = (const struct __brk_sockaddr_in *)addr;
+	const struct __brk_sockaddr_in *sin =
+		(const struct __brk_sockaddr_in *)addr;
 	struct tcp_sock *tsk = tcp_from_sock(sock);
 	irqstate_t flags;
 	u32 laddr;
@@ -751,7 +752,8 @@ static int tcp_bind(struct socket *sock, const struct __brk_sockaddr *addr,
 static int tcp_connect(struct socket *sock, const struct __brk_sockaddr *addr,
 		       int addrlen)
 {
-	const struct __brk_sockaddr_in *sin = (const struct __brk_sockaddr_in *)addr;
+	const struct __brk_sockaddr_in *sin =
+		(const struct __brk_sockaddr_in *)addr;
 	struct tcp_sock *tsk = tcp_from_sock(sock);
 	irqstate_t flags;
 	enum tcp_state st;
@@ -911,7 +913,8 @@ static int tcp_accept(struct socket *sock, struct socket **newsock)
 }
 
 static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
-		       const struct __brk_sockaddr *addr, int addrlen, int flags)
+		       const struct __brk_sockaddr *addr, int addrlen,
+		       int flags)
 {
 	struct tcp_sock *tsk = tcp_from_sock(sock);
 	bool nonblock = sock->nonblock || (flags & MSG_DONTWAIT);
@@ -1207,8 +1210,8 @@ static unsigned int tcp_poll(struct socket *sock, unsigned int events)
 	return rev & (events | POLLERR | POLLHUP);
 }
 
-static int tcp_getname(struct socket *sock, struct __brk_sockaddr *addr, int *addrlen,
-		       bool peer)
+static int tcp_getname(struct socket *sock, struct __brk_sockaddr *addr,
+		       int *addrlen, bool peer)
 {
 	struct sock *sk = sock->sk;
 	struct __brk_sockaddr_in sin = { 0 };

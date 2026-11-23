@@ -35,7 +35,8 @@ static struct raw_sock *raw_from_sock(struct socket *sock)
 }
 
 static int raw_sendmsg(struct socket *sock, const void *buf, size_t len,
-		       const struct __brk_sockaddr *addr, int addrlen, int flags)
+		       const struct __brk_sockaddr *addr, int addrlen,
+		       int flags)
 {
 	struct raw_sock *raw = raw_from_sock(sock);
 	struct sk_buff *skb;
@@ -135,7 +136,8 @@ static int raw_bind(struct socket *sock, const struct __brk_sockaddr *addr,
 		    int addrlen)
 {
 	struct raw_sock *raw = raw_from_sock(sock);
-	const struct __brk_sockaddr_in *sin = (const struct __brk_sockaddr_in *)addr;
+	const struct __brk_sockaddr_in *sin =
+		(const struct __brk_sockaddr_in *)addr;
 
 	if (!raw || addrlen < (int)sizeof(*sin) || sin->sin_family != AF_INET)
 		return -EINVAL;
@@ -148,7 +150,8 @@ static int raw_connect(struct socket *sock, const struct __brk_sockaddr *addr,
 		       int addrlen)
 {
 	struct raw_sock *raw = raw_from_sock(sock);
-	const struct __brk_sockaddr_in *sin = (const struct __brk_sockaddr_in *)addr;
+	const struct __brk_sockaddr_in *sin =
+		(const struct __brk_sockaddr_in *)addr;
 
 	if (!raw || addrlen < (int)sizeof(*sin) || sin->sin_family != AF_INET)
 		return -EINVAL;
@@ -173,8 +176,8 @@ static int raw_shutdown(struct socket *sock, int how)
 	return 0;
 }
 
-static int raw_getname(struct socket *sock, struct __brk_sockaddr *addr, int *addrlen,
-		       bool peer)
+static int raw_getname(struct socket *sock, struct __brk_sockaddr *addr,
+		       int *addrlen, bool peer)
 {
 	struct raw_sock *raw = raw_from_sock(sock);
 	struct __brk_sockaddr_in sin = { 0 };

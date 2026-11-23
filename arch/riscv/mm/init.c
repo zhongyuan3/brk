@@ -132,7 +132,8 @@ static void map_early_free_range(phys_addr_t start, phys_addr_t end)
 	} spans[2] = {
 		{ _SKERNEL_PHYS, align_up(_EKERNEL_PHYS, PAGE_SIZE_2M) },
 		{ align_down(boot_info.dtb_pa, PAGE_SIZE_2M),
-		  align_up(boot_info.dtb_pa + of_early_get_fdt_size(boot_info.dtb_pa),
+		  align_up(boot_info.dtb_pa +
+				   of_early_get_fdt_size(boot_info.dtb_pa),
 			   PAGE_SIZE_2M) },
 	};
 	struct early_span tmp;

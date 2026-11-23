@@ -32,8 +32,8 @@ void process_destroy(struct process *process);
 
 int process_fork(void);
 void process_exit_group(int status);
-pid_t process_wait(pid_t pid, int *status, int options, struct __brk_rusage *rus,
-		   kuid_t *uid);
+pid_t process_wait(pid_t pid, int *status, int options,
+		   struct __brk_rusage *rus, kuid_t *uid);
 
 pid_t process_get_pgid(pid_t pid);
 pid_t process_get_sid(pid_t pid);

@@ -507,7 +507,8 @@ unlock_and_return:
 }
 
 int signal_do_sigaction(struct process *process, int sig,
-			const struct __brk_sigaction *act, struct __brk_sigaction *oact)
+			const struct __brk_sigaction *act,
+			struct __brk_sigaction *oact)
 {
 	struct __brk_sigaction_table *table = &process->sigactions;
 
@@ -731,7 +732,6 @@ u64 sys_wait_signal(void)
 
 	return (u64)sig;
 }
-
 
 u64 sys_restore_context(void)
 {

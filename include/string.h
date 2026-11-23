@@ -39,6 +39,4 @@ size_t strspn(const char *s, const char *accept);
 size_t strcspn(const char *s, const char *reject);
 char *strtok(char *str, const char *delim);
 
-const char *strerror(int errnum);
-
 #endif

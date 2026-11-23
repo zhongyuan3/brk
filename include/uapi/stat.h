@@ -42,7 +42,6 @@
 #define UTIME_NOW ((1l << 30) - 1l)
 #define UTIME_OMIT ((1l << 30) - 2l)
 
-
 /*
  * Kernel-side status primitive.  POSIX struct stat is built by libc from
  * this layout so the kernel does not have to track POSIX structure versions.

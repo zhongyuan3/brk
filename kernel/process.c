@@ -538,8 +538,8 @@ static struct process *process_create_user_init(void)
 		.name = "init",
 	});
 	if (IS_ERR(init))
-		panic("failed to create user init process: %s\n",
-		      strerror(PTR_ERR(init)));
+		panic("failed to create user init process: err=%d\n",
+		      PTR_ERR(init));
 
 	return init;
 }
@@ -579,15 +579,15 @@ void process_init_main(void)
 
 	int err = vfs_init();
 	if (err)
-		panic("failed to initialize filesystem: %s\n", strerror(err));
+		panic("failed to initialize filesystem: err=%d\n", err);
 
 	err = rootfs_init();
 	if (err)
-		panic("failed to initialize rootfs: %s\n", strerror(err));
+		panic("failed to initialize rootfs: err=%d\n", err);
 
 	err = netif_rx_start();
 	if (err)
-		panic("failed to start network RX worker: %s\n", strerror(err));
+		panic("failed to start network RX worker: err=%d\n", err);
 	pr_info("file system initialized\n");
 
 	process_start_user_init(init);
@@ -606,7 +606,7 @@ void user_init_entry(void)
 	char *envp[] = { 0 };
 	int err = do_execve(argv[0], argv, envp);
 	if (err < 0) {
-		pr_err("execve %s failed: %s\n", argv[0], strerror(err));
+		pr_err("execve %s failed: err=%d\n", argv[0], err);
 		thread_exit_normal(1);
 		panic("user init exit returned\n");
 	}

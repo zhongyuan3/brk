@@ -86,7 +86,8 @@ u64 sys_bind(void)
 	if (err)
 		return err;
 
-	err = sock->ops->bind(sock, (const struct __brk_sockaddr *)&sa, addrlen);
+	err = sock->ops->bind(sock, (const struct __brk_sockaddr *)&sa,
+			      addrlen);
 	file_put(file);
 	return err;
 }
@@ -112,7 +113,8 @@ u64 sys_connect(void)
 	if (err)
 		return err;
 
-	err = sock->ops->connect(sock, (const struct __brk_sockaddr *)&sa, addrlen);
+	err = sock->ops->connect(sock, (const struct __brk_sockaddr *)&sa,
+				 addrlen);
 	file_put(file);
 	return err;
 }
@@ -144,7 +146,8 @@ u64 sys_sendto(void)
 		return err;
 
 	err = sock->ops->sendmsg(sock, buf, len,
-				 uaddr ? (const struct __brk_sockaddr *)&sa : NULL,
+				 uaddr ? (const struct __brk_sockaddr *)&sa :
+					 NULL,
 				 uaddr ? (int)sizeof(sa) : 0, (int)flags);
 	file_put(file);
 	return err;
@@ -282,8 +285,8 @@ static u64 sys_accept_common(unsigned int flags)
 		int n;
 
 		salen = sizeof(sa);
-		err = newsock->ops->getname(newsock, (struct __brk_sockaddr *)&sa,
-					    &salen, true);
+		err = newsock->ops->getname(
+			newsock, (struct __brk_sockaddr *)&sa, &salen, true);
 		if (!err) {
 			n = min(ulen, salen);
 			copy_to_user(uaddr, &sa, n);
@@ -328,7 +331,8 @@ static u64 sys_getname(bool peer)
 	}
 
 	salen = ulen;
-	err = sock->ops->getname(sock, (struct __brk_sockaddr *)&sa, &salen, peer);
+	err = sock->ops->getname(sock, (struct __brk_sockaddr *)&sa, &salen,
+				 peer);
 	if (!err) {
 		int n = min(ulen, salen);
 

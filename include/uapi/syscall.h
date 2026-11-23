@@ -113,7 +113,8 @@
 #define SYS_WAIT_SIGNAL 64
 
 /* WAIT_SIGNAL flags */
-#define SIG_WAIT_SETMASK 1	/* install @set as the mask and sleep
+#define SIG_WAIT_SETMASK \
+	1 /* install @set as the mask and sleep
 				   until a delivery, sigsuspend-style;
 				   the caller restores the old mask
 				   after the handler returns */

@@ -197,7 +197,8 @@ static int ifreq_get_addr(const struct __brk_ifreq *ifr, u32 *addr)
 
 static void ifreq_set_addr(struct __brk_ifreq *ifr, u32 addr)
 {
-	struct __brk_sockaddr_in *sin = (struct __brk_sockaddr_in *)&ifr->ifr_addr;
+	struct __brk_sockaddr_in *sin =
+		(struct __brk_sockaddr_in *)&ifr->ifr_addr;
 
 	memset(sin, 0, sizeof(*sin));
 	sin->sin_family = AF_INET;
@@ -206,7 +207,8 @@ static void ifreq_set_addr(struct __brk_ifreq *ifr, u32 addr)
 
 static int sockaddr_to_ipv4(const struct __brk_sockaddr *sa, u32 *addr)
 {
-	const struct __brk_sockaddr_in *sin = (const struct __brk_sockaddr_in *)sa;
+	const struct __brk_sockaddr_in *sin =
+		(const struct __brk_sockaddr_in *)sa;
 
 	if (sin->sin_family != AF_INET)
 		return -EINVAL;

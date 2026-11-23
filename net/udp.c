@@ -75,7 +75,8 @@ static int udp_autobind(struct sock *sk)
 static int udp_bind(struct socket *sock, const struct __brk_sockaddr *addr,
 		    int addrlen)
 {
-	const struct __brk_sockaddr_in *sin = (const struct __brk_sockaddr_in *)addr;
+	const struct __brk_sockaddr_in *sin =
+		(const struct __brk_sockaddr_in *)addr;
 	struct sock *sk = sock->sk;
 	irqstate_t flags;
 	u32 laddr;
@@ -114,7 +115,8 @@ static int udp_bind(struct socket *sock, const struct __brk_sockaddr *addr,
 static int udp_connect(struct socket *sock, const struct __brk_sockaddr *addr,
 		       int addrlen)
 {
-	const struct __brk_sockaddr_in *sin = (const struct __brk_sockaddr_in *)addr;
+	const struct __brk_sockaddr_in *sin =
+		(const struct __brk_sockaddr_in *)addr;
 	struct sock *sk = sock->sk;
 	irqstate_t flags;
 	int err;
@@ -137,7 +139,8 @@ static int udp_connect(struct socket *sock, const struct __brk_sockaddr *addr,
 }
 
 static int udp_sendmsg(struct socket *sock, const void *buf, size_t len,
-		       const struct __brk_sockaddr *addr, int addrlen, int flags)
+		       const struct __brk_sockaddr *addr, int addrlen,
+		       int flags)
 {
 	struct sock *sk = sock->sk;
 	struct net_device *dev;
@@ -413,8 +416,8 @@ static unsigned int udp_poll(struct socket *sock, unsigned int events)
 	return rev & (events | POLLERR | POLLHUP);
 }
 
-static int udp_getname(struct socket *sock, struct __brk_sockaddr *addr, int *addrlen,
-		       bool peer)
+static int udp_getname(struct socket *sock, struct __brk_sockaddr *addr,
+		       int *addrlen, bool peer)
 {
 	struct sock *sk = sock->sk;
 	struct __brk_sockaddr_in sin = { 0 };
