@@ -47,20 +47,20 @@
  * this layout so the kernel does not have to track POSIX structure versions.
  * Timestamps are nanoseconds since the realtime epoch.
  */
-struct __brk_statx {
-	__brk_u64 stx_dev;
-	__brk_u64 stx_ino;
-	__brk_u64 stx_rdev;
-	__brk_s64 stx_size;
-	__brk_s64 stx_blocks;
-	__brk_s64 stx_atime_ns;
-	__brk_s64 stx_mtime_ns;
-	__brk_s64 stx_ctime_ns;
-	__brk_u32 stx_mode;
-	__brk_u32 stx_nlink;
-	__brk_u32 stx_uid;
-	__brk_u32 stx_gid;
-	__brk_s32 stx_blksize;
+struct __brk_stat {
+	__brk_u64 st_dev;
+	__brk_u64 st_ino;
+	__brk_u64 st_rdev;
+	__brk_s64 st_size;
+	__brk_s64 st_blocks;
+	__brk_s64 st_atime_ns;
+	__brk_s64 st_mtime_ns;
+	__brk_s64 st_ctime_ns;
+	__brk_u32 st_mode;
+	__brk_u32 st_nlink;
+	__brk_u32 st_uid;
+	__brk_u32 st_gid;
+	__brk_s32 st_blksize;
 	__brk_u32 __spare;
 };
 

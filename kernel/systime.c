@@ -36,7 +36,7 @@ static int clock_now(int clockid, ktime_t *now)
 	}
 }
 
-u64 sys_clock_gettime(void)
+u64 sys_get_clock(void)
 {
 	int clockid = syscall_arg_int(0);
 	struct __brk_timespec *ut = syscall_arg_ptr(1);
@@ -57,7 +57,7 @@ u64 sys_clock_gettime(void)
 	return 0;
 }
 
-u64 sys_clock_settime(void)
+u64 sys_set_clock(void)
 {
 	int clockid = syscall_arg_int(0);
 	const struct __brk_timespec *ut = syscall_arg_ptr(1);
@@ -79,7 +79,7 @@ u64 sys_clock_settime(void)
 	return (u64)(long)ktime_set_realtime(t);
 }
 
-u64 sys_clock_nanosleep(void)
+u64 sys_sleep_clock(void)
 {
 	int clockid = syscall_arg_int(0);
 	int flags = syscall_arg_int(1);

@@ -1,23 +1,23 @@
 #include <brk/stat.h>
 #include <brk/string.h>
 
-void kstat_to_statx(const struct kstat *ks, struct __brk_statx *stx)
+void kstat_to_statx(const struct kstat *ks, struct __brk_stat *stx)
 {
 	memset(stx, 0, sizeof(*stx));
 
-	stx->stx_dev = (__brk_u64)ks->dev;
-	stx->stx_ino = ks->ino;
-	stx->stx_rdev = (__brk_u64)ks->rdev;
-	stx->stx_size = ks->size;
-	stx->stx_blocks = ks->blocks;
-	stx->stx_atime_ns = ks->atime;
-	stx->stx_mtime_ns = ks->mtime;
-	stx->stx_ctime_ns = ks->ctime;
-	stx->stx_mode = ks->mode;
-	stx->stx_nlink = ks->nlink;
-	stx->stx_uid = ks->uid;
-	stx->stx_gid = ks->gid;
-	stx->stx_blksize = (__brk_s32)ks->blksize;
+	stx->st_dev = (__brk_u64)ks->dev;
+	stx->st_ino = ks->ino;
+	stx->st_rdev = (__brk_u64)ks->rdev;
+	stx->st_size = ks->size;
+	stx->st_blocks = ks->blocks;
+	stx->st_atime_ns = ks->atime;
+	stx->st_mtime_ns = ks->mtime;
+	stx->st_ctime_ns = ks->ctime;
+	stx->st_mode = ks->mode;
+	stx->st_nlink = ks->nlink;
+	stx->st_uid = ks->uid;
+	stx->st_gid = ks->gid;
+	stx->st_blksize = (__brk_s32)ks->blksize;
 }
 
 void kstatfs_to_statfs(const struct kstatfs *ks, struct __brk_statfs *st)

@@ -17,7 +17,7 @@
 #include <uapi/resource.h>
 #include <uapi/time.h>
 
-u64 sys_waitid(void)
+u64 sys_wait(void)
 {
 	int idtype = syscall_arg_int(0);
 	pid_t id = syscall_arg_int(1);
@@ -90,7 +90,7 @@ u64 sys_exit(void)
 	return 0;
 }
 
-u64 sys_exit_group(void)
+u64 sys_exit_all(void)
 {
 	int status = syscall_arg_raw(0);
 
@@ -98,7 +98,7 @@ u64 sys_exit_group(void)
 	return 0;
 }
 
-u64 sys_thread_create(void)
+u64 sys_create_thread(void)
 {
 	struct __brk_thread_create_args args;
 	struct thread *thread;
@@ -133,7 +133,7 @@ u64 sys_thread_create(void)
 	return (u64)thread->tid;
 }
 
-u64 sys_kill(void)
+u64 sys_send_signal(void)
 {
 	pid_t pid = syscall_arg_int(0);
 	int sig = syscall_arg_int(1);
@@ -141,13 +141,13 @@ u64 sys_kill(void)
 	return signal_do_kill(pid, sig);
 }
 
-u64 sys_sched_yield(void)
+u64 sys_yield(void)
 {
 	thread_yield();
 	return 0;
 }
 
-u64 sys_getproc(void)
+u64 sys_get_proc(void)
 {
 	struct process *process = current_process();
 	struct __brk_proc *ubuf = syscall_arg_ptr(0);
@@ -343,7 +343,7 @@ u64 sys_set_gid_saved(void)
 	return (u64)ret;
 }
 
-u64 sys_umask(void)
+u64 sys_set_umask(void)
 {
 	struct process *process = current_process();
 	umode_t old;
@@ -355,7 +355,7 @@ u64 sys_umask(void)
 	return old;
 }
 
-u64 sys_setpgid(void)
+u64 sys_set_pgid(void)
 {
 	pid_t pid = syscall_arg_int(0);
 	pid_t pgid = syscall_arg_int(1);
@@ -378,7 +378,7 @@ u64 sys_setpgid(void)
 	return 0;
 }
 
-u64 sys_setsid(void)
+u64 sys_set_sid(void)
 {
 	struct process *process = current_process();
 
@@ -390,7 +390,7 @@ u64 sys_setsid(void)
 	return process->sid;
 }
 
-u64 sys_getpgid(void)
+u64 sys_get_pgid(void)
 {
 	pid_t pid = syscall_arg_int(0);
 
@@ -399,7 +399,7 @@ u64 sys_getpgid(void)
 	return process_get_pgid(pid);
 }
 
-u64 sys_getsid(void)
+u64 sys_get_sid(void)
 {
 	pid_t pid = syscall_arg_int(0);
 

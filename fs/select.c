@@ -128,7 +128,7 @@ static int apply_sigmask(const sigset_t *uset, sigset_t *oldmask)
 	return 1;
 }
 
-u64 sys_ppoll(void)
+u64 sys_poll(void)
 {
 	struct __brk_pollfd *ufds = syscall_arg_ptr(0);
 	unsigned long nfds = (unsigned long)syscall_arg_raw(1);
