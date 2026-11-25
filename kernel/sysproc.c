@@ -17,12 +17,12 @@
 #include <uapi/resource.h>
 #include <uapi/time.h>
 
-u64 sys_wait(void)
+long sys_wait(const struct syscall_ctx *ctx)
 {
-	int idtype = syscall_arg_int(0);
-	pid_t id = syscall_arg_int(1);
-	__brk_siginfo_t *infop = syscall_arg_ptr(2);
-	int options = syscall_arg_int(3);
+	int idtype = syscall_arg_int(ctx, 0);
+	pid_t id = syscall_arg_int(ctx, 1);
+	__brk_siginfo_t *infop = syscall_arg_ptr(ctx, 2);
+	int options = syscall_arg_int(ctx, 3);
 	kuid_t uid = 0;
 	int status = 0;
 	pid_t pid;
@@ -77,32 +77,33 @@ u64 sys_wait(void)
 	return 0;
 }
 
-u64 sys_fork(void)
+long sys_fork(const struct syscall_ctx *ctx)
 {
+	(void)ctx;
 	return process_fork();
 }
 
-u64 sys_exit(void)
+long sys_exit(const struct syscall_ctx *ctx)
 {
-	int status = syscall_arg_raw(0);
+	int status = syscall_arg_raw(ctx, 0);
 
 	thread_exit_normal(status);
 	return 0;
 }
 
-u64 sys_exit_all(void)
+long sys_exit_all(const struct syscall_ctx *ctx)
 {
-	int status = syscall_arg_raw(0);
+	int status = syscall_arg_raw(ctx, 0);
 
 	process_exit_group((status & 0xff) << 8);
 	return 0;
 }
 
-u64 sys_create_thread(void)
+long sys_create_thread(const struct syscall_ctx *ctx)
 {
 	struct __brk_thread_create_args args;
 	struct thread *thread;
-	void *uargs = syscall_arg_ptr(0);
+	void *uargs = syscall_arg_ptr(ctx, 0);
 
 	if (!uargs ||
 	    !user_range_ok((user_addr_t)(uintptr_t)uargs, sizeof(args)))
@@ -133,24 +134,25 @@ u64 sys_create_thread(void)
 	return (u64)thread->tid;
 }
 
-u64 sys_send_signal(void)
+long sys_send_signal(const struct syscall_ctx *ctx)
 {
-	pid_t pid = syscall_arg_int(0);
-	int sig = syscall_arg_int(1);
+	pid_t pid = syscall_arg_int(ctx, 0);
+	int sig = syscall_arg_int(ctx, 1);
 
 	return signal_do_kill(pid, sig);
 }
 
-u64 sys_yield(void)
+long sys_yield(const struct syscall_ctx *ctx)
 {
+	(void)ctx;
 	thread_yield();
 	return 0;
 }
 
-u64 sys_get_proc(void)
+long sys_get_proc(const struct syscall_ctx *ctx)
 {
 	struct process *process = current_process();
-	struct __brk_proc *ubuf = syscall_arg_ptr(0);
+	struct __brk_proc *ubuf = syscall_arg_ptr(ctx, 0);
 	struct __brk_proc proc;
 	irqstate_t flags;
 
@@ -222,10 +224,10 @@ static int gid_slot_ok(const struct cred *cred, int gid)
 	       (kgid_t)gid == cred->sgid;
 }
 
-u64 sys_set_uid_real(void)
+long sys_set_uid_real(const struct syscall_ctx *ctx)
 {
 	struct process *process = current_process();
-	int uid = syscall_arg_int(0);
+	int uid = syscall_arg_int(ctx, 0);
 	irqstate_t flags;
 	int ret = 0;
 
@@ -241,10 +243,10 @@ u64 sys_set_uid_real(void)
 	return (u64)ret;
 }
 
-u64 sys_set_gid_real(void)
+long sys_set_gid_real(const struct syscall_ctx *ctx)
 {
 	struct process *process = current_process();
-	int gid = syscall_arg_int(0);
+	int gid = syscall_arg_int(ctx, 0);
 	irqstate_t flags;
 	int ret = 0;
 
@@ -260,10 +262,10 @@ u64 sys_set_gid_real(void)
 	return (u64)ret;
 }
 
-u64 sys_set_uid_effective(void)
+long sys_set_uid_effective(const struct syscall_ctx *ctx)
 {
 	struct process *process = current_process();
-	int uid = syscall_arg_int(0);
+	int uid = syscall_arg_int(ctx, 0);
 	irqstate_t flags;
 	kuid_t old_euid;
 	int ret = 0;
@@ -284,10 +286,10 @@ u64 sys_set_uid_effective(void)
 	return (u64)ret;
 }
 
-u64 sys_set_gid_effective(void)
+long sys_set_gid_effective(const struct syscall_ctx *ctx)
 {
 	struct process *process = current_process();
-	int gid = syscall_arg_int(0);
+	int gid = syscall_arg_int(ctx, 0);
 	irqstate_t flags;
 	int ret = 0;
 
@@ -305,10 +307,10 @@ u64 sys_set_gid_effective(void)
 	return (u64)ret;
 }
 
-u64 sys_set_uid_saved(void)
+long sys_set_uid_saved(const struct syscall_ctx *ctx)
 {
 	struct process *process = current_process();
-	int uid = syscall_arg_int(0);
+	int uid = syscall_arg_int(ctx, 0);
 	irqstate_t flags;
 	int ret = 0;
 
@@ -324,10 +326,10 @@ u64 sys_set_uid_saved(void)
 	return (u64)ret;
 }
 
-u64 sys_set_gid_saved(void)
+long sys_set_gid_saved(const struct syscall_ctx *ctx)
 {
 	struct process *process = current_process();
-	int gid = syscall_arg_int(0);
+	int gid = syscall_arg_int(ctx, 0);
 	irqstate_t flags;
 	int ret = 0;
 
@@ -343,22 +345,22 @@ u64 sys_set_gid_saved(void)
 	return (u64)ret;
 }
 
-u64 sys_set_umask(void)
+long sys_set_umask(const struct syscall_ctx *ctx)
 {
 	struct process *process = current_process();
 	umode_t old;
 	irqstate_t flags = spin_lock_irqsave(&process->cred_lock);
 
 	old = process->cred.umask;
-	process->cred.umask = syscall_arg_raw(0) & 0777;
+	process->cred.umask = syscall_arg_raw(ctx, 0) & 0777;
 	spin_unlock_irqrestore(&process->cred_lock, flags);
 	return old;
 }
 
-u64 sys_set_pgid(void)
+long sys_set_pgid(const struct syscall_ctx *ctx)
 {
-	pid_t pid = syscall_arg_int(0);
-	pid_t pgid = syscall_arg_int(1);
+	pid_t pid = syscall_arg_int(ctx, 0);
+	pid_t pgid = syscall_arg_int(ctx, 1);
 	struct process *process = current_process();
 
 	if (pid != 0 && pid != process->pid)
@@ -378,9 +380,11 @@ u64 sys_set_pgid(void)
 	return 0;
 }
 
-u64 sys_set_sid(void)
+long sys_set_sid(const struct syscall_ctx *ctx)
 {
 	struct process *process = current_process();
+
+	(void)ctx;
 
 	if (process->pgid == process->pid)
 		return -EPERM;
@@ -390,18 +394,18 @@ u64 sys_set_sid(void)
 	return process->sid;
 }
 
-u64 sys_get_pgid(void)
+long sys_get_pgid(const struct syscall_ctx *ctx)
 {
-	pid_t pid = syscall_arg_int(0);
+	pid_t pid = syscall_arg_int(ctx, 0);
 
 	if (pid == 0)
 		return current_process()->pgid;
 	return process_get_pgid(pid);
 }
 
-u64 sys_get_sid(void)
+long sys_get_sid(const struct syscall_ctx *ctx)
 {
-	pid_t pid = syscall_arg_int(0);
+	pid_t pid = syscall_arg_int(ctx, 0);
 
 	if (pid == 0)
 		return current_process()->sid;

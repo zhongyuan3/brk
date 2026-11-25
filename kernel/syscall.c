@@ -1,4 +1,4 @@
-#include <arch/trapframe.h>
+#include <arch/syscall.h>
 #include <brk/cpu.h>
 #include <brk/lengthof.h>
 #include <brk/panic.h>
@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <uapi/errno.h>
 
-static u64 (*systable[])(void) = {
+static long (*systable[])(const struct syscall_ctx *ctx) = {
 	[SYS_READ] = sys_read,
 	[SYS_WRITE] = sys_write,
 	[SYS_READ_IOV] = sys_read_iov,
@@ -96,29 +96,52 @@ static u64 (*systable[])(void) = {
 
 void syscall(void)
 {
-	struct thread *thread = current_thread();
-	u64 num = trap_frame_get_syscall_no(thread->frame);
-	u64 ret;
+	struct trap_frame *regs = current_thread()->frame;
+	struct syscall_ctx ctx = {
+		.regs = regs,
+	};
+	long ret;
 
-	if (num < lengthof(systable) && systable[num])
-		ret = systable[num]();
+	ctx.nr = arch_syscall_nr(regs);
+	for (unsigned int i = 0; i < SYSCALL_MAX_ARGS; i++)
+		ctx.args[i] = arch_syscall_arg(regs, i);
+
+	if (ctx.nr < lengthof(systable) && systable[ctx.nr])
+		ret = systable[ctx.nr](&ctx);
 	else
 		ret = -ENOSYS;
-	trap_frame_set_ret_val(thread->frame, ret);
+
+	arch_syscall_set_ret(regs, ret);
 }
 
-u64 syscall_arg_raw(int argno)
+u64 syscall_arg_raw(const struct syscall_ctx *ctx, unsigned int argno)
 {
-	struct trap_frame *tf = current_thread()->frame;
-	return trap_frame_get_arg(tf, argno);
+	if (argno >= SYSCALL_MAX_ARGS)
+		panic("%s(): illegal argument number: %u\n", __func__, argno);
+	return ctx->args[argno];
 }
 
-void *syscall_arg_ptr(int argno)
+void *syscall_arg_ptr(const struct syscall_ctx *ctx, unsigned int argno)
 {
-	return (void *)(uintptr_t)syscall_arg_raw(argno);
+	return (void *)(uintptr_t)syscall_arg_raw(ctx, argno);
 }
 
-int syscall_arg_int(int argno)
+int syscall_arg_int(const struct syscall_ctx *ctx, unsigned int argno)
 {
-	return (int)syscall_arg_raw(argno);
+	return (int)syscall_arg_raw(ctx, argno);
+}
+
+long syscall_arg_long(const struct syscall_ctx *ctx, unsigned int argno)
+{
+	return (long)syscall_arg_raw(ctx, argno);
+}
+
+size_t syscall_arg_size(const struct syscall_ctx *ctx, unsigned int argno)
+{
+	return (size_t)syscall_arg_raw(ctx, argno);
+}
+
+user_addr_t syscall_arg_user(const struct syscall_ctx *ctx, unsigned int argno)
+{
+	return (user_addr_t)syscall_arg_raw(ctx, argno);
 }

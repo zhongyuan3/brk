@@ -2,7 +2,6 @@
 #define BRK_THREAD_TYPES_H
 
 #include <arch/context.h>
-#include <arch/trapframe.h>
 #include <brk/list.h>
 #include <brk/spinlock_types.h>
 #include <brk/timer_list.h>
@@ -11,6 +10,7 @@
 #include <uapi/types.h>
 
 struct process;
+struct trap_frame;
 struct futex_bucket;
 struct uvm_space;
 

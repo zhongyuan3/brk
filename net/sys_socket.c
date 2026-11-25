@@ -32,11 +32,11 @@ static int socket_from_fd(int fd, struct file **filep, struct socket **sockp)
 	return 0;
 }
 
-u64 sys_create_socket(void)
+long sys_create_socket(const struct syscall_ctx *ctx)
 {
-	int family = syscall_arg_int(0);
-	int type = syscall_arg_int(1);
-	int protocol = syscall_arg_int(2);
+	int family = syscall_arg_int(ctx, 0);
+	int type = syscall_arg_int(ctx, 1);
+	int protocol = syscall_arg_int(ctx, 2);
 	bool nonblock = (type & SOCK_NONBLOCK) != 0;
 	struct file *file;
 	struct socket *sock;
@@ -65,11 +65,11 @@ u64 sys_create_socket(void)
 	return fd;
 }
 
-u64 sys_bind(void)
+long sys_bind(const struct syscall_ctx *ctx)
 {
-	int fd = syscall_arg_int(0);
-	const void *uaddr = syscall_arg_ptr(1);
-	int addrlen = syscall_arg_int(2);
+	int fd = syscall_arg_int(ctx, 0);
+	const void *uaddr = syscall_arg_ptr(ctx, 1);
+	int addrlen = syscall_arg_int(ctx, 2);
 	struct __brk_sockaddr_in sa;
 	struct file *file;
 	struct socket *sock;
@@ -92,11 +92,11 @@ u64 sys_bind(void)
 	return err;
 }
 
-u64 sys_connect(void)
+long sys_connect(const struct syscall_ctx *ctx)
 {
-	int fd = syscall_arg_int(0);
-	const void *uaddr = syscall_arg_ptr(1);
-	int addrlen = syscall_arg_int(2);
+	int fd = syscall_arg_int(ctx, 0);
+	const void *uaddr = syscall_arg_ptr(ctx, 1);
+	int addrlen = syscall_arg_int(ctx, 2);
 	struct __brk_sockaddr_in sa;
 	struct file *file;
 	struct socket *sock;
@@ -119,14 +119,14 @@ u64 sys_connect(void)
 	return err;
 }
 
-u64 sys_send_to(void)
+long sys_send_to(const struct syscall_ctx *ctx)
 {
-	int fd = syscall_arg_int(0);
-	const void *buf = syscall_arg_ptr(1);
-	size_t len = syscall_arg_raw(2);
-	unsigned int flags = syscall_arg_raw(3);
-	const void *uaddr = syscall_arg_ptr(4);
-	int addrlen = syscall_arg_int(5);
+	int fd = syscall_arg_int(ctx, 0);
+	const void *buf = syscall_arg_ptr(ctx, 1);
+	size_t len = syscall_arg_raw(ctx, 2);
+	unsigned int flags = syscall_arg_raw(ctx, 3);
+	const void *uaddr = syscall_arg_ptr(ctx, 4);
+	int addrlen = syscall_arg_int(ctx, 5);
 	struct __brk_sockaddr_in sa;
 	struct file *file;
 	struct socket *sock;
@@ -153,14 +153,14 @@ u64 sys_send_to(void)
 	return err;
 }
 
-u64 sys_recv_from(void)
+long sys_recv_from(const struct syscall_ctx *ctx)
 {
-	int fd = syscall_arg_int(0);
-	void *buf = syscall_arg_ptr(1);
-	size_t len = syscall_arg_raw(2);
-	unsigned int flags = syscall_arg_raw(3);
-	void *uaddr = syscall_arg_ptr(4);
-	int *uaddrlen = syscall_arg_ptr(5);
+	int fd = syscall_arg_int(ctx, 0);
+	void *buf = syscall_arg_ptr(ctx, 1);
+	size_t len = syscall_arg_raw(ctx, 2);
+	unsigned int flags = syscall_arg_raw(ctx, 3);
+	void *uaddr = syscall_arg_ptr(ctx, 4);
+	int *uaddrlen = syscall_arg_ptr(ctx, 5);
 	struct __brk_sockaddr_in sa;
 	struct file *file;
 	struct socket *sock;
@@ -193,10 +193,10 @@ u64 sys_recv_from(void)
 	return err;
 }
 
-u64 sys_shutdown(void)
+long sys_shutdown(const struct syscall_ctx *ctx)
 {
-	int fd = syscall_arg_int(0);
-	int how = syscall_arg_int(1);
+	int fd = syscall_arg_int(ctx, 0);
+	int how = syscall_arg_int(ctx, 1);
 	struct file *file;
 	struct socket *sock;
 	int err;
@@ -214,10 +214,10 @@ u64 sys_shutdown(void)
 	return err;
 }
 
-u64 sys_listen(void)
+long sys_listen(const struct syscall_ctx *ctx)
 {
-	int fd = syscall_arg_int(0);
-	int backlog = syscall_arg_int(1);
+	int fd = syscall_arg_int(ctx, 0);
+	int backlog = syscall_arg_int(ctx, 1);
 	struct file *file;
 	struct socket *sock;
 	int err;
@@ -235,11 +235,11 @@ u64 sys_listen(void)
 	return err;
 }
 
-static u64 sys_accept_common(unsigned int flags)
+static u64 sys_accept_common(const struct syscall_ctx *ctx, unsigned int flags)
 {
-	int fd = syscall_arg_int(0);
-	void *uaddr = syscall_arg_ptr(1);
-	int *uaddrlen = syscall_arg_ptr(2);
+	int fd = syscall_arg_int(ctx, 0);
+	void *uaddr = syscall_arg_ptr(ctx, 1);
+	int *uaddrlen = syscall_arg_ptr(ctx, 2);
 	struct file *file, *nfile;
 	struct socket *sock, *newsock;
 	int ulen = 0, salen;
@@ -297,16 +297,16 @@ static u64 sys_accept_common(unsigned int flags)
 	return nfd;
 }
 
-u64 sys_accept(void)
+long sys_accept(const struct syscall_ctx *ctx)
 {
-	return sys_accept_common((unsigned int)syscall_arg_int(3));
+	return sys_accept_common(ctx, (unsigned int)syscall_arg_int(ctx, 3));
 }
 
-static u64 sys_getname(bool peer)
+static u64 sys_getname(const struct syscall_ctx *ctx, bool peer)
 {
-	int fd = syscall_arg_int(0);
-	void *uaddr = syscall_arg_ptr(1);
-	int *uaddrlen = syscall_arg_ptr(2);
+	int fd = syscall_arg_int(ctx, 0);
+	void *uaddr = syscall_arg_ptr(ctx, 1);
+	int *uaddrlen = syscall_arg_ptr(ctx, 2);
 	struct __brk_sockaddr_in sa;
 	struct file *file;
 	struct socket *sock;
@@ -344,23 +344,23 @@ static u64 sys_getname(bool peer)
 	return err;
 }
 
-u64 sys_get_sock_addr(void)
+long sys_get_sock_addr(const struct syscall_ctx *ctx)
 {
-	return sys_getname(false);
+	return sys_getname(ctx, false);
 }
 
-u64 sys_get_peer_addr(void)
+long sys_get_peer_addr(const struct syscall_ctx *ctx)
 {
-	return sys_getname(true);
+	return sys_getname(ctx, true);
 }
 
-u64 sys_set_sock_opt(void)
+long sys_set_sock_opt(const struct syscall_ctx *ctx)
 {
-	int fd = syscall_arg_int(0);
-	int level = syscall_arg_int(1);
-	int optname = syscall_arg_int(2);
-	const void *optval = syscall_arg_ptr(3);
-	int optlen = syscall_arg_int(4);
+	int fd = syscall_arg_int(ctx, 0);
+	int level = syscall_arg_int(ctx, 1);
+	int optname = syscall_arg_int(ctx, 2);
+	const void *optval = syscall_arg_ptr(ctx, 3);
+	int optlen = syscall_arg_int(ctx, 4);
 	struct file *file;
 	struct socket *sock;
 	int value;
@@ -405,13 +405,13 @@ u64 sys_set_sock_opt(void)
 	return err;
 }
 
-u64 sys_get_sock_opt(void)
+long sys_get_sock_opt(const struct syscall_ctx *ctx)
 {
-	int fd = syscall_arg_int(0);
-	int level = syscall_arg_int(1);
-	int optname = syscall_arg_int(2);
-	void *optval = syscall_arg_ptr(3);
-	int *optlen = syscall_arg_ptr(4);
+	int fd = syscall_arg_int(ctx, 0);
+	int level = syscall_arg_int(ctx, 1);
+	int optname = syscall_arg_int(ctx, 2);
+	void *optval = syscall_arg_ptr(ctx, 3);
+	int *optlen = syscall_arg_ptr(ctx, 4);
 	struct file *file;
 	struct socket *sock;
 	irqstate_t flags;

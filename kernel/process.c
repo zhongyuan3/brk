@@ -1,7 +1,6 @@
 #include <arch/context.h>
 #include <arch/csr.h>
 #include <arch/pgtable.h>
-#include <arch/trapframe.h>
 #include <brk/asm/cpu.h>
 #include <brk/assert.h>
 #include <brk/console.h>
@@ -203,10 +202,10 @@ static struct thread *thread_create_in(struct process *process,
 	}
 	thread->kstack_top = thread->kstack_base + KSTACK_SIZE;
 	kernel_sp = thread->kstack_top;
-	kernel_sp -= TRAP_FRAME_SIZE;
+	kernel_sp -= arch_frame_size();
 	assert(is_aligned(kernel_sp, 16));
 	thread->frame = (struct trap_frame *)kernel_sp;
-	memset(thread->frame, 0, TRAP_FRAME_SIZE);
+	arch_frame_init(thread->frame);
 	kernel_sp -= CONTEXT_SIZE;
 	assert(is_aligned(kernel_sp, 16));
 	ctx = (struct context *)kernel_sp;
@@ -284,11 +283,8 @@ struct thread *thread_create_user(struct process *process, user_addr_t stack,
 	spin_unlock_irqrestore(&process->sigactions.lock, sflags);
 	signal_thread_init(process, thread, blocked);
 
-	thread->frame->sp = stack;
-	thread->frame->sepc = entry;
-	thread->frame->a0 = arg;
-	thread->frame->gp = current->frame->gp;
-	thread->frame->tp = tls ? tls : current->frame->tp;
+	arch_setup_user_thread(thread->frame, current->frame, entry, stack,
+			       arg, tls);
 	prepare_to_ret_to_user(thread->frame);
 
 	irqstate_t flags = spin_lock_irqsave(&process->lock);
@@ -522,7 +518,7 @@ struct process *process_create_idle(cpuid_t cpuid)
 	signal_init(process, thread, 0);
 	thread->state = THREAD_STATE_RUNNING;
 	thread->is_init_thread = true;
-	trap_frame_set_kernel_tp(thread->frame, (unsigned long)&cpus[cpuid]);
+	arch_frame_set_kernel_tp(thread->frame, (unsigned long)&cpus[cpuid]);
 
 	return process;
 
@@ -948,8 +944,8 @@ int process_fork(void)
 	fsinfo_copy(&child->fsinfo, &parent->fsinfo);
 	signal_copy(child, child->leader, parent, current_thread());
 
-	memcpy(child->leader->frame, current_thread()->frame, TRAP_FRAME_SIZE);
-	trap_frame_set_ret_val(child->leader->frame, 0);
+	arch_frame_copy(child->leader->frame, current_thread()->frame);
+	arch_frame_set_ret(child->leader->frame, 0);
 
 	cpid = child->pid;
 	child->leader->newly_forked = true;

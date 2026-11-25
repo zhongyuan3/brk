@@ -321,14 +321,14 @@ void futex_cleanup_thread(struct thread *thread)
 	spin_unlock_irqrestore(&futex_lock, flags);
 }
 
-u64 sys_futex(void)
+long sys_futex(const struct syscall_ctx *ctx)
 {
-	u32 *uaddr = syscall_arg_ptr(0);
-	int op = syscall_arg_int(1);
-	u32 val = (u32)syscall_arg_raw(2);
-	u64 arg_timeout = syscall_arg_raw(3);
-	u32 *uaddr2 = syscall_arg_ptr(4);
-	u32 val3 = (u32)syscall_arg_raw(5);
+	u32 *uaddr = syscall_arg_ptr(ctx, 0);
+	int op = syscall_arg_int(ctx, 1);
+	u32 val = (u32)syscall_arg_raw(ctx, 2);
+	u64 arg_timeout = syscall_arg_raw(ctx, 3);
+	u32 *uaddr2 = syscall_arg_ptr(ctx, 4);
+	u32 val3 = (u32)syscall_arg_raw(ctx, 5);
 	const struct __brk_timespec *timeout =
 		(const struct __brk_timespec *)(uintptr_t)arg_timeout;
 	int cmd = op & FUTEX_CMD_MASK;

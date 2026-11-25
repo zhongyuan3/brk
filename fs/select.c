@@ -128,12 +128,12 @@ static int apply_sigmask(const sigset_t *uset, sigset_t *oldmask)
 	return 1;
 }
 
-u64 sys_poll(void)
+long sys_poll(const struct syscall_ctx *ctx)
 {
-	struct __brk_pollfd *ufds = syscall_arg_ptr(0);
-	unsigned long nfds = (unsigned long)syscall_arg_raw(1);
-	const struct __brk_timespec *utimeout = syscall_arg_ptr(2);
-	const sigset_t *usigmask = syscall_arg_ptr(3);
+	struct __brk_pollfd *ufds = syscall_arg_ptr(ctx, 0);
+	unsigned long nfds = (unsigned long)syscall_arg_raw(ctx, 1);
+	const struct __brk_timespec *utimeout = syscall_arg_ptr(ctx, 2);
+	const sigset_t *usigmask = syscall_arg_ptr(ctx, 3);
 	struct __brk_timespec ts;
 	sigset_t oldmask;
 	int timeout_ms = -1;

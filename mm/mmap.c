@@ -1064,15 +1064,15 @@ int uvm_msync(struct uvm_space *mm, user_addr_t addr, size_t len, int flags)
 
 /* ---- syscall entry points ---- */
 
-u64 sys_mmap(void)
+long sys_mmap(const struct syscall_ctx *ctx)
 {
 	struct uvm_space *mm = current_process()->mm;
-	user_addr_t hint = syscall_arg_raw(0);
-	size_t len = (size_t)syscall_arg_raw(1);
-	int prot = syscall_arg_int(2);
-	int flags = syscall_arg_int(3);
-	int fd = syscall_arg_int(4);
-	u64 offset = syscall_arg_raw(5);
+	user_addr_t hint = syscall_arg_raw(ctx, 0);
+	size_t len = (size_t)syscall_arg_raw(ctx, 1);
+	int prot = syscall_arg_int(ctx, 2);
+	int flags = syscall_arg_int(ctx, 3);
+	int fd = syscall_arg_int(ctx, 4);
+	u64 offset = syscall_arg_raw(ctx, 5);
 	user_addr_t addr = 0;
 	int err;
 
@@ -1102,11 +1102,11 @@ u64 sys_mmap(void)
 	return addr;
 }
 
-u64 sys_munmap(void)
+long sys_munmap(const struct syscall_ctx *ctx)
 {
 	struct uvm_space *mm = current_process()->mm;
-	user_addr_t addr = syscall_arg_raw(0);
-	size_t len = (size_t)syscall_arg_raw(1);
+	user_addr_t addr = syscall_arg_raw(ctx, 0);
+	size_t len = (size_t)syscall_arg_raw(ctx, 1);
 	int err;
 
 	if (!mm)
@@ -1118,12 +1118,12 @@ u64 sys_munmap(void)
 	return (u64)(long)err;
 }
 
-u64 sys_mprotect(void)
+long sys_mprotect(const struct syscall_ctx *ctx)
 {
 	struct uvm_space *mm = current_process()->mm;
-	user_addr_t addr = syscall_arg_raw(0);
-	size_t len = (size_t)syscall_arg_raw(1);
-	int prot = syscall_arg_int(2);
+	user_addr_t addr = syscall_arg_raw(ctx, 0);
+	size_t len = (size_t)syscall_arg_raw(ctx, 1);
+	int prot = syscall_arg_int(ctx, 2);
 	int err;
 
 	if (!mm)
@@ -1135,12 +1135,12 @@ u64 sys_mprotect(void)
 	return (u64)(long)err;
 }
 
-u64 sys_msync(void)
+long sys_msync(const struct syscall_ctx *ctx)
 {
 	struct uvm_space *mm = current_process()->mm;
-	user_addr_t addr = syscall_arg_raw(0);
-	size_t len = (size_t)syscall_arg_raw(1);
-	int flags = syscall_arg_int(2);
+	user_addr_t addr = syscall_arg_raw(ctx, 0);
+	size_t len = (size_t)syscall_arg_raw(ctx, 1);
+	int flags = syscall_arg_int(ctx, 2);
 	int err;
 
 	if (!mm)

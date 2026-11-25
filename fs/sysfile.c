@@ -36,7 +36,7 @@
 #include <uapi/types.h>
 #include <uapi/uio.h>
 
-u64 sys_read(void)
+long sys_read(const struct syscall_ctx *ctx)
 {
 	int fd;
 	void *buf;
@@ -46,18 +46,18 @@ u64 sys_read(void)
 	struct thread *task;
 
 	task = current_thread();
-	fd = syscall_arg_int(0);
+	fd = syscall_arg_int(ctx, 0);
 	fp = fdtable_get_file(&task->process->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
-	buf = syscall_arg_ptr(1);
-	n = syscall_arg_raw(2);
+	buf = syscall_arg_ptr(ctx, 1);
+	n = syscall_arg_raw(ctx, 2);
 	ret = file_read(fp, buf, n);
 	file_put(fp);
 	return ret;
 }
 
-u64 sys_write(void)
+long sys_write(const struct syscall_ctx *ctx)
 {
 	int fd;
 	const void *buf;
@@ -67,7 +67,7 @@ u64 sys_write(void)
 	struct thread *task;
 
 	task = current_thread();
-	fd = syscall_arg_int(0);
+	fd = syscall_arg_int(ctx, 0);
 	fp = fdtable_get_file(&task->process->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
@@ -75,18 +75,18 @@ u64 sys_write(void)
 		file_put(fp);
 		return -EISDIR;
 	}
-	buf = syscall_arg_ptr(1);
-	n = syscall_arg_raw(2);
+	buf = syscall_arg_ptr(ctx, 1);
+	n = syscall_arg_raw(ctx, 2);
 	ret = file_write(fp, buf, n);
 	file_put(fp);
 	return ret;
 }
 
-static u64 readv_writev(bool is_write)
+static u64 readv_writev(const struct syscall_ctx *ctx, bool is_write)
 {
-	int fd = syscall_arg_int(0);
-	const struct __brk_iovec *uiov = syscall_arg_ptr(1);
-	int iovcnt = syscall_arg_int(2);
+	int fd = syscall_arg_int(ctx, 0);
+	const struct __brk_iovec *uiov = syscall_arg_ptr(ctx, 1);
+	int iovcnt = syscall_arg_int(ctx, 2);
 	struct __brk_iovec *iov;
 	struct file *fp;
 	size_t bytes;
@@ -151,24 +151,24 @@ static u64 readv_writev(bool is_write)
 	return (u64)(long)total;
 }
 
-u64 sys_read_iov(void)
+long sys_read_iov(const struct syscall_ctx *ctx)
 {
-	return readv_writev(false);
+	return readv_writev(ctx, false);
 }
 
-u64 sys_write_iov(void)
+long sys_write_iov(const struct syscall_ctx *ctx)
 {
-	return readv_writev(true);
+	return readv_writev(ctx, true);
 }
 
-u64 sys_open(void)
+long sys_open(const struct syscall_ctx *ctx)
 {
 	int fd;
 	struct file *fp = NULL;
-	int dirfd = syscall_arg_raw(0);
-	char *path = syscall_arg_ptr(1);
-	int flags = syscall_arg_raw(2);
-	umode_t mode = syscall_arg_raw(3);
+	int dirfd = syscall_arg_raw(ctx, 0);
+	char *path = syscall_arg_ptr(ctx, 1);
+	int flags = syscall_arg_raw(ctx, 2);
+	umode_t mode = syscall_arg_raw(ctx, 3);
 
 	fp = do_openat(dirfd, path, flags, mode);
 	if (IS_ERR(fp))
@@ -182,18 +182,18 @@ u64 sys_open(void)
 	return fd;
 }
 
-u64 sys_close(void)
+long sys_close(const struct syscall_ctx *ctx)
 {
-	int fd = syscall_arg_int(0);
+	int fd = syscall_arg_int(ctx, 0);
 	struct thread *task = current_thread();
 	return fdtable_close_fd(&task->process->fdtable, fd);
 }
 
-u64 sys_exec(void)
+long sys_exec(const struct syscall_ctx *ctx)
 {
-	char *path = syscall_arg_ptr(0);
-	char **argv = syscall_arg_ptr(1);
-	char **envp = syscall_arg_ptr(2);
+	char *path = syscall_arg_ptr(ctx, 0);
+	char **argv = syscall_arg_ptr(ctx, 1);
+	char **envp = syscall_arg_ptr(ctx, 2);
 	return do_execve(path, argv, envp);
 }
 
@@ -236,12 +236,12 @@ static u64 stat_fd(struct thread *task, int fd, struct kstat *ks)
 	return ret;
 }
 
-u64 sys_stat(void)
+long sys_stat(const struct syscall_ctx *ctx)
 {
-	int dirfd = syscall_arg_int(0);
-	const char *path = syscall_arg_ptr(1);
-	int flags = syscall_arg_int(2);
-	struct __brk_stat *ubuf = syscall_arg_ptr(3);
+	int dirfd = syscall_arg_int(ctx, 0);
+	const char *path = syscall_arg_ptr(ctx, 1);
+	int flags = syscall_arg_int(ctx, 2);
+	struct __brk_stat *ubuf = syscall_arg_ptr(ctx, 3);
 	struct __brk_stat stx;
 	struct kstat ks;
 	int ret;
@@ -293,12 +293,12 @@ static u64 access_path_at(int dirfd, const char *path, int mode,
 	return ret;
 }
 
-u64 sys_access(void)
+long sys_access(const struct syscall_ctx *ctx)
 {
-	int dirfd = syscall_arg_int(0);
-	const char *path = syscall_arg_ptr(1);
-	int mode = syscall_arg_int(2);
-	int flags = syscall_arg_int(3);
+	int dirfd = syscall_arg_int(ctx, 0);
+	const char *path = syscall_arg_ptr(ctx, 1);
+	int mode = syscall_arg_int(ctx, 2);
+	int flags = syscall_arg_int(ctx, 3);
 	unsigned int lookup_flags;
 
 	if (flags & ~(AT_SYMLINK_NOFOLLOW | AT_EACCESS))
@@ -308,10 +308,10 @@ u64 sys_access(void)
 	return access_path_at(dirfd, path, mode, lookup_flags);
 }
 
-u64 sys_stat_fs_fd(void)
+long sys_stat_fs_fd(const struct syscall_ctx *ctx)
 {
-	int fd = syscall_arg_int(0);
-	struct __brk_statfs *ubuf = syscall_arg_ptr(1);
+	int fd = syscall_arg_int(ctx, 0);
+	struct __brk_statfs *ubuf = syscall_arg_ptr(ctx, 1);
 	struct __brk_statfs st;
 	struct kstatfs ks;
 	struct thread *task = current_thread();
@@ -337,10 +337,10 @@ u64 sys_stat_fs_fd(void)
 	return 0;
 }
 
-u64 sys_stat_fs(void)
+long sys_stat_fs(const struct syscall_ctx *ctx)
 {
-	const char *path = syscall_arg_ptr(0);
-	struct __brk_statfs *ubuf = syscall_arg_ptr(1);
+	const char *path = syscall_arg_ptr(ctx, 0);
+	struct __brk_statfs *ubuf = syscall_arg_ptr(ctx, 1);
 	struct __brk_statfs st;
 	struct kstatfs ks;
 	struct path p = { 0 };
@@ -371,12 +371,12 @@ u64 sys_stat_fs(void)
 	return 0;
 }
 
-u64 sys_preallocate(void)
+long sys_preallocate(const struct syscall_ctx *ctx)
 {
-	int fd = syscall_arg_int(0);
-	int mode = syscall_arg_int(1);
-	loff_t offset = (loff_t)syscall_arg_raw(2);
-	loff_t len = (loff_t)syscall_arg_raw(3);
+	int fd = syscall_arg_int(ctx, 0);
+	int mode = syscall_arg_int(ctx, 1);
+	loff_t offset = (loff_t)syscall_arg_raw(ctx, 2);
+	loff_t len = (loff_t)syscall_arg_raw(ctx, 3);
 	struct thread *task = current_thread();
 	struct file *fp;
 	int ret;
@@ -398,27 +398,27 @@ u64 sys_preallocate(void)
 	return ret;
 }
 
-u64 sys_link(void)
+long sys_link(const struct syscall_ctx *ctx)
 {
-	int olddirfd = syscall_arg_int(0);
-	char *oldpath = syscall_arg_ptr(1);
-	int newdirfd = syscall_arg_int(2);
-	char *newpath = syscall_arg_ptr(3);
-	int flags = syscall_arg_raw(4);
+	int olddirfd = syscall_arg_int(ctx, 0);
+	char *oldpath = syscall_arg_ptr(ctx, 1);
+	int newdirfd = syscall_arg_int(ctx, 2);
+	char *newpath = syscall_arg_ptr(ctx, 3);
+	int flags = syscall_arg_raw(ctx, 4);
 	return do_linkat(olddirfd, oldpath, newdirfd, newpath, flags);
 }
 
-u64 sys_unlink(void)
+long sys_unlink(const struct syscall_ctx *ctx)
 {
-	int dirfd = syscall_arg_int(0);
-	char *path = syscall_arg_ptr(1);
-	int flags = syscall_arg_int(2);
+	int dirfd = syscall_arg_int(ctx, 0);
+	char *path = syscall_arg_ptr(ctx, 1);
+	int flags = syscall_arg_int(ctx, 2);
 	return do_unlinkat(dirfd, path, flags);
 }
 
-u64 sys_get_sysinfo(void)
+long sys_get_sysinfo(const struct syscall_ctx *ctx)
 {
-	struct __brk_sysinfo *ubuf = syscall_arg_ptr(0);
+	struct __brk_sysinfo *ubuf = syscall_arg_ptr(ctx, 0);
 	struct __brk_sysinfo info = { 0 };
 
 	if (!ubuf)
@@ -437,11 +437,11 @@ u64 sys_get_sysinfo(void)
 	return 0;
 }
 
-u64 sys_get_cwd(void)
+long sys_get_cwd(const struct syscall_ctx *ctx)
 {
 	struct thread *task = current_thread();
-	char *buf = syscall_arg_ptr(0);
-	size_t size = syscall_arg_raw(1);
+	char *buf = syscall_arg_ptr(ctx, 0);
+	size_t size = syscall_arg_raw(ctx, 1);
 	struct path cwd = { 0 };
 	fsinfo_get_cwd(&task->process->fsinfo, &cwd);
 	int ret = path_to_absolute(&cwd, buf, size);
@@ -449,9 +449,9 @@ u64 sys_get_cwd(void)
 	return ret;
 }
 
-u64 sys_chdir(void)
+long sys_chdir(const struct syscall_ctx *ctx)
 {
-	char *pathname = syscall_arg_ptr(0);
+	char *pathname = syscall_arg_ptr(ctx, 0);
 	struct thread *task = current_thread();
 	struct path new_path;
 
@@ -481,13 +481,13 @@ u64 sys_chdir(void)
 	return 0;
 }
 
-u64 sys_chdir_fd(void)
+long sys_chdir_fd(const struct syscall_ctx *ctx)
 {
 	int fd;
 	struct file *fp;
 	struct thread *task = current_thread();
 
-	fd = syscall_arg_int(0);
+	fd = syscall_arg_int(ctx, 0);
 	fp = fdtable_get_file(&task->process->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
@@ -509,63 +509,63 @@ u64 sys_chdir_fd(void)
 	return 0;
 }
 
-u64 sys_rename(void)
+long sys_rename(const struct syscall_ctx *ctx)
 {
-	int olddirfd = syscall_arg_int(0);
-	const char *oldpathname = syscall_arg_ptr(1);
-	int newdirfd = syscall_arg_int(2);
-	const char *newpathname = syscall_arg_ptr(3);
+	int olddirfd = syscall_arg_int(ctx, 0);
+	const char *oldpathname = syscall_arg_ptr(ctx, 1);
+	int newdirfd = syscall_arg_int(ctx, 2);
+	const char *newpathname = syscall_arg_ptr(ctx, 3);
 	return do_renameat(olddirfd, oldpathname, newdirfd, newpathname, 0);
 }
 
-u64 sys_symlink(void)
+long sys_symlink(const struct syscall_ctx *ctx)
 {
 	const char *target;
 	int newdirfd;
 	const char *linkpath;
 
-	target = syscall_arg_ptr(0);
-	newdirfd = syscall_arg_int(1);
-	linkpath = syscall_arg_ptr(2);
+	target = syscall_arg_ptr(ctx, 0);
+	newdirfd = syscall_arg_int(ctx, 1);
+	linkpath = syscall_arg_ptr(ctx, 2);
 	return do_symlinkat(newdirfd, linkpath, target);
 }
 
-u64 sys_readlink(void)
+long sys_readlink(const struct syscall_ctx *ctx)
 {
 	int dirfd;
 	const char *pathname;
 	char *buf;
 	size_t bufsiz;
 
-	dirfd = syscall_arg_int(0);
-	pathname = syscall_arg_ptr(1);
-	buf = syscall_arg_ptr(2);
-	bufsiz = syscall_arg_raw(3);
+	dirfd = syscall_arg_int(ctx, 0);
+	pathname = syscall_arg_ptr(ctx, 1);
+	buf = syscall_arg_ptr(ctx, 2);
+	bufsiz = syscall_arg_raw(ctx, 3);
 	return do_readlinkat(dirfd, pathname, buf, bufsiz);
 }
 
-u64 sys_mkdir(void)
+long sys_mkdir(const struct syscall_ctx *ctx)
 {
-	int dirfd = syscall_arg_int(0);
-	char *pathname = syscall_arg_ptr(1);
-	umode_t mode = syscall_arg_raw(2);
+	int dirfd = syscall_arg_int(ctx, 0);
+	char *pathname = syscall_arg_ptr(ctx, 1);
+	umode_t mode = syscall_arg_raw(ctx, 2);
 
 	return do_mkdirat(dirfd, pathname, mode);
 }
 
-u64 sys_mknod(void)
+long sys_mknod(const struct syscall_ctx *ctx)
 {
-	int dirfd = syscall_arg_int(0);
-	char *path = syscall_arg_ptr(1);
-	umode_t mode = syscall_arg_raw(2);
-	dev_t dev = syscall_arg_raw(3);
+	int dirfd = syscall_arg_int(ctx, 0);
+	char *path = syscall_arg_ptr(ctx, 1);
+	umode_t mode = syscall_arg_raw(ctx, 2);
+	dev_t dev = syscall_arg_raw(ctx, 3);
 	return do_mknodat(dirfd, path, mode, dev);
 }
 
-u64 sys_pipe(void)
+long sys_pipe(const struct syscall_ctx *ctx)
 {
-	int *pipefd = syscall_arg_ptr(0);
-	int flags = syscall_arg_int(1);
+	int *pipefd = syscall_arg_ptr(ctx, 0);
+	int flags = syscall_arg_int(ctx, 1);
 
 	if (!pipefd)
 		return -EFAULT;
@@ -573,18 +573,18 @@ u64 sys_pipe(void)
 	return (u64)(long)do_pipe2(pipefd, flags);
 }
 
-u64 sys_dup(void)
+long sys_dup(const struct syscall_ctx *ctx)
 {
-	int oldfd = syscall_arg_int(0);
+	int oldfd = syscall_arg_int(ctx, 0);
 	struct thread *task = current_thread();
 	return fdtable_dup_fd(&task->process->fdtable, oldfd);
 }
 
-u64 sys_dup_to(void)
+long sys_dup_to(const struct syscall_ctx *ctx)
 {
-	int oldfd = syscall_arg_int(0);
-	int newfd = syscall_arg_int(1);
-	int flags = syscall_arg_int(2);
+	int oldfd = syscall_arg_int(ctx, 0);
+	int newfd = syscall_arg_int(ctx, 1);
+	int flags = syscall_arg_int(ctx, 2);
 	struct thread *task = current_thread();
 	int err;
 
@@ -599,7 +599,7 @@ u64 sys_dup_to(void)
 	return newfd;
 }
 
-u64 sys_seek(void)
+long sys_seek(const struct syscall_ctx *ctx)
 {
 	int fd = 0;
 	struct file *fp = NULL;
@@ -607,13 +607,13 @@ u64 sys_seek(void)
 	off_t off;
 	int whence;
 
-	fd = syscall_arg_int(0);
+	fd = syscall_arg_int(ctx, 0);
 	fp = fdtable_get_file(&current_process()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
-	off = syscall_arg_raw(1);
-	whence = syscall_arg_int(2);
+	off = syscall_arg_raw(ctx, 1);
+	whence = syscall_arg_int(ctx, 2);
 
 	ret = file_lseek(fp, off, whence);
 	file_put(fp);
@@ -657,7 +657,7 @@ static bool getdents_filldir(struct dir_iterator *ctx, const char *name,
 	return true;
 }
 
-u64 sys_read_dir(void)
+long sys_read_dir(const struct syscall_ctx *ctx)
 {
 	int fd = -1;
 	struct file *fp = NULL;
@@ -666,10 +666,10 @@ u64 sys_read_dir(void)
 	int flags;
 	int err;
 
-	fd = syscall_arg_int(0);
-	buf = syscall_arg_ptr(1);
-	size = syscall_arg_raw(2);
-	flags = syscall_arg_int(3);
+	fd = syscall_arg_int(ctx, 0);
+	buf = syscall_arg_ptr(ctx, 1);
+	size = syscall_arg_raw(ctx, 2);
+	flags = syscall_arg_int(ctx, 3);
 
 	if (flags)
 		return -EINVAL;
@@ -697,7 +697,7 @@ u64 sys_read_dir(void)
 
 	sleeplock_acquire(&fp->pos_lock);
 
-	struct getdents_context ctx = {
+	struct getdents_context dctx = {
 		.ctx.actor = getdents_filldir,
 		.ctx.pos = fp->pos,
 		.buf = buf,
@@ -706,7 +706,7 @@ u64 sys_read_dir(void)
 	};
 
 	sleeplock_acquire(&inode->rwsem);
-	err = fop->iterate_shared(fp, &ctx.ctx);
+	err = fop->iterate_shared(fp, &dctx.ctx);
 	sleeplock_release(&inode->rwsem);
 	if (err) {
 		sleeplock_release(&fp->pos_lock);
@@ -714,34 +714,34 @@ u64 sys_read_dir(void)
 		return err;
 	}
 
-	fp->pos = ctx.ctx.pos;
+	fp->pos = dctx.ctx.pos;
 	sleeplock_release(&fp->pos_lock);
 	file_put(fp);
 
-	return ctx.pos;
+	return dctx.pos;
 }
 
-u64 sys_ioctl(void)
+long sys_ioctl(const struct syscall_ctx *ctx)
 {
 	struct file *fp;
 	int fd;
 
-	fd = syscall_arg_int(0);
+	fd = syscall_arg_int(ctx, 0);
 	fp = fdtable_get_file(&current_process()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
-	unsigned int cmd = (unsigned int)syscall_arg_raw(1);
-	unsigned long arg = (unsigned long)syscall_arg_raw(2);
+	unsigned int cmd = (unsigned int)syscall_arg_raw(ctx, 1);
+	unsigned long arg = (unsigned long)syscall_arg_raw(ctx, 2);
 	long ret = file_ioctl(fp, cmd, arg);
 	file_put(fp);
 	return (u64)(long)ret;
 }
 
-u64 sys_truncate_fd(void)
+long sys_truncate_fd(const struct syscall_ctx *ctx)
 {
-	int fd = syscall_arg_int(0);
-	loff_t length = (loff_t)syscall_arg_raw(1);
+	int fd = syscall_arg_int(ctx, 0);
+	loff_t length = (loff_t)syscall_arg_raw(ctx, 1);
 	struct file *fp;
 	int ret;
 
@@ -762,10 +762,10 @@ u64 sys_truncate_fd(void)
 	return ret;
 }
 
-u64 sys_truncate(void)
+long sys_truncate(const struct syscall_ctx *ctx)
 {
-	const char *pathname = syscall_arg_ptr(0);
-	loff_t length = (loff_t)syscall_arg_raw(1);
+	const char *pathname = syscall_arg_ptr(ctx, 0);
+	loff_t length = (loff_t)syscall_arg_raw(ctx, 1);
 	struct iattr attr = {
 		.valid = ATTR_SIZE,
 		.size = length,
@@ -951,12 +951,12 @@ static int set_times_fd(int fd, const struct __brk_timespec times[2])
 	return setattr_fd(fd, &attr);
 }
 
-u64 sys_chmod(void)
+long sys_chmod(const struct syscall_ctx *ctx)
 {
-	int dirfd = syscall_arg_int(0);
-	const char *path = syscall_arg_ptr(1);
-	umode_t mode = syscall_arg_raw(2);
-	int flags = syscall_arg_int(3);
+	int dirfd = syscall_arg_int(ctx, 0);
+	const char *path = syscall_arg_ptr(ctx, 1);
+	umode_t mode = syscall_arg_raw(ctx, 2);
+	int flags = syscall_arg_int(ctx, 3);
 	unsigned int lookup_flags;
 	struct iattr attr = {
 		.valid = ATTR_MODE,
@@ -986,13 +986,13 @@ static void chown_attr_init(struct iattr *attr, long uid, long gid)
 	}
 }
 
-u64 sys_chown(void)
+long sys_chown(const struct syscall_ctx *ctx)
 {
-	int dirfd = syscall_arg_int(0);
-	const char *path = syscall_arg_ptr(1);
-	long uid = syscall_arg_int(2);
-	long gid = syscall_arg_int(3);
-	int flags = syscall_arg_raw(4);
+	int dirfd = syscall_arg_int(ctx, 0);
+	const char *path = syscall_arg_ptr(ctx, 1);
+	long uid = syscall_arg_int(ctx, 2);
+	long gid = syscall_arg_int(ctx, 3);
+	int flags = syscall_arg_raw(ctx, 4);
 	struct iattr attr;
 	unsigned int lookup_flags;
 
@@ -1010,12 +1010,12 @@ u64 sys_chown(void)
 	return setattr_path_at(dirfd, path, &attr, lookup_flags);
 }
 
-u64 sys_set_file_times(void)
+long sys_set_file_times(const struct syscall_ctx *ctx)
 {
-	int dirfd = syscall_arg_int(0);
-	const char *path = syscall_arg_ptr(1);
-	const struct __brk_timespec *utimes = syscall_arg_ptr(2);
-	int flags = syscall_arg_raw(3);
+	int dirfd = syscall_arg_int(ctx, 0);
+	const char *path = syscall_arg_ptr(ctx, 1);
+	const struct __brk_timespec *utimes = syscall_arg_ptr(ctx, 2);
+	int flags = syscall_arg_raw(ctx, 3);
 	struct __brk_timespec ts[2];
 
 	if (flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH))
@@ -1033,13 +1033,13 @@ u64 sys_set_file_times(void)
 	return set_times_path_at(dirfd, path, utimes ? ts : NULL, lookup_flags);
 }
 
-static u64 do_fsync(int datasync)
+static u64 do_fsync(const struct syscall_ctx *ctx, int datasync)
 {
 	struct file *fp = NULL;
 	int ret;
 	int fd;
 
-	fd = syscall_arg_int(0);
+	fd = syscall_arg_int(ctx, 0);
 	fp = fdtable_get_file(&current_process()->fdtable, fd);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
@@ -1056,18 +1056,19 @@ static u64 do_fsync(int datasync)
 	return ret;
 }
 
-u64 sys_sync_fd(void)
+long sys_sync_fd(const struct syscall_ctx *ctx)
 {
-	return do_fsync(0);
+	return do_fsync(ctx, 0);
 }
 
-u64 sys_sync_data_fd(void)
+long sys_sync_data_fd(const struct syscall_ctx *ctx)
 {
-	return do_fsync(1);
+	return do_fsync(ctx, 1);
 }
 
-u64 sys_sync(void)
+long sys_sync(const struct syscall_ctx *ctx)
 {
+	(void)ctx;
 	sync_all_filesystems();
 	return 0;
 }

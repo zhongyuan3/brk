@@ -1,7 +1,6 @@
 #include <arch/asm/page.h>
 #include <arch/asm/vmlayout.h>
 #include <arch/pgtable.h>
-#include <arch/trapframe.h>
 #include <brk/align.h>
 #include <brk/assert.h>
 #include <brk/error.h>
@@ -19,6 +18,7 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
+#include <brk/trap.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
 #include <brk/types.h>
@@ -186,8 +186,8 @@ static user_addr_t stack_reserve(virt_addr_t *ksp, user_addr_t *sp, size_t n,
 }
 
 static void push_args(struct exec_args *args, user_addr_t *psp,
-		      virt_addr_t stack_virt, struct thread *task,
-		      const struct exec_stack_info *info)
+		      virt_addr_t stack_virt, const struct exec_stack_info *info,
+		      user_addr_t *pargv, user_addr_t *penvp)
 {
 	user_addr_t sp = *psp;
 	virt_addr_t ksp = stack_virt + USTACK_SIZE;
@@ -259,12 +259,12 @@ static void push_args(struct exec_args *args, user_addr_t *psp,
 	(void)stack_reserve(&ksp, &sp, (size_t)naux * 2 * sizeof(void *), 8);
 	memcpy((void *)ksp, auxv, (size_t)naux * sizeof(auxv[0]));
 
-	trap_frame_set_arg(task->frame, 2,
-			   stack_push_ptr_slots(&ksp, &sp, args->envc));
+	user_addr_t envp_uaddr =
+		stack_push_ptr_slots(&ksp, &sp, args->envc);
 	char **envp_kstart = (char **)ksp;
 
-	trap_frame_set_arg(task->frame, 1,
-			   stack_push_ptr_slots(&ksp, &sp, args->argc));
+	user_addr_t argv_uaddr =
+		stack_push_ptr_slots(&ksp, &sp, args->argc);
 	char **argv_kstart = (char **)ksp;
 
 	copy_exec_strings(args->envp, args->envc, &envp_strs_kstart,
@@ -274,6 +274,9 @@ static void push_args(struct exec_args *args, user_addr_t *psp,
 
 	argv_kstart[args->argc] = NULL;
 	envp_kstart[args->envc] = NULL;
+
+	*pargv = argv_uaddr;
+	*penvp = envp_uaddr;
 
 	ksp -= sizeof(int);
 	sp -= sizeof(int);
@@ -991,11 +994,13 @@ static int __do_execve(const char *path, struct exec_args *args)
 
 	{
 		user_addr_t sp = new_mm->stack->addr + new_mm->stack->size;
+		user_addr_t argv_uaddr, envp_uaddr;
 		struct page *stack_pg = new_mm->stack->pages[0];
 		phys_addr_t stack_phys = page_to_phys(stack_pg);
 		virt_addr_t stack_virt = phys_to_virt(stack_phys);
 
-		push_args(args, &sp, stack_virt, task, &exec_info);
+		push_args(args, &sp, stack_virt, &exec_info, &argv_uaddr,
+			  &envp_uaddr);
 		strlcpy(process->name, args->argv[0], sizeof(process->name));
 
 		switch_pgtable(new_mm->pgd);
@@ -1005,12 +1010,9 @@ static int __do_execve(const char *path, struct exec_args *args)
 		process->mm = new_mm;
 		uvm_space_free(old_mm);
 		signal_reset(process, task);
-		trap_frame_set_pc(task->frame, run_entry);
-		trap_frame_set_sp(task->frame, sp);
-		/* The new image starts with a clean FP state: cleared registers
-		 * and the default round-to-nearest-even mode in fcsr. */
-		memset(task->frame->f, 0, sizeof(task->frame->f));
-		task->frame->fcsr = 0;
+		arch_setup_user_entry(task->frame, run_entry, sp, args->argc,
+				      argv_uaddr, envp_uaddr);
+		arch_frame_reset_user_fp(task->frame);
 
 		irqstate_t cred_flags = spin_lock_irqsave(&process->cred_lock);
 

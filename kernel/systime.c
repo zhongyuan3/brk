@@ -36,10 +36,10 @@ static int clock_now(int clockid, ktime_t *now)
 	}
 }
 
-u64 sys_get_clock(void)
+long sys_get_clock(const struct syscall_ctx *ctx)
 {
-	int clockid = syscall_arg_int(0);
-	struct __brk_timespec *ut = syscall_arg_ptr(1);
+	int clockid = syscall_arg_int(ctx, 0);
+	struct __brk_timespec *ut = syscall_arg_ptr(ctx, 1);
 	struct __brk_timespec ts;
 	ktime_t now;
 	int ret;
@@ -57,10 +57,10 @@ u64 sys_get_clock(void)
 	return 0;
 }
 
-u64 sys_set_clock(void)
+long sys_set_clock(const struct syscall_ctx *ctx)
 {
-	int clockid = syscall_arg_int(0);
-	const struct __brk_timespec *ut = syscall_arg_ptr(1);
+	int clockid = syscall_arg_int(ctx, 0);
+	const struct __brk_timespec *ut = syscall_arg_ptr(ctx, 1);
 	struct __brk_timespec ts;
 
 	if (clockid != CLOCK_REALTIME)
@@ -79,12 +79,12 @@ u64 sys_set_clock(void)
 	return (u64)(long)ktime_set_realtime(t);
 }
 
-u64 sys_sleep_clock(void)
+long sys_sleep_clock(const struct syscall_ctx *ctx)
 {
-	int clockid = syscall_arg_int(0);
-	int flags = syscall_arg_int(1);
-	const struct __brk_timespec *ureq = syscall_arg_ptr(2);
-	struct __brk_timespec *urem = syscall_arg_ptr(3);
+	int clockid = syscall_arg_int(ctx, 0);
+	int flags = syscall_arg_int(ctx, 1);
+	const struct __brk_timespec *ureq = syscall_arg_ptr(ctx, 2);
+	struct __brk_timespec *urem = syscall_arg_ptr(ctx, 3);
 	struct __brk_timespec req;
 	ktime_t now, target, duration, rem = 0;
 	int ret;
@@ -125,10 +125,10 @@ u64 sys_sleep_clock(void)
 	return (u64)(long)ret;
 }
 
-u64 sys_get_times(void)
+long sys_get_times(const struct syscall_ctx *ctx)
 {
 	struct process *process = current_process();
-	struct __brk_times *ubuf = syscall_arg_ptr(0);
+	struct __brk_times *ubuf = syscall_arg_ptr(ctx, 0);
 	struct __brk_times times = {
 		.user_ns = process_get_user_time(process) * TICK_NS,
 		.system_ns = process_get_system_time(process) * TICK_NS,

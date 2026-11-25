@@ -1,7 +1,6 @@
 #include <arch/boot_info.h>
 #include <arch/irqflags.h>
 #include <arch/mm.h>
-#include <arch/trapframe.h>
 #include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/error.h>
@@ -10,6 +9,7 @@
 #include <brk/fsinfo.h>
 #include <brk/futex.h>
 #include <brk/list.h>
+#include <brk/trap.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/process.h>
@@ -204,9 +204,9 @@ static void init_unit_setup(struct init_unit *unit, cpuid_t cpuid)
 	thread->kstack_top = arch_boot_stack_top(cpuid);
 	thread->kstack_base = thread->kstack_top - KSTACK_SIZE;
 	thread->frame =
-		(struct trap_frame *)(thread->kstack_top - TRAP_FRAME_SIZE);
-	memset(thread->frame, 0, TRAP_FRAME_SIZE);
-	trap_frame_set_kernel_tp(thread->frame, (unsigned long)&cpus[cpuid]);
+		(struct trap_frame *)(thread->kstack_top - arch_frame_size());
+	arch_frame_init(thread->frame);
+	arch_frame_set_kernel_tp(thread->frame, (unsigned long)&cpus[cpuid]);
 
 	signal_init(process, thread, 0);
 }
@@ -318,7 +318,7 @@ static void sched_switch(void)
 	assert(next->oncpu == -1);
 	next->oncpu = cpu->id;
 	set_current_thread(next);
-	trap_frame_set_kernel_tp(next->frame, (unsigned long)cpu);
+	arch_frame_set_kernel_tp(next->frame, (unsigned long)cpu);
 	if (next->process->mm) {
 		switch_pgtable(next->process->mm->pgd);
 		user_access_enable();

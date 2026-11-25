@@ -1,20 +1,12 @@
 #ifndef BRK_SIGNAL_TYPES_H
 #define BRK_SIGNAL_TYPES_H
 
-#include <arch/trapframe.h>
 #include <brk/spinlock_types.h>
 #include <uapi/signal.h>
 
 struct __brk_sigaction_table {
 	struct __brk_sigaction actions[NSIG];
 	spinlock_t lock;
-};
-
-struct user_sigframe {
-	struct trap_frame tf;
-	u64 blocked;
-	int signo;
-	int pad;
 };
 
 #endif

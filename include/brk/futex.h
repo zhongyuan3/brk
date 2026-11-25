@@ -13,6 +13,5 @@ int futex_wake_user(struct uvm_space *mm, u32 *uaddr, u32 bitset, int nr);
 /* Remove a thread's embedded waiter from its hash bucket, if queued. */
 void futex_cleanup_thread(struct thread *thread);
 
-u64 sys_futex(void);
 
 #endif

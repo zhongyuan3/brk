@@ -1,5 +1,3 @@
-#include <arch/asm/vmlayout.h>
-#include <arch/trapframe.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
@@ -12,6 +10,7 @@
 #include <brk/syscall.h>
 #include <brk/thread.h>
 #include <brk/timeconst.h>
+#include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
 #include <stdint.h>
@@ -43,11 +42,6 @@ static bool sig_default_terminate(int sig)
 	default:
 		return true;
 	}
-}
-
-static bool user_access_ok(user_addr_t addr, size_t len)
-{
-	return addr + len <= USER_SPACE_SIZE_MAX;
 }
 
 static void sigaction_table_reset_locked(struct __brk_sigaction_table *table)
@@ -367,30 +361,15 @@ static bool setup_signal_frame_locked(struct thread *thread, int sig,
 				      u64 handler)
 {
 	struct process *process = thread->process;
-	user_addr_t sp;
-	struct user_sigframe *frame;
 
-	sp = trap_frame_get_sp(thread->frame);
-	sp -= sizeof(*frame);
-	sp &= ~0xFULL;
-	if (!user_access_ok(sp, sizeof(*frame)))
+	if (!arch_setup_signal_frame(thread, sig, (user_addr_t)handler))
 		return false;
 
-	frame = (struct user_sigframe *)(uintptr_t)sp;
-	memcpy(&frame->tf, thread->frame, TRAP_FRAME_SIZE);
-	frame->blocked = thread->blocked;
-	frame->signo = sig;
-
-	thread->sigframe_sp = sp;
 	if (!(process->sigactions.actions[sig].sa_flags & SA_NODEFER))
 		thread->blocked |= (1ULL << sig);
 	thread->blocked |= process->sigactions.actions[sig].sa_mask;
 	clear_pending_locked(thread, sig);
 	thread->in_handler = true;
-
-	trap_frame_set_sp(thread->frame, sp);
-	trap_frame_set_pc(thread->frame, handler);
-	trap_frame_set_ret_val(thread->frame, sig);
 	return true;
 }
 
@@ -480,26 +459,17 @@ void signal_copy(struct process *dst_process, struct thread *dst_thread,
 
 u64 signal_do_sigreturn(struct thread *thread)
 {
-	struct user_sigframe *frame;
 	u64 ret = 0;
+	int err;
 	irqstate_t flags = spin_lock_irqsave(&thread->process->sigactions.lock);
 
-	if (!thread->sigframe_sp) {
-		ret = -EINVAL;
+	err = arch_restore_signal_frame(thread, &ret);
+	if (err) {
+		ret = (u64)err;
 		goto unlock_and_return;
 	}
 
-	frame = (struct user_sigframe *)(uintptr_t)thread->sigframe_sp;
-	if (!user_access_ok(thread->sigframe_sp, sizeof(*frame))) {
-		ret = -EFAULT;
-		goto unlock_and_return;
-	}
-
-	memcpy(thread->frame, &frame->tf, TRAP_FRAME_SIZE);
-	thread->blocked = frame->blocked;
 	thread->in_handler = false;
-	thread->sigframe_sp = 0;
-	ret = trap_frame_get_arg(thread->frame, 0);
 
 unlock_and_return:
 	spin_unlock_irqrestore(&thread->process->sigactions.lock, flags);
@@ -578,28 +548,28 @@ void sigaction_table_copy(struct __brk_sigaction_table *dst,
 	spin_unlock_irqrestore(&src->lock, sflags);
 }
 
-u64 sys_set_signal(void)
+long sys_set_signal(const struct syscall_ctx *ctx)
 {
-	int sig = syscall_arg_int(0);
-	const struct __brk_sigaction *act = syscall_arg_ptr(1);
-	struct __brk_sigaction *oact = syscall_arg_ptr(2);
+	int sig = syscall_arg_int(ctx, 0);
+	const struct __brk_sigaction *act = syscall_arg_ptr(ctx, 1);
+	struct __brk_sigaction *oact = syscall_arg_ptr(ctx, 2);
 
 	return signal_do_sigaction(current_process(), sig, act, oact);
 }
 
-u64 sys_set_sigmask(void)
+long sys_set_sigmask(const struct syscall_ctx *ctx)
 {
-	int how = syscall_arg_int(0);
-	const sigset_t *set = syscall_arg_ptr(1);
-	sigset_t *oldset = syscall_arg_ptr(2);
+	int how = syscall_arg_int(ctx, 0);
+	const sigset_t *set = syscall_arg_ptr(ctx, 1);
+	sigset_t *oldset = syscall_arg_ptr(ctx, 2);
 
 	return signal_do_sigprocmask(current_thread(), how, set, oldset);
 }
 
-u64 sys_get_pending(void)
+long sys_get_pending(const struct syscall_ctx *ctx)
 {
 	struct thread *thread = current_thread();
-	sigset_t *uset = syscall_arg_ptr(0);
+	sigset_t *uset = syscall_arg_ptr(ctx, 0);
 	sigset_t set;
 	irqstate_t flags;
 
@@ -615,12 +585,12 @@ u64 sys_get_pending(void)
 	return 0;
 }
 
-u64 sys_wait_signal(void)
+long sys_wait_signal(const struct syscall_ctx *ctx)
 {
-	const sigset_t *uset = syscall_arg_ptr(0);
-	const struct __brk_timespec *utimeout = syscall_arg_ptr(1);
-	__brk_siginfo_t *uinfo = syscall_arg_ptr(2);
-	int wflags = syscall_arg_int(3);
+	const sigset_t *uset = syscall_arg_ptr(ctx, 0);
+	const struct __brk_timespec *utimeout = syscall_arg_ptr(ctx, 1);
+	__brk_siginfo_t *uinfo = syscall_arg_ptr(ctx, 2);
+	int wflags = syscall_arg_int(ctx, 3);
 	struct thread *thread = current_thread();
 	sigset_t set;
 	struct __brk_timespec req;
@@ -733,7 +703,8 @@ u64 sys_wait_signal(void)
 	return (u64)sig;
 }
 
-u64 sys_restore_context(void)
+long sys_restore_context(const struct syscall_ctx *ctx)
 {
+	(void)ctx;
 	return signal_do_sigreturn(current_thread());
 }

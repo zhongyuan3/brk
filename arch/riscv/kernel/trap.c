@@ -1,5 +1,6 @@
 #include <arch/asm/vmlayout.h>
 #include <arch/csr.h>
+#include <arch/syscall.h>
 #include <arch/irqflags.h>
 #include <arch/sbi.h>
 #include <arch/timer.h>
@@ -255,7 +256,7 @@ static void handle_exception(unsigned long code, struct trap_frame *frame,
 	case EXCEPTION_ECALL_FROM_USER:
 		if (from_user) {
 			signal_deliver_pending(task);
-			frame->sepc += 4;
+			arch_syscall_advance_pc(frame);
 			local_irq_enable();
 			syscall();
 		}
