@@ -351,4 +351,8 @@
 /* void sys_restore_context(void) */
 #define SYS_RESTORE_CONTEXT 82
 
+/* Highest valid syscall number and the size of the dispatch table. */
+#define SYS_MAX SYS_RESTORE_CONTEXT
+#define SYS_COUNT (SYS_MAX + 1)
+
 #endif
