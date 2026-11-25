@@ -1,5 +1,6 @@
 #define pr_fmt(fmt) "tick: " fmt
 #include <brk/clockevent.h>
+#include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/spinlock.h>
 #include <brk/tick.h>
@@ -22,7 +23,7 @@ void tick_init(void)
 	int err;
 
 	if (!dev)
-		pr_err("no clock event device\n");
+		panic("tick: no clock event device\n");
 
 	dev->event_handler = tick_handle_periodic;
 	err = clockevents_set_mode(dev, CLOCK_EVT_MODE_PERIODIC);
@@ -34,7 +35,7 @@ void tick_init(void)
 
 	err = clockevents_program_event(dev, last_tick_ns + TICK_NS);
 	if (err)
-		pr_err("failed to program first tick: %d\n", err);
+		panic("tick: failed to program first tick: %d\n", err);
 
 	pr_debug("started (HZ=%d)\n", HZ);
 }
@@ -45,6 +46,7 @@ void tick_handle_periodic(struct clock_event_device *dev)
 	irqstate_t flags;
 	u64 now;
 	u64 next;
+	int err;
 
 	if (!dev)
 		return;
@@ -74,7 +76,9 @@ void tick_handle_periodic(struct clock_event_device *dev)
 	}
 	spin_unlock_irqrestore(&tick_handlers_lock, flags);
 
-	(void)clockevents_program_event(dev, next);
+	err = clockevents_program_event(dev, next);
+	if (err)
+		panic("tick: failed to program next event: %d\n", err);
 }
 
 u64 tick_get_jiffies(void)

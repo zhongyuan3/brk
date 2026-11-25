@@ -1,5 +1,6 @@
 #define pr_fmt(fmt) "timekeeper: " fmt
 #include <brk/clocksource.h>
+#include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/seqcount.h>
 #include <brk/signal.h>
@@ -122,7 +123,7 @@ void timekeeper_init(void)
 	irqstate_t flags;
 
 	if (!cs)
-		pr_err("no clocksource selected\n");
+		panic("timekeeper: no clocksource selected\n");
 
 	/*
 	 * Establish the monotonic epoch exactly once.  This is the equivalent
@@ -134,6 +135,7 @@ void timekeeper_init(void)
 	if (__atomic_load_n(&tk.ready, __ATOMIC_RELAXED)) {
 		spin_unlock_irqrestore(&tk.lock, flags);
 		pr_warn("already initialized\n");
+		return;
 	}
 
 	write_seqcount_begin(&tk.seq);

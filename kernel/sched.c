@@ -8,7 +8,6 @@
 #include <brk/fsinfo.h>
 #include <brk/futex.h>
 #include <brk/list.h>
-#include <brk/trap.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/process.h>
@@ -18,6 +17,7 @@
 #include <brk/string.h>
 #include <brk/thread.h>
 #include <brk/tick.h>
+#include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
 #include <uapi/capability.h>
@@ -243,6 +243,7 @@ void sched_start(void)
 
 	init->time_slice = TIME_SLICE_MAX;
 	init->ktime = tick_get_jiffies();
+	init->utime = init->ktime;
 
 	/*
 	 * Publish this CPU as online only after current is the boot thread.  An
@@ -273,6 +274,7 @@ static void sched_switch(void)
 {
 	struct thread *curr = current_thread();
 	struct cpu *cpu = this_cpu();
+	u64 now;
 
 	assert(!local_irq_enabled());
 	assert(curr->lock.locked);
@@ -309,8 +311,8 @@ static void sched_switch(void)
 		return;
 	}
 
-	process_add_system_time(curr->process,
-				tick_get_jiffies() - curr->ktime);
+	now = tick_get_jiffies();
+	process_add_system_time(curr->process, now - curr->ktime);
 	cpu->handoff = curr;
 
 	raw_spin_lock(&next->lock);
@@ -326,7 +328,8 @@ static void sched_switch(void)
 		user_access_disable();
 	}
 	next->time_slice = TIME_SLICE_MAX;
-	next->ktime = tick_get_jiffies();
+	next->ktime = now;
+	next->utime = now;
 	/*
 	 * curr->oncpu is cleared by sched_resume() in the next thread's
 	 * context, i.e. only after this CPU has completely left curr.  This

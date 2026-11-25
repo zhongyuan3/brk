@@ -39,8 +39,7 @@ static int riscv_timer_set_next_event(u64 delta_ns,
 {
 	u64 cycles = ns_to_cycles(delta_ns, dev->frequency);
 
-	sbi_set_timer(read_time() + cycles);
-	return 0;
+	return (int)sbi_set_timer(read_time() + cycles);
 }
 
 static struct clock_event_device riscv_clockevent = {
@@ -85,24 +84,35 @@ void timer_init(void)
 
 void timer_init_hart(void)
 {
-	struct clock_event_device *dev = clockevents_get_current();
+	struct clock_event_device *dev;
+	int err;
 
+	dev = clockevents_get_current();
 	if (!dev)
-		return;
+		panic("timer: no clock event device\n");
 
-	(void)clockevents_program_event(dev, ktime_get_mono_ns() + TICK_NS);
+	err = clockevents_program_event(dev, ktime_get_mono_ns() + TICK_NS);
+	if (err)
+		panic("timer: failed to program tick on hart %lu: %d\n",
+		      this_cpuid(), err);
 }
 
 void timer_handle_tick(void)
 {
-	struct clock_event_device *dev = clockevents_get_current();
+	struct clock_event_device *dev;
+	int err;
 
+	dev = clockevents_get_current();
 	if (!dev)
-		return;
+		panic("timer: no clock event device\n");
 
-	if (this_cpuid() == boot_info.boot_hart_id && dev->event_handler)
+	if (this_cpuid() == boot_info.boot_hart_id && dev->event_handler) {
 		dev->event_handler(dev);
-	else
-		(void)clockevents_program_event(dev,
-						ktime_get_mono_ns() + TICK_NS);
+		return;
+	}
+
+	err = clockevents_program_event(dev, ktime_get_mono_ns() + TICK_NS);
+	if (err)
+		panic("timer: failed to reprogram tick on hart %lu: %d\n",
+		      this_cpuid(), err);
 }

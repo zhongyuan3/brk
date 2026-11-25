@@ -184,6 +184,8 @@ static struct thread *thread_create_in(struct process *process,
 	thread->state = THREAD_STATE_NEW;
 	thread->oncpu = -1;
 	thread->cpu = (int)this_cpuid();
+	thread->utime = tick_get_jiffies();
+	thread->ktime = thread->utime;
 
 	if (main) {
 		thread->tid = process->pid;
@@ -283,8 +285,8 @@ struct thread *thread_create_user(struct process *process, user_addr_t stack,
 	spin_unlock_irqrestore(&process->sigactions.lock, sflags);
 	signal_thread_init(process, thread, blocked);
 
-	arch_setup_user_thread(thread->frame, current->frame, entry, stack,
-			       arg, tls);
+	arch_setup_user_thread(thread->frame, current->frame, entry, stack, arg,
+			       tls);
 	prepare_to_ret_to_user(thread->frame);
 
 	irqstate_t flags = spin_lock_irqsave(&process->lock);

@@ -22,15 +22,22 @@ static int clock_now(int clockid, ktime_t *now)
 		*now = ktime_realtime();
 		return 0;
 	case CLOCK_MONOTONIC:
+		*now = (ktime_t)ktime_get_mono_ns();
+		return 0;
 	case CLOCK_BOOTTIME:
 		*now = (ktime_t)ktime_boottime_ns();
 		return 0;
 	case CLOCK_PROCESS_CPUTIME_ID:
-	case CLOCK_THREAD_CPUTIME_ID:
 		*now = (ktime_t)(process_get_user_time(process) +
 				 process_get_system_time(process)) *
 		       (ktime_t)TICK_NS;
 		return 0;
+	case CLOCK_THREAD_CPUTIME_ID:
+		/*
+		 * Per-thread CPU accounting is not implemented yet.  Returning
+		 * process time here would silently give a wrong answer.
+		 */
+		return -EINVAL;
 	default:
 		return -EINVAL;
 	}
@@ -104,10 +111,9 @@ long sys_sleep_clock(const struct syscall_ctx *ctx)
 
 	target = ktime_from_timespec(&req);
 	if (flags & TIMER_ABSTIME) {
-		if (clockid == CLOCK_REALTIME)
-			now = ktime_realtime();
-		else
-			now = (ktime_t)ktime_boottime_ns();
+		ret = clock_now(clockid, &now);
+		if (ret)
+			return ret;
 		duration = target - now;
 		if (duration <= 0)
 			return 0;

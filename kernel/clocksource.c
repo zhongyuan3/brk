@@ -1,5 +1,6 @@
 #define pr_fmt(fmt) "clocksource: " fmt
 #include <brk/clocksource.h>
+#include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/sched_clock.h>
 #include <brk/spinlock.h>
@@ -51,7 +52,7 @@ void clocksource_init(void)
 	struct clocksource *cs = clocksource_select();
 
 	if (!cs)
-		pr_err("no source registered\n");
+		panic("clocksource: no source registered\n");
 
 	/*
 	 * Establish the boot-clock epoch before the first timestamped message
