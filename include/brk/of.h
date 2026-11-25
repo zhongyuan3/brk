@@ -49,9 +49,6 @@ int of_early_scan_reserved_memory(void);
 int of_init(void);
 struct device_node *of_root(void);
 
-int of_scan_cpu(void);
-int of_get_timebase_freq(u32 *freq_out);
-
 struct device_node *of_find_node_by_path(const char *path);
 struct device_node *of_find_compatible_node(const char *compatible);
 struct device_node *of_find_node_by_phandle(u32 phandle);

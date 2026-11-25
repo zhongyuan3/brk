@@ -1,4 +1,3 @@
-#include <arch/hart.h>
 #include <arch/mm.h>
 #include <brk/align.h>
 #include <brk/irqdomain.h>
@@ -667,42 +666,6 @@ int of_address_to_resource(const struct device_node *node, int index,
 	res->flags = IORESOURCE_MEM;
 	res->name = node->name;
 	return 0;
-}
-
-int of_scan_cpu(void)
-{
-	struct device_node *node;
-	struct device_node *cpu;
-	const char *type;
-	int len;
-
-	node = of_find_node_by_path("/cpus");
-	if (!node)
-		return -ENOENT;
-
-	of_for_each_child(cpu, node) {
-		type = of_get_property(cpu, "device_type", &len);
-		if (type && len > 0 && !strcmp(type, "cpu"))
-			nr_harts += 1;
-	}
-
-	return 0;
-}
-
-int of_get_timebase_freq(u32 *freq_out)
-{
-	struct device_node *node;
-
-	if (!freq_out)
-		return -EINVAL;
-
-	node = of_find_node_by_path("/cpus");
-	if (!node) {
-		pr_err("no cpus node in the DT\n");
-		return -ENOENT;
-	}
-
-	return of_property_read_u32(node, "timebase-frequency", freq_out);
 }
 
 int of_irq_get(const struct device_node *node, int index)

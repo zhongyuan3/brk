@@ -52,13 +52,11 @@ void timer_init(void)
 	u64 timer_interval;
 	u64 resolution_ns;
 	int err;
+	struct device_node *node;
 
-	err = of_get_timebase_freq(&freq);
-	if (err) {
-		freq = DEFAULT_TIMEBASE_FREQ;
-		pr_warn("timebase-frequency unavailable (%d), using %u Hz\n",
-			err, freq);
-	}
+	node = of_find_node_by_path("/cpus");
+	if (!node || of_property_read_u32(node, "timebase-frequency", &freq))
+		panic("timer: no reserved-memory node in the DT\n");
 
 	if (!freq)
 		panic("timer: invalid timebase frequency\n");

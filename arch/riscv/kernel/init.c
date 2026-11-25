@@ -59,6 +59,10 @@ void secondary_entry(unsigned long hart_id)
 void arch_init(void)
 {
 	int err;
+	struct device_node *node;
+	struct device_node *cpu;
+	const char *type;
+	int len;
 
 	err = vm_init();
 	if (err)
@@ -68,9 +72,15 @@ void arch_init(void)
 	if (err)
 		panic("of_init() failed: err=%d\n", err);
 
-	err = of_scan_cpu();
-	if (err)
-		panic("of_scan_cpu() failed: err=%d\n", err);
+	node = of_find_node_by_path("/cpus");
+	if (!node)
+		panic("no cpus node in the DT");
+
+	of_for_each_child(cpu, node) {
+		type = of_get_property(cpu, "device_type", &len);
+		if (type && len > 0 && !strcmp(type, "cpu"))
+			nr_harts += 1;
+	}
 }
 
 static void smp_wake_secondary_harts(unsigned long boot_hart_id)
