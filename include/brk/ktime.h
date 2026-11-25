@@ -75,13 +75,16 @@ static inline u64 ktime_boottime_ns(void)
 	return ktime_get_boottime_ns();
 }
 
+/* Scheduler-side sleep; implemented in kernel/sched.c. */
+int thread_sleep_ns(ktime_t dur, ktime_t *rem);
+
 /*
  * Sleep for @dur nanoseconds.  On -EINTR, @rem receives the remaining time
  * when non-NULL.  @rem is also zeroed on success.
  */
 static inline int ktime_nanosleep(ktime_t dur, ktime_t *rem)
 {
-	return timekeeper_nanosleep(dur, rem);
+	return thread_sleep_ns(dur, rem);
 }
 
 #endif

@@ -7,6 +7,7 @@
 #include <brk/fs.h>
 #include <brk/fsinfo.h>
 #include <brk/futex.h>
+#include <brk/ktime.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
@@ -26,6 +27,7 @@
 #include <uapi/limits.h>
 
 SPINLOCK_DEFINE(wait_lock);
+SPINLOCK_DEFINE(sleep_lock);
 
 static LIST_DEFINE(sleep_queue);
 static SPINLOCK_DEFINE(sleep_queue_lock);
@@ -352,6 +354,67 @@ void thread_yield(void)
 	raw_spin_unlock(&thread->lock);
 
 	local_irq_restore(flags);
+}
+
+void sched_tick(void)
+{
+	struct thread *thread = current_thread();
+
+	if (!thread)
+		return;
+
+	if (--thread->time_slice <= 0 && preempt_count() == 0)
+		thread_yield();
+}
+
+int thread_sleep_ns(ktime_t dur, ktime_t *rem)
+{
+	struct thread *task = current_thread();
+	s64 start_ns;
+	s64 deadline_ns;
+	s64 now_ns;
+	irqstate_t flags;
+
+	if (dur <= 0) {
+		if (rem)
+			*rem = 0;
+		return 0;
+	}
+
+	start_ns = (s64)ktime_get_mono_ns();
+	deadline_ns = start_ns + dur;
+
+	thread_disarm_sleep_timer();
+	thread_arm_sleep_timer(&sleep_lock, (u64)deadline_ns);
+
+	flags = spin_lock_irqsave(&sleep_lock);
+
+	for (;;) {
+		if (thread_abort_pending(task)) {
+			s64 left_ns;
+
+			spin_unlock_irqrestore(&sleep_lock, flags);
+			thread_disarm_sleep_timer();
+			now_ns = (s64)ktime_get_mono_ns();
+			left_ns = deadline_ns - now_ns;
+			if (left_ns < 0)
+				left_ns = 0;
+			if (rem)
+				*rem = (ktime_t)left_ns;
+			return -EINTR;
+		}
+		now_ns = (s64)ktime_get_mono_ns();
+		if (now_ns >= deadline_ns)
+			break;
+		(void)thread_sleep_interruptible(task, &sleep_lock);
+	}
+	spin_unlock_irqrestore(&sleep_lock, flags);
+
+	thread_disarm_sleep_timer();
+
+	if (rem)
+		*rem = 0;
+	return 0;
 }
 
 /*

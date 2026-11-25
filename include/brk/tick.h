@@ -9,19 +9,26 @@
 struct clock_event_device;
 
 /*
- * Periodic work driven by the boot hart's clock event device.  Handlers run
- * in interrupt context, must not sleep, and must not register/unregister
- * handlers from inside the callback.
+ * Per-CPU periodic work.  Each CPU has its own tick device and its own
+ * handler list; handlers are registered on the current CPU and run only
+ * from that CPU's tick interrupt.
+ *
+ * Handlers run in interrupt context, must not sleep, and must not
+ * register/unregister handlers from inside the callback.
  */
 struct tick_handler {
 	void (*fn)(void);
 	struct list_head node;
+	cpuid_t cpu;
 	bool registered;
 };
 
 void tick_init(void);
+void tick_init_cpu(void);
+void tick_handle_irq(void);
 void tick_handle_periodic(struct clock_event_device *dev);
 
+/* Monotonic jiffies since tick_init(). */
 u64 tick_get_jiffies(void);
 
 int tick_register_handler(struct tick_handler *th);

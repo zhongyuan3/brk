@@ -33,7 +33,7 @@ void timer_del_sync(struct timer_list *timer);
 
 bool timer_pending(struct timer_list *timer);
 
-/* Run all timers whose expiry is <= @now_ns.  Called from the tick handler. */
+/* Run all timers whose expiry is <= @now_ns.  Called from a CPU tick. */
 void timer_run_expired(u64 now_ns);
 
 #endif

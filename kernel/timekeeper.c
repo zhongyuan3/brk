@@ -3,9 +3,7 @@
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/seqcount.h>
-#include <brk/signal.h>
 #include <brk/spinlock.h>
-#include <brk/task.h>
 #include <brk/timeconst.h>
 #include <brk/timekeeper.h>
 #include <brk/types.h>
@@ -204,20 +202,6 @@ void timekeeper_unregister_wall_clock(struct wall_clock *wc)
 	spin_unlock_irqrestore(&tk.lock, flags);
 }
 
-void timekeeping_advance(void)
-{
-	irqstate_t flags;
-
-	if (!__atomic_load_n(&tk.ready, __ATOMIC_ACQUIRE))
-		return;
-
-	flags = spin_lock_irqsave(&tk.lock);
-	write_seqcount_begin(&tk.seq);
-	timekeeping_forward_now(&tk);
-	write_seqcount_end(&tk.seq);
-	spin_unlock_irqrestore(&tk.lock, flags);
-}
-
 ktime_t timekeeper_real(void)
 {
 	struct timekeeper *tkp = &tk;
@@ -259,54 +243,4 @@ int timekeeper_set_real(ktime_t ns)
 
 	spin_unlock_irqrestore(&tk.lock, flags);
 	return err;
-}
-
-int timekeeper_nanosleep(ktime_t dur, ktime_t *rem)
-{
-	struct thread *task = current_thread();
-	s64 start_ns;
-	s64 deadline_ns;
-	s64 now_ns;
-	irqstate_t flags;
-
-	if (dur <= 0) {
-		if (rem)
-			*rem = 0;
-		return 0;
-	}
-
-	start_ns = (s64)ktime_get_mono_ns();
-	deadline_ns = start_ns + dur;
-
-	thread_disarm_sleep_timer();
-	thread_arm_sleep_timer(&tk.lock, (u64)deadline_ns);
-
-	flags = spin_lock_irqsave(&tk.lock);
-
-	for (;;) {
-		if (thread_abort_pending(task)) {
-			s64 left_ns;
-
-			spin_unlock_irqrestore(&tk.lock, flags);
-			thread_disarm_sleep_timer();
-			now_ns = (s64)ktime_get_mono_ns();
-			left_ns = deadline_ns - now_ns;
-			if (left_ns < 0)
-				left_ns = 0;
-			if (rem)
-				*rem = (ktime_t)left_ns;
-			return -EINTR;
-		}
-		now_ns = (s64)ktime_get_mono_ns();
-		if (now_ns >= deadline_ns)
-			break;
-		(void)thread_sleep_interruptible(task, &tk.lock);
-	}
-	spin_unlock_irqrestore(&tk.lock, flags);
-
-	thread_disarm_sleep_timer();
-
-	if (rem)
-		*rem = 0;
-	return 0;
 }

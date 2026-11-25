@@ -1,7 +1,7 @@
 #include <arch/asm/vmlayout.h>
 #include <arch/csr.h>
-#include <arch/syscall.h>
 #include <arch/sbi.h>
+#include <arch/syscall.h>
 #include <arch/timer.h>
 #include <arch/trap.h>
 #include <arch/trapframe.h>
@@ -179,19 +179,6 @@ static void handle_interrupt(unsigned long code, struct trap_frame *frame,
 		break;
 	case INTERRUPT_SUPERVISOR_TIMER:
 		timer_handle_tick();
-		if (from_user)
-			signal_deliver_pending(task);
-		if (task && --task->time_slice <= 0) {
-			/*
-			 * Plain spinlocks and explicit preempt_disable()
-			 * sections bump preempt_count. Do not switch away
-			 * while such a section is active, or another task
-			 * could spin forever on a lock held by the preempted
-			 * context.
-			 */
-			if (preempt_count() == 0)
-				thread_yield();
-		}
 		break;
 	case INTERRUPT_SUPERVISOR_EXTERNAL:
 		irq_handle_external(this_cpuid());

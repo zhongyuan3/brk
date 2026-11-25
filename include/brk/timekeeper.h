@@ -28,9 +28,6 @@ struct wall_clock {
 
 void timekeeper_init(void);
 
-/* Advance the timekeeper base; called from the periodic tick. */
-void timekeeping_advance(void);
-
 /* CLOCK_MONOTONIC nanoseconds since timekeeper initialization. */
 u64 ktime_get_mono_ns(void);
 
@@ -42,7 +39,5 @@ int timekeeper_set_real(ktime_t ns);
 
 int timekeeper_register_wall_clock(struct wall_clock *wc);
 void timekeeper_unregister_wall_clock(struct wall_clock *wc);
-
-int timekeeper_nanosleep(ktime_t dur, ktime_t *rem);
 
 #endif

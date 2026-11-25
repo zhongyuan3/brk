@@ -30,6 +30,8 @@ void thread_exit_normal(int code);
 void thread_exit_signal(int sig);
 
 void thread_yield(void);
+/* Scheduler tick: run from the per-CPU timer interrupt. */
+void sched_tick(void);
 void thread_sleep(void *chan, spinlock_t *lock);
 bool thread_sleep_interruptible(void *chan, spinlock_t *lock);
 bool thread_abort_pending(struct thread *thread);

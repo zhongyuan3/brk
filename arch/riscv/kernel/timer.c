@@ -1,16 +1,14 @@
 #define pr_fmt(fmt) "timer: " fmt
-#include <arch/boot_info.h>
 #include <arch/csr.h>
 #include <arch/sbi.h>
 #include <arch/timer.h>
 #include <brk/clockevent.h>
 #include <brk/clocksource.h>
-#include <brk/cpu.h>
 #include <brk/of.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
+#include <brk/tick.h>
 #include <brk/timeconst.h>
-#include <brk/timekeeper.h>
 #include <brk/timer.h>
 
 #define DEFAULT_TIMEBASE_FREQ 0x989680u
@@ -84,35 +82,10 @@ void timer_init(void)
 
 void timer_init_hart(void)
 {
-	struct clock_event_device *dev;
-	int err;
-
-	dev = clockevents_get_current();
-	if (!dev)
-		panic("timer: no clock event device\n");
-
-	err = clockevents_program_event(dev, ktime_get_mono_ns() + TICK_NS);
-	if (err)
-		panic("timer: failed to program tick on hart %lu: %d\n",
-		      this_cpuid(), err);
+	tick_init_cpu();
 }
 
 void timer_handle_tick(void)
 {
-	struct clock_event_device *dev;
-	int err;
-
-	dev = clockevents_get_current();
-	if (!dev)
-		panic("timer: no clock event device\n");
-
-	if (this_cpuid() == boot_info.boot_hart_id && dev->event_handler) {
-		dev->event_handler(dev);
-		return;
-	}
-
-	err = clockevents_program_event(dev, ktime_get_mono_ns() + TICK_NS);
-	if (err)
-		panic("timer: failed to reprogram tick on hart %lu: %d\n",
-		      this_cpuid(), err);
+	tick_handle_irq();
 }
