@@ -3,12 +3,9 @@
 #include <arch/asm/mm.h>
 #include <arch/asm/page.h>
 #include <arch/asm/vmlayout.h>
-#include <arch/boot_info.h>
-#include <arch/csr.h>
 #include <arch/mm.h>
 #include <arch/pgtable.h>
 #include <arch/pgtable_types.h>
-#include <arch/sbi.h>
 #include <brk/align.h>
 #include <brk/assert.h>
 #include <brk/mchain.h>
@@ -20,6 +17,9 @@
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/types.h>
+#include <riscv/boot_info.h>
+#include <riscv/csr.h>
+#include <riscv/sbi.h>
 #include <stddef.h>
 #include <string.h>
 

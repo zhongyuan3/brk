@@ -1,4 +1,3 @@
-#include <arch/boot_info.h>
 #include <arch/mm.h>
 #include <brk/assert.h>
 #include <brk/cpu.h>
@@ -21,6 +20,7 @@
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <riscv/boot_info.h>
 #include <uapi/capability.h>
 #include <uapi/errno.h>
 #include <uapi/futex.h>

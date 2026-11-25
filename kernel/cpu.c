@@ -1,4 +1,3 @@
-#include <arch/csr.h>
 #include <brk/asm/cpu.h>
 #include <brk/assert.h>
 #include <brk/cpu.h>
@@ -8,7 +7,6 @@
 #include <stdalign.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <uapi/errno.h>
 
 struct cpu cpus[MAX_CPUS];
 

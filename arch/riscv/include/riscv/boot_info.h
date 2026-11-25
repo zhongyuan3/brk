@@ -1,5 +1,5 @@
-#ifndef ARCH_BOOT_INFO_H
-#define ARCH_BOOT_INFO_H
+#ifndef RISCV_BOOT_INFO_H
+#define RISCV_BOOT_INFO_H
 
 #include <brk/types.h>
 

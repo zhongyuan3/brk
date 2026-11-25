@@ -1,13 +1,11 @@
 #include <arch/context.h>
-#include <arch/csr.h>
-#include <arch/hart.h>
 #include <arch/irqstate.h>
 #include <arch/mm.h>
 #include <brk/assert.h>
 #include <brk/cpu.h>
-#include <brk/panic.h>
 #include <brk/task.h>
 #include <brk/thread_types.h>
+#include <riscv/csr.h>
 
 unsigned long nr_harts = 0;
 

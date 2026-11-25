@@ -1,6 +1,4 @@
 #define pr_fmt(fmt) "timer: " fmt
-#include <arch/csr.h>
-#include <arch/sbi.h>
 #include <arch/timer.h>
 #include <brk/clockevent.h>
 #include <brk/clocksource.h>
@@ -9,7 +7,8 @@
 #include <brk/printk.h>
 #include <brk/tick.h>
 #include <brk/timeconst.h>
-#include <brk/timer.h>
+#include <riscv/csr.h>
+#include <riscv/sbi.h>
 
 #define DEFAULT_TIMEBASE_FREQ 0x989680u
 

@@ -1,9 +1,7 @@
 #include <arch/asm/page.h>
 #include <arch/asm/vmlayout.h>
-#include <arch/csr.h>
 #include <arch/mm.h>
 #include <arch/pgtable.h>
-#include <brk/assert.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
 #include <brk/fs.h>
@@ -18,6 +16,7 @@
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <riscv/csr.h>
 #include <uapi/errno.h>
 #include <uapi/mman.h>
 #include <uapi/stat.h>

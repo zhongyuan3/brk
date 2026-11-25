@@ -1,6 +1,4 @@
-#include <arch/asm/huge_page.h>
 #include <arch/asm/page.h>
-#include <arch/csr.h>
 #include <arch/pgtable.h>
 #include <brk/assert.h>
 #include <brk/mm.h>
@@ -10,6 +8,7 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <inttypes.h>
+#include <riscv/csr.h>
 #include <uapi/errno.h>
 
 SPINLOCK_DEFINE(kernel_pgdir_lock);

@@ -1,5 +1,4 @@
 #include <arch/asm/huge_page.h>
-#include <arch/csr.h>
 #include <arch/pgtable.h>
 #include <arch/pgtable_types.h>
 #include <brk/align.h>
@@ -21,6 +20,7 @@
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
+#include <riscv/csr.h>
 #include <stdalign.h>
 #include <uapi/errno.h>
 

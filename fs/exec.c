@@ -18,9 +18,9 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
-#include <brk/trap.h>
 #include <brk/timekeeper.h>
 #include <brk/timer.h>
+#include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
 #include <uapi/auxv.h>
@@ -186,8 +186,9 @@ static user_addr_t stack_reserve(virt_addr_t *ksp, user_addr_t *sp, size_t n,
 }
 
 static void push_args(struct exec_args *args, user_addr_t *psp,
-		      virt_addr_t stack_virt, const struct exec_stack_info *info,
-		      user_addr_t *pargv, user_addr_t *penvp)
+		      virt_addr_t stack_virt,
+		      const struct exec_stack_info *info, user_addr_t *pargv,
+		      user_addr_t *penvp)
 {
 	user_addr_t sp = *psp;
 	virt_addr_t ksp = stack_virt + USTACK_SIZE;
@@ -259,12 +260,10 @@ static void push_args(struct exec_args *args, user_addr_t *psp,
 	(void)stack_reserve(&ksp, &sp, (size_t)naux * 2 * sizeof(void *), 8);
 	memcpy((void *)ksp, auxv, (size_t)naux * sizeof(auxv[0]));
 
-	user_addr_t envp_uaddr =
-		stack_push_ptr_slots(&ksp, &sp, args->envc);
+	user_addr_t envp_uaddr = stack_push_ptr_slots(&ksp, &sp, args->envc);
 	char **envp_kstart = (char **)ksp;
 
-	user_addr_t argv_uaddr =
-		stack_push_ptr_slots(&ksp, &sp, args->argc);
+	user_addr_t argv_uaddr = stack_push_ptr_slots(&ksp, &sp, args->argc);
 	char **argv_kstart = (char **)ksp;
 
 	copy_exec_strings(args->envp, args->envc, &envp_strs_kstart,

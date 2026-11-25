@@ -61,8 +61,7 @@ void arch_setup_user_entry(struct trap_frame *frame, user_addr_t pc,
 
 void arch_setup_user_thread(struct trap_frame *frame,
 			    const struct trap_frame *parent, user_addr_t entry,
-			    user_addr_t stack, user_addr_t arg,
-			    user_addr_t tls)
+			    user_addr_t stack, user_addr_t arg, user_addr_t tls)
 {
 	frame->sp = stack;
 	frame->sepc = entry;

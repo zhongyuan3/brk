@@ -1,5 +1,4 @@
 #include <arch/context.h>
-#include <arch/csr.h>
 #include <arch/pgtable.h>
 #include <brk/asm/cpu.h>
 #include <brk/assert.h>
@@ -16,7 +15,6 @@
 #include <brk/klog.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
-#include <brk/lengthof.h>
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
@@ -39,8 +37,6 @@
 #include <stddef.h>
 #include <uapi/capability.h>
 #include <uapi/errno.h>
-#include <uapi/limits.h>
-#include <uapi/signal.h>
 
 struct process *init_reaper;
 

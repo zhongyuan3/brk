@@ -1,12 +1,8 @@
-#include <arch/csr.h>
-#include <arch/hart.h>
 #include <arch/mm.h>
-#include <arch/sbi.h>
 #include <arch/timer.h>
 #include <arch/trap.h>
 #include <arch/trapframe.h>
 #include <brk/asm/cpu.h>
-#include <brk/console.h>
 #include <brk/cpu.h>
 #include <brk/init.h>
 #include <brk/irq.h>
@@ -14,9 +10,10 @@
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/task.h>
-#include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>
+#include <riscv/hart.h>
+#include <riscv/sbi.h>
 #include <stdbool.h>
 
 struct boot_info boot_info;
