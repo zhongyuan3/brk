@@ -1,5 +1,4 @@
 #include <arch/boot_info.h>
-#include <arch/irqflags.h>
 #include <arch/mm.h>
 #include <brk/assert.h>
 #include <brk/cpu.h>

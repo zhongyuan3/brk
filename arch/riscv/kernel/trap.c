@@ -1,7 +1,6 @@
 #include <arch/asm/vmlayout.h>
 #include <arch/csr.h>
 #include <arch/syscall.h>
-#include <arch/irqflags.h>
 #include <arch/sbi.h>
 #include <arch/timer.h>
 #include <arch/trap.h>
