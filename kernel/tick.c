@@ -22,14 +22,9 @@ struct tick_cpu {
 };
 
 static struct tick_cpu tick_cpus[MAX_CPUS];
-static u64 tick_epoch_ns;
-static bool tick_ready;
 
 void tick_init(void)
 {
-	__atomic_store_n(&tick_epoch_ns, ktime_get_mono_ns(), __ATOMIC_RELAXED);
-	__atomic_store_n(&tick_ready, true, __ATOMIC_RELEASE);
-
 	tick_init_cpu();
 
 	pr_debug("started (HZ=%d)\n", HZ);
@@ -134,21 +129,6 @@ void tick_handle_periodic(struct clock_event_device *dev)
 		      cpu, err);
 
 	sched_tick();
-}
-
-u64 tick_get_jiffies(void)
-{
-	u64 now;
-	u64 epoch;
-
-	if (!__atomic_load_n(&tick_ready, __ATOMIC_ACQUIRE))
-		return 0;
-
-	now = ktime_get_mono_ns();
-	epoch = __atomic_load_n(&tick_epoch_ns, __ATOMIC_RELAXED);
-	if (now <= epoch)
-		return 0;
-	return (now - epoch) / TICK_NS;
 }
 
 int tick_register_handler(struct tick_handler *th)

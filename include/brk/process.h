@@ -51,6 +51,7 @@ umode_t process_get_umask(struct process *process);
 bool process_has_cap(struct process *process, int cap);
 
 int process_get_times(struct process *process, struct tms *times);
+/* CPU time accounting is in nanoseconds. */
 void process_add_system_time(struct process *process, u64 time);
 void process_add_user_time(struct process *process, u64 time);
 void process_add_child_system_time(struct process *process, u64 time);

@@ -29,7 +29,6 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/thread.h>
-#include <brk/tick.h>
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
@@ -180,8 +179,8 @@ static struct thread *thread_create_in(struct process *process,
 	thread->state = THREAD_STATE_NEW;
 	thread->oncpu = -1;
 	thread->cpu = (int)this_cpuid();
-	thread->utime = tick_get_jiffies();
-	thread->ktime = thread->utime;
+	thread->last_user_ns = ktime_get_mono_ns();
+	thread->last_kernel_ns = thread->last_user_ns;
 
 	if (main) {
 		thread->tid = process->pid;
@@ -857,8 +856,8 @@ bool process_get_info(pid_t pid, struct process_info *info)
 	name[PROCESS_NAME_MAX - 1] = '\0';
 	spin_unlock(&target->lock);
 
-	utime = process_get_user_time(target);
-	ktime = process_get_system_time(target);
+	utime = process_get_user_time(target) / (NS_PER_SEC / USER_HZ);
+	ktime = process_get_system_time(target) / (NS_PER_SEC / USER_HZ);
 	if (target->leader)
 		killed = signal_pending(target->leader);
 
@@ -972,6 +971,46 @@ int process_get_times(struct process *process, struct tms *times)
 	spin_unlock(&process->rsrc_usage.lock);
 
 	return 0;
+}
+
+void thread_account_user(struct thread *thread, u64 ns)
+{
+	if (!thread || !thread->process || !ns)
+		return;
+
+	thread->utime_ns += ns;
+	process_add_user_time(thread->process, ns);
+}
+
+void thread_account_system(struct thread *thread, u64 ns)
+{
+	if (!thread || !thread->process || !ns)
+		return;
+
+	thread->stime_ns += ns;
+	process_add_system_time(thread->process, ns);
+}
+
+u64 thread_live_system_ns(struct thread *thread)
+{
+	u64 now;
+
+	if (!thread || thread != current_thread())
+		return 0;
+
+	now = ktime_get_mono_ns();
+	if (now <= thread->last_kernel_ns)
+		return 0;
+	return now - thread->last_kernel_ns;
+}
+
+u64 thread_cpu_time_ns(struct thread *thread)
+{
+	if (!thread)
+		return 0;
+
+	return thread->utime_ns + thread->stime_ns +
+	       thread_live_system_ns(thread);
 }
 
 void process_add_system_time(struct process *process, u64 time)

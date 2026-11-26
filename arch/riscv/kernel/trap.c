@@ -13,7 +13,7 @@
 #include <brk/sleeplock.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
-#include <brk/tick.h>
+#include <brk/ktime.h>
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <inttypes.h>
@@ -274,13 +274,14 @@ void trap_handler(struct trap_frame *frame)
 
 	bool from_user = (frame->sstatus & SSTATUS_SPP) == 0;
 	struct thread *task = current_thread();
-	u64 jiffies = 0;
 
 	if (from_user) {
+		u64 now_ns = ktime_get_mono_ns();
+
 		write_sstatus(read_sstatus() | SSTATUS_SUM);
-		jiffies = tick_get_jiffies();
-		process_add_user_time(task->process, jiffies - task->utime);
-		task->ktime = jiffies;
+		if (now_ns > task->last_user_ns)
+			thread_account_user(task, now_ns - task->last_user_ns);
+		task->last_kernel_ns = now_ns;
 	}
 
 	if (is_interrupt)
@@ -291,9 +292,6 @@ void trap_handler(struct trap_frame *frame)
 	if (from_user) {
 		prepare_to_ret_to_user(frame);
 		signal_deliver_pending(task);
-		jiffies = tick_get_jiffies();
-		process_add_system_time(task->process, jiffies - task->ktime);
-		task->utime = jiffies;
 
 		if (process_group_exiting(task->process))
 			thread_exit(process_group_exit_status(task->process));

@@ -25,19 +25,15 @@ static struct clocksource riscv_clocksource = {
 	.rating = 100,
 };
 
-static u64 ns_to_cycles(u64 ns, u32 freq)
-{
-	u64 sec = ns / NS_PER_SEC;
-	u64 rem = ns % NS_PER_SEC;
-
-	return sec * freq + rem * freq / NS_PER_SEC;
-}
-
 static int riscv_timer_set_next_event(u64 delta_ns,
 				      struct clock_event_device *dev)
 {
-	u64 cycles = ns_to_cycles(delta_ns, dev->frequency);
+	u64 cycles;
 
+	if (!dev)
+		return -EINVAL;
+
+	cycles = clocksource_ns_to_cycles_freq(dev->frequency, delta_ns);
 	return (int)sbi_set_timer(read_time() + cycles);
 }
 

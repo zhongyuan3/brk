@@ -38,14 +38,6 @@ static struct timekeeper tk = {
 static bool wall_valid;
 static struct wall_clock *wall_clock;
 
-static u64 clocksource_cycles_to_ns(const struct clocksource *cs, u64 cycles)
-{
-	u64 sec = cycles / cs->frequency;
-	u64 rem = cycles % cs->frequency;
-
-	return sec * NS_PER_SEC + rem * NS_PER_SEC / cs->frequency;
-}
-
 static u64 tk_read_base_ns(const struct tk_read_base *tkr)
 {
 	struct clocksource *cs = tkr->clock;

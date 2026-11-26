@@ -16,7 +16,6 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/thread.h>
-#include <brk/tick.h>
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
@@ -244,8 +243,8 @@ void sched_start(void)
 	user_access_disable();
 
 	init->time_slice = TIME_SLICE_MAX;
-	init->ktime = tick_get_jiffies();
-	init->utime = init->ktime;
+	init->last_user_ns = ktime_get_mono_ns();
+	init->last_kernel_ns = init->last_user_ns;
 
 	/*
 	 * Publish this CPU as online only after current is the boot thread.  An
@@ -313,8 +312,11 @@ static void sched_switch(void)
 		return;
 	}
 
-	now = tick_get_jiffies();
-	process_add_system_time(curr->process, now - curr->ktime);
+	now = ktime_get_mono_ns();
+	if (now > curr->last_kernel_ns)
+		thread_account_system(curr, now - curr->last_kernel_ns);
+	curr->last_kernel_ns = now;
+	curr->last_user_ns = now;
 	cpu->handoff = curr;
 
 	raw_spin_lock(&next->lock);
@@ -330,8 +332,8 @@ static void sched_switch(void)
 		user_access_disable();
 	}
 	next->time_slice = TIME_SLICE_MAX;
-	next->ktime = now;
-	next->utime = now;
+	next->last_kernel_ns = now;
+	next->last_user_ns = now;
 	/*
 	 * curr->oncpu is cleared by sched_resume() in the next thread's
 	 * context, i.e. only after this CPU has completely left curr.  This
@@ -365,6 +367,20 @@ void sched_tick(void)
 
 	if (--thread->time_slice <= 0 && preempt_count() == 0)
 		thread_yield();
+}
+
+void trap_return_to_user(void)
+{
+	struct thread *thread = current_thread();
+	u64 now;
+
+	if (!thread)
+		return;
+
+	now = ktime_get_mono_ns();
+	if (now > thread->last_kernel_ns)
+		thread_account_system(thread, now - thread->last_kernel_ns);
+	thread->last_user_ns = now;
 }
 
 int thread_sleep_ns(ktime_t dur, ktime_t *rem)

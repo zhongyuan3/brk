@@ -4,7 +4,6 @@
 #include <brk/permission.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
-#include <brk/tick.h>
 #include <brk/timeconst.h>
 #include <brk/timekeeper.h>
 #include <brk/types.h>
@@ -29,15 +28,12 @@ static int clock_now(int clockid, ktime_t *now)
 		return 0;
 	case CLOCK_PROCESS_CPUTIME_ID:
 		*now = (ktime_t)(process_get_user_time(process) +
-				 process_get_system_time(process)) *
-		       (ktime_t)TICK_NS;
+				 process_get_system_time(process) +
+				 thread_live_system_ns(current_thread()));
 		return 0;
 	case CLOCK_THREAD_CPUTIME_ID:
-		/*
-		 * Per-thread CPU accounting is not implemented yet.  Returning
-		 * process time here would silently give a wrong answer.
-		 */
-		return -EINVAL;
+		*now = (ktime_t)thread_cpu_time_ns(current_thread());
+		return 0;
 	default:
 		return -EINVAL;
 	}
@@ -136,11 +132,11 @@ long sys_get_times(const struct syscall_ctx *ctx)
 	struct process *process = current_process();
 	struct __brk_times *ubuf = syscall_arg_ptr(ctx, 0);
 	struct __brk_times times = {
-		.user_ns = process_get_user_time(process) * TICK_NS,
-		.system_ns = process_get_system_time(process) * TICK_NS,
-		.child_user_ns = process_get_child_user_time(process) * TICK_NS,
-		.child_system_ns =
-			process_get_child_system_time(process) * TICK_NS,
+		.user_ns = process_get_user_time(process),
+		.system_ns = process_get_system_time(process) +
+			     thread_live_system_ns(current_thread()),
+		.child_user_ns = process_get_child_user_time(process),
+		.child_system_ns = process_get_child_system_time(process),
 	};
 
 	if (!ubuf)

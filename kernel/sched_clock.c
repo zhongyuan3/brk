@@ -22,17 +22,13 @@ u64 sched_clock(void)
 {
 	struct clocksource *cs = __atomic_load_n(&sched_cs, __ATOMIC_ACQUIRE);
 	u64 cycles;
-	u64 sec;
-	u64 rem;
 
 	if (!cs)
 		return 0;
 
 	cycles = cs->read() -
 		 __atomic_load_n(&sched_cycle_base, __ATOMIC_RELAXED);
-	sec = cycles / cs->frequency;
-	rem = cycles % cs->frequency;
-	return sec * NS_PER_SEC + rem * NS_PER_SEC / cs->frequency;
+	return clocksource_cycles_to_ns(cs, cycles);
 }
 
 u64 local_clock(void)

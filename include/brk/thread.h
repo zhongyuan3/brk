@@ -33,6 +33,13 @@ void thread_yield(void);
 /* Scheduler tick: run from the per-CPU timer interrupt. */
 void sched_tick(void);
 void thread_sleep(void *chan, spinlock_t *lock);
+/* CPU time accounting, in nanoseconds. */
+void thread_account_user(struct thread *thread, u64 ns);
+void thread_account_system(struct thread *thread, u64 ns);
+u64 thread_live_system_ns(struct thread *thread);
+u64 thread_cpu_time_ns(struct thread *thread);
+/* Called from the assembly return path immediately before sret to user. */
+void trap_return_to_user(void);
 bool thread_sleep_interruptible(void *chan, spinlock_t *lock);
 bool thread_abort_pending(struct thread *thread);
 void thread_wake_all(void *chan);

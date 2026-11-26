@@ -18,6 +18,11 @@ void clocksource_init(void);
 
 /* Selected clocksource, or NULL before clocksource_init(). */
 struct clocksource *clocksource_get_current(void);
+
+/* Shared, overflow-conscious cycle <-> nanosecond conversions. */
+u64 clocksource_cycles_to_ns(const struct clocksource *cs, u64 cycles);
+u64 clocksource_ns_to_cycles(const struct clocksource *cs, u64 ns);
+u64 clocksource_ns_to_cycles_freq(u32 frequency, u64 ns);
 u32 clocksource_get_frequency(void);
 u64 clocksource_get_resolution_ns(void);
 

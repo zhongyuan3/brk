@@ -28,9 +28,6 @@ void tick_init_cpu(void);
 void tick_handle_irq(void);
 void tick_handle_periodic(struct clock_event_device *dev);
 
-/* Monotonic jiffies since tick_init(). */
-u64 tick_get_jiffies(void);
-
 int tick_register_handler(struct tick_handler *th);
 void tick_unregister_handler(struct tick_handler *th);
 

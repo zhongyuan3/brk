@@ -81,8 +81,11 @@ struct thread {
 	virt_addr_t kstack_top; /* no lock protection */
 	int oncpu; /* CPU currently running this thread, -1 if not running */
 	int cpu; /* CPU affinity; the thread is only dispatched on this CPU */
-	u64 ktime; /* no lock protection */
-	u64 utime; /* no lock protection */
+	/* CPU time accounting; only the current thread updates these. */
+	u64 utime_ns; /* cumulative user time */
+	u64 stime_ns; /* cumulative system time */
+	u64 last_user_ns; /* timestamp of the last user-mode entry */
+	u64 last_kernel_ns; /* timestamp of the last kernel-mode entry */
 	int time_slice; /* no lock protection */
 
 	/*

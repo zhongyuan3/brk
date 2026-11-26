@@ -159,6 +159,7 @@ ret_from_trap:
 	csrr x5, sstatus
 	andi x5, x5, 0x100
 	bnez x5, .Ltrap_ret_kernel
+	call trap_return_to_user
 	addi x5, sp, __RISCV_TRAP_FRAME_SIZE
 	csrw sscratch, x5
 

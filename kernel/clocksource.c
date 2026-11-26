@@ -70,6 +70,39 @@ struct clocksource *clocksource_get_current(void)
 	return __atomic_load_n(&current_clocksource, __ATOMIC_ACQUIRE);
 }
 
+u64 clocksource_cycles_to_ns(const struct clocksource *cs, u64 cycles)
+{
+	u64 sec;
+	u64 rem;
+
+	if (!cs || !cs->frequency)
+		return 0;
+
+	sec = cycles / cs->frequency;
+	rem = cycles % cs->frequency;
+	return sec * NS_PER_SEC + rem * NS_PER_SEC / cs->frequency;
+}
+
+u64 clocksource_ns_to_cycles_freq(u32 frequency, u64 ns)
+{
+	u64 sec;
+	u64 rem;
+
+	if (!frequency)
+		return 0;
+
+	sec = ns / NS_PER_SEC;
+	rem = ns % NS_PER_SEC;
+	return sec * frequency + rem * frequency / NS_PER_SEC;
+}
+
+u64 clocksource_ns_to_cycles(const struct clocksource *cs, u64 ns)
+{
+	if (!cs)
+		return 0;
+	return clocksource_ns_to_cycles_freq(cs->frequency, ns);
+}
+
 u32 clocksource_get_frequency(void)
 {
 	struct clocksource *cs = clocksource_get_current();

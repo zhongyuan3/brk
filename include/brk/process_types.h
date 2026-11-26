@@ -10,16 +10,12 @@
 #include <stdbool.h>
 #include <uapi/types.h>
 
-/*
- * Kernel-internal tick accounting snapshot.  The user ABI is
- * struct __brk_times (nanoseconds); this legacy tick view is only
- * used by process bookkeeping.
- */
+/* Kernel-internal CPU-time accounting, in nanoseconds. */
 struct tms {
-	__brk_clock_t tms_utime;
-	__brk_clock_t tms_stime;
-	__brk_clock_t tms_cutime;
-	__brk_clock_t tms_cstime;
+	u64 tms_utime;
+	u64 tms_stime;
+	u64 tms_cutime;
+	u64 tms_cstime;
 };
 
 #define PROCESS_NAME_MAX 32
@@ -132,8 +128,8 @@ struct process_info {
 	enum thread_state state;
 	int exit_status;
 	bool killed;
-	u64 utime;
-	u64 ktime;
+	u64 utime; /* USER_HZ ticks */
+	u64 ktime; /* USER_HZ ticks */
 	u64 brk;
 	unsigned int nr_threads;
 	char name[PROCESS_NAME_MAX];
