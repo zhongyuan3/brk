@@ -27,6 +27,7 @@ void tick_init(void);
 void tick_init_cpu(void);
 void tick_handle_irq(void);
 void tick_handle_periodic(struct clock_event_device *dev);
+void tick_reschedule(void);
 
 int tick_register_handler(struct tick_handler *th);
 void tick_unregister_handler(struct tick_handler *th);

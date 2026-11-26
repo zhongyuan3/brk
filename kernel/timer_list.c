@@ -1,4 +1,5 @@
 #include <brk/spinlock.h>
+#include <brk/tick.h>
 #include <brk/timer_list.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
@@ -49,6 +50,9 @@ int timer_add(struct timer_list *timer)
 	list_add_tail(&timer->node, head);
 	timer->pending = true;
 	spin_unlock_irqrestore(&timer_lock, flags);
+
+	/* A timer can be earlier than the next periodic tick. */
+	tick_reschedule();
 	return 0;
 }
 
@@ -94,6 +98,19 @@ bool timer_pending(struct timer_list *timer)
 	pending = timer->pending;
 	spin_unlock_irqrestore(&timer_lock, flags);
 	return pending;
+}
+
+u64 timer_next_expiry_ns(void)
+{
+	u64 expires = ~(u64)0;
+	irqstate_t flags;
+
+	flags = spin_lock_irqsave(&timer_lock);
+	if (!list_empty(&timer_head))
+		expires = list_first_entry(&timer_head, struct timer_list, node)
+				  ->expires_ns;
+	spin_unlock_irqrestore(&timer_lock, flags);
+	return expires;
 }
 
 void timer_run_expired(u64 now_ns)

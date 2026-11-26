@@ -16,7 +16,8 @@
 
 struct tick_cpu {
 	struct list_head handlers;
-	spinlock_t lock;
+	spinlock_t handlers_lock;
+	spinlock_t state_lock;
 	u64 last_tick_ns;
 	bool initialized;
 };
@@ -48,7 +49,8 @@ void tick_init_cpu(void)
 
 	if (!tc->initialized) {
 		list_init(&tc->handlers);
-		spinlock_init(&tc->lock, "tick");
+		spinlock_init(&tc->handlers_lock, "tick-handlers");
+		spinlock_init(&tc->state_lock, "tick-state");
 		tc->initialized = true;
 	}
 
@@ -62,10 +64,7 @@ void tick_init_cpu(void)
 		pr_warn("failed to set oneshot mode on cpu %lu: %d\n", cpu,
 			err);
 
-	err = clockevents_program_event(dev, now + TICK_NS);
-	if (err)
-		panic("tick: failed to program first event on cpu %lu: %d\n",
-		      cpu, err);
+	tick_reschedule();
 }
 
 void tick_handle_irq(void)
@@ -78,6 +77,41 @@ void tick_handle_irq(void)
 	tick_handle_periodic(dev);
 }
 
+void tick_reschedule(void)
+{
+	cpuid_t cpu = this_cpuid();
+	struct clock_event_device *dev;
+	struct tick_cpu *tc;
+	irqstate_t flags;
+	u64 timer_at;
+	u64 tick_at;
+	u64 expires;
+	int err;
+
+	if (cpu >= MAX_CPUS)
+		return;
+
+	tc = &tick_cpus[cpu];
+	if (!tc->initialized)
+		return;
+
+	dev = clockevents_get_current();
+	if (!dev)
+		panic("tick: no clock event device\n");
+
+	flags = spin_lock_irqsave(&tc->state_lock);
+	tick_at = tc->last_tick_ns + TICK_NS;
+	timer_at = timer_next_expiry_ns();
+	expires = timer_at < tick_at ? timer_at : tick_at;
+
+	err = clockevents_program_event(dev, expires);
+	spin_unlock_irqrestore(&tc->state_lock, flags);
+
+	if (err)
+		panic("tick: failed to program next event on cpu %lu: %d\n",
+		      cpu, err);
+}
+
 void tick_handle_periodic(struct clock_event_device *dev)
 {
 	cpuid_t cpu = this_cpuid();
@@ -85,8 +119,7 @@ void tick_handle_periodic(struct clock_event_device *dev)
 	struct tick_handler *th;
 	irqstate_t flags;
 	u64 now;
-	u64 next;
-	int err;
+	bool tick_due = false;
 
 	if (!dev)
 		return;
@@ -99,16 +132,14 @@ void tick_handle_periodic(struct clock_event_device *dev)
 
 	now = ktime_get_mono_ns();
 
-	flags = spin_lock_irqsave(&tc->lock);
-	if (now > tc->last_tick_ns) {
-		u64 delta = now - tc->last_tick_ns;
-		u64 ticks = delta / TICK_NS;
+	flags = spin_lock_irqsave(&tc->state_lock);
+	if (now >= tc->last_tick_ns + TICK_NS) {
+		u64 ticks = (now - tc->last_tick_ns) / TICK_NS;
 
-		if (ticks)
-			tc->last_tick_ns += ticks * TICK_NS;
+		tc->last_tick_ns += ticks * TICK_NS;
+		tick_due = true;
 	}
-	next = tc->last_tick_ns + TICK_NS;
-	spin_unlock_irqrestore(&tc->lock, flags);
+	spin_unlock_irqrestore(&tc->state_lock, flags);
 
 	/*
 	 * Software timers are global; any CPU may service expired timers.
@@ -116,19 +147,19 @@ void tick_handle_periodic(struct clock_event_device *dev)
 	 */
 	timer_run_expired(now);
 
-	flags = spin_lock_irqsave(&tc->lock);
-	list_for_each_entry(th, &tc->handlers, node) {
-		if (th->fn)
-			th->fn();
+	if (tick_due) {
+		flags = spin_lock_irqsave(&tc->handlers_lock);
+		list_for_each_entry(th, &tc->handlers, node) {
+			if (th->fn)
+				th->fn();
+		}
+		spin_unlock_irqrestore(&tc->handlers_lock, flags);
 	}
-	spin_unlock_irqrestore(&tc->lock, flags);
 
-	err = clockevents_program_event(dev, next);
-	if (err)
-		panic("tick: failed to program next event on cpu %lu: %d\n",
-		      cpu, err);
+	tick_reschedule();
 
-	sched_tick();
+	if (tick_due)
+		sched_tick();
 }
 
 int tick_register_handler(struct tick_handler *th)
@@ -141,20 +172,20 @@ int tick_register_handler(struct tick_handler *th)
 		return -EINVAL;
 
 	tc = &tick_cpus[cpu];
-	flags = spin_lock_irqsave(&tc->lock);
+	flags = spin_lock_irqsave(&tc->handlers_lock);
 	if (!tc->initialized) {
-		spin_unlock_irqrestore(&tc->lock, flags);
+		spin_unlock_irqrestore(&tc->handlers_lock, flags);
 		return -EAGAIN;
 	}
 	if (th->registered) {
-		spin_unlock_irqrestore(&tc->lock, flags);
+		spin_unlock_irqrestore(&tc->handlers_lock, flags);
 		return -EBUSY;
 	}
 
 	th->cpu = cpu;
 	list_add_tail(&th->node, &tc->handlers);
 	th->registered = true;
-	spin_unlock_irqrestore(&tc->lock, flags);
+	spin_unlock_irqrestore(&tc->handlers_lock, flags);
 	return 0;
 }
 
@@ -172,10 +203,10 @@ void tick_unregister_handler(struct tick_handler *th)
 		return;
 
 	tc = &tick_cpus[cpu];
-	flags = spin_lock_irqsave(&tc->lock);
+	flags = spin_lock_irqsave(&tc->handlers_lock);
 	if (th->registered) {
 		list_del_init(&th->node);
 		th->registered = false;
 	}
-	spin_unlock_irqrestore(&tc->lock, flags);
+	spin_unlock_irqrestore(&tc->handlers_lock, flags);
 }

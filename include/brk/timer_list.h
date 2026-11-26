@@ -33,6 +33,9 @@ void timer_del_sync(struct timer_list *timer);
 
 bool timer_pending(struct timer_list *timer);
 
+/* Earliest pending expiry, or ~0ULL when the timer list is empty. */
+u64 timer_next_expiry_ns(void);
+
 /* Run all timers whose expiry is <= @now_ns.  Called from a CPU tick. */
 void timer_run_expired(u64 now_ns);
 
