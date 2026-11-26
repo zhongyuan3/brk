@@ -2,8 +2,8 @@
 #define _BRK_MM_TYPES_H
 
 #include <arch/pgtable_types.h>
+#include <brk/mutex_types.h>
 #include <brk/refcnt_types.h>
-#include <brk/sleeplock_types.h>
 #include <brk/types.h>
 #include <stddef.h>
 
@@ -67,7 +67,7 @@ struct uvm_space {
 	/* Top-down mmap allocation cursor, below the user stack. */
 	user_addr_t mmap_top;
 	/* Serializes all address-space mutations across threads. */
-	sleeplock_t lock;
+	mutex_t lock;
 };
 
 #endif

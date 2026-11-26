@@ -2,10 +2,10 @@
 #include <brk/fs.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
+#include <brk/mutex.h>
 #include <brk/pagecache.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
@@ -42,7 +42,7 @@ static struct inode *__inode_alloc(struct super_block *sb, unsigned long ino)
 	inode->fops = NULL;
 	refcnt_init(&inode->count, 1);
 	spinlock_init(&inode->lock, "inode.lock");
-	sleeplock_init(&inode->rwsem, "inode.rwsem");
+	mutex_init(&inode->rwsem, "inode.rwsem");
 	inode->state = 0;
 	list_init(&inode->sb_list);
 	list_init(&inode->list);
@@ -114,7 +114,8 @@ retry:
 			     (I_FREEING | I_WILL_FREE | I_BAD)) ||
 			    !refcnt_inc_unless_zero(&inode->count)) {
 				spin_unlock_irqrestore(&inode->lock, flags);
-				thread_sleep(&inode->state, &inode_hash_lock);
+				thread_sleep_on(&inode->state,
+						&inode_hash_lock);
 				goto retry;
 			}
 
@@ -139,7 +140,7 @@ static bool inode_wait_new(struct inode *inode)
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
 	while (inode->state & I_NEW)
-		thread_sleep(&inode->state, &inode->lock);
+		thread_sleep_on(&inode->state, &inode->lock);
 
 	bool ready = !(inode->state & (I_BAD | I_FREEING | I_WILL_FREE));
 	spin_unlock_irqrestore(&inode->lock, flags);

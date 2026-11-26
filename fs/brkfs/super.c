@@ -107,7 +107,7 @@ struct brkfs_sb_info *brkfs_sb_info_alloc(struct block_dev *bdev,
 	sbi->s_inodes_per_block = sb->s_blocksize / sb->s_inode_size;
 	sbi->s_bits_per_block = sb->s_blocksize * 8;
 	sbi->s_super_dirty = false;
-	sleeplock_init(&sbi->s_orphan_lock, "brkfs_orphan");
+	mutex_init(&sbi->s_orphan_lock, "brkfs_orphan");
 	spinlock_init(&sbi->s_super_lock, "brkfs_super");
 
 	return sbi;

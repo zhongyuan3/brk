@@ -4,8 +4,8 @@
 #include <brk/assert.h>
 #include <brk/blkdev.h>
 #include <brk/fs_types.h>
+#include <brk/mutex.h>
 #include <brk/pagecache.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/types.h>
 
@@ -192,7 +192,7 @@ struct brkfs_sb_info {
 	u32 s_inodes_per_block;
 	u32 s_bits_per_block;
 	bool s_super_dirty;
-	sleeplock_t s_orphan_lock;
+	mutex_t s_orphan_lock;
 	spinlock_t s_super_lock;
 };
 

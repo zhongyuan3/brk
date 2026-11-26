@@ -2,7 +2,7 @@
 #define _BRK_BIO_H
 
 #include <brk/list.h>
-#include <brk/sleeplock_types.h>
+#include <brk/mutex_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 
@@ -69,7 +69,7 @@ typedef int (*request_fn_t)(struct request_queue *, struct request *);
 
 struct request_queue {
 	spinlock_t lock;
-	sleeplock_t worker_lock;
+	mutex_t worker_lock;
 	struct list_head queue;
 	request_fn_t queue_rq;
 	struct gendisk *disk;

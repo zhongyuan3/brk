@@ -9,6 +9,7 @@
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <brk/wait.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 
@@ -22,6 +23,7 @@ struct devtmpfs_work {
 
 static LIST_DEFINE(work_list);
 static SPINLOCK_DEFINE(work_lock);
+static WAIT_QUEUE_DEFINE(work_wait, &work_lock);
 static bool active;
 
 static int devtmpfs_create_node(const char *name, dev_t dev, umode_t mode)
@@ -55,10 +57,9 @@ static void devtmpfs_worker(void *arg)
 		struct devtmpfs_work *work;
 		irqstate_t flags;
 
-		flags = spin_lock_irqsave(&work_lock);
-		while (list_empty(&work_list))
-			thread_sleep(&work_list, &work_lock);
+		wait_event(&work_wait, !list_empty(&work_list));
 
+		flags = spin_lock_irqsave(&work_lock);
 		work = list_first_entry(&work_list, struct devtmpfs_work, list);
 		list_del_init(&work->list);
 		spin_unlock_irqrestore(&work_lock, flags);
@@ -98,7 +99,7 @@ void devtmpfs_notify(struct device *dev, bool remove)
 		return;
 	}
 	list_add_tail(&work->list, &work_list);
-	thread_wake_all(&work_list);
+	wake_up_all(&work_wait);
 	spin_unlock_irqrestore(&work_lock, flags);
 }
 

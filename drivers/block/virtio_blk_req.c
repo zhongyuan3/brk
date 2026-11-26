@@ -148,7 +148,7 @@ static int virtio_blk_submit_vec(struct virtio_blk_dev *vblk, u64 sector,
 	}
 
 	while (virtq_alloc_desc_chain(&vblk->vq, idx, chain))
-		thread_sleep(&vblk->vq.desc, &vblk->lock);
+		thread_sleep_on(&vblk->vq.desc, &vblk->lock);
 
 	req = &vblk->reqs[idx[0]];
 	req->type = write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
@@ -183,7 +183,7 @@ static int virtio_blk_submit_vec(struct virtio_blk_dev *vblk, u64 sector,
 	virtio_queue_notify(vblk->vdev, 0);
 
 	while (!trans.completed)
-		thread_sleep(&trans.completed, &vblk->lock);
+		thread_sleep_on(&trans.completed, &vblk->lock);
 
 	err = virtio_blk_status_to_errno(vblk->slots[idx[0]].status);
 	vblk->slots[idx[0]].trans = NULL;
@@ -204,7 +204,7 @@ static int virtio_blk_flush(struct virtio_blk_dev *vblk)
 	irqstate_t flags = spin_lock_irqsave(&vblk->lock);
 
 	while (virtq_alloc_desc_chain(&vblk->vq, idx, 2))
-		thread_sleep(&vblk->vq.desc, &vblk->lock);
+		thread_sleep_on(&vblk->vq.desc, &vblk->lock);
 
 	req = &vblk->reqs[idx[0]];
 	req->type = VIRTIO_BLK_T_FLUSH;
@@ -228,7 +228,7 @@ static int virtio_blk_flush(struct virtio_blk_dev *vblk)
 	virtio_queue_notify(vblk->vdev, 0);
 
 	while (!trans.completed)
-		thread_sleep(&trans.completed, &vblk->lock);
+		thread_sleep_on(&trans.completed, &vblk->lock);
 
 	err = virtio_blk_status_to_errno(vblk->slots[idx[0]].status);
 	vblk->slots[idx[0]].trans = NULL;

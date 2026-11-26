@@ -1,10 +1,11 @@
 #ifndef _BRK_TTY_H
 #define _BRK_TTY_H
 
+#include <brk/mutex_types.h>
 #include <brk/refcnt_types.h>
-#include <brk/sleeplock_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <brk/wait_types.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <uapi/ioctl.h>
@@ -96,8 +97,10 @@ struct tty {
 	struct __brk_winsize winsize;
 	refcnt_t refcnt;
 	const struct tty_ldisc_ops *ldisc;
-	sleeplock_t read_lock;
-	sleeplock_t write_lock;
+	mutex_t read_lock;
+	mutex_t write_lock;
+	wait_queue_head_t rx_wait;
+	wait_queue_head_t stop_wait;
 };
 
 extern const struct tty_ldisc_ops n_tty_ldisc_ops;

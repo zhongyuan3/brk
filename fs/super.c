@@ -1,9 +1,9 @@
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
+#include <brk/mutex.h>
 #include <brk/pagecache.h>
 #include <brk/refcnt.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <uapi/errno.h>
@@ -75,7 +75,7 @@ static int writeback_single_inode(struct inode *inode)
 	int ret = 0;
 	int err;
 
-	sleeplock_acquire(&inode->rwsem);
+	mutex_lock(&inode->rwsem);
 	if (inode->mapping) {
 		err = page_cache_flush(inode->mapping);
 		if (err)
@@ -86,7 +86,7 @@ static int writeback_single_inode(struct inode *inode)
 		if (err && !ret)
 			ret = err;
 	}
-	sleeplock_release(&inode->rwsem);
+	mutex_unlock(&inode->rwsem);
 	return ret;
 }
 

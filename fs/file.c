@@ -1,11 +1,11 @@
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fs.h>
+#include <brk/mutex.h>
 #include <brk/path.h>
 #include <brk/permission.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
@@ -45,7 +45,7 @@ struct file *file_alloc(struct path *path, fmode_t mode)
 	spinlock_init(&file->lock, "file.f_lock");
 	file->mode = mode;
 	file->anon = false;
-	sleeplock_init(&file->pos_lock, "file.f_pos_lock");
+	mutex_init(&file->pos_lock, "file.f_pos_lock");
 	file->pos = 0;
 	file->private_data = NULL;
 	file->dev_private = NULL;
@@ -85,7 +85,7 @@ struct file *file_alloc_anon(const struct file_ops *ops, void *private_data)
 	spinlock_init(&file->lock, "file.f_lock");
 	file->mode = FMODE_READ | FMODE_WRITE;
 	file->anon = true;
-	sleeplock_init(&file->pos_lock, "file.f_pos_lock");
+	mutex_init(&file->pos_lock, "file.f_pos_lock");
 	file->pos = 0;
 	file->private_data = private_data;
 	file->dev_private = NULL;
@@ -116,20 +116,20 @@ loff_t file_lseek(struct file *file, loff_t len, int whence)
 	loff_t ret;
 
 	/* Serialize with file_read()/write() and getdents(). */
-	sleeplock_acquire(&file->pos_lock);
+	mutex_lock(&file->pos_lock);
 	ret = file->ops->llseek(file, len, whence);
 	if (ret >= 0)
 		file->pos = ret;
-	sleeplock_release(&file->pos_lock);
+	mutex_unlock(&file->pos_lock);
 	return ret;
 }
 
 ssize_t file_read(struct file *file, void *buf, size_t size)
 {
 	loff_t *pos = &file->pos;
-	sleeplock_acquire(&file->pos_lock);
+	mutex_lock(&file->pos_lock);
 	ssize_t ret = file->ops->read(file, buf, size, pos);
-	sleeplock_release(&file->pos_lock);
+	mutex_unlock(&file->pos_lock);
 	return ret;
 }
 
@@ -163,9 +163,9 @@ ssize_t file_write(struct file *file, const void *buf, size_t size)
 
 	file_remove_privs(file);
 
-	sleeplock_acquire(&file->pos_lock);
+	mutex_lock(&file->pos_lock);
 	ssize_t ret = file->ops->write(file, buf, size, pos);
-	sleeplock_release(&file->pos_lock);
+	mutex_unlock(&file->pos_lock);
 	return ret;
 }
 

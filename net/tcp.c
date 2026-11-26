@@ -18,6 +18,7 @@
 #include <brk/tick.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <brk/wait.h>
 #include <uapi/errno.h>
 #include <uapi/poll.h>
 #include <uapi/socket.h>
@@ -154,6 +155,7 @@ static struct tcp_sock *tcp_alloc_sock(void)
 		return NULL;
 
 	spinlock_init(&tsk->sk.lock, "tcp_sock");
+	wait_queue_init(&tsk->sk.rcv_wait, &tsk->sk.lock, "tcp.rcv");
 	list_init(&tsk->sk.node);
 	list_init(&tsk->accept_node);
 	list_init(&tsk->accept_queue);
@@ -693,8 +695,10 @@ out_unlock:
 	if (need_tx)
 		tcp_send_segment(tsk, tx_seq, tx_ack, tx_flags, NULL, 0,
 				 tx_mss);
-	if (wake_child)
+	if (wake_child) {
+		wake_up_all(&tsk->sk.rcv_wait);
 		thread_wake_all(&tsk->sk);
+	}
 	if (wake_listener && listener)
 		thread_wake_all(&listener->sk);
 	return 0;
@@ -819,7 +823,7 @@ static int tcp_connect(struct socket *sock, const struct __brk_sockaddr *addr,
 	}
 
 	while (tsk->state == TCP_SYN_SENT && !tsk->err) {
-		if (!thread_sleep_interruptible(&tsk->sk, &tcp_lock)) {
+		if (thread_sleep_on_interruptible(&tsk->sk, &tcp_lock) < 0) {
 			spin_unlock_irqrestore(&tcp_lock, flags);
 			return -EINTR;
 		}
@@ -881,7 +885,7 @@ static int tcp_accept(struct socket *sock, struct socket **newsock)
 			spin_unlock_irqrestore(&tcp_lock, flags);
 			return -EAGAIN;
 		}
-		if (!thread_sleep_interruptible(&tsk->sk, &tcp_lock)) {
+		if (thread_sleep_on_interruptible(&tsk->sk, &tcp_lock) < 0) {
 			spin_unlock_irqrestore(&tcp_lock, flags);
 			return -EINTR;
 		}
@@ -963,7 +967,8 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 				kfree(copy);
 				return off ? (int)off : -EAGAIN;
 			}
-			if (!thread_sleep_interruptible(&tsk->sk, &tcp_lock)) {
+			if (thread_sleep_on_interruptible(&tsk->sk, &tcp_lock) <
+			    0) {
 				spin_unlock_irqrestore(&tcp_lock, flags);
 				kfree(copy);
 				return off ? (int)off : -EINTR;
@@ -1018,7 +1023,8 @@ static int tcp_sendmsg(struct socket *sock, const void *buf, size_t len,
 
 		flags = spin_lock_irqsave(&tcp_lock);
 		while (!tsk->err && tsk->tx_kind == TCP_TX_DATA) {
-			if (!thread_sleep_interruptible(&tsk->sk, &tcp_lock)) {
+			if (thread_sleep_on_interruptible(&tsk->sk, &tcp_lock) <
+			    0) {
 				/*
 				 * This chunk is already queued in the TCP
 				 * stack, so report it as transferred.
@@ -1075,7 +1081,8 @@ static int tcp_recvmsg(struct socket *sock, void *buf, size_t len,
 				spin_unlock_irqrestore(&sk->lock, flags);
 				return total ? (int)total : -EAGAIN;
 			}
-			if (!thread_sleep_interruptible(sk, &sk->lock)) {
+			if (thread_sleep_on_interruptible(
+				    &sk->rcv_wait, sk->rcv_wait.lock) < 0) {
 				spin_unlock_irqrestore(&sk->lock, flags);
 				return total ? (int)total : -EINTR;
 			}
@@ -1149,6 +1156,7 @@ static int tcp_shutdown(struct socket *sock, int how)
 		tsk->sk.shutdown = true;
 		tsk->sk.eof = true;
 		spin_unlock_irqrestore(&tsk->sk.lock, flags);
+		wake_up_all(&tsk->sk.rcv_wait);
 		thread_wake_all(&tsk->sk);
 	}
 
@@ -1428,6 +1436,7 @@ static void tcp_timer_tick(void)
 				skb_queue_purge(&tsk->sk.rcv_queue);
 				kfree(tsk);
 			} else {
+				wake_up_all(&tsk->sk.rcv_wait);
 				thread_wake_all(&tsk->sk);
 			}
 			continue;

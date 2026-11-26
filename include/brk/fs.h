@@ -2,9 +2,9 @@
 #define _BRK_FS_H
 
 #include <brk/fs_types.h>
+#include <brk/mutex_types.h>
 #include <brk/path.h>
 #include <brk/refcnt_types.h>
-#include <brk/sleeplock_types.h>
 #include <brk/stat_types.h>
 #include <brk/types.h>
 #include <uapi/fcntl.h>
@@ -105,7 +105,7 @@ struct inode {
 	const struct file_ops *fops;
 	refcnt_t count;
 	spinlock_t lock;
-	sleeplock_t rwsem;
+	mutex_t rwsem;
 	unsigned long state;
 	struct list_head sb_list;
 	struct list_head list;
@@ -150,7 +150,7 @@ struct file {
 	fmode_t mode;
 	/* Anonymous object (socket, ...): no path/inode to release. */
 	bool anon;
-	sleeplock_t pos_lock;
+	mutex_t pos_lock;
 	loff_t pos;
 	/* Driver-specific per-open state (e.g. tty). */
 	void *private_data;

@@ -5,6 +5,7 @@
 #include <brk/skbuff.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <brk/wait_types.h>
 #include <uapi/socket.h>
 
 #define SOCK_DEFAULT_RCVBUF 4096
@@ -40,6 +41,7 @@ struct sock {
 
 	struct sk_buff_head rcv_queue;
 	struct list_head node;
+	wait_queue_head_t rcv_wait;
 };
 
 struct proto_ops {

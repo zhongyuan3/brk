@@ -3,9 +3,9 @@
 #include <brk/genhd.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
+#include <brk/mutex.h>
 #include <brk/printf.h>
 #include <brk/printk.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
@@ -60,7 +60,7 @@ static void blk_queue_worker(void *arg)
 
 		flags = spin_lock_irqsave(&q->lock);
 		while (list_empty(&q->queue) && !q->dead)
-			thread_sleep(&q->queue, &q->lock);
+			thread_sleep_on(&q->queue, &q->lock);
 
 		if (q->dead) {
 			/* Fail everything still queued, then let cleanup run. */
@@ -108,7 +108,7 @@ static int blk_queue_ensure_worker(struct request_queue *q)
 	if (__atomic_load_n(&q->worker, __ATOMIC_ACQUIRE))
 		return 0;
 
-	sleeplock_acquire(&q->worker_lock);
+	mutex_lock(&q->worker_lock);
 	if (!q->worker) {
 		struct thread *task;
 		irqstate_t flags;
@@ -132,7 +132,7 @@ static int blk_queue_ensure_worker(struct request_queue *q)
 		thread_start(task);
 	}
 out:
-	sleeplock_release(&q->worker_lock);
+	mutex_unlock(&q->worker_lock);
 	return err;
 }
 
@@ -148,7 +148,7 @@ int blk_init_queue(struct gendisk *disk, request_fn_t fn)
 		return -ENOMEM;
 
 	spinlock_init(&q->lock, "request_queue");
-	sleeplock_init(&q->worker_lock, "request_queue_worker");
+	mutex_init(&q->worker_lock, "request_queue_worker");
 	list_init(&q->queue);
 	q->queue_rq = fn;
 	q->disk = disk;
@@ -168,7 +168,7 @@ void blk_cleanup_queue(struct request_queue *q)
 	q->dead = true;
 	thread_wake_all(&q->queue);
 	while (q->worker && !q->worker_done)
-		thread_sleep(&q->worker_done, &q->lock);
+		thread_sleep_on(&q->worker_done, &q->lock);
 	spin_unlock_irqrestore(&q->lock, flags);
 
 	kfree(q);
@@ -256,7 +256,7 @@ int submit_bio_wait(struct bio *bio)
 
 	flags = spin_lock_irqsave(&q->lock);
 	while (!bio->bi_done)
-		thread_sleep(bio, &q->lock);
+		thread_sleep_on(bio, &q->lock);
 	spin_unlock_irqrestore(&q->lock, flags);
 
 	return bio->bi_status;

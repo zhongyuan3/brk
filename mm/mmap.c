@@ -8,10 +8,10 @@
 #include <brk/kmalloc.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
+#include <brk/mutex.h>
 #include <brk/pagecache.h>
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>
-#include <brk/sleeplock.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
@@ -1081,20 +1081,20 @@ long sys_mmap(const struct syscall_ctx *ctx)
 	if (flags & MAP_ANONYMOUS) {
 		if (flags & MAP_SHARED)
 			return -EOPNOTSUPP;
-		sleeplock_acquire(&mm->lock);
+		mutex_lock(&mm->lock);
 		err = uvm_mmap_anon(mm, hint, len, prot, flags, fd, offset,
 				    &addr);
-		sleeplock_release(&mm->lock);
+		mutex_unlock(&mm->lock);
 	} else if (flags & MAP_SHARED) {
-		sleeplock_acquire(&mm->lock);
+		mutex_lock(&mm->lock);
 		err = uvm_mmap_file_shared(mm, hint, len, prot, flags, fd,
 					   offset, &addr);
-		sleeplock_release(&mm->lock);
+		mutex_unlock(&mm->lock);
 	} else {
-		sleeplock_acquire(&mm->lock);
+		mutex_lock(&mm->lock);
 		err = uvm_mmap_file_private(mm, hint, len, prot, flags, fd,
 					    offset, &addr);
-		sleeplock_release(&mm->lock);
+		mutex_unlock(&mm->lock);
 	}
 	if (err)
 		return (u64)(long)err;
@@ -1111,9 +1111,9 @@ long sys_munmap(const struct syscall_ctx *ctx)
 	if (!mm)
 		return -EFAULT;
 
-	sleeplock_acquire(&mm->lock);
+	mutex_lock(&mm->lock);
 	err = uvm_munmap(mm, addr, len);
-	sleeplock_release(&mm->lock);
+	mutex_unlock(&mm->lock);
 	return (u64)(long)err;
 }
 
@@ -1128,9 +1128,9 @@ long sys_mprotect(const struct syscall_ctx *ctx)
 	if (!mm)
 		return -EFAULT;
 
-	sleeplock_acquire(&mm->lock);
+	mutex_lock(&mm->lock);
 	err = uvm_mprotect(mm, addr, len, prot);
-	sleeplock_release(&mm->lock);
+	mutex_unlock(&mm->lock);
 	return (u64)(long)err;
 }
 
@@ -1145,8 +1145,8 @@ long sys_msync(const struct syscall_ctx *ctx)
 	if (!mm)
 		return -EFAULT;
 
-	sleeplock_acquire(&mm->lock);
+	mutex_lock(&mm->lock);
 	err = uvm_msync(mm, addr, len, flags);
-	sleeplock_release(&mm->lock);
+	mutex_unlock(&mm->lock);
 	return (u64)(long)err;
 }

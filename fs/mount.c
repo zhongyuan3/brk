@@ -5,10 +5,10 @@
 #include <brk/kmalloc.h>
 #include <brk/list.h>
 #include <brk/mount.h>
+#include <brk/mutex.h>
 #include <brk/path.h>
 #include <brk/printk.h>
 #include <brk/refcnt.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
@@ -17,7 +17,7 @@
 
 static struct hlist_head mount_hashtable[MOUNT_HTABLE_SIZE];
 static SPINLOCK_DEFINE(mount_hashtable_lock);
-static SLEEPLOCK_DEFINE(mount_lock);
+static MUTEX_DEFINE(mount_lock);
 static HLIST_HEAD_DEFINE(kernel_mounts);
 static SPINLOCK_DEFINE(kernel_mounts_lock);
 
@@ -74,7 +74,7 @@ static int graft_tree(struct mount_state *new_mnt, struct path *mountpoint)
 	struct mount_state *mp_mnt = mountpoint->mnt;
 	u32 h = __mount_state_hash(mp_mnt, mp_dentry);
 
-	sleeplock_acquire(&mount_lock);
+	mutex_lock(&mount_lock);
 
 	/*
 	 * Stage 1 (validation):
@@ -83,7 +83,7 @@ static int graft_tree(struct mount_state *new_mnt, struct path *mountpoint)
 	spin_lock(&mount_hashtable_lock);
 	if (mount_point_busy(mp_mnt, mp_dentry)) {
 		spin_unlock(&mount_hashtable_lock);
-		sleeplock_release(&mount_lock);
+		mutex_unlock(&mount_lock);
 		return -EBUSY;
 	}
 	spin_unlock(&mount_hashtable_lock);
@@ -124,7 +124,7 @@ static int graft_tree(struct mount_state *new_mnt, struct path *mountpoint)
 	list_add(&new_mnt->instance, &new_mnt->sb->mnt_states);
 	spin_unlock(&new_mnt->sb->mnt_states_lock);
 
-	sleeplock_release(&mount_lock);
+	mutex_unlock(&mount_lock);
 
 	return 0;
 }
@@ -224,7 +224,7 @@ int do_umount(struct mount_state *mnt, int flags)
 	 * Unmount stage 1: detach from global topology while serialized by
 	 * mount_lock; keep heavy put/kill callbacks out of the lock.
 	 */
-	sleeplock_acquire(&mount_lock);
+	mutex_lock(&mount_lock);
 
 	/*
 	 * Revalidate and unpublish atomically.  mount_state_lookup()
@@ -238,7 +238,7 @@ int do_umount(struct mount_state *mnt, int flags)
 	refcnt = mount_state_get_refcnt(mnt);
 	if (hlist_unhashed(&mnt->hash) || refcnt != 2) {
 		spin_unlock(&mount_hashtable_lock);
-		sleeplock_release(&mount_lock);
+		mutex_unlock(&mount_lock);
 		return refcnt > 2 ? -EBUSY : -EINVAL;
 	}
 	hlist_del_init(&mnt->hash);
@@ -260,7 +260,7 @@ int do_umount(struct mount_state *mnt, int flags)
 	list_del(&mnt->instance);
 	spin_unlock(&sb->mnt_states_lock);
 
-	sleeplock_release(&mount_lock);
+	mutex_unlock(&mount_lock);
 
 	mount_state_put(parent);
 	dentry_put(mountpoint);

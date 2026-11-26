@@ -290,7 +290,7 @@ static void sched_switch(void)
 	case THREAD_STATE_ZOMBIE:
 		break;
 	case THREAD_STATE_SLEEPING:
-		/* thread_sleep() already linked us into the sleep queue. */
+		/* thread_sleep_on() already linked us into the sleep queue. */
 		break;
 	default:
 		panic("unexpected state: tid=%d, state=%d\n", curr->tid,
@@ -420,7 +420,7 @@ int thread_sleep_ns(ktime_t dur, ktime_t *rem)
 		now_ns = (s64)ktime_get_mono_ns();
 		if (now_ns >= deadline_ns)
 			break;
-		(void)thread_sleep_interruptible(task, &sleep_lock);
+		(void)thread_sleep_on_interruptible(task, &sleep_lock);
 	}
 	spin_unlock_irqrestore(&sleep_lock, flags);
 
@@ -452,13 +452,15 @@ bool thread_abort_pending(struct thread *thread)
  * Return true if the thread actually slept, false if an interruptible sleep
  * was aborted by thread_abort_pending() before scheduling.
  */
-static bool thread_sleep_common(void *chan, spinlock_t *lock,
+static bool thread_sleep_common(void *chan, spinlock_t *wake_lock,
 				bool interruptible)
 {
 	struct thread *thread = current_thread();
 
+	kassert(chan != NULL);
+	kassert(wake_lock != NULL);
 	kassert(!local_irq_enabled());
-	kassert(lock->locked);
+	kassert(spin_is_locked_by_me(wake_lock));
 	kassert(preempt_count() == 0);
 
 	if (interruptible && thread_abort_pending(thread))
@@ -469,9 +471,9 @@ static bool thread_sleep_common(void *chan, spinlock_t *lock,
 	thread->chan = chan;
 
 	/*
-	 * Publish the thread on the sleep queue while the caller's condition
-	 * lock is still held. A wakeup that races with us must take that
-	 * condition lock, so it is guaranteed to observe the queue entry.
+	 * Publish the thread on the sleep queue while the caller's wake lock
+	 * is still held. A wakeup that races with us must take that lock, so
+	 * it is guaranteed to observe the queue entry.
 	 */
 	irqstate_t sflags = spin_lock_irqsave(&sleep_queue_lock);
 
@@ -493,46 +495,47 @@ static bool thread_sleep_common(void *chan, spinlock_t *lock,
 		spin_unlock_irqrestore(&sleep_queue_lock, sflags);
 
 		raw_spin_unlock(&thread->lock);
-		raw_spin_unlock(lock);
-		raw_spin_lock(lock);
+		raw_spin_unlock(wake_lock);
+		raw_spin_lock(wake_lock);
 		return false;
 	}
 
-	raw_spin_unlock(lock);
+	raw_spin_unlock(wake_lock);
 	sched_switch();
 	thread->chan = NULL;
 	raw_spin_unlock(&thread->lock);
-	raw_spin_lock(lock);
+	raw_spin_lock(wake_lock);
 	return true;
 }
 
 /*
- * Callers must hold @lock and run with interrupts disabled. The interrupt
- * state stays disabled across the switch and is restored by the caller's
- * irqrestore once it drops @lock.
+ * Callers must hold @wake_lock and run with interrupts disabled. The
+ * interrupt state stays disabled across the switch and is restored by the
+ * caller's irqrestore once it drops @wake_lock.
  *
  * Uninterruptible sleeps always wait for their condition.  Use this for
  * kernel-internal operations that cannot be unwound safely.
  */
-void thread_sleep(void *chan, spinlock_t *lock)
+void thread_sleep_on(void *chan, spinlock_t *wake_lock)
 {
-	(void)thread_sleep_common(chan, lock, false);
+	(void)thread_sleep_common(chan, wake_lock, false);
 }
 
 /*
- * Like thread_sleep(), but abort the sleep when a signal is pending or the
- * process group is exiting.  Returns false when the sleep was aborted; the
- * caller must unwind and return -EINTR (or a partial result) instead of
- * re-entering the sleep.
+ * Like thread_sleep_on(), but abort the sleep when a signal is pending or the
+ * process group is exiting.  Returns 0 after a normal sleep, or -EINTR when
+ * the sleep was aborted.
  */
-bool thread_sleep_interruptible(void *chan, spinlock_t *lock)
+int thread_sleep_on_interruptible(void *chan, spinlock_t *wake_lock)
 {
-	return thread_sleep_common(chan, lock, true);
+	return thread_sleep_common(chan, wake_lock, true) ? 0 : -EINTR;
 }
 
-void thread_wake_all(void *chan)
+static int thread_wake_common(void *chan, bool all)
 {
-	while (1) {
+	int woken = 0;
+
+	for (;;) {
 		struct thread *p, *wakee = NULL;
 		bool retry = false;
 		irqstate_t flags;
@@ -565,11 +568,27 @@ void thread_wake_all(void *chan)
 		}
 		spin_unlock_irqrestore(&sleep_queue_lock, flags);
 
-		if (wakee)
+		if (wakee) {
 			sched_enqueue(wakee);
-		else if (!retry)
+			woken++;
+			if (!all)
+				break;
+		} else if (!retry) {
 			break;
+		}
 	}
+
+	return woken;
+}
+
+int thread_wake_one(void *chan)
+{
+	return thread_wake_common(chan, false);
+}
+
+int thread_wake_all(void *chan)
+{
+	return thread_wake_common(chan, true);
 }
 
 void thread_wake(struct thread *thread)
@@ -784,7 +803,7 @@ again:
 		return 0;
 	}
 
-	if (!thread_sleep_interruptible(parent, &wait_lock)) {
+	if (thread_sleep_on_interruptible(parent, &wait_lock) < 0) {
 		spin_unlock_irqrestore(&wait_lock, flags);
 		return -EINTR;
 	}

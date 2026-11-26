@@ -4,12 +4,12 @@
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
+#include <brk/mutex.h>
 #include <brk/pagecache.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
@@ -162,7 +162,7 @@ static struct cached_page *cached_page_alloc(struct page_cache *m,
 	cp->index = index;
 	cp->flags = 0;
 	spinlock_init(&cp->lock, "cached_page.lock");
-	sleeplock_init(&cp->io_lock, "cached_page.io_lock");
+	mutex_init(&cp->io_lock, "cached_page.io_lock");
 	hlist_node_init(&cp->ht_node);
 	list_init(&cp->dirty_list);
 	list_init(&cp->lru_list);
@@ -255,12 +255,12 @@ void cached_page_put(struct cached_page *cp)
 
 void cached_page_lock(struct cached_page *cp)
 {
-	sleeplock_acquire(&cp->io_lock);
+	mutex_lock(&cp->io_lock);
 }
 
 void cached_page_unlock(struct cached_page *cp)
 {
-	sleeplock_release(&cp->io_lock);
+	mutex_unlock(&cp->io_lock);
 }
 
 bool cached_page_uptodate(struct cached_page *cp)
@@ -597,11 +597,11 @@ ssize_t generic_file_read(struct file *file, char *buf, size_t size,
 	if (!m)
 		return -EIO;
 
-	sleeplock_acquire(&inode->rwsem);
+	mutex_lock(&inode->rwsem);
 
 	isize = inode->size;
 	if (*pos >= isize) {
-		sleeplock_release(&inode->rwsem);
+		mutex_unlock(&inode->rwsem);
 		return 0;
 	}
 	end = *pos + (loff_t)size;
@@ -634,7 +634,7 @@ ssize_t generic_file_read(struct file *file, char *buf, size_t size,
 		total += (ssize_t)nr;
 	}
 
-	sleeplock_release(&inode->rwsem);
+	mutex_unlock(&inode->rwsem);
 	return total > 0 ? total : err;
 }
 
@@ -649,7 +649,7 @@ ssize_t generic_file_write(struct file *file, const char *buf, size_t size,
 	if (!m)
 		return -EIO;
 
-	sleeplock_acquire(&inode->rwsem);
+	mutex_lock(&inode->rwsem);
 
 	while (size > 0) {
 		pgoff_t index = (pgoff_t)(*pos >> PAGE_SHIFT);
@@ -703,6 +703,6 @@ ssize_t generic_file_write(struct file *file, const char *buf, size_t size,
 		inode_mark_dirty(inode);
 	}
 
-	sleeplock_release(&inode->rwsem);
+	mutex_unlock(&inode->rwsem);
 	return total > 0 ? total : err;
 }

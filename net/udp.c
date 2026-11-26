@@ -13,6 +13,7 @@
 #include <brk/types.h>
 #include <brk/uaccess.h>
 #include <brk/udp.h>
+#include <brk/wait.h>
 #include <uapi/errno.h>
 #include <uapi/poll.h>
 #include <uapi/socket.h>
@@ -306,7 +307,7 @@ int udp_rcv(struct sk_buff *skb)
 		skb_free(skb);
 	}
 	if (wake)
-		thread_wake_all(match);
+		wake_up_all(&match->rcv_wait);
 
 	return 0;
 
@@ -340,7 +341,8 @@ static int udp_recvmsg(struct socket *sock, void *buf, size_t len,
 			spin_unlock_irqrestore(&sk->lock, flags);
 			return -EAGAIN;
 		}
-		if (!thread_sleep_interruptible(sk, &sk->lock)) {
+		if (thread_sleep_on_interruptible(&sk->rcv_wait,
+						  sk->rcv_wait.lock) < 0) {
 			spin_unlock_irqrestore(&sk->lock, flags);
 			return -EINTR;
 		}
@@ -390,7 +392,7 @@ static int udp_shutdown(struct socket *sock, int how)
 	flags = spin_lock_irqsave(&sk->lock);
 	sk->shutdown = true;
 	spin_unlock_irqrestore(&sk->lock, flags);
-	thread_wake_all(sk);
+	wake_up_all(&sk->rcv_wait);
 	return 0;
 }
 
@@ -483,6 +485,7 @@ int udp_sock_create(struct socket *sock, int protocol)
 		return -ENOMEM;
 
 	spinlock_init(&sk->lock, "udp_sock");
+	wait_queue_init(&sk->rcv_wait, &sk->lock, "udp.rcv");
 	list_init(&sk->node);
 	skb_queue_init(&sk->rcv_queue);
 	sk->family = AF_INET;

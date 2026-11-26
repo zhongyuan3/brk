@@ -14,6 +14,7 @@
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <brk/wait.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
 #include <uapi/poll.h>
@@ -29,8 +30,8 @@ struct anon_pipe {
 	unsigned int readers;
 	unsigned int writers;
 	bool nonblock;
-	char rwait;
-	char wwait;
+	wait_queue_head_t rwait;
+	wait_queue_head_t wwait;
 	char buf[PIPE_RING_CAP];
 };
 
@@ -257,12 +258,12 @@ static int pipe_release(struct inode *inode, struct file *file)
 	if (file->mode & FMODE_READ) {
 		if (pipe->readers)
 			pipe->readers--;
-		thread_wake_all(&pipe->wwait);
+		wake_up_all(&pipe->wwait);
 	}
 	if (file->mode & FMODE_WRITE) {
 		if (pipe->writers)
 			pipe->writers--;
-		thread_wake_all(&pipe->rwait);
+		wake_up_all(&pipe->rwait);
 	}
 	spin_unlock_irqrestore(&pipe->lock, flags);
 	return 0;
@@ -302,8 +303,8 @@ static ssize_t pipe_read(struct file *file, char *buf, size_t size, loff_t *pos)
 				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EINTR;
 			}
-			if (!thread_sleep_interruptible(&pipe->rwait,
-							&pipe->lock)) {
+			if (thread_sleep_on_interruptible(
+				    &pipe->rwait, pipe->rwait.lock) < 0) {
 				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EINTR;
 			}
@@ -326,7 +327,7 @@ static ssize_t pipe_read(struct file *file, char *buf, size_t size, loff_t *pos)
 		buf += n;
 		size -= n;
 		total += (ssize_t)n;
-		thread_wake_all(&pipe->wwait);
+		wake_up_all(&pipe->wwait);
 	}
 
 	return total;
@@ -359,8 +360,8 @@ static ssize_t pipe_write(struct file *file, const char *buf, size_t size,
 				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EINTR;
 			}
-			if (!thread_sleep_interruptible(&pipe->wwait,
-							&pipe->lock)) {
+			if (thread_sleep_on_interruptible(
+				    &pipe->wwait, pipe->wwait.lock) < 0) {
 				spin_unlock_irqrestore(&pipe->lock, flags);
 				return total ? total : -EINTR;
 			}
@@ -391,7 +392,7 @@ static ssize_t pipe_write(struct file *file, const char *buf, size_t size,
 		buf += n;
 		size -= n;
 		total += (ssize_t)n;
-		thread_wake_all(&pipe->rwait);
+		wake_up_all(&pipe->rwait);
 	}
 
 	return total;
@@ -472,6 +473,8 @@ int anon_pipe_create(struct file **read_file, struct file **write_file,
 		return -ENOMEM;
 
 	spinlock_init(&pipe->lock, "pipe.lock");
+	wait_queue_init(&pipe->rwait, &pipe->lock, "pipe.rwait");
+	wait_queue_init(&pipe->wwait, &pipe->lock, "pipe.wwait");
 	pipe->readers = 1;
 	pipe->writers = 1;
 	pipe->nonblock = (flags & O_NONBLOCK) != 0;

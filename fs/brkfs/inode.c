@@ -5,9 +5,9 @@
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
+#include <brk/mutex.h>
 #include <brk/pagecache.h>
 #include <brk/printk.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
@@ -120,13 +120,13 @@ static void brkfs_orphan_add(struct brkfs_sb_info *sbi, struct inode *inode)
 	if (!info)
 		return;
 
-	sleeplock_acquire(&sbi->s_orphan_lock);
+	mutex_lock(&sbi->s_orphan_lock);
 	spin_lock(&sbi->s_super_lock);
 	info->i_next_orphan = sbi->s_sb.s_orphan;
 	sbi->s_sb.s_orphan = (u32)inode->ino;
 	sbi->s_super_dirty = true;
 	spin_unlock(&sbi->s_super_lock);
-	sleeplock_release(&sbi->s_orphan_lock);
+	mutex_unlock(&sbi->s_orphan_lock);
 }
 
 void brkfs_orphan_remove(struct brkfs_sb_info *sbi, u32 ino)
@@ -134,7 +134,7 @@ void brkfs_orphan_remove(struct brkfs_sb_info *sbi, u32 ino)
 	u32 prev = 0;
 	u32 cur;
 
-	sleeplock_acquire(&sbi->s_orphan_lock);
+	mutex_lock(&sbi->s_orphan_lock);
 
 	cur = sbi->s_sb.s_orphan;
 	u32 guard = sbi->s_sb.s_inodes_count;
@@ -177,7 +177,7 @@ void brkfs_orphan_remove(struct brkfs_sb_info *sbi, u32 ino)
 		cur = next;
 	}
 
-	sleeplock_release(&sbi->s_orphan_lock);
+	mutex_unlock(&sbi->s_orphan_lock);
 }
 
 void brkfs_orphan_cleanup(struct brkfs_sb_info *sbi)
@@ -423,7 +423,7 @@ static int brkfs_unlink(struct inode *dir, struct dentry *dentry)
 	 * written back under the target inode's rwsem.  The VFS only holds
 	 * the parent directory's rwsem here.
 	 */
-	sleeplock_acquire(&inode->rwsem);
+	mutex_lock(&inode->rwsem);
 
 	err = brkfs_dir_remove(dir, dentry->name.name, dentry->name.len);
 	if (err)
@@ -441,7 +441,7 @@ static int brkfs_unlink(struct inode *dir, struct dentry *dentry)
 
 	err = brkfs_inode_write(sbi, inode);
 out:
-	sleeplock_release(&inode->rwsem);
+	mutex_unlock(&inode->rwsem);
 	return err;
 	/*
 	 * Do NOT inode_put(inode) here: the inode reference belongs to the
@@ -620,7 +620,7 @@ static int brkfs_rmdir(struct inode *dir, struct dentry *dentry)
 	if (!S_ISDIR(inode->mode))
 		return -ENOTDIR;
 
-	sleeplock_acquire(&inode->rwsem);
+	mutex_lock(&inode->rwsem);
 
 	/*
 	 * nlink only counts subdirectories, not ordinary files.  Scan the
@@ -650,7 +650,7 @@ static int brkfs_rmdir(struct inode *dir, struct dentry *dentry)
 	inode_touch_ctime(inode);
 	err = brkfs_inode_write(sbi, inode);
 out:
-	sleeplock_release(&inode->rwsem);
+	mutex_unlock(&inode->rwsem);
 	return err;
 	/*
 	 * Do NOT inode_put(inode) here. The inode reference belongs to the
@@ -715,9 +715,9 @@ static int brkfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		first = second;
 		second = tmp;
 	}
-	sleeplock_acquire(&first->rwsem);
+	mutex_lock(&first->rwsem);
 	if (second)
-		sleeplock_acquire(&second->rwsem);
+		mutex_lock(&second->rwsem);
 
 	if (replace && S_ISDIR(target->mode)) {
 		err = brkfs_dir_is_empty(target);
@@ -808,8 +808,8 @@ rollback_target:
 
 out_unlock:
 	if (second)
-		sleeplock_release(&second->rwsem);
-	sleeplock_release(&first->rwsem);
+		mutex_unlock(&second->rwsem);
+	mutex_unlock(&first->rwsem);
 	return err;
 }
 
@@ -882,7 +882,7 @@ static int brkfs_getattr(const struct path *path, struct kstat *stat, u32 mask,
 	(void)mask;
 	(void)flags;
 
-	sleeplock_acquire(&inode->rwsem);
+	mutex_lock(&inode->rwsem);
 
 	memset(stat, 0, sizeof(*stat));
 	stat->ino = inode->ino;
@@ -899,7 +899,7 @@ static int brkfs_getattr(const struct path *path, struct kstat *stat, u32 mask,
 	stat->blocks = (loff_t)div_ceil(blocks * inode->sb->block_size, 512);
 	inode_times_to_kstat(inode, stat);
 
-	sleeplock_release(&inode->rwsem);
+	mutex_unlock(&inode->rwsem);
 	return 0;
 }
 
@@ -914,7 +914,7 @@ static int brkfs_setattr(struct dentry *dentry, struct iattr *attr)
 	 * writeback.  Besides truncation, the mode/timestamp changes below
 	 * are copied into the on-disk inode by brkfs_inode_write().
 	 */
-	sleeplock_acquire(&inode->rwsem);
+	mutex_lock(&inode->rwsem);
 
 	if (attr->valid & ATTR_MODE) {
 		inode->mode = (inode->mode & S_IFMT) | (attr->mode & 07777);
@@ -952,7 +952,7 @@ static int brkfs_setattr(struct dentry *dentry, struct iattr *attr)
 	}
 	err = brkfs_inode_write(sbi, inode);
 out:
-	sleeplock_release(&inode->rwsem);
+	mutex_unlock(&inode->rwsem);
 	return err;
 }
 

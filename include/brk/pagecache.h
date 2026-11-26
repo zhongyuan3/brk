@@ -4,9 +4,9 @@
 #include <brk/fs_types.h>
 #include <brk/list.h>
 #include <brk/mm_types.h>
+#include <brk/mutex_types.h>
 #include <brk/pgalloc.h>
 #include <brk/refcnt_types.h>
-#include <brk/sleeplock_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 
@@ -30,7 +30,7 @@ struct cached_page {
 	pgoff_t index;
 	unsigned int flags;
 	spinlock_t lock;
-	sleeplock_t io_lock;
+	mutex_t io_lock;
 	struct hlist_node ht_node;
 	struct list_head dirty_list;
 	struct list_head lru_list;

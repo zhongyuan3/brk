@@ -5,10 +5,10 @@
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
+#include <brk/mutex.h>
 #include <brk/printk.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
@@ -322,7 +322,7 @@ struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name)
 		return ERR_PTR(-ENOMEM);
 
 	inode = parent->inode;
-	sleeplock_acquire(&inode->rwsem);
+	mutex_lock(&inode->rwsem);
 
 	/*
 	 * Another CPU may have populated the hash while we were allocating
@@ -341,7 +341,7 @@ struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name)
 		spin_lock(&dentry->lock);
 		dentry->flags |= DCACHE_NEGATIVE;
 		spin_unlock(&dentry->lock);
-		sleeplock_release(&inode->rwsem);
+		mutex_unlock(&inode->rwsem);
 		dentry_put(dentry);
 		return tmp;
 	}
@@ -355,7 +355,7 @@ struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name)
 		spin_lock(&dentry->lock);
 		dentry->flags |= DCACHE_NEGATIVE;
 		spin_unlock(&dentry->lock);
-		sleeplock_release(&inode->rwsem);
+		mutex_unlock(&inode->rwsem);
 		dentry_put(dentry);
 		return ERR_CAST(tmp);
 	}
@@ -374,7 +374,7 @@ struct dentry *dentry_lookup(struct dentry *parent, const struct qstr *name)
 	 * so that both callers operate on the same object.
 	 */
 	dentry_hash(dentry, idx);
-	sleeplock_release(&inode->rwsem);
+	mutex_unlock(&inode->rwsem);
 
 	return dentry;
 }

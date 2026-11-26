@@ -18,6 +18,7 @@
 #include <brk/list.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
+#include <brk/mutex.h>
 #include <brk/netdevice.h>
 #include <brk/panic.h>
 #include <brk/pgalloc.h>
@@ -25,7 +26,6 @@
 #include <brk/process.h>
 #include <brk/signal.h>
 #include <brk/slab.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/thread.h>
@@ -119,7 +119,7 @@ static void thread_sleep_timeout(struct timer_list *timer)
 	if (lock) {
 		/*
 		 * Taking the sleeper's condition lock orders this wakeup after
-		 * thread_sleep() has published the thread on the sleep queue.
+		 * thread_sleep_on() has published the thread on the sleep queue.
 		 */
 		irqstate_t flags = spin_lock_irqsave(lock);
 
@@ -926,9 +926,9 @@ int process_fork(void)
 	if (IS_ERR(child))
 		return PTR_ERR(child);
 
-	sleeplock_acquire(&parent->mm->lock);
+	mutex_lock(&parent->mm->lock);
 	err = uvm_space_copy(child->mm, parent->mm);
-	sleeplock_release(&parent->mm->lock);
+	mutex_unlock(&parent->mm->lock);
 	if (err)
 		goto failed;
 

@@ -1,13 +1,14 @@
 #include <brk/kmalloc.h>
+#include <brk/mutex.h>
 #include <brk/refcnt.h>
 #include <brk/signal.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <brk/wait.h>
 #include <uapi/errno.h>
 #include <uapi/ioctl.h>
 #include <uapi/signal.h>
@@ -39,8 +40,8 @@ struct tty *tty_alloc(void)
 	tty->eof_pending = false;
 	/* The port owns the initial reference. */
 	refcnt_init(&tty->refcnt, 1);
-	sleeplock_init(&tty->read_lock, "tty.read_lock");
-	sleeplock_init(&tty->write_lock, "tty.write_lock");
+	mutex_init(&tty->read_lock, "tty.read_lock");
+	mutex_init(&tty->write_lock, "tty.write_lock");
 	return tty;
 }
 
@@ -62,6 +63,8 @@ static void tty_put(struct tty *tty)
 void tty_init(struct tty *tty, struct tty_port *port)
 {
 	tty->port = port;
+	wait_queue_init(&tty->rx_wait, &port->lock, "tty.rx");
+	wait_queue_init(&tty->stop_wait, &port->lock, "tty.stopped");
 	tty_init_winsize(tty);
 }
 
@@ -269,8 +272,8 @@ void tty_detach_port(struct tty_port *port)
 	/* Wake readers/writers waiting on this port. */
 	thread_wake_all(&port->pgrp);
 	if (tty) {
-		thread_wake_all(&tty->rx_r);
-		thread_wake_all(&tty->stopped);
+		wake_up_all(&tty->rx_wait);
+		wake_up_all(&tty->stop_wait);
 	}
 
 	/* Drop the port's reference; open files keep their own. */

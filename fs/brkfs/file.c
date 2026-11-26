@@ -4,9 +4,9 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
+#include <brk/mutex.h>
 #include <brk/pagecache.h>
 #include <brk/printk.h>
-#include <brk/sleeplock.h>
 #include <brk/string.h>
 #include <brk/types.h>
 #include <inttypes.h>
@@ -186,7 +186,7 @@ static int brkfs_file_fsync(struct file *file, loff_t start, loff_t end,
 
 	(void)datasync;
 
-	sleeplock_acquire(&inode->rwsem);
+	mutex_lock(&inode->rwsem);
 	err = page_cache_flush_range(inode->mapping, start, end);
 	if (!err)
 		err = brkfs_inode_write(sbi, inode);
@@ -194,7 +194,7 @@ static int brkfs_file_fsync(struct file *file, loff_t start, loff_t end,
 		err = page_cache_flush(sbi->s_bdev->bd_mapping);
 	if (!err)
 		err = blkdev_flush(sbi->s_bdev);
-	sleeplock_release(&inode->rwsem);
+	mutex_unlock(&inode->rwsem);
 	return err;
 }
 
@@ -331,7 +331,7 @@ static int brkfs_file_fallocate(struct file *file, int mode, loff_t offset,
 
 	end = offset + len;
 
-	sleeplock_acquire(&inode->rwsem);
+	mutex_lock(&inode->rwsem);
 
 	for (loff_t off = offset; off < end; off += bs) {
 		u32 bno;
@@ -368,7 +368,7 @@ static int brkfs_file_fallocate(struct file *file, int mode, loff_t offset,
 	if (!err)
 		err = brkfs_inode_write(sbi, inode);
 
-	sleeplock_release(&inode->rwsem);
+	mutex_unlock(&inode->rwsem);
 	return err;
 }
 

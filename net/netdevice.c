@@ -11,6 +11,7 @@
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <brk/wait.h>
 #include <uapi/capability.h>
 #include <uapi/errno.h>
 #include <uapi/net.h>
@@ -25,7 +26,7 @@ static unsigned int netdev_ifindex;
 
 static struct sk_buff_head net_rx_queue;
 static SPINLOCK_DEFINE(net_rx_queue_lock);
-static int net_rx_wait;
+static WAIT_QUEUE_DEFINE(net_rx_wait, &net_rx_queue_lock);
 static bool net_rx_started;
 
 static struct net_device *netdev_lookup_locked(const char *name)
@@ -454,7 +455,7 @@ static void net_rx_thread(void *arg)
 
 		flags = spin_lock_irqsave(&net_rx_queue_lock);
 		while (skb_queue_empty(&net_rx_queue))
-			thread_sleep(&net_rx_wait, &net_rx_queue_lock);
+			thread_sleep_on(&net_rx_wait, net_rx_wait.lock);
 		skb = skb_dequeue(&net_rx_queue);
 		spin_unlock_irqrestore(&net_rx_queue_lock, flags);
 
@@ -497,7 +498,7 @@ int netif_rx(struct sk_buff *skb)
 		return -ENOBUFS;
 	}
 	skb_queue_tail(&net_rx_queue, skb);
-	thread_wake_all(&net_rx_wait);
+	wake_up_all(&net_rx_wait);
 	spin_unlock_irqrestore(&net_rx_queue_lock, flags);
 	return 0;
 }

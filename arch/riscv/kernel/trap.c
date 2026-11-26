@@ -8,10 +8,10 @@
 #include <brk/ktime.h>
 #include <brk/lengthof.h>
 #include <brk/mm.h>
+#include <brk/mutex.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
 #include <brk/signal.h>
-#include <brk/sleeplock.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/trap.h>
@@ -217,9 +217,9 @@ static bool handle_page_fault(unsigned long code, struct trap_frame *frame,
 	if (task && task->process->mm) {
 		struct uvm_space *mm = task->process->mm;
 
-		sleeplock_acquire(&mm->lock);
+		mutex_lock(&mm->lock);
 		err = uvm_handle_fault(mm, frame->stval, write, instr);
-		sleeplock_release(&mm->lock);
+		mutex_unlock(&mm->lock);
 	}
 	if (!err)
 		return true;

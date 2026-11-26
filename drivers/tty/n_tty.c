@@ -1,12 +1,13 @@
 #include <brk/ktime.h>
+#include <brk/mutex.h>
 #include <brk/signal.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <brk/wait.h>
 #include <uapi/errno.h>
 #include <uapi/termios.h>
 
@@ -122,7 +123,7 @@ static void n_tty_signal(struct tty *tty, int sig, int c)
 	}
 
 	/* Wake a reader blocked in read() so it can observe the signal. */
-	thread_wake_all(&tty->rx_r);
+	wake_up_all(&tty->rx_wait);
 }
 
 /* Store one byte without interpreting it as an editing character. */
@@ -134,7 +135,7 @@ static void n_tty_store(struct tty *tty, u8 c)
 	if (tty->rx_e - tty->rx_r >= tty->rx_size) {
 		/* Publish the buffer and let the reader drain it. */
 		tty->rx_w = tty->rx_e;
-		thread_wake_all(&tty->rx_r);
+		wake_up_all(&tty->rx_wait);
 		return;
 	}
 
@@ -144,7 +145,7 @@ static void n_tty_store(struct tty *tty, u8 c)
 
 	if (!canonical) {
 		tty->rx_w = tty->rx_e;
-		thread_wake_all(&tty->rx_r);
+		wake_up_all(&tty->rx_wait);
 	}
 }
 
@@ -234,7 +235,7 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 			}
 			if (c == t->c_cc[VSTART]) {
 				tty->stopped = false;
-				thread_wake_all(&tty->stopped);
+				wake_up_all(&tty->stop_wait);
 				continue;
 			}
 		}
@@ -300,7 +301,7 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 			} else {
 				tty->rx_w = tty->rx_e;
 			}
-			thread_wake_all(&tty->rx_r);
+			wake_up_all(&tty->rx_wait);
 			continue;
 		}
 
@@ -309,7 +310,7 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 		if (c == '\n' || c == t->c_cc[VEOL] || c == t->c_cc[VEOL2] ||
 		    tty->rx_e - tty->rx_r == tty->rx_size) {
 			tty->rx_w = tty->rx_e;
-			thread_wake_all(&tty->rx_r);
+			wake_up_all(&tty->rx_wait);
 		}
 	}
 
@@ -329,7 +330,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 	if (size == 0)
 		return 0;
 
-	sleeplock_acquire(&tty->read_lock);
+	mutex_lock(&tty->read_lock);
 
 	while (total < size) {
 		bool canonical;
@@ -344,7 +345,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 		    (port->termios.c_lflag & ISIG)) {
 			signal_send_pgrp(task->process->pgid, SIGTTIN);
 			spin_unlock_irqrestore(&port->lock, flags);
-			sleeplock_release(&tty->read_lock);
+			mutex_unlock(&tty->read_lock);
 			return total > 0 ? (ssize_t)total : -EINTR;
 		}
 
@@ -379,18 +380,18 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 					tty->eof_pending = false;
 					spin_unlock_irqrestore(&port->lock,
 							       flags);
-					sleeplock_release(&tty->read_lock);
+					mutex_unlock(&tty->read_lock);
 					return 0;
 				}
 				if (thread_abort_pending(task)) {
 					spin_unlock_irqrestore(&port->lock,
 							       flags);
-					sleeplock_release(&tty->read_lock);
+					mutex_unlock(&tty->read_lock);
 					return total > 0 ? (ssize_t)total :
 							   -EINTR;
 				}
-				(void)thread_sleep_interruptible(&tty->rx_r,
-								 &port->lock);
+				(void)thread_sleep_on_interruptible(
+					&tty->rx_wait, tty->rx_wait.lock);
 				spin_unlock_irqrestore(&port->lock, flags);
 				continue;
 			}
@@ -406,7 +407,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 				if (thread_abort_pending(task)) {
 					spin_unlock_irqrestore(&port->lock,
 							       flags);
-					sleeplock_release(&tty->read_lock);
+					mutex_unlock(&tty->read_lock);
 					return total > 0 ? (ssize_t)total :
 							   -EINTR;
 				}
@@ -415,7 +416,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 				if (min == 0 && vtime == 0) {
 					spin_unlock_irqrestore(&port->lock,
 							       flags);
-					sleeplock_release(&tty->read_lock);
+					mutex_unlock(&tty->read_lock);
 					return (ssize_t)total;
 				}
 
@@ -444,31 +445,32 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 							spin_unlock_irqrestore(
 								&port->lock,
 								flags);
-							sleeplock_release(
+							mutex_unlock(
 								&tty->read_lock);
 							return (ssize_t)total;
 						}
 					} else if (timed) {
 						thread_arm_sleep_timer(
 							&port->lock, deadline);
-						thread_sleep_interruptible(
-							&tty->rx_r,
-							&port->lock);
+						thread_sleep_on_interruptible(
+							&tty->rx_wait,
+							tty->rx_wait.lock);
 						spin_unlock_irqrestore(
 							&port->lock, flags);
 						thread_disarm_sleep_timer();
 						continue;
 					} else {
-						(void)thread_sleep_interruptible(
-							&tty->rx_r,
-							&port->lock);
+						(void)thread_sleep_on_interruptible(
+							&tty->rx_wait,
+							tty->rx_wait.lock);
 						spin_unlock_irqrestore(
 							&port->lock, flags);
 						continue;
 					}
 				} else {
-					(void)thread_sleep_interruptible(
-						&tty->rx_r, &port->lock);
+					(void)thread_sleep_on_interruptible(
+						&tty->rx_wait,
+						tty->rx_wait.lock);
 					spin_unlock_irqrestore(&port->lock,
 							       flags);
 					continue;
@@ -478,7 +480,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 
 		if (copy == 0) {
 			spin_unlock_irqrestore(&port->lock, flags);
-			sleeplock_release(&tty->read_lock);
+			mutex_unlock(&tty->read_lock);
 			return (ssize_t)total;
 		}
 
@@ -495,7 +497,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 		spin_unlock_irqrestore(&port->lock, flags);
 
 		if (copy_to_user(buf + total, tmp, chunk)) {
-			sleeplock_release(&tty->read_lock);
+			mutex_unlock(&tty->read_lock);
 			return total > 0 ? (ssize_t)total : -EFAULT;
 		}
 		total += chunk;
@@ -504,7 +506,7 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 		break;
 	}
 
-	sleeplock_release(&tty->read_lock);
+	mutex_unlock(&tty->read_lock);
 	return (ssize_t)total;
 }
 
@@ -516,7 +518,7 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 	size_t total = 0;
 	int err = 0;
 
-	sleeplock_acquire(&tty->write_lock);
+	mutex_lock(&tty->write_lock);
 
 	/* TOSTOP: background writers get SIGTTOU. */
 	{
@@ -527,7 +529,7 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 		if (bg) {
 			signal_send_pgrp(task->process->pgid, SIGTTOU);
 			spin_unlock_irqrestore(&port->lock, flags);
-			sleeplock_release(&tty->write_lock);
+			mutex_unlock(&tty->write_lock);
 			return -EINTR;
 		}
 		spin_unlock_irqrestore(&port->lock, flags);
@@ -560,8 +562,8 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 				err = -EINTR;
 				goto out;
 			}
-			(void)thread_sleep_interruptible(&tty->stopped,
-							 &port->lock);
+			(void)thread_sleep_on_interruptible(
+				&tty->stop_wait, tty->stop_wait.lock);
 			spin_unlock_irqrestore(&port->lock, flags);
 		}
 
@@ -610,7 +612,7 @@ static ssize_t n_tty_write(struct tty *tty, const char *buf, size_t size)
 	}
 
 out:
-	sleeplock_release(&tty->write_lock);
+	mutex_unlock(&tty->write_lock);
 
 	if (total > 0 && (ssize_t)total > 0)
 		return (ssize_t)total;
@@ -657,8 +659,8 @@ static long n_tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 			tty->lnext = false;
 		}
 		spin_unlock_irqrestore(&port->lock, flags);
-		thread_wake_all(&tty->rx_r);
-		thread_wake_all(&tty->stopped);
+		wake_up_all(&tty->rx_wait);
+		wake_up_all(&tty->stop_wait);
 		return 0;
 
 	case TCFLSH:
@@ -671,7 +673,7 @@ static long n_tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 			tty->lnext = false;
 		}
 		spin_unlock_irqrestore(&port->lock, flags);
-		thread_wake_all(&tty->rx_r);
+		wake_up_all(&tty->rx_wait);
 		return 0;
 
 	case FIONREAD:

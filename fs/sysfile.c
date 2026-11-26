@@ -12,10 +12,10 @@
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/mount.h>
+#include <brk/mutex.h>
 #include <brk/path.h>
 #include <brk/permission.h>
 #include <brk/printk.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/stat.h>
 #include <brk/string.h>
@@ -693,7 +693,7 @@ long sys_read_dir(const struct syscall_ctx *ctx)
 		return -EOPNOTSUPP;
 	}
 
-	sleeplock_acquire(&fp->pos_lock);
+	mutex_lock(&fp->pos_lock);
 
 	struct getdents_context dctx = {
 		.ctx.actor = getdents_filldir,
@@ -703,17 +703,17 @@ long sys_read_dir(const struct syscall_ctx *ctx)
 		.pos = 0,
 	};
 
-	sleeplock_acquire(&inode->rwsem);
+	mutex_lock(&inode->rwsem);
 	err = fop->iterate_shared(fp, &dctx.ctx);
-	sleeplock_release(&inode->rwsem);
+	mutex_unlock(&inode->rwsem);
 	if (err) {
-		sleeplock_release(&fp->pos_lock);
+		mutex_unlock(&fp->pos_lock);
 		file_put(fp);
 		return err;
 	}
 
 	fp->pos = dctx.ctx.pos;
-	sleeplock_release(&fp->pos_lock);
+	mutex_unlock(&fp->pos_lock);
 	file_put(fp);
 
 	return dctx.pos;

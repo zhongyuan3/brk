@@ -12,6 +12,7 @@
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <brk/wait.h>
 #include <uapi/capability.h>
 #include <uapi/errno.h>
 #include <uapi/poll.h>
@@ -102,7 +103,8 @@ static int raw_recvmsg(struct socket *sock, void *buf, size_t len,
 			spin_unlock_irqrestore(&raw->sk.lock, flags);
 			return -EAGAIN;
 		}
-		if (!thread_sleep_interruptible(&raw->sk, &raw->sk.lock)) {
+		if (thread_sleep_on_interruptible(&raw->sk.rcv_wait,
+						  raw->sk.rcv_wait.lock) < 0) {
 			spin_unlock_irqrestore(&raw->sk.lock, flags);
 			return -EINTR;
 		}
@@ -172,7 +174,7 @@ static int raw_shutdown(struct socket *sock, int how)
 	raw->sk.shutdown = true;
 	raw->sk.eof = true;
 	spin_unlock_irqrestore(&raw->sk.lock, flags);
-	thread_wake_all(&raw->sk);
+	wake_up_all(&raw->sk.rcv_wait);
 	return 0;
 }
 
@@ -249,6 +251,7 @@ int raw_sock_create(struct socket *sock, int protocol)
 	if (!raw)
 		return -ENOMEM;
 	spinlock_init(&raw->sk.lock, "raw_sock");
+	wait_queue_init(&raw->sk.rcv_wait, &raw->sk.lock, "raw.rcv");
 	list_init(&raw->node);
 	skb_queue_init(&raw->sk.rcv_queue);
 	raw->sk.family = AF_INET;
@@ -295,7 +298,7 @@ void raw_deliver(u8 protocol, struct sk_buff *skb, u32 saddr, u32 daddr)
 		spin_lock(&raw->sk.lock);
 		skb_queue_tail(&raw->sk.rcv_queue, copy);
 		spin_unlock(&raw->sk.lock);
-		thread_wake_all(&raw->sk);
+		wake_up_all(&raw->sk.rcv_wait);
 	}
 	spin_unlock_irqrestore(&raw_lock, flags);
 }

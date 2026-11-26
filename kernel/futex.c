@@ -152,13 +152,13 @@ static int futex_wait_common(u32 *uaddr, u32 val,
 		thread_arm_sleep_timer(&futex_lock, deadline);
 
 	for (;;) {
-		bool slept = thread_sleep_interruptible(bucket, &futex_lock);
+		int slept = thread_sleep_on_interruptible(bucket, &futex_lock);
 
 		if (waiter->woken) {
 			err = 0;
 			break;
 		}
-		if (!slept || signal_pending(thread)) {
+		if (slept < 0 || signal_pending(thread)) {
 			err = -EINTR;
 			break;
 		}

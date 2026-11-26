@@ -10,12 +10,12 @@
 #include <brk/mchain.h>
 #include <brk/mm.h>
 #include <brk/mm_types.h>
+#include <brk/mutex.h>
 #include <brk/pagecache.h>
 #include <brk/pgalloc.h>
 #include <brk/pgtable.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
-#include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
@@ -39,7 +39,7 @@ struct uvm_space *uvm_space_create(void)
 	mm = slab_alloc(&uvms_cache);
 	if (!mm)
 		return ERR_PTR(-ENOMEM);
-	sleeplock_init(&mm->lock, "uvm_space");
+	mutex_init(&mm->lock, "uvm_space");
 
 	mm->pgd = pgd_alloc_user();
 	if (!mm->pgd) {

@@ -4,6 +4,7 @@
 #include <arch/asm/page.h>
 #include <brk/asm/cpu.h>
 #include <brk/cpu.h>
+#include <brk/process_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/thread_types.h>
 #include <brk/types.h>
@@ -14,8 +15,6 @@
 #define USTACK_SIZE (PAGE_SIZE * (1 << USTACK_PAGE_ORDER))
 
 #define TIME_SLICE_MAX 5
-
-struct process;
 
 void thread_cache_init(void);
 struct thread *thread_create(struct process *process, void (*fn)(void *),
@@ -32,7 +31,26 @@ void thread_exit_signal(int sig);
 void thread_yield(void);
 /* Scheduler tick: run from the per-CPU timer interrupt. */
 void sched_tick(void);
-void thread_sleep(void *chan, spinlock_t *lock);
+
+/*
+ * Sleep on @chan until a matching thread_wake_*() call.
+ *
+ * @chan identifies the wait condition; only its address is used, it is never
+ * dereferenced.  @wake_lock must be held by the caller with interrupts
+ * disabled.  It is released before the context switch and reacquired before
+ * return.  It need not be the lock that directly protects the condition; it is
+ * the lock that serializes wait publication with the waker's condition update.
+ * The caller must recheck its condition in a loop after return.
+ */
+void thread_sleep_on(void *chan, spinlock_t *wake_lock);
+
+/*
+ * Like thread_sleep_on(), but abort the sleep when a signal is pending or the
+ * process group is exiting.  Returns 0 after a normal sleep, or -EINTR when
+ * the sleep was aborted; the caller must unwind instead of re-entering.
+ */
+int thread_sleep_on_interruptible(void *chan, spinlock_t *wake_lock);
+
 /* CPU time accounting, in nanoseconds. */
 void thread_account_user(struct thread *thread, u64 ns);
 void thread_account_system(struct thread *thread, u64 ns);
@@ -40,9 +58,10 @@ u64 thread_live_system_ns(struct thread *thread);
 u64 thread_cpu_time_ns(struct thread *thread);
 /* Called from the assembly return path immediately before sret to user. */
 void trap_return_to_user(void);
-bool thread_sleep_interruptible(void *chan, spinlock_t *lock);
 bool thread_abort_pending(struct thread *thread);
-void thread_wake_all(void *chan);
+/* Wake one/all threads sleeping on @chan; returns the number woken. */
+int thread_wake_one(void *chan);
+int thread_wake_all(void *chan);
 void thread_wake(struct thread *thread);
 
 /*
