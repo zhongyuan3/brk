@@ -38,6 +38,7 @@ struct file *file_alloc(struct path *path, fmode_t mode)
 	refcnt_init(&file->count, 1);
 	path_get(path);
 	file->path = *path;
+	inode_get(inode);
 	file->inode = inode;
 	file->ops = inode->fops;
 
@@ -52,6 +53,7 @@ struct file *file_alloc(struct path *path, fmode_t mode)
 	int err = file->ops->open(file->inode, file);
 	if (err) {
 		path_put(&file->path);
+		inode_put(file->inode);
 		slab_free(&file_cache, file);
 		return ERR_PTR(err);
 	}
@@ -101,8 +103,10 @@ void file_put(struct file *file)
 	if (fop->release)
 		fop->release(file->inode, file);
 
-	if (!file->anon)
+	if (!file->anon) {
 		path_put(&file->path);
+		inode_put(file->inode);
+	}
 
 	slab_free(&file_cache, file);
 }

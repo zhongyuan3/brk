@@ -428,6 +428,9 @@ int do_unlinkat(int dirfd, const char *pathname, int flags)
 	err = inode->ops->unlink(inode, path.dentry);
 	sleeplock_release(&inode->rwsem);
 
+	if (!err)
+		dentry_make_negative(path.dentry);
+
 	path_put(&parent_path);
 	path_put(&path);
 	return err;
