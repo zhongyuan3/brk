@@ -4,6 +4,7 @@
 #include <brk/list.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <brk/wait_types.h>
 
 struct thread;
 
@@ -17,15 +18,19 @@ typedef struct mutex {
 	struct thread *owner;
 	spinlock_t wait_lock;
 	struct list_head wait_list;
+	wait_queue_head_t wait;
 	const char *name;
 } mutex_t;
 
-#define __MUTEX_INITIALIZER(var)                                      \
-	{                                                             \
-		.owner = NULL,                                        \
-		.wait_lock = SPINLOCK_INITIALIZER("mutex.wait_lock"), \
-		.wait_list = LIST_INITIALIZER((var).wait_list),       \
-		.name = #var,                                         \
+#define __MUTEX_INITIALIZER(var)                                             \
+	{                                                                    \
+		.owner = NULL,                                               \
+		.wait_lock = SPINLOCK_INITIALIZER("mutex.wait_lock"),        \
+		.wait_list = LIST_INITIALIZER((var).wait_list),              \
+		.wait = { .lock = &(var).wait_lock,                          \
+			  .name = #var ".wait",                              \
+			  .waiters = LIST_INITIALIZER((var).wait.waiters) }, \
+		.name = #var,                                                \
 	}
 
 #define MUTEX_DEFINE(name) mutex_t name = __MUTEX_INITIALIZER(name)

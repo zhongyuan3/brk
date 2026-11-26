@@ -26,9 +26,9 @@
 
 SPINLOCK_DEFINE(wait_lock);
 SPINLOCK_DEFINE(sleep_lock);
+static WAIT_QUEUE_DEFINE(sleep_wq, &sleep_lock);
 
-static LIST_DEFINE(sleep_queue);
-static SPINLOCK_DEFINE(sleep_queue_lock);
+static SPINLOCK_DEFINE(wait_queue_lock);
 
 static unsigned int next_cpu_hint;
 
@@ -294,7 +294,7 @@ static void sched_switch(void)
 	case THREAD_STATE_ZOMBIE:
 		break;
 	case THREAD_STATE_SLEEPING:
-		/* thread_sleep_on() already linked us into the sleep queue. */
+		/* thread_sleep_on() already linked us into its wait queue. */
 		break;
 	default:
 		panic("unexpected state: tid=%d, state=%d\n", curr->tid,
@@ -424,7 +424,7 @@ int thread_sleep_ns(ktime_t dur, ktime_t *rem)
 		now_ns = (s64)ktime_get_mono_ns();
 		if (now_ns >= deadline_ns)
 			break;
-		(void)thread_sleep_on_interruptible(task, &sleep_lock);
+		(void)thread_sleep_on_interruptible(&sleep_wq, &sleep_lock);
 	}
 	spin_unlock_irqrestore(&sleep_lock, flags);
 
@@ -456,12 +456,13 @@ bool thread_abort_pending(struct thread *thread)
  * Return true if the thread actually slept, false if an interruptible sleep
  * was aborted by thread_abort_pending() before scheduling.
  */
-static bool thread_sleep_common(void *chan, spinlock_t *wake_lock,
+static bool thread_sleep_common(wait_queue_head_t *wq, spinlock_t *wake_lock,
 				bool interruptible)
 {
 	struct thread *thread = current_thread();
+	irqstate_t sflags;
 
-	kassert(chan != NULL);
+	kassert(wq != NULL);
 	kassert(wake_lock != NULL);
 	kassert(!local_irq_enabled());
 	kassert(spin_is_locked_by_me(wake_lock));
@@ -472,17 +473,17 @@ static bool thread_sleep_common(void *chan, spinlock_t *wake_lock,
 
 	raw_spin_lock(&thread->lock);
 	thread->state = THREAD_STATE_SLEEPING;
-	thread->chan = chan;
+	thread->wait_wq = wq;
 
 	/*
-	 * Publish the thread on the sleep queue while the caller's wake lock
-	 * is still held. A wakeup that races with us must take that lock, so
-	 * it is guaranteed to observe the queue entry.
+	 * Publish the thread on the condition's wait queue while the caller's
+	 * wake lock is still held. A wakeup that races with us must take that
+	 * lock, so it is guaranteed to observe the queue entry.
 	 */
-	irqstate_t sflags = spin_lock_irqsave(&sleep_queue_lock);
+	sflags = spin_lock_irqsave(&wait_queue_lock);
 
-	list_add_tail(&thread->sleep_node, &sleep_queue);
-	spin_unlock_irqrestore(&sleep_queue_lock, sflags);
+	list_add_tail(&thread->sleep_node, &wq->waiters);
+	spin_unlock_irqrestore(&wait_queue_lock, sflags);
 
 	/*
 	 * A signal or group exit that arrives between the caller's condition
@@ -492,11 +493,11 @@ static bool thread_sleep_common(void *chan, spinlock_t *wake_lock,
 	 * promptly so the condition can be acted on.
 	 */
 	if (interruptible && thread_abort_pending(thread)) {
-		sflags = spin_lock_irqsave(&sleep_queue_lock);
+		sflags = spin_lock_irqsave(&wait_queue_lock);
 		thread->state = THREAD_STATE_RUNNING;
-		thread->chan = NULL;
+		thread->wait_wq = NULL;
 		list_del_init(&thread->sleep_node);
-		spin_unlock_irqrestore(&sleep_queue_lock, sflags);
+		spin_unlock_irqrestore(&wait_queue_lock, sflags);
 
 		raw_spin_unlock(&thread->lock);
 		raw_spin_unlock(wake_lock);
@@ -506,7 +507,7 @@ static bool thread_sleep_common(void *chan, spinlock_t *wake_lock,
 
 	raw_spin_unlock(wake_lock);
 	sched_switch();
-	thread->chan = NULL;
+	thread->wait_wq = NULL;
 	raw_spin_unlock(&thread->lock);
 	raw_spin_lock(wake_lock);
 	return true;
@@ -520,9 +521,9 @@ static bool thread_sleep_common(void *chan, spinlock_t *wake_lock,
  * Uninterruptible sleeps always wait for their condition.  Use this for
  * kernel-internal operations that cannot be unwound safely.
  */
-void thread_sleep_on(void *chan, spinlock_t *wake_lock)
+void thread_sleep_on(wait_queue_head_t *wq, spinlock_t *wake_lock)
 {
-	(void)thread_sleep_common(chan, wake_lock, false);
+	(void)thread_sleep_common(wq, wake_lock, false);
 }
 
 /*
@@ -530,75 +531,68 @@ void thread_sleep_on(void *chan, spinlock_t *wake_lock)
  * process group is exiting.  Returns 0 after a normal sleep, or -EINTR when
  * the sleep was aborted.
  */
-int thread_sleep_on_interruptible(void *chan, spinlock_t *wake_lock)
+int thread_sleep_on_interruptible(wait_queue_head_t *wq, spinlock_t *wake_lock)
 {
-	return thread_sleep_common(chan, wake_lock, true) ? 0 : -EINTR;
+	return thread_sleep_common(wq, wake_lock, true) ? 0 : -EINTR;
 }
 
-static int thread_wake_common(void *chan, bool all)
+static int thread_wake_common(wait_queue_head_t *wq, bool all)
 {
 	int woken = 0;
 
 	for (;;) {
-		struct thread *p, *wakee = NULL;
-		bool retry = false;
+		struct thread *thread;
 		irqstate_t flags;
+		irqstate_t tflags;
 
 		/*
-		 * sched_switch() takes thread->lock before sleep_queue_lock when
-		 * a thread goes to sleep, so never block on thread->lock while
-		 * holding sleep_queue_lock. Try-lock instead; if the sleeper
-		 * still owns it, drop sleep_queue_lock and retry.
+		 * Keep the old lock order: wait_queue_lock, then try-lock the
+		 * thread.  The sleeper takes its own lock before
+		 * wait_queue_lock, so never block on thread->lock here.
 		 */
-		flags = spin_lock_irqsave(&sleep_queue_lock);
-		list_for_each_entry(p, &sleep_queue, sleep_node) {
-			irqstate_t pflags;
-
-			if (p->state != THREAD_STATE_SLEEPING ||
-			    p->chan != chan)
-				continue;
-
-			if (!spin_trylock_irqsave(&p->lock, &pflags)) {
-				retry = true;
-				continue;
-			}
-
-			p->state = THREAD_STATE_RUNNING;
-			p->chan = NULL;
-			list_del_init(&p->sleep_node);
-			spin_unlock_irqrestore(&p->lock, pflags);
-			wakee = p;
+		flags = spin_lock_irqsave(&wait_queue_lock);
+		if (list_empty(&wq->waiters)) {
+			spin_unlock_irqrestore(&wait_queue_lock, flags);
 			break;
 		}
-		spin_unlock_irqrestore(&sleep_queue_lock, flags);
 
-		if (wakee) {
-			sched_enqueue(wakee);
-			woken++;
-			if (!all)
-				break;
-		} else if (!retry) {
-			break;
+		thread = list_first_entry(&wq->waiters, struct thread,
+					  sleep_node);
+		if (!spin_trylock_irqsave(&thread->lock, &tflags)) {
+			spin_unlock_irqrestore(&wait_queue_lock, flags);
+			continue;
 		}
+
+		kassert(thread->wait_wq == wq);
+		list_del_init(&thread->sleep_node);
+		thread->state = THREAD_STATE_RUNNING;
+		thread->wait_wq = NULL;
+		spin_unlock_irqrestore(&thread->lock, tflags);
+		spin_unlock_irqrestore(&wait_queue_lock, flags);
+		sched_enqueue(thread);
+		woken++;
+
+		if (!all)
+			break;
 	}
 
 	return woken;
 }
 
-int thread_wake_one(void *chan)
+int thread_wake_one(wait_queue_head_t *wq)
 {
-	return thread_wake_common(chan, false);
+	return thread_wake_common(wq, false);
 }
 
-int thread_wake_all(void *chan)
+int thread_wake_all(wait_queue_head_t *wq)
 {
-	return thread_wake_common(chan, true);
+	return thread_wake_common(wq, true);
 }
 
 void thread_wake(struct thread *thread)
 {
 	for (;;) {
-		irqstate_t flags = spin_lock_irqsave(&sleep_queue_lock);
+		irqstate_t flags = spin_lock_irqsave(&wait_queue_lock);
 		irqstate_t tflags;
 
 		/*
@@ -607,22 +601,23 @@ void thread_wake(struct thread *thread)
 		 * on a thread that is mid-switch.
 		 */
 		if (!spin_trylock_irqsave(&thread->lock, &tflags)) {
-			spin_unlock_irqrestore(&sleep_queue_lock, flags);
+			spin_unlock_irqrestore(&wait_queue_lock, flags);
 			continue;
 		}
 
 		if (thread->state != THREAD_STATE_SLEEPING) {
 			spin_unlock_irqrestore(&thread->lock, tflags);
-			spin_unlock_irqrestore(&sleep_queue_lock, flags);
+			spin_unlock_irqrestore(&wait_queue_lock, flags);
 			return;
 		}
 
 		kassert(!list_empty(&thread->sleep_node));
+		kassert(thread->wait_wq != NULL);
 		thread->state = THREAD_STATE_RUNNING;
-		thread->chan = NULL;
+		thread->wait_wq = NULL;
 		list_del_init(&thread->sleep_node);
 		spin_unlock_irqrestore(&thread->lock, tflags);
-		spin_unlock_irqrestore(&sleep_queue_lock, flags);
+		spin_unlock_irqrestore(&wait_queue_lock, flags);
 		sched_enqueue(thread);
 		return;
 	}

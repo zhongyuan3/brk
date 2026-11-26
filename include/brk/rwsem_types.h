@@ -3,6 +3,7 @@
 
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <brk/wait_types.h>
 
 struct thread;
 
@@ -16,6 +17,7 @@ typedef struct rwsem {
 	struct thread *writer;
 	unsigned int waiting_writers;
 	spinlock_t wait_lock;
+	wait_queue_head_t wait;
 	const char *name;
 } rwsem_t;
 

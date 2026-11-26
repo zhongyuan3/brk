@@ -49,6 +49,7 @@ struct tty_port {
 	struct device *dev;
 	/* Foreground process group and owning session (job control). */
 	pid_t pgrp;
+	wait_queue_head_t pgrp_wait;
 	pid_t sid;
 
 	unsigned int open_count;

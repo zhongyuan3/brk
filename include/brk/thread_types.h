@@ -6,6 +6,7 @@
 #include <brk/spinlock_types.h>
 #include <brk/timer_list.h>
 #include <brk/types.h>
+#include <brk/wait_types.h>
 #include <stdbool.h>
 #include <uapi/types.h>
 
@@ -55,12 +56,12 @@ struct thread {
 
 	/* protected by run_queue_lock */
 	struct list_head run_node;
-	/* protected by sleep_queue_lock */
+	/* protected by wait_queue_lock; linked into wait_wq->waiters */
 	struct list_head sleep_node;
 
 	spinlock_t lock;
 	/* protected by @lock */
-	void *chan;
+	wait_queue_head_t *wait_wq;
 	/* protected by @lock */
 	virt_addr_t kernel_sp;
 	/* protected by @lock */

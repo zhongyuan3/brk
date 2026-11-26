@@ -5,6 +5,7 @@
 #include <brk/process.h>
 #include <brk/spinlock.h>
 #include <brk/thread.h>
+#include <brk/wait.h>
 #include <uapi/errno.h>
 
 struct mutex_waiter {
@@ -27,6 +28,7 @@ void mutex_init(mutex_t *mutex, const char *name)
 	mutex->owner = NULL;
 	spinlock_init(&mutex->wait_lock, "mutex.wait_lock");
 	list_init(&mutex->wait_list);
+	wait_queue_init(&mutex->wait, &mutex->wait_lock, name);
 	mutex->name = name;
 }
 
@@ -55,7 +57,7 @@ void mutex_lock(mutex_t *mutex)
 	list_add_tail(&waiter.node, &mutex->wait_list);
 
 	while (!waiter.granted)
-		thread_sleep_on(mutex, &mutex->wait_lock);
+		thread_sleep_on(&mutex->wait, &mutex->wait_lock);
 
 	spin_unlock_irqrestore(&mutex->wait_lock, flags);
 }
@@ -87,7 +89,8 @@ int mutex_lock_interruptible(mutex_t *mutex)
 	list_add_tail(&waiter.node, &mutex->wait_list);
 
 	while (!waiter.granted) {
-		err = thread_sleep_on_interruptible(mutex, &mutex->wait_lock);
+		err = thread_sleep_on_interruptible(&mutex->wait,
+						    &mutex->wait_lock);
 		if (err < 0) {
 			/*
 			 * A handoff may have raced with the abort.  If we were

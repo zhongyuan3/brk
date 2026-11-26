@@ -176,7 +176,7 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 		flags = spin_lock_irqsave(&port->lock);
 		port->pgrp = pgrp;
 		spin_unlock_irqrestore(&port->lock, flags);
-		thread_wake_all(&port->pgrp);
+		wake_up_all(&port->pgrp_wait);
 		return 0;
 
 	case TIOCSCTTY:
@@ -192,7 +192,7 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 		port->sid = task->process->sid;
 		port->pgrp = task->process->pgid;
 		spin_unlock_irqrestore(&port->lock, flags);
-		thread_wake_all(&port->pgrp);
+		wake_up_all(&port->pgrp_wait);
 		return 0;
 
 	case TIOCNOTTY:
@@ -206,7 +206,7 @@ long tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 		port->sid = 0;
 		port->pgrp = 0;
 		spin_unlock_irqrestore(&port->lock, flags);
-		thread_wake_all(&port->pgrp);
+		wake_up_all(&port->pgrp_wait);
 
 		if (pgrp > 0) {
 			signal_send_pgrp(pgrp, SIGHUP);
@@ -270,7 +270,7 @@ void tty_detach_port(struct tty_port *port)
 	spin_unlock_irqrestore(&port->lock, flags);
 
 	/* Wake readers/writers waiting on this port. */
-	thread_wake_all(&port->pgrp);
+	wake_up_all(&port->pgrp_wait);
 	if (tty) {
 		wake_up_all(&tty->rx_wait);
 		wake_up_all(&tty->stop_wait);

@@ -10,6 +10,7 @@
 #include <brk/syscall.h>
 #include <brk/thread.h>
 #include <brk/uaccess.h>
+#include <brk/wait.h>
 #include <stdint.h>
 #include <uapi/errno.h>
 #include <uapi/futex.h>
@@ -20,6 +21,7 @@
 
 struct futex_bucket {
 	struct list_head waiters;
+	wait_queue_head_t wait;
 };
 
 static struct futex_bucket futex_buckets[FUTEX_HASH_SIZE];
@@ -27,8 +29,11 @@ static SPINLOCK_DEFINE(futex_lock);
 
 void futex_init(void)
 {
-	for (unsigned int i = 0; i < FUTEX_HASH_SIZE; ++i)
+	for (unsigned int i = 0; i < FUTEX_HASH_SIZE; ++i) {
 		list_init(&futex_buckets[i].waiters);
+		wait_queue_init(&futex_buckets[i].wait, &futex_lock,
+				"futex.bucket");
+	}
 }
 
 static unsigned int futex_hash(struct uvm_space *mm, const u32 *uaddr)
@@ -152,7 +157,8 @@ static int futex_wait_common(u32 *uaddr, u32 val,
 		thread_arm_sleep_timer(&futex_lock, deadline);
 
 	for (;;) {
-		int slept = thread_sleep_on_interruptible(bucket, &futex_lock);
+		int slept = thread_sleep_on_interruptible(&bucket->wait,
+							  &futex_lock);
 
 		if (waiter->woken) {
 			err = 0;

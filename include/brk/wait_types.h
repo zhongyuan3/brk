@@ -9,10 +9,9 @@
  * that waiters hold across the condition check and wait publication.  It may
  * be shared by several wait queues when one lock protects multiple conditions.
  *
- * @waiters is reserved for a future implementation that wakes waiters without
- * scanning the global scheduler sleep queue.  The current implementation uses
- * the queue address as the scheduler channel, so it must not be dereferenced
- * by a waiter after it has been woken.
+ * @waiters is the list of sleeping threads for this condition.  It is
+ * protected by the scheduler's sleep-queue lock, not by @lock; this keeps the
+ * condition lock and the scheduler bookkeeping independent.
  */
 typedef struct wait_queue_head {
 	spinlock_t *lock;

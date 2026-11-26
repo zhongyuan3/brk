@@ -11,6 +11,7 @@
 #include <brk/task.h>
 #include <brk/tty.h>
 #include <brk/types.h>
+#include <brk/wait.h>
 #include <uapi/errno.h>
 #include <uapi/stat.h>
 
@@ -291,6 +292,7 @@ struct tty_port *tty_port_alloc(void)
 	if (!port)
 		return NULL;
 	spinlock_init(&port->lock, "tty_port");
+	wait_queue_init(&port->pgrp_wait, &port->lock, "tty_port.pgrp");
 	tty_termios_defaults(&port->termios);
 	return port;
 }

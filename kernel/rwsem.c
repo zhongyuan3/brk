@@ -5,6 +5,7 @@
 #include <brk/rwsem.h>
 #include <brk/spinlock.h>
 #include <brk/thread.h>
+#include <brk/wait.h>
 #include <uapi/errno.h>
 
 void rwsem_init(rwsem_t *sem, const char *name)
@@ -13,6 +14,7 @@ void rwsem_init(rwsem_t *sem, const char *name)
 	sem->writer = NULL;
 	sem->waiting_writers = 0;
 	spinlock_init(&sem->wait_lock, "rwsem.wait_lock");
+	wait_queue_init(&sem->wait, &sem->wait_lock, name);
 	sem->name = name;
 }
 
@@ -26,7 +28,7 @@ void down_read(rwsem_t *sem)
 	if (sem->writer == current_thread())
 		panic("down_read: recursive name=%s\n", sem->name);
 	while (sem->writer || sem->waiting_writers)
-		thread_sleep_on(sem, &sem->wait_lock);
+		thread_sleep_on(&sem->wait, &sem->wait_lock);
 	sem->readers++;
 	spin_unlock_irqrestore(&sem->wait_lock, flags);
 }
@@ -44,7 +46,8 @@ int down_read_interruptible(rwsem_t *sem)
 		      sem->name);
 
 	while (sem->writer || sem->waiting_writers) {
-		err = thread_sleep_on_interruptible(sem, &sem->wait_lock);
+		err = thread_sleep_on_interruptible(&sem->wait,
+						    &sem->wait_lock);
 		if (err < 0) {
 			/*
 			 * The lock may have become available just as the
@@ -86,7 +89,7 @@ void up_read(rwsem_t *sem)
 		panic("up_read: name=%s readers=0\n", sem->name);
 	sem->readers--;
 	if (sem->readers == 0)
-		thread_wake_all(sem);
+		thread_wake_all(&sem->wait);
 	spin_unlock_irqrestore(&sem->wait_lock, flags);
 }
 
@@ -103,7 +106,7 @@ void down_write(rwsem_t *sem)
 
 	sem->waiting_writers++;
 	while (sem->writer || sem->readers)
-		thread_sleep_on(sem, &sem->wait_lock);
+		thread_sleep_on(&sem->wait, &sem->wait_lock);
 	sem->waiting_writers--;
 	sem->writer = self;
 	spin_unlock_irqrestore(&sem->wait_lock, flags);
@@ -124,7 +127,8 @@ int down_write_interruptible(rwsem_t *sem)
 
 	sem->waiting_writers++;
 	while (sem->writer || sem->readers) {
-		err = thread_sleep_on_interruptible(sem, &sem->wait_lock);
+		err = thread_sleep_on_interruptible(&sem->wait,
+						    &sem->wait_lock);
 		if (err < 0) {
 			/*
 			 * The lock may have become available just as the
@@ -139,7 +143,7 @@ int down_write_interruptible(rwsem_t *sem)
 
 			sem->waiting_writers--;
 			if (!sem->waiting_writers)
-				thread_wake_all(sem);
+				thread_wake_all(&sem->wait);
 			spin_unlock_irqrestore(&sem->wait_lock, flags);
 			return err;
 		}
@@ -174,7 +178,7 @@ void up_write(rwsem_t *sem)
 		panic("up_write: name=%s writer=%p self=%p\n", sem->name,
 		      sem->writer, self);
 	sem->writer = NULL;
-	thread_wake_all(sem);
+	thread_wake_all(&sem->wait);
 	spin_unlock_irqrestore(&sem->wait_lock, flags);
 }
 
