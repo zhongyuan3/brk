@@ -53,8 +53,10 @@ struct thread {
 	/* Embedded waiter, so a thread can never leave a stale stack pointer. */
 	struct futex_waiter futex;
 
-	/* protected by run_queue_lock/sleep_queue_lock */
-	struct list_head queue;
+	/* protected by run_queue_lock */
+	struct list_head run_node;
+	/* protected by sleep_queue_lock */
+	struct list_head sleep_node;
 
 	spinlock_t lock;
 	/* protected by @lock */

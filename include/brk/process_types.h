@@ -7,6 +7,7 @@
 #include <brk/spinlock_types.h>
 #include <brk/thread_types.h>
 #include <brk/types.h>
+#include <brk/wait_types.h>
 #include <stdbool.h>
 #include <uapi/types.h>
 
@@ -65,6 +66,8 @@ struct process {
 	struct list_head children;
 	/* protected by wait_lock */
 	struct list_head sibling;
+	/* protected by wait_lock; waiters sleep on this channel */
+	wait_queue_head_t child_wait;
 
 	/* process-wide mutable state */
 	spinlock_t lock;

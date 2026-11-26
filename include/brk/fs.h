@@ -8,6 +8,7 @@
 #include <brk/rwsem_types.h>
 #include <brk/stat_types.h>
 #include <brk/types.h>
+#include <brk/wait_types.h>
 #include <uapi/fcntl.h>
 
 #define SEEK_SET 0
@@ -124,6 +125,8 @@ struct inode {
 	kuid_t uid;
 	struct page_cache *mapping;
 	void *private_data;
+	wait_queue_head_t i_new_wait;
+	wait_queue_head_t i_free_wait;
 };
 
 struct inode_ops {

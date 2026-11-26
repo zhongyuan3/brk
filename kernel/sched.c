@@ -19,6 +19,7 @@
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
+#include <brk/wait.h>
 #include <uapi/capability.h>
 #include <uapi/errno.h>
 #include <uapi/futex.h>
@@ -106,10 +107,10 @@ void sched_enqueue(struct thread *thread)
 	cpu = &cpus[target];
 	flags = spin_lock_irqsave(&cpu->run_queue_lock);
 
-	kassert(list_empty(&thread->queue));
+	kassert(list_empty(&thread->run_node));
 	kassert(thread->state == THREAD_STATE_RUNNING);
 	thread->cpu = target;
-	list_add_tail(&thread->queue, &cpu->run_queue);
+	list_add_tail(&thread->run_node, &cpu->run_queue);
 	cpu->nr_running++;
 	spin_unlock_irqrestore(&cpu->run_queue_lock, flags);
 
@@ -132,10 +133,10 @@ static struct thread *thread_pick_next(struct cpu *cpu)
 
 	spin_lock(&cpu->run_queue_lock);
 	if (!list_empty(&cpu->run_queue)) {
-		thread =
-			list_first_entry(&cpu->run_queue, struct thread, queue);
+		thread = list_first_entry(&cpu->run_queue, struct thread,
+					  run_node);
 		kassert(thread->cpu == (int)cpu->id);
-		list_del_init(&thread->queue);
+		list_del_init(&thread->run_node);
 		kassert(cpu->nr_running > 0);
 		cpu->nr_running--;
 	}
@@ -171,6 +172,8 @@ static void init_unit_setup(struct init_unit *unit, cpuid_t cpuid)
 	list_init(&process->sibling);
 	list_init(&process->threads);
 	spinlock_init(&process->lock, "init_process");
+	wait_queue_init(&process->child_wait, &wait_lock,
+			"init_process.child_wait");
 	spinlock_init(&process->cred_lock, "init_cred");
 	fdtable_init(&process->fdtable);
 	fsinfo_init(&process->fsinfo);
@@ -189,7 +192,8 @@ static void init_unit_setup(struct init_unit *unit, cpuid_t cpuid)
 
 	list_init(&thread->list);
 	list_init(&thread->proc_threads);
-	list_init(&thread->queue);
+	list_init(&thread->run_node);
+	list_init(&thread->sleep_node);
 	spinlock_init(&thread->lock, "init_thread");
 	thread->process = process;
 	thread->tid = 0;
@@ -477,7 +481,7 @@ static bool thread_sleep_common(void *chan, spinlock_t *wake_lock,
 	 */
 	irqstate_t sflags = spin_lock_irqsave(&sleep_queue_lock);
 
-	list_add_tail(&thread->queue, &sleep_queue);
+	list_add_tail(&thread->sleep_node, &sleep_queue);
 	spin_unlock_irqrestore(&sleep_queue_lock, sflags);
 
 	/*
@@ -491,7 +495,7 @@ static bool thread_sleep_common(void *chan, spinlock_t *wake_lock,
 		sflags = spin_lock_irqsave(&sleep_queue_lock);
 		thread->state = THREAD_STATE_RUNNING;
 		thread->chan = NULL;
-		list_del_init(&thread->queue);
+		list_del_init(&thread->sleep_node);
 		spin_unlock_irqrestore(&sleep_queue_lock, sflags);
 
 		raw_spin_unlock(&thread->lock);
@@ -547,7 +551,7 @@ static int thread_wake_common(void *chan, bool all)
 		 * still owns it, drop sleep_queue_lock and retry.
 		 */
 		flags = spin_lock_irqsave(&sleep_queue_lock);
-		list_for_each_entry(p, &sleep_queue, queue) {
+		list_for_each_entry(p, &sleep_queue, sleep_node) {
 			irqstate_t pflags;
 
 			if (p->state != THREAD_STATE_SLEEPING ||
@@ -561,7 +565,7 @@ static int thread_wake_common(void *chan, bool all)
 
 			p->state = THREAD_STATE_RUNNING;
 			p->chan = NULL;
-			list_del_init(&p->queue);
+			list_del_init(&p->sleep_node);
 			spin_unlock_irqrestore(&p->lock, pflags);
 			wakee = p;
 			break;
@@ -593,36 +597,33 @@ int thread_wake_all(void *chan)
 
 void thread_wake(struct thread *thread)
 {
-	while (1) {
-		struct thread *p = NULL;
-		bool found = false;
-		irqstate_t flags;
+	for (;;) {
+		irqstate_t flags = spin_lock_irqsave(&sleep_queue_lock);
 		irqstate_t tflags;
 
-		flags = spin_lock_irqsave(&sleep_queue_lock);
-		list_for_each_entry(p, &sleep_queue, queue) {
-			if (p == thread) {
-				found = true;
-				break;
-			}
-		}
-
-		if (!found || p->state != THREAD_STATE_SLEEPING) {
-			spin_unlock_irqrestore(&sleep_queue_lock, flags);
-			return;
-		}
-
-		if (!spin_trylock_irqsave(&p->lock, &tflags)) {
+		/*
+		 * A sleeping thread holds its own lock from state publication
+		 * until it is completely off-CPU, so try-lock to avoid blocking
+		 * on a thread that is mid-switch.
+		 */
+		if (!spin_trylock_irqsave(&thread->lock, &tflags)) {
 			spin_unlock_irqrestore(&sleep_queue_lock, flags);
 			continue;
 		}
 
-		p->state = THREAD_STATE_RUNNING;
-		p->chan = NULL;
-		list_del_init(&p->queue);
-		spin_unlock_irqrestore(&p->lock, tflags);
+		if (thread->state != THREAD_STATE_SLEEPING) {
+			spin_unlock_irqrestore(&thread->lock, tflags);
+			spin_unlock_irqrestore(&sleep_queue_lock, flags);
+			return;
+		}
+
+		kassert(!list_empty(&thread->sleep_node));
+		thread->state = THREAD_STATE_RUNNING;
+		thread->chan = NULL;
+		list_del_init(&thread->sleep_node);
+		spin_unlock_irqrestore(&thread->lock, tflags);
 		spin_unlock_irqrestore(&sleep_queue_lock, flags);
-		sched_enqueue(p);
+		sched_enqueue(thread);
 		return;
 	}
 }
@@ -711,7 +712,7 @@ void thread_exit(int status)
 		spin_unlock_irqrestore(&wait_lock, flags);
 
 		if (reparented)
-			thread_wake_all(init_reaper);
+			wake_up_all(&init_reaper->child_wait);
 	}
 
 	kassert(preempt_count() == 0);
@@ -803,7 +804,8 @@ again:
 		return 0;
 	}
 
-	if (thread_sleep_on_interruptible(parent, &wait_lock) < 0) {
+	if (thread_sleep_on_interruptible(&parent->child_wait, &wait_lock) <
+	    0) {
 		spin_unlock_irqrestore(&wait_lock, flags);
 		return -EINTR;
 	}
@@ -847,5 +849,5 @@ void sched_resume(void)
 	 * zombie is really off-CPU and safe to reap, wake its waiters.
 	 */
 	if (wake_parent)
-		thread_wake_all(wake_parent);
+		wake_up_all(&wake_parent->child_wait);
 }

@@ -10,6 +10,7 @@
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
+#include <brk/wait.h>
 #include <uapi/errno.h>
 
 void bio_init(struct bio *bio, struct block_dev *bd, enum req_op op)
@@ -62,7 +63,7 @@ static void blk_queue_worker(void *arg)
 
 		flags = spin_lock_irqsave(&q->lock);
 		while (list_empty(&q->queue) && !q->dead)
-			thread_sleep_on(&q->queue, &q->lock);
+			thread_sleep_on(&q->queue_wait, q->queue_wait.lock);
 
 		if (q->dead) {
 			/* Fail everything still queued, then let cleanup run. */
@@ -149,6 +150,7 @@ int blk_init_queue(struct gendisk *disk, request_fn_t fn)
 	spinlock_init(&q->lock, "request_queue");
 	mutex_init(&q->worker_lock, "request_queue_worker");
 	completion_init(&q->worker_done, "request_queue.worker_done");
+	wait_queue_init(&q->queue_wait, &q->lock, "request_queue.queue");
 	list_init(&q->queue);
 	q->queue_rq = fn;
 	q->disk = disk;
@@ -168,7 +170,7 @@ void blk_cleanup_queue(struct request_queue *q)
 	flags = spin_lock_irqsave(&q->lock);
 	q->dead = true;
 	has_worker = q->worker != NULL;
-	thread_wake_all(&q->queue);
+	wake_up_all(&q->queue_wait);
 	spin_unlock_irqrestore(&q->lock, flags);
 
 	if (has_worker) {
@@ -263,7 +265,7 @@ int submit_bio_wait(struct bio *bio)
 	} else {
 		list_add_tail(&rq->rq_list, &q->queue);
 		spin_unlock_irqrestore(&q->lock, flags);
-		thread_wake_all(&q->queue);
+		wake_up_all(&q->queue_wait);
 	}
 
 	wait_for_completion(&bio->done);

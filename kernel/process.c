@@ -32,6 +32,7 @@
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
+#include <brk/wait.h>
 #include <brk/writeback.h>
 #include <stddef.h>
 #include <uapi/capability.h>
@@ -173,7 +174,8 @@ static struct thread *thread_create_in(struct process *process,
 
 	list_init(&thread->list);
 	list_init(&thread->proc_threads);
-	list_init(&thread->queue);
+	list_init(&thread->run_node);
+	list_init(&thread->sleep_node);
 	spinlock_init(&thread->lock, "thread");
 	thread->process = process;
 	thread->state = THREAD_STATE_NEW;
@@ -398,6 +400,7 @@ struct process *process_create(struct process_create_args *args)
 	list_init(&process->sibling);
 	list_init(&process->threads);
 	spinlock_init(&process->lock, "process");
+	wait_queue_init(&process->child_wait, &wait_lock, "process.child_wait");
 	spinlock_init(&process->cred_lock, "cred");
 	fdtable_init(&process->fdtable);
 	fsinfo_init(&process->fsinfo);
@@ -497,6 +500,8 @@ struct process *process_create_idle(cpuid_t cpuid)
 	list_init(&process->sibling);
 	list_init(&process->threads);
 	spinlock_init(&process->lock, "idle_process");
+	wait_queue_init(&process->child_wait, &wait_lock,
+			"idle_process.child_wait");
 	spinlock_init(&process->cred_lock, "idle_cred");
 	fdtable_init(&process->fdtable);
 	fsinfo_init(&process->fsinfo);

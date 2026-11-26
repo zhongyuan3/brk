@@ -6,6 +6,7 @@
 #include <brk/mutex_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
+#include <brk/wait_types.h>
 
 struct block_dev;
 struct gendisk;
@@ -71,6 +72,7 @@ typedef int (*request_fn_t)(struct request_queue *, struct request *);
 struct request_queue {
 	spinlock_t lock;
 	mutex_t worker_lock;
+	wait_queue_head_t queue_wait;
 	struct list_head queue;
 	request_fn_t queue_rq;
 	struct gendisk *disk;

@@ -10,6 +10,7 @@
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/types.h>
+#include <brk/wait.h>
 #include <stdalign.h>
 #include <uapi/errno.h>
 
@@ -43,6 +44,9 @@ static struct inode *__inode_alloc(struct super_block *sb, unsigned long ino)
 	refcnt_init(&inode->count, 1);
 	spinlock_init(&inode->lock, "inode.lock");
 	rwsem_init(&inode->rwsem, "inode.rwsem");
+	wait_queue_init(&inode->i_new_wait, &inode->lock, "inode.i_new_wait");
+	wait_queue_init(&inode->i_free_wait, &inode_hash_lock,
+			"inode.i_free_wait");
 	inode->state = 0;
 	list_init(&inode->sb_list);
 	list_init(&inode->list);
@@ -114,7 +118,7 @@ retry:
 			     (I_FREEING | I_WILL_FREE | I_BAD)) ||
 			    !refcnt_inc_unless_zero(&inode->count)) {
 				spin_unlock_irqrestore(&inode->lock, flags);
-				thread_sleep_on(&inode->state,
+				thread_sleep_on(&inode->i_free_wait,
 						&inode_hash_lock);
 				goto retry;
 			}
@@ -140,7 +144,7 @@ static bool inode_wait_new(struct inode *inode)
 	irqstate_t flags = spin_lock_irqsave(&inode->lock);
 
 	while (inode->state & I_NEW)
-		thread_sleep_on(&inode->state, &inode->lock);
+		thread_sleep_on(&inode->i_new_wait, &inode->lock);
 
 	bool ready = !(inode->state & (I_BAD | I_FREEING | I_WILL_FREE));
 	spin_unlock_irqrestore(&inode->lock, flags);
@@ -207,7 +211,7 @@ void inode_unlock_new(struct inode *inode)
 
 	inode->state &= ~I_NEW;
 	spin_unlock_irqrestore(&inode->lock, flags);
-	thread_wake_all(&inode->state);
+	wake_up_all(&inode->i_new_wait);
 }
 
 /*
@@ -223,7 +227,7 @@ void inode_fail_new(struct inode *inode)
 	inode->state |= I_BAD;
 	inode->state &= ~I_NEW;
 	spin_unlock_irqrestore(&inode->lock, flags);
-	thread_wake_all(&inode->state);
+	wake_up_all(&inode->i_new_wait);
 }
 
 struct inode *inode_get(struct inode *inode)
@@ -282,7 +286,7 @@ void inode_put(struct inode *inode)
 	 * will retry from scratch and either allocate a fresh inode or find
 	 * one created in the meantime.
 	 */
-	thread_wake_all(&inode->state);
+	wake_up_all(&inode->i_free_wait);
 
 	__inode_free(inode);
 }
