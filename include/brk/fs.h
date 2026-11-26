@@ -5,6 +5,7 @@
 #include <brk/mutex_types.h>
 #include <brk/path.h>
 #include <brk/refcnt_types.h>
+#include <brk/rwsem_types.h>
 #include <brk/stat_types.h>
 #include <brk/types.h>
 #include <uapi/fcntl.h>
@@ -105,7 +106,7 @@ struct inode {
 	const struct file_ops *fops;
 	refcnt_t count;
 	spinlock_t lock;
-	mutex_t rwsem;
+	rwsem_t rwsem;
 	unsigned long state;
 	struct list_head sb_list;
 	struct list_head list;

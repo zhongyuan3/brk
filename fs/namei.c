@@ -1,8 +1,8 @@
 #include <brk/error.h>
 #include <brk/fs.h>
-#include <brk/mutex.h>
 #include <brk/path.h>
 #include <brk/permission.h>
+#include <brk/rwsem.h>
 #include <brk/spinlock.h>
 #include <brk/task.h>
 #include <uapi/errno.h>
@@ -101,9 +101,9 @@ retry:
 			path_put(&path);
 			return ERR_PTR(err);
 		}
-		mutex_lock(&inode->rwsem);
+		down_write(&inode->rwsem);
 		err = inode->ops->create(inode, path.dentry, create_mode, excl);
-		mutex_unlock(&inode->rwsem);
+		up_write(&inode->rwsem);
 		path_put(&parent_path);
 
 		if (err == -EEXIST && !excl && !retried) {
@@ -219,10 +219,10 @@ int do_mkdirat(int dirfd, const char *pathname, umode_t mode)
 		path_put(&path);
 		return err;
 	}
-	mutex_lock(&inode->rwsem);
+	down_write(&inode->rwsem);
 	err = inode->ops->mkdir(inode, path.dentry,
 				apply_umask(mode) | S_IFDIR);
-	mutex_unlock(&inode->rwsem);
+	up_write(&inode->rwsem);
 
 	path_put(&parent_path);
 	path_put(&path);
@@ -262,11 +262,11 @@ int do_mknodat(int dirfd, const char *pathname, umode_t mode, dev_t dev)
 		path_put(&path);
 		return err;
 	}
-	mutex_lock(&inode->rwsem);
+	down_write(&inode->rwsem);
 	err = inode->ops->mknod(inode, path.dentry,
 				apply_umask(mode & 07777) | (mode & S_IFMT),
 				dev);
-	mutex_unlock(&inode->rwsem);
+	up_write(&inode->rwsem);
 
 	path_put(&parent_path);
 	path_put(&path);
@@ -336,12 +336,12 @@ int do_linkat(int olddirfd, const char *oldpathname, int newdirfd,
 		goto out_paths;
 	}
 
-	mutex_lock(&parent_inode->rwsem);
-	mutex_lock(&old_inode->rwsem);
+	down_write(&parent_inode->rwsem);
+	down_write(&old_inode->rwsem);
 	err = parent_inode->ops->link(oldpath.dentry, parent_inode,
 				      newpath.dentry);
-	mutex_unlock(&old_inode->rwsem);
-	mutex_unlock(&parent_inode->rwsem);
+	up_write(&old_inode->rwsem);
+	up_write(&parent_inode->rwsem);
 
 out_paths:
 	path_put(&parent_path);
@@ -380,9 +380,9 @@ static int do_rmdirat(int dirfd, const char *pathname)
 		path_put(&path);
 		return err;
 	}
-	mutex_lock(&inode->rwsem);
+	down_write(&inode->rwsem);
 	err = inode->ops->rmdir(inode, path.dentry);
-	mutex_unlock(&inode->rwsem);
+	up_write(&inode->rwsem);
 
 	path_put(&parent_path);
 	path_put(&path);
@@ -424,9 +424,9 @@ int do_unlinkat(int dirfd, const char *pathname, int flags)
 		path_put(&path);
 		return err;
 	}
-	mutex_lock(&inode->rwsem);
+	down_write(&inode->rwsem);
 	err = inode->ops->unlink(inode, path.dentry);
-	mutex_unlock(&inode->rwsem);
+	up_write(&inode->rwsem);
 
 	if (!err)
 		dentry_make_negative(path.dentry);
@@ -466,9 +466,9 @@ int do_symlinkat(int dirfd, const char *pathname, const char *target)
 		path_put(&path);
 		return err;
 	}
-	mutex_lock(&inode->rwsem);
+	down_write(&inode->rwsem);
 	err = inode->ops->symlink(inode, path.dentry, target);
-	mutex_unlock(&inode->rwsem);
+	up_write(&inode->rwsem);
 
 	path_put(&parent_path);
 	path_put(&path);
@@ -507,9 +507,9 @@ int do_readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz)
 		return -EOPNOTSUPP;
 	}
 
-	mutex_lock(&inode->rwsem);
+	down_read(&inode->rwsem);
 	err = inode->ops->readlink(path.dentry, buf, bufsiz);
-	mutex_unlock(&inode->rwsem);
+	up_read(&inode->rwsem);
 
 	path_put(&path);
 
@@ -643,21 +643,21 @@ int do_renameat(int olddirfd, const char *oldpathname, int newdirfd,
 
 	/* Lock parent directories in a stable order. */
 	if (old_dir == new_dir) {
-		mutex_lock(&old_dir->rwsem);
+		down_write(&old_dir->rwsem);
 	} else if ((uintptr_t)old_dir < (uintptr_t)new_dir) {
-		mutex_lock(&old_dir->rwsem);
-		mutex_lock(&new_dir->rwsem);
+		down_write(&old_dir->rwsem);
+		down_write(&new_dir->rwsem);
 	} else {
-		mutex_lock(&new_dir->rwsem);
-		mutex_lock(&old_dir->rwsem);
+		down_write(&new_dir->rwsem);
+		down_write(&old_dir->rwsem);
 	}
 
 	err = old_dir->ops->rename(old_dir, oldpath.dentry, new_dir,
 				   newpath.dentry, flags);
 
 	if (old_dir != new_dir)
-		mutex_unlock(&new_dir->rwsem);
-	mutex_unlock(&old_dir->rwsem);
+		up_write(&new_dir->rwsem);
+	up_write(&old_dir->rwsem);
 
 	if (!err) {
 		/*

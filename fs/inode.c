@@ -2,9 +2,9 @@
 #include <brk/fs.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
-#include <brk/mutex.h>
 #include <brk/pagecache.h>
 #include <brk/refcnt.h>
+#include <brk/rwsem.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
@@ -42,7 +42,7 @@ static struct inode *__inode_alloc(struct super_block *sb, unsigned long ino)
 	inode->fops = NULL;
 	refcnt_init(&inode->count, 1);
 	spinlock_init(&inode->lock, "inode.lock");
-	mutex_init(&inode->rwsem, "inode.rwsem");
+	rwsem_init(&inode->rwsem, "inode.rwsem");
 	inode->state = 0;
 	list_init(&inode->sb_list);
 	list_init(&inode->list);

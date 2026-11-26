@@ -7,10 +7,10 @@
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
-#include <brk/mutex.h>
 #include <brk/pagecache.h>
 #include <brk/path.h>
 #include <brk/printk.h>
+#include <brk/rwsem.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
@@ -285,9 +285,9 @@ int brkfs_mount(struct mount_args *args, struct mount_result *result)
 		return -ENOMEM;
 	}
 
-	mutex_lock(&root_inode->rwsem);
+	down_write(&root_inode->rwsem);
 	err = brkfs_inode_read(sb_info, root_inode);
-	mutex_unlock(&root_inode->rwsem);
+	up_write(&root_inode->rwsem);
 	if (err) {
 		inode_fail_new(root_inode);
 		inode_put(root_inode);

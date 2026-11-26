@@ -3,9 +3,9 @@
 #include <brk/blkdev.h>
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
-#include <brk/mutex.h>
 #include <brk/pagecache.h>
 #include <brk/printk.h>
+#include <brk/rwsem.h>
 #include <brk/string.h>
 #include <uapi/dirent.h>
 #include <uapi/errno.h>
@@ -167,13 +167,13 @@ static int brkfs_dir_fsync(struct file *file, loff_t start, loff_t end,
 	(void)datasync;
 
 	/* Persist the directory inode and all filesystem metadata pages. */
-	mutex_lock(&inode->rwsem);
+	down_write(&inode->rwsem);
 	err = brkfs_inode_write(sbi, inode);
 	if (!err)
 		err = page_cache_flush(sbi->s_bdev->bd_mapping);
 	if (!err)
 		err = blkdev_flush(sbi->s_bdev);
-	mutex_unlock(&inode->rwsem);
+	up_write(&inode->rwsem);
 	return err;
 }
 

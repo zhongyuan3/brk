@@ -2,6 +2,7 @@
 #define _BRK_VIRTIO_BLK_H
 
 #include <brk/compiler_attr.h>
+#include <brk/completion_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <brk/virtio_queue.h>
@@ -152,7 +153,7 @@ struct virtio_blk_io_desc {
 	u64 sector;
 	size_t sec_count;
 	bool is_write;
-	bool completed;
+	completion_t done;
 };
 
 struct virtio_blk_slot {

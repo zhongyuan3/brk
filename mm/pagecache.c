@@ -9,6 +9,7 @@
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/refcnt.h>
+#include <brk/rwsem.h>
 #include <brk/slab.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
@@ -597,11 +598,11 @@ ssize_t generic_file_read(struct file *file, char *buf, size_t size,
 	if (!m)
 		return -EIO;
 
-	mutex_lock(&inode->rwsem);
+	down_read(&inode->rwsem);
 
 	isize = inode->size;
 	if (*pos >= isize) {
-		mutex_unlock(&inode->rwsem);
+		up_read(&inode->rwsem);
 		return 0;
 	}
 	end = *pos + (loff_t)size;
@@ -634,7 +635,7 @@ ssize_t generic_file_read(struct file *file, char *buf, size_t size,
 		total += (ssize_t)nr;
 	}
 
-	mutex_unlock(&inode->rwsem);
+	up_read(&inode->rwsem);
 	return total > 0 ? total : err;
 }
 
@@ -649,7 +650,7 @@ ssize_t generic_file_write(struct file *file, const char *buf, size_t size,
 	if (!m)
 		return -EIO;
 
-	mutex_lock(&inode->rwsem);
+	down_write(&inode->rwsem);
 
 	while (size > 0) {
 		pgoff_t index = (pgoff_t)(*pos >> PAGE_SHIFT);
@@ -703,6 +704,6 @@ ssize_t generic_file_write(struct file *file, const char *buf, size_t size,
 		inode_mark_dirty(inode);
 	}
 
-	mutex_unlock(&inode->rwsem);
+	up_write(&inode->rwsem);
 	return total > 0 ? total : err;
 }

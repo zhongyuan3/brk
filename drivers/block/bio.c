@@ -1,5 +1,6 @@
 #include <brk/bio.h>
 #include <brk/blkdev.h>
+#include <brk/completion.h>
 #include <brk/genhd.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
@@ -16,6 +17,7 @@ void bio_init(struct bio *bio, struct block_dev *bd, enum req_op op)
 	memset(bio, 0, sizeof(*bio));
 	bio->bi_bdev = bd;
 	bio->bi_op = op;
+	completion_init(&bio->done, "bio.done");
 }
 
 int bio_add_buf(struct bio *bio, void *buf, size_t len)
@@ -71,14 +73,12 @@ static void blk_queue_worker(void *arg)
 				for (bio = rq->rq_bio; bio; bio = next) {
 					next = bio->bi_next;
 					bio->bi_status = -ENODEV;
-					bio->bi_done = true;
-					thread_wake_all(bio);
+					complete(&bio->done);
 				}
 				kfree(rq);
 			}
 			q->worker = NULL;
-			q->worker_done = true;
-			thread_wake_all(&q->worker_done);
+			complete(&q->worker_done);
 			spin_unlock_irqrestore(&q->lock, flags);
 			return;
 		}
@@ -93,8 +93,7 @@ static void blk_queue_worker(void *arg)
 		for (bio = rq->rq_bio; bio; bio = next) {
 			next = bio->bi_next;
 			bio->bi_status = rq->rq_status;
-			bio->bi_done = true;
-			thread_wake_all(bio);
+			complete(&bio->done);
 		}
 		spin_unlock_irqrestore(&q->lock, flags);
 		kfree(rq);
@@ -149,6 +148,7 @@ int blk_init_queue(struct gendisk *disk, request_fn_t fn)
 
 	spinlock_init(&q->lock, "request_queue");
 	mutex_init(&q->worker_lock, "request_queue_worker");
+	completion_init(&q->worker_done, "request_queue.worker_done");
 	list_init(&q->queue);
 	q->queue_rq = fn;
 	q->disk = disk;
@@ -160,16 +160,28 @@ int blk_init_queue(struct gendisk *disk, request_fn_t fn)
 void blk_cleanup_queue(struct request_queue *q)
 {
 	irqstate_t flags;
+	bool has_worker;
 
 	if (!q)
 		return;
 
 	flags = spin_lock_irqsave(&q->lock);
 	q->dead = true;
+	has_worker = q->worker != NULL;
 	thread_wake_all(&q->queue);
-	while (q->worker && !q->worker_done)
-		thread_sleep_on(&q->worker_done, &q->lock);
 	spin_unlock_irqrestore(&q->lock, flags);
+
+	if (has_worker) {
+		wait_for_completion(&q->worker_done);
+
+		/*
+		 * The worker completes before dropping q->lock.  Reacquire it
+		 * so the worker is completely done touching @q before we free
+		 * the queue.
+		 */
+		flags = spin_lock_irqsave(&q->lock);
+		spin_unlock_irqrestore(&q->lock, flags);
+	}
 
 	kfree(q);
 }
@@ -212,7 +224,7 @@ int submit_bio_wait(struct bio *bio)
 
 	bio->bi_disk_sector = disk_sector;
 	bio->bi_status = 0;
-	bio->bi_done = false;
+	reinit_completion(&bio->done);
 	bio->bi_next = NULL;
 
 	rq = kzalloc(sizeof(*rq));
@@ -254,10 +266,7 @@ int submit_bio_wait(struct bio *bio)
 		thread_wake_all(&q->queue);
 	}
 
-	flags = spin_lock_irqsave(&q->lock);
-	while (!bio->bi_done)
-		thread_sleep_on(bio, &q->lock);
-	spin_unlock_irqrestore(&q->lock, flags);
+	wait_for_completion(&bio->done);
 
 	return bio->bi_status;
 }

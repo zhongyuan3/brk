@@ -122,8 +122,11 @@ void mutex_unlock(mutex_t *mutex)
 
 	flags = spin_lock_irqsave(&mutex->wait_lock);
 	if (mutex->owner != self)
-		panic("mutex_unlock: name=%s owner=%p self=%p\n", mutex->name,
-		      mutex->owner, self);
+		panic("mutex_unlock: name=%s owner=%p(tid=%d) self=%p(tid=%d) "
+		      "caller=%p\n",
+		      mutex->name, mutex->owner,
+		      mutex->owner ? mutex->owner->tid : -1, self, self->tid,
+		      __builtin_return_address(0));
 
 	if (!list_empty(&mutex->wait_list)) {
 		waiter = list_first_entry(&mutex->wait_list,

@@ -1,6 +1,7 @@
 #include <arch/mm.h>
 #include <brk/bio.h>
 #include <brk/blkdev.h>
+#include <brk/completion.h>
 #include <brk/device.h>
 #include <brk/fs.h>
 #include <brk/genhd.h>
@@ -106,8 +107,7 @@ static void virtio_blk_vq_used(struct virtq *vq, u32 id, u32 len, void *ctx)
 		panic("%s(): invalid used id %" PRIu32 "\n", __func__, id);
 
 	io = vblk->slots[id].trans;
-	io->completed = true;
-	thread_wake_all(&io->completed);
+	complete(&io->done);
 }
 
 irqreturn_t virtio_blk_irq_handler(int irq, void *dev_id)
@@ -137,10 +137,12 @@ static int virtio_blk_submit_vec(struct virtio_blk_dev *vblk, u64 sector,
 	unsigned int chain = nr_vecs + 2;
 	unsigned int sidx;
 	struct virtio_blk_req *req;
-	struct virtio_blk_io_desc trans = { .completed = false };
+	struct virtio_blk_io_desc trans = { 0 };
 	char *status;
 	int err;
 	irqstate_t flags = spin_lock_irqsave(&vblk->lock);
+
+	completion_init(&trans.done, "virtio_blk.trans");
 
 	if (!nr_vecs || nr_vecs > VIRTIO_BLK_MAX_SEGS) {
 		spin_unlock_irqrestore(&vblk->lock, flags);
@@ -182,8 +184,13 @@ static int virtio_blk_submit_vec(struct virtio_blk_dev *vblk, u64 sector,
 	virtq_submit(&vblk->vq, idx[0]);
 	virtio_queue_notify(vblk->vdev, 0);
 
-	while (!trans.completed)
-		thread_sleep_on(&trans.completed, &vblk->lock);
+	/*
+	 * Drop the queue lock while waiting so the IRQ handler can process the
+	 * used ring and complete @trans.  Reacquire it for the slot cleanup.
+	 */
+	spin_unlock_irqrestore(&vblk->lock, flags);
+	wait_for_completion(&trans.done);
+	flags = spin_lock_irqsave(&vblk->lock);
 
 	err = virtio_blk_status_to_errno(vblk->slots[idx[0]].status);
 	vblk->slots[idx[0]].trans = NULL;
@@ -198,10 +205,12 @@ static int virtio_blk_flush(struct virtio_blk_dev *vblk)
 {
 	unsigned int idx[2];
 	struct virtio_blk_req *req;
-	struct virtio_blk_io_desc trans = { .completed = false };
+	struct virtio_blk_io_desc trans = { 0 };
 	char *status;
 	int err;
 	irqstate_t flags = spin_lock_irqsave(&vblk->lock);
+
+	completion_init(&trans.done, "virtio_blk.flush");
 
 	while (virtq_alloc_desc_chain(&vblk->vq, idx, 2))
 		thread_sleep_on(&vblk->vq.desc, &vblk->lock);
@@ -227,8 +236,13 @@ static int virtio_blk_flush(struct virtio_blk_dev *vblk)
 	virtq_submit(&vblk->vq, idx[0]);
 	virtio_queue_notify(vblk->vdev, 0);
 
-	while (!trans.completed)
-		thread_sleep_on(&trans.completed, &vblk->lock);
+	/*
+	 * Drop the queue lock while waiting so the IRQ handler can process the
+	 * used ring and complete @trans.  Reacquire it for the slot cleanup.
+	 */
+	spin_unlock_irqrestore(&vblk->lock, flags);
+	wait_for_completion(&trans.done);
+	flags = spin_lock_irqsave(&vblk->lock);
 
 	err = virtio_blk_status_to_errno(vblk->slots[idx[0]].status);
 	vblk->slots[idx[0]].trans = NULL;

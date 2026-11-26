@@ -1,6 +1,7 @@
 #ifndef _BRK_BIO_H
 #define _BRK_BIO_H
 
+#include <brk/completion_types.h>
 #include <brk/list.h>
 #include <brk/mutex_types.h>
 #include <brk/spinlock_types.h>
@@ -49,7 +50,7 @@ struct bio {
 	unsigned int bi_nr_vecs;
 	enum req_op bi_op;
 	int bi_status;
-	bool bi_done;
+	completion_t done;
 	struct bio *bi_next;
 	struct bio_vec bi_io_vec[BIO_MAX_VECS];
 };
@@ -75,7 +76,7 @@ struct request_queue {
 	struct gendisk *disk;
 	struct thread *worker;
 	bool dead;
-	bool worker_done;
+	completion_t worker_done;
 };
 
 void bio_init(struct bio *bio, struct block_dev *bd, enum req_op op);

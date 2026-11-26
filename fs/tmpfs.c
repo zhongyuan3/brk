@@ -12,6 +12,7 @@
 #include <brk/path.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
+#include <brk/rwsem.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
@@ -1266,7 +1267,7 @@ static int tmpfs_setattr(struct dentry *dentry, struct iattr *attr)
 	t_inode = inode->private_data;
 	t_sb = inode->sb->private_data;
 
-	mutex_lock(&inode->rwsem);
+	down_write(&inode->rwsem);
 	mutex_lock(&t_sb->s_lock);
 
 	if (attr->valid & ATTR_SIZE) {
@@ -1350,7 +1351,7 @@ static int tmpfs_setattr(struct dentry *dentry, struct iattr *attr)
 
 out:
 	mutex_unlock(&t_sb->s_lock);
-	mutex_unlock(&inode->rwsem);
+	up_write(&inode->rwsem);
 	return err;
 }
 
@@ -1371,18 +1372,18 @@ static ssize_t tmpfs_file_read(struct file *file, char *buf, size_t size,
 	int err = 0;
 	size_t rcnt = 0;
 
-	mutex_lock(&inode->rwsem);
+	down_read(&inode->rwsem);
 
 	mutex_lock(&t_sb->s_lock);
 	err = tmpfs_read_file_at(t_inode, buf, size, pos, &rcnt);
 	mutex_unlock(&t_sb->s_lock);
 
 	if (err) {
-		mutex_unlock(&inode->rwsem);
+		up_read(&inode->rwsem);
 		return err;
 	}
 
-	mutex_unlock(&inode->rwsem);
+	up_read(&inode->rwsem);
 
 	return rcnt;
 }
@@ -1398,14 +1399,14 @@ static ssize_t tmpfs_file_write(struct file *file, const char *buf, size_t size,
 
 	loff_t old_pos = *pos;
 
-	mutex_lock(&inode->rwsem);
+	down_write(&inode->rwsem);
 
 	mutex_lock(&t_sb->s_lock);
 	err = tmpfs_write_file_at(t_inode, buf, size, pos, &wcnt);
 	mutex_unlock(&t_sb->s_lock);
 
 	if (err) {
-		mutex_unlock(&inode->rwsem);
+		up_write(&inode->rwsem);
 		return err;
 	}
 
@@ -1418,7 +1419,7 @@ static ssize_t tmpfs_file_write(struct file *file, const char *buf, size_t size,
 	tmpfs_vfs_times_to_inode(inode, t_inode);
 	mutex_unlock(&t_sb->s_lock);
 
-	mutex_unlock(&inode->rwsem);
+	up_write(&inode->rwsem);
 
 	return wcnt;
 }

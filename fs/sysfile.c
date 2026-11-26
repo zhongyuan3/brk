@@ -16,6 +16,7 @@
 #include <brk/path.h>
 #include <brk/permission.h>
 #include <brk/printk.h>
+#include <brk/rwsem.h>
 #include <brk/spinlock.h>
 #include <brk/stat.h>
 #include <brk/string.h>
@@ -703,9 +704,9 @@ long sys_read_dir(const struct syscall_ctx *ctx)
 		.pos = 0,
 	};
 
-	mutex_lock(&inode->rwsem);
+	down_read(&inode->rwsem);
 	err = fop->iterate_shared(fp, &dctx.ctx);
-	mutex_unlock(&inode->rwsem);
+	up_read(&inode->rwsem);
 	if (err) {
 		mutex_unlock(&fp->pos_lock);
 		file_put(fp);

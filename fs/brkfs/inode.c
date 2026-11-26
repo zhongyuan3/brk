@@ -8,6 +8,7 @@
 #include <brk/mutex.h>
 #include <brk/pagecache.h>
 #include <brk/printk.h>
+#include <brk/rwsem.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/task.h>
@@ -423,7 +424,7 @@ static int brkfs_unlink(struct inode *dir, struct dentry *dentry)
 	 * written back under the target inode's rwsem.  The VFS only holds
 	 * the parent directory's rwsem here.
 	 */
-	mutex_lock(&inode->rwsem);
+	down_write(&inode->rwsem);
 
 	err = brkfs_dir_remove(dir, dentry->name.name, dentry->name.len);
 	if (err)
@@ -441,7 +442,7 @@ static int brkfs_unlink(struct inode *dir, struct dentry *dentry)
 
 	err = brkfs_inode_write(sbi, inode);
 out:
-	mutex_unlock(&inode->rwsem);
+	up_write(&inode->rwsem);
 	return err;
 	/*
 	 * Do NOT inode_put(inode) here: the inode reference belongs to the
@@ -620,7 +621,7 @@ static int brkfs_rmdir(struct inode *dir, struct dentry *dentry)
 	if (!S_ISDIR(inode->mode))
 		return -ENOTDIR;
 
-	mutex_lock(&inode->rwsem);
+	down_write(&inode->rwsem);
 
 	/*
 	 * nlink only counts subdirectories, not ordinary files.  Scan the
@@ -650,7 +651,7 @@ static int brkfs_rmdir(struct inode *dir, struct dentry *dentry)
 	inode_touch_ctime(inode);
 	err = brkfs_inode_write(sbi, inode);
 out:
-	mutex_unlock(&inode->rwsem);
+	up_write(&inode->rwsem);
 	return err;
 	/*
 	 * Do NOT inode_put(inode) here. The inode reference belongs to the
@@ -715,9 +716,9 @@ static int brkfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		first = second;
 		second = tmp;
 	}
-	mutex_lock(&first->rwsem);
+	down_write(&first->rwsem);
 	if (second)
-		mutex_lock(&second->rwsem);
+		down_write(&second->rwsem);
 
 	if (replace && S_ISDIR(target->mode)) {
 		err = brkfs_dir_is_empty(target);
@@ -808,8 +809,8 @@ rollback_target:
 
 out_unlock:
 	if (second)
-		mutex_unlock(&second->rwsem);
-	mutex_unlock(&first->rwsem);
+		up_write(&second->rwsem);
+	up_write(&first->rwsem);
 	return err;
 }
 
@@ -882,7 +883,7 @@ static int brkfs_getattr(const struct path *path, struct kstat *stat, u32 mask,
 	(void)mask;
 	(void)flags;
 
-	mutex_lock(&inode->rwsem);
+	down_read(&inode->rwsem);
 
 	memset(stat, 0, sizeof(*stat));
 	stat->ino = inode->ino;
@@ -899,7 +900,7 @@ static int brkfs_getattr(const struct path *path, struct kstat *stat, u32 mask,
 	stat->blocks = (loff_t)div_ceil(blocks * inode->sb->block_size, 512);
 	inode_times_to_kstat(inode, stat);
 
-	mutex_unlock(&inode->rwsem);
+	up_read(&inode->rwsem);
 	return 0;
 }
 
@@ -914,7 +915,7 @@ static int brkfs_setattr(struct dentry *dentry, struct iattr *attr)
 	 * writeback.  Besides truncation, the mode/timestamp changes below
 	 * are copied into the on-disk inode by brkfs_inode_write().
 	 */
-	mutex_lock(&inode->rwsem);
+	down_write(&inode->rwsem);
 
 	if (attr->valid & ATTR_MODE) {
 		inode->mode = (inode->mode & S_IFMT) | (attr->mode & 07777);
@@ -952,7 +953,7 @@ static int brkfs_setattr(struct dentry *dentry, struct iattr *attr)
 	}
 	err = brkfs_inode_write(sbi, inode);
 out:
-	mutex_unlock(&inode->rwsem);
+	up_write(&inode->rwsem);
 	return err;
 }
 
