@@ -10,23 +10,6 @@
 ![Mood](https://img.shields.io/badge/mood-panic%20but_happy-red)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
----
-
-## Table of Contents
-
-- [BRK](#brk)
-  - [Table of Contents](#table-of-contents)
-  - [What the heck is this?](#what-the-heck-is-this)
-  - [Inspiration \& Origins](#inspiration--origins)
-  - [Build](#build)
-    - [Prerequisites](#prerequisites)
-    - [Building the Kernel](#building-the-kernel)
-    - [Useful Helpers](#useful-helpers)
-    - [Useful Variables](#useful-variables)
-  - [License](#license)
-
----
-
 ## What the heck is this?
 
 BRK is a monolithic kernel written entirely in C, driven purely by personal curiosity (and maybe a slight touch of madness).
@@ -67,18 +50,6 @@ make help           # list all available targets
 make size           # show kernel size
 make disasm         # disassemble the kernel
 ```
-
-### Useful Variables
-
-| Variable                                 | Description                                               |
-| ---------------------------------------- | --------------------------------------------------------- |
-| `BUILD=debug\|release`                   | Kernel build type                                         |
-| `BUILD_ROOT=<path>`                      | Kernel build directory, default `build`                   |
-| `V=1`                                    | Show full compiler/linker commands                        |
-| `EXTRA_CFLAGS=...` / `EXTRA_LDFLAGS=...` | Temporarily append compile/link flags                     |
-| `WERROR=0`                               | Keep warnings non-fatal while bringing up a new toolchain |
-| `PGTABLE_LEVELS={3\|4\|5}`               | Page-table levels, default `3`                            |
-| `LINK_CHECK={0\|1}`                      | Warn about linker orphan sections                         |
 
 ## License
 
