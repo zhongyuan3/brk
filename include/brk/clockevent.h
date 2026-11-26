@@ -15,7 +15,8 @@ enum clock_event_mode {
 /*
  * A clock event device programs the next timer interrupt.  Expiry times are
  * absolute CLOCK_MONOTONIC nanoseconds; the device converts the resulting
- * delta into its own cycles.
+ * delta into its own cycles.  Devices are registered per CPU; the current
+ * device is selected independently on each CPU.
  */
 struct clock_event_device {
 	const char *name;

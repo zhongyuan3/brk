@@ -27,18 +27,8 @@ static bool tick_ready;
 
 void tick_init(void)
 {
-	struct clock_event_device *dev = clockevents_get_current();
-	int err;
-
-	if (!dev)
-		panic("tick: no clock event device\n");
-
 	__atomic_store_n(&tick_epoch_ns, ktime_get_mono_ns(), __ATOMIC_RELAXED);
 	__atomic_store_n(&tick_ready, true, __ATOMIC_RELEASE);
-
-	err = clockevents_set_mode(dev, CLOCK_EVT_MODE_ONESHOT);
-	if (err)
-		pr_warn("failed to set oneshot mode: %d\n", err);
 
 	tick_init_cpu();
 
@@ -71,6 +61,11 @@ void tick_init_cpu(void)
 
 	now = ktime_get_mono_ns();
 	tc->last_tick_ns = now;
+
+	err = clockevents_set_mode(dev, CLOCK_EVT_MODE_ONESHOT);
+	if (err)
+		pr_warn("failed to set oneshot mode on cpu %lu: %d\n", cpu,
+			err);
 
 	err = clockevents_program_event(dev, now + TICK_NS);
 	if (err)

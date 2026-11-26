@@ -1,4 +1,5 @@
 #include <brk/clockevent.h>
+#include <brk/cpu.h>
 #include <brk/spinlock.h>
 #include <brk/timekeeper.h>
 #include <brk/types.h>
@@ -6,14 +7,17 @@
 
 static LIST_DEFINE(clockevents);
 static SPINLOCK_DEFINE(clockevents_lock);
-static struct clock_event_device *current_clockevent;
+static struct clock_event_device *current_clockevents[MAX_CPUS];
 
 int clockevents_register_device(struct clock_event_device *dev)
 {
 	struct clock_event_device *existing;
+	cpuid_t cpu = this_cpuid();
 	irqstate_t flags;
 
 	if (!dev || !dev->name || !dev->set_next_event || !dev->frequency)
+		return -EINVAL;
+	if (cpu >= MAX_CPUS)
 		return -EINVAL;
 
 	flags = spin_lock_irqsave(&clockevents_lock);
@@ -27,8 +31,10 @@ int clockevents_register_device(struct clock_event_device *dev)
 	list_add_tail(&dev->list, &clockevents);
 	dev->registered = true;
 
-	if (!current_clockevent || dev->rating > current_clockevent->rating)
-		__atomic_store_n(&current_clockevent, dev, __ATOMIC_RELEASE);
+	if (!current_clockevents[cpu] ||
+	    dev->rating > current_clockevents[cpu]->rating)
+		__atomic_store_n(&current_clockevents[cpu], dev,
+				 __ATOMIC_RELEASE);
 
 	spin_unlock_irqrestore(&clockevents_lock, flags);
 	return 0;
@@ -36,7 +42,11 @@ int clockevents_register_device(struct clock_event_device *dev)
 
 struct clock_event_device *clockevents_get_current(void)
 {
-	return __atomic_load_n(&current_clockevent, __ATOMIC_ACQUIRE);
+	cpuid_t cpu = this_cpuid();
+
+	if (cpu >= MAX_CPUS)
+		return NULL;
+	return __atomic_load_n(&current_clockevents[cpu], __ATOMIC_ACQUIRE);
 }
 
 int clockevents_set_mode(struct clock_event_device *dev,
