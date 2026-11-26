@@ -56,7 +56,7 @@ static struct page *pcp_alloc(void)
 		list_del(&pg->buddy_lru);
 		pcp->count -= 1;
 
-		assert(pg->flags & PAGE_FLAGS_PCP);
+		kassert(pg->flags & PAGE_FLAGS_PCP);
 		pg->flags &= ~(PAGE_FLAGS_FREE | PAGE_FLAGS_PCP);
 		pg->buddy_page_order = 0;
 	}
@@ -89,11 +89,11 @@ static void __page_free_to_buddy(struct page *pg, unsigned int order)
 
 	spin_lock(&areas_lock);
 
-	assert((pg->flags & PAGE_FLAGS_BUDDY));
-	assert(!(pg->flags & PAGE_FLAGS_FREE));
-	assert(!(pg->flags & PAGE_FLAGS_PCP));
-	assert((pg->flags & PAGE_FLAGS_HEAD));
-	assert(is_aligned(page_to_phys(pg), (1ULL << (PAGE_SHIFT + order))));
+	kassert((pg->flags & PAGE_FLAGS_BUDDY));
+	kassert(!(pg->flags & PAGE_FLAGS_FREE));
+	kassert(!(pg->flags & PAGE_FLAGS_PCP));
+	kassert((pg->flags & PAGE_FLAGS_HEAD));
+	kassert(is_aligned(page_to_phys(pg), (1ULL << (PAGE_SHIFT + order))));
 
 	pg->flags = 0;
 
@@ -131,7 +131,7 @@ static void pcp_drain_all(void)
 			list_del(&pg->buddy_lru);
 			pcp->count -= 1;
 
-			assert(pg->flags & PAGE_FLAGS_PCP);
+			kassert(pg->flags & PAGE_FLAGS_PCP);
 			pg->flags = PAGE_FLAGS_NEW_PAGE;
 			pg->buddy_page_order = 0;
 			__page_free_to_buddy(pg, 0);
@@ -239,10 +239,10 @@ static bool page_is_buddy(struct page *pg, struct page *buddy,
 
 void page_free(struct page *pg, unsigned int order)
 {
-	assert((pg->flags & PAGE_FLAGS_BUDDY));
-	assert(!(pg->flags & PAGE_FLAGS_FREE));
-	assert((pg->flags & PAGE_FLAGS_HEAD));
-	assert(is_aligned(page_to_phys(pg), (1ULL << (PAGE_SHIFT + order))));
+	kassert((pg->flags & PAGE_FLAGS_BUDDY));
+	kassert(!(pg->flags & PAGE_FLAGS_FREE));
+	kassert((pg->flags & PAGE_FLAGS_HEAD));
+	kassert(is_aligned(page_to_phys(pg), (1ULL << (PAGE_SHIFT + order))));
 
 	if (order == 0 && pcp_free(pg))
 		return;
@@ -289,7 +289,7 @@ void page_free_phys_range(phys_addr_t start, phys_size_t size)
 
 		npgs = (size_t)1 << order;
 		pg = pfn_to_page(phys_to_pfn(start));
-		assert(pg);
+		kassert(pg);
 		pg->flags = PAGE_FLAGS_NEW_PAGE;
 		page_free(pg, order);
 
@@ -329,19 +329,19 @@ static void page_alloc_check_pfn_conversions(void)
 		for (pfn_t pfn = start; pfn < end; ++pfn) {
 			struct page *pg = pfn_to_page(pfn);
 
-			assert(pfn_valid(pfn));
-			assert(page_to_pfn(pg) == pfn);
-			assert(page_to_phys(pg) == pfn_to_phys(pfn));
-			assert(phys_to_page(pfn_to_phys(pfn)) == pg);
-			assert(page_to_virt(pg) ==
-			       phys_to_virt(pfn_to_phys(pfn)));
+			kassert(pfn_valid(pfn));
+			kassert(page_to_pfn(pg) == pfn);
+			kassert(page_to_phys(pg) == pfn_to_phys(pfn));
+			kassert(phys_to_page(pfn_to_phys(pfn)) == pg);
+			kassert(page_to_virt(pg) ==
+				phys_to_virt(pfn_to_phys(pfn)));
 		}
 	}
 
 	for (pfn_t pfn = min_pfn; pfn < max_pfn; ++pfn) {
 		bool valid = mchain_is_memory(pfn_to_phys(pfn));
 
-		assert(pfn_valid(pfn) == valid);
+		kassert(pfn_valid(pfn) == valid);
 	}
 }
 #endif

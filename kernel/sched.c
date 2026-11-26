@@ -95,7 +95,7 @@ void sched_enqueue(struct thread *thread)
 		if (target < 0)
 			target = thread->cpu;
 	} else {
-		assert(thread->cpu == (int)this_cpuid());
+		kassert(thread->cpu == (int)this_cpuid());
 		target = thread->cpu;
 	}
 
@@ -106,8 +106,8 @@ void sched_enqueue(struct thread *thread)
 	cpu = &cpus[target];
 	flags = spin_lock_irqsave(&cpu->run_queue_lock);
 
-	assert(list_empty(&thread->queue));
-	assert(thread->state == THREAD_STATE_RUNNING);
+	kassert(list_empty(&thread->queue));
+	kassert(thread->state == THREAD_STATE_RUNNING);
 	thread->cpu = target;
 	list_add_tail(&thread->queue, &cpu->run_queue);
 	cpu->nr_running++;
@@ -134,9 +134,9 @@ static struct thread *thread_pick_next(struct cpu *cpu)
 	if (!list_empty(&cpu->run_queue)) {
 		thread =
 			list_first_entry(&cpu->run_queue, struct thread, queue);
-		assert(thread->cpu == (int)cpu->id);
+		kassert(thread->cpu == (int)cpu->id);
 		list_del_init(&thread->queue);
-		assert(cpu->nr_running > 0);
+		kassert(cpu->nr_running > 0);
 		cpu->nr_running--;
 	}
 	spin_unlock(&cpu->run_queue_lock);
@@ -233,7 +233,7 @@ void sched_start(void)
 	cpu->idle = idle_process->leader;
 	cpu->handoff = NULL;
 
-	assert(init->oncpu == -1);
+	kassert(init->oncpu == -1);
 	init->oncpu = cpu->id;
 	set_current_thread(init);
 
@@ -275,10 +275,10 @@ static void sched_switch(void)
 	struct cpu *cpu = this_cpu();
 	u64 now;
 
-	assert(!local_irq_enabled());
-	assert(curr->lock.locked);
-	assert(cpu->preempt_count == 0);
-	assert(curr->oncpu == (int)cpu->id);
+	kassert(!local_irq_enabled());
+	kassert(curr->lock.locked);
+	kassert(cpu->preempt_count == 0);
+	kassert(curr->oncpu == (int)cpu->id);
 
 	set_current_thread(NULL);
 
@@ -318,7 +318,7 @@ static void sched_switch(void)
 	cpu->handoff = curr;
 
 	raw_spin_lock(&next->lock);
-	assert(next->oncpu == -1);
+	kassert(next->oncpu == -1);
 	next->oncpu = cpu->id;
 	set_current_thread(next);
 	arch_frame_set_kernel_tp(next->frame, (unsigned long)cpu);
@@ -347,7 +347,7 @@ void thread_yield(void)
 	irqstate_t flags = local_irq_save();
 	struct thread *thread = current_thread();
 
-	assert(preempt_count() == 0);
+	kassert(preempt_count() == 0);
 
 	raw_spin_lock(&thread->lock);
 	sched_switch();
@@ -457,9 +457,9 @@ static bool thread_sleep_common(void *chan, spinlock_t *lock,
 {
 	struct thread *thread = current_thread();
 
-	assert(!local_irq_enabled());
-	assert(lock->locked);
-	assert(preempt_count() == 0);
+	kassert(!local_irq_enabled());
+	kassert(lock->locked);
+	kassert(preempt_count() == 0);
 
 	if (interruptible && thread_abort_pending(thread))
 		return false;
@@ -695,7 +695,7 @@ void thread_exit(int status)
 			thread_wake_all(init_reaper);
 	}
 
-	assert(preempt_count() == 0);
+	kassert(preempt_count() == 0);
 
 	/* sched_switch() never returns for a zombie, so no irqrestore here. */
 	local_irq_disable();

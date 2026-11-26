@@ -88,7 +88,7 @@ static void uvm_space_free_stack(struct uvm_space *mm)
 {
 	if (mm->stack->size > 0) {
 		unmap_user_pages(mm->pgd, mm->stack->addr, mm->stack->size);
-		assert(mm->stack->pages[0]);
+		kassert(mm->stack->pages[0]);
 		page_free(mm->stack->pages[0], USTACK_PAGE_ORDER);
 	}
 	uvm_region_free(mm->stack);
@@ -99,7 +99,7 @@ static void uvm_space_free_heap(struct uvm_space *mm)
 	if (mm->heap->size > 0) {
 		unmap_user_pages(mm->pgd, mm->heap->addr, mm->heap->size);
 		for (size_t i = 0; i < mm->heap->nr_pages; ++i) {
-			assert(mm->heap->pages[i]);
+			kassert(mm->heap->pages[i]);
 			page_put(mm->heap->pages[i]);
 		}
 		kfree(mm->heap->pages);
@@ -411,7 +411,7 @@ static int uvm_space_copy_stack(struct uvm_space *dst, struct uvm_space *src)
 
 	struct page **pgs = kcalloc(1, sizeof(struct page *));
 	if (!pgs) {
-		assert(pg);
+		kassert(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
 		return -ENOMEM;
 	}
@@ -428,7 +428,7 @@ static int uvm_space_copy_stack(struct uvm_space *dst, struct uvm_space *src)
 	err = map_user_pages(dst->pgd, src->stack->addr, src->stack->size, pa,
 			     flags);
 	if (err) {
-		assert(pg);
+		kassert(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
 		kfree(pgs);
 		return err;
@@ -515,38 +515,38 @@ static void __unmap_range(virt_addr_t addr, virt_addr_t end_addr,
 	while (addr < end_addr) {
 		pgde = pgd_offset(pgd, addr);
 		if (pgd_is_leaf(*pgde)) {
-			assert(end_addr - addr >= (1UL << PGDIR_SHIFT));
+			kassert(end_addr - addr >= (1UL << PGDIR_SHIFT));
 			pgd_clear(pgde);
 			addr += 1UL << PGDIR_SHIFT;
 			continue;
 		}
 		p4de = p4d_offset(pgde, addr, phys_to_virt);
 		if (p4d_is_leaf(*p4de)) {
-			assert(end_addr - addr >= (1UL << P4D_SHIFT));
+			kassert(end_addr - addr >= (1UL << P4D_SHIFT));
 			p4d_clear(p4de);
 			addr += 1UL << P4D_SHIFT;
 			continue;
 		}
 		pude = pud_offset(p4de, addr, phys_to_virt);
 		if (pud_is_leaf(*pude)) {
-			assert(end_addr - addr >= (1UL << PUD_SHIFT));
+			kassert(end_addr - addr >= (1UL << PUD_SHIFT));
 			pud_clear(pude);
 			addr += 1UL << PUD_SHIFT;
 			continue;
 		}
-		assert(!pud_none(*pude));
+		kassert(!pud_none(*pude));
 		pmd = pud_to_pmd(*pude, phys_to_virt);
 		pmde = pmd_offset(pmd, addr);
 		if (pmd_is_leaf(*pmde)) {
-			assert(end_addr - addr >= PAGE_SIZE_2M);
+			kassert(end_addr - addr >= PAGE_SIZE_2M);
 			pmd_clear(pmde);
 			addr += PAGE_SIZE_2M;
 			continue;
 		}
-		assert(pmd_is_valid(*pmde));
+		kassert(pmd_is_valid(*pmde));
 		pt = pmd_to_pt(*pmde, phys_to_virt);
 		pte = pte_offset(pt, addr);
-		assert(pte_is_valid(*pte));
+		kassert(pte_is_valid(*pte));
 		pte_clear(pte);
 		addr += PAGE_SIZE;
 	}
@@ -573,11 +573,11 @@ static int map_fixed_size_pages(virt_addr_t addr, phys_addr_t paddr,
 		pgde = pgd_offset(pgd, addr);
 
 		if (page_size == (1UL << PGDIR_SHIFT)) {
-			assert(pgd_none(*pgde));
+			kassert(pgd_none(*pgde));
 			pgd_set_leaf(pgde, paddr, flags);
 			continue;
 		}
-		assert(!pgd_is_leaf(*pgde));
+		kassert(!pgd_is_leaf(*pgde));
 
 #if HAVE_P4D
 		if (pgd_none(*pgde)) {
@@ -594,11 +594,11 @@ static int map_fixed_size_pages(virt_addr_t addr, phys_addr_t paddr,
 		p4de = p4d_offset(pgde, addr, phys_to_virt);
 
 		if (page_size == (1UL << P4D_SHIFT)) {
-			assert(p4d_none(*p4de));
+			kassert(p4d_none(*p4de));
 			p4d_set_leaf(p4de, paddr, flags);
 			continue;
 		}
-		assert(!p4d_is_leaf(*p4de));
+		kassert(!p4d_is_leaf(*p4de));
 
 #if HAVE_PUD
 		if (p4d_none(*p4de)) {
@@ -615,11 +615,11 @@ static int map_fixed_size_pages(virt_addr_t addr, phys_addr_t paddr,
 		pude = pud_offset(p4de, addr, phys_to_virt);
 
 		if (page_size == (1UL << PUD_SHIFT)) {
-			assert(pud_none(*pude));
+			kassert(pud_none(*pude));
 			pud_set_leaf(pude, paddr, flags);
 			continue;
 		}
-		assert(!pud_is_leaf(*pude));
+		kassert(!pud_is_leaf(*pude));
 
 		if (pud_none(*pude)) {
 			table_pa = alloc_frame();
@@ -634,7 +634,7 @@ static int map_fixed_size_pages(virt_addr_t addr, phys_addr_t paddr,
 		pmd = pud_to_pmd(*pude, phys_to_virt);
 		pmde = pmd_offset(pmd, addr);
 		if (page_size == PAGE_SIZE_2M) {
-			assert(!pmd_is_valid(*pmde));
+			kassert(!pmd_is_valid(*pmde));
 			pmd_set_leaf(pmde, paddr, flags);
 			continue;
 		}
@@ -650,7 +650,7 @@ static int map_fixed_size_pages(virt_addr_t addr, phys_addr_t paddr,
 		}
 		pt = pmd_to_pt(*pmde, phys_to_virt);
 		pte = pte_offset(pt, addr);
-		assert(!pte_is_valid(*pte));
+		kassert(!pte_is_valid(*pte));
 		pte_set_leaf(pte, paddr, flags);
 	}
 
@@ -667,12 +667,12 @@ int map_pages(const struct map_pages_context *ctx)
 	phys_size_t size = ctx->size;
 	phys_addr_t paddr = ctx->paddr;
 
-	assert(ctx->root);
-	assert(ctx->alloc_frame);
-	assert(ctx->phys_to_virt);
-	assert(is_aligned(addr, PAGE_SIZE));
-	assert(is_aligned(size, PAGE_SIZE));
-	assert(is_aligned(paddr, PAGE_SIZE));
+	kassert(ctx->root);
+	kassert(ctx->alloc_frame);
+	kassert(ctx->phys_to_virt);
+	kassert(is_aligned(addr, PAGE_SIZE));
+	kassert(is_aligned(size, PAGE_SIZE));
+	kassert(is_aligned(paddr, PAGE_SIZE));
 
 	end_addr = addr + size;
 	while (addr < end_addr) {
@@ -739,8 +739,8 @@ void unmap_pages(pgd_t *root, virt_addr_t addr, phys_size_t size)
 	};
 	virt_addr_t start = addr;
 
-	assert(is_aligned(start, PAGE_SIZE));
-	assert(is_aligned(size, PAGE_SIZE));
+	kassert(is_aligned(start, PAGE_SIZE));
+	kassert(is_aligned(size, PAGE_SIZE));
 	__unmap_range(start, start + size, &ctx);
 }
 
@@ -782,7 +782,7 @@ static void mchain_release_to_buddy(void)
 	phys_addr_t end;
 
 #ifndef NDEBUG
-	assert(mchain_validate() == 0);
+	kassert(mchain_validate() == 0);
 #endif
 
 	/*

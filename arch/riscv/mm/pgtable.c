@@ -26,7 +26,7 @@ static phys_addr_t alloc_pgtable(void)
 static void free_pgtable(phys_addr_t paddr)
 {
 	struct page *pg = phys_to_page(paddr);
-	assert(pg);
+	kassert(pg);
 	page_free(pg, 0);
 }
 

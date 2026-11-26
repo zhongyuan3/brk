@@ -147,7 +147,7 @@ void *vmalloc(size_t size)
 		area->pages[i] = pg;
 		if (map_kernel_pages(vaddr, PAGE_SIZE, page_to_phys(pg),
 				     PTE_R | PTE_W)) {
-			assert(pg);
+			kassert(pg);
 			page_free(pg, 0);
 			goto out_cleanup;
 		}
@@ -159,7 +159,7 @@ void *vmalloc(size_t size)
 
 out_cleanup:
 	for (size_t j = 0; j < i; ++j) {
-		assert(area->pages[j]);
+		kassert(area->pages[j]);
 		page_free(area->pages[j], 0);
 	}
 	kfree(area->pages);
@@ -181,7 +181,7 @@ void vfree(void *ptr)
 
 	unmap_kernel_pages(area->addr, area->size);
 	for (size_t i = 0; i < area->nr_pages; ++i) {
-		assert(area->pages[i]);
+		kassert(area->pages[i]);
 		page_free(area->pages[i], 0);
 	}
 	kfree(area->pages);

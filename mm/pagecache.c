@@ -249,7 +249,7 @@ void cached_page_put(struct cached_page *cp)
 	 * only after the page has been removed from the hash, so by this
 	 * point the page is unreachable from the cache.
 	 */
-	assert(hlist_unhashed(&cp->ht_node));
+	kassert(hlist_unhashed(&cp->ht_node));
 	cached_page_destroy(cp);
 }
 

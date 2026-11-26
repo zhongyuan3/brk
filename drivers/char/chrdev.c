@@ -41,7 +41,7 @@ void chrdev_put(struct char_dev *cd)
 	if (refcnt_dec_fetch(&cd->ref) > 0)
 		return;
 
-	assert(hlist_unhashed(&cd->hlist));
+	kassert(hlist_unhashed(&cd->hlist));
 	kfree(cd);
 }
 

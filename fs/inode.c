@@ -93,7 +93,7 @@ static struct inode *__inode_lookup(struct hlist_head *bucket,
 {
 	struct inode *inode;
 
-	assert(spin_is_locked_by_me(&inode_hash_lock));
+	kassert(spin_is_locked_by_me(&inode_hash_lock));
 
 retry:
 	/* Look up in hash table */

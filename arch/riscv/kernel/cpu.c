@@ -28,8 +28,8 @@ virt_addr_t arch_boot_stack_top(cpuid_t cpuid)
 
 void context_switch(struct thread *prev, struct thread *next)
 {
-	assert(prev != NULL);
-	assert(prev != next);
+	kassert(prev != NULL);
+	kassert(prev != next);
 
 	__switch_to(&prev->kernel_sp, &next->kernel_sp);
 }

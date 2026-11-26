@@ -401,7 +401,7 @@ static void vmemmap_map_range(pfn_t start_pfn, pfn_t end_pfn,
 	size = va_end - va_start;
 	paddr = mchain_alloc(size, PAGE_SIZE, 0, MCHAIN_ANY_ADDR,
 			     MCHAIN_NID_ANY, 0);
-	assert(paddr);
+	kassert(paddr);
 	memset((void *)(uintptr_t)phys_to_virt(paddr), 0, size);
 
 	pr_debug("vmemmap: va=%#lx,pa=%#lx,sz=%lu\n", va_start, paddr, size);

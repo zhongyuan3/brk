@@ -69,8 +69,8 @@ int virtq_alloc_desc(struct virtq *vq, unsigned int *idx)
 
 void virtq_free_desc(struct virtq *vq, unsigned int idx)
 {
-	assert(idx < vq->num);
-	assert(vq->desc_used[idx]);
+	kassert(idx < vq->num);
+	kassert(vq->desc_used[idx]);
 	vq->desc_used[idx] = false;
 	vq->desc[idx].addr = 0;
 	vq->desc[idx].len = 0;

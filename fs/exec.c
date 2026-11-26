@@ -337,14 +337,14 @@ static int map_seg(struct uvm_space *mm, struct uvm_region *vma,
 
 			err = exec_read_exact(fp, fo, (char *)va + dst_off, n);
 			if (err) {
-				assert(pg);
+				kassert(pg);
 				page_free(pg, 0);
 				goto failed;
 			}
 		}
 		err = map_user_pages(mm->pgd, addr, PAGE_SIZE, pa, flags);
 		if (err) {
-			assert(pg);
+			kassert(pg);
 			page_free(pg, 0);
 			goto failed;
 		}
@@ -361,7 +361,7 @@ failed:
 	for (user_addr_t a = vma->addr; a < addr; a += PAGE_SIZE)
 		unmap_user_pages(mm->pgd, a, PAGE_SIZE);
 	for (size_t j = 0; j < i; ++j) {
-		assert(pgs[j]);
+		kassert(pgs[j]);
 		page_free(pgs[j], 0);
 	}
 	kfree(pgs);
@@ -587,7 +587,7 @@ static int map_stack(struct uvm_space *mm, bool want_x)
 
 	pgs = kcalloc(1, sizeof(struct page *));
 	if (!pgs) {
-		assert(pg);
+		kassert(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
 		return -ENOMEM;
 	}
@@ -599,7 +599,7 @@ static int map_stack(struct uvm_space *mm, bool want_x)
 	err = map_user_pages(mm->pgd, base, USTACK_SIZE, pa, stack_perm);
 	if (err) {
 		kfree(pgs);
-		assert(pg);
+		kassert(pg);
 		page_free(pg, USTACK_PAGE_ORDER);
 		return err;
 	}

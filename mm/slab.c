@@ -116,9 +116,9 @@ void slab_deinit(struct slab_allocator *allocator)
 		first = list->next;
 		list_del(first);
 		pg = list_entry(first, struct page, slab_list);
-		assert(pg->slab_free_count == pg->slab_objs_count);
+		kassert(pg->slab_free_count == pg->slab_objs_count);
 		slab_unmark_page_range(pg, allocator->page_order);
-		assert(pg);
+		kassert(pg);
 		page_free(pg, allocator->page_order);
 	}
 	spin_unlock(&allocator->lock);
@@ -179,7 +179,7 @@ void slab_free(struct slab_allocator *allocator, void *obj)
 
 	spin_lock(&allocator->lock);
 
-	assert(is_aligned((uintptr_t)obj, allocator->align));
+	kassert(is_aligned((uintptr_t)obj, allocator->align));
 
 	list = &allocator->slab_list;
 	list_for_each_entry(curr, list, slab_list) {

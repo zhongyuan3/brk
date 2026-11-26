@@ -1,20 +1,19 @@
 #ifndef BRK_ASSERT_H
 #define BRK_ASSERT_H
 
+#include <assert.h>
 #include <stdnoreturn.h>
 
-noreturn void __assert_fail(char const *file, int line, char const *expr);
+noreturn void __kassert_fail(char const *file, int line, char const *expr);
 
 #ifndef NDEBUG
-#define assert(expr)                                              \
-	do {                                                      \
-		if (!(expr))                                      \
-			__assert_fail(__FILE__, __LINE__, #expr); \
+#define kassert(expr)                                              \
+	do {                                                       \
+		if (!(expr))                                       \
+			__kassert_fail(__FILE__, __LINE__, #expr); \
 	} while (0)
 #else
-#define assert(expr) ((void)0)
+#define kassert(expr) ((void)0)
 #endif
-
-#define static_assert _Static_assert
 
 #endif

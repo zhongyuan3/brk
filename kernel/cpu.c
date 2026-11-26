@@ -40,7 +40,7 @@ void preempt_enable(void)
 {
 	struct cpu *cpu = this_cpu();
 
-	assert(cpu->preempt_count > 0);
+	kassert(cpu->preempt_count > 0);
 	cpu->preempt_count--;
 	__asm__ volatile("" ::: "memory");
 }
@@ -94,13 +94,13 @@ void set_this_cpuid(cpuid_t cpuid)
 struct thread *current_thread(void)
 {
 	struct cpu *c = this_cpu();
-	assert(c != NULL);
+	kassert(c != NULL);
 	return c->current;
 }
 
 void set_current_thread(struct thread *task)
 {
 	struct cpu *c = this_cpu();
-	assert(c != NULL);
+	kassert(c != NULL);
 	c->current = task;
 }

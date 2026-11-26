@@ -86,7 +86,7 @@ static virt_addr_t kstack_alloc(void)
 static void kstack_free(virt_addr_t stack)
 {
 	struct page *pg = virt_to_page((uintptr_t)stack);
-	assert(pg);
+	kassert(pg);
 	page_free(pg, KSTACK_PAGE_ORDER);
 }
 
@@ -200,11 +200,11 @@ static struct thread *thread_create_in(struct process *process,
 	thread->kstack_top = thread->kstack_base + KSTACK_SIZE;
 	kernel_sp = thread->kstack_top;
 	kernel_sp -= arch_frame_size();
-	assert(is_aligned(kernel_sp, 16));
+	kassert(is_aligned(kernel_sp, 16));
 	thread->frame = (struct trap_frame *)kernel_sp;
 	arch_frame_init(thread->frame);
 	kernel_sp -= CONTEXT_SIZE;
-	assert(is_aligned(kernel_sp, 16));
+	kassert(is_aligned(kernel_sp, 16));
 	ctx = (struct context *)kernel_sp;
 	ctx->ra = (unsigned long)(fn ? fn : default_new_thread_entry);
 	thread->kernel_sp = kernel_sp;
@@ -340,7 +340,7 @@ void process_destroy(struct process *process)
 	while (!list_empty(&process->threads)) {
 		thread = list_first_entry(&process->threads, struct thread,
 					  proc_threads);
-		assert(thread->oncpu == -1);
+		kassert(thread->oncpu == -1);
 
 		list_del_init(&thread->proc_threads);
 
@@ -1151,8 +1151,8 @@ void thread_start(struct thread *thread)
 void thread_sched_tail(void)
 {
 	struct thread *thread = current_thread();
-	assert(thread != NULL);
-	assert(thread->newly_forked);
+	kassert(thread != NULL);
+	kassert(thread->newly_forked);
 	thread->newly_forked = false;
 	complete_thread_switch();
 }

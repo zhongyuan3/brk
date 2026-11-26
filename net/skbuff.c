@@ -29,7 +29,7 @@ u8 *skb_put(struct sk_buff *skb, size_t len)
 {
 	u8 *old = skb->tail;
 
-	assert(skb->tail + len <= skb->end);
+	kassert(skb->tail + len <= skb->end);
 	skb->tail += len;
 	skb->len += len;
 	return old;
@@ -37,7 +37,7 @@ u8 *skb_put(struct sk_buff *skb, size_t len)
 
 u8 *skb_push(struct sk_buff *skb, size_t len)
 {
-	assert(skb->data - skb->head >= (ptrdiff_t)len);
+	kassert(skb->data - skb->head >= (ptrdiff_t)len);
 	skb->data -= len;
 	skb->len += len;
 	return skb->data;
@@ -45,14 +45,14 @@ u8 *skb_push(struct sk_buff *skb, size_t len)
 
 void skb_pull(struct sk_buff *skb, size_t len)
 {
-	assert(len <= skb->len);
+	kassert(len <= skb->len);
 	skb->data += len;
 	skb->len -= len;
 }
 
 void skb_reserve(struct sk_buff *skb, size_t len)
 {
-	assert(len <= skb_tailroom(skb));
+	kassert(len <= skb_tailroom(skb));
 	skb->data += len;
 	skb->tail += len;
 }

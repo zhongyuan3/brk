@@ -52,7 +52,7 @@ noreturn void panic(char const *fmt, ...)
 		__asm__ volatile("wfi");
 }
 
-noreturn void __assert_fail(char const *file, int line, char const *expr)
+noreturn void __kassert_fail(char const *file, int line, char const *expr)
 {
 	panic("assertion failed: %s:%d: %s\n", file, line, expr);
 }

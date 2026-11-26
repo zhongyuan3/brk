@@ -130,11 +130,11 @@ void kfree(void *ptr)
 		struct page *head =
 			kmalloc_block_head(pg, pg->buddy_page_order);
 
-		assert(head->flags & PAGE_FLAGS_HEAD);
+		kassert(head->flags & PAGE_FLAGS_HEAD);
 		kmalloc_unmark_block(head, head->buddy_page_order);
 		page_free(head, head->buddy_page_order);
 	} else {
-		assert(pg);
+		kassert(pg);
 		page_free(pg, pg->buddy_page_order);
 	}
 }

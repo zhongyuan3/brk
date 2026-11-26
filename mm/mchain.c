@@ -151,10 +151,10 @@ static void mchain_free_list_push(struct mchain_pool *pool, int idx)
 {
 	struct mchain_entry *entry;
 
-	assert(pool);
-	assert(idx >= 0);
-	assert((unsigned int)idx < pool->capacity);
-	assert(pool->free_list_ready);
+	kassert(pool);
+	kassert(idx >= 0);
+	kassert((unsigned int)idx < pool->capacity);
+	kassert(pool->free_list_ready);
 
 	entry = &pool->entries[idx];
 	entry->prev = -1;
@@ -173,7 +173,7 @@ static int mchain_free_list_pop(struct mchain_pool *pool)
 	if (idx < 0)
 		return -1;
 
-	assert((unsigned int)idx < pool->capacity);
+	kassert((unsigned int)idx < pool->capacity);
 	pool->free_head = pool->entries[idx].next;
 	pool->entries[idx].next = -1;
 	pool->entries[idx].prev = -1;
@@ -183,7 +183,7 @@ static int mchain_free_list_pop(struct mchain_pool *pool)
 
 static void mchain_used_inc(struct mchain_pool *pool)
 {
-	assert(pool->used < pool->capacity);
+	kassert(pool->used < pool->capacity);
 	pool->used++;
 	if (pool->used > pool->peak_used)
 		pool->peak_used = pool->used;
@@ -191,7 +191,7 @@ static void mchain_used_inc(struct mchain_pool *pool)
 
 static void mchain_used_dec(struct mchain_pool *pool)
 {
-	assert(pool->used > 0);
+	kassert(pool->used > 0);
 	if (pool->used > 0)
 		pool->used--;
 }
@@ -209,9 +209,9 @@ void mchain_bootstrap(struct mchain_pool *pool)
 		return;
 	}
 
-	assert(pool->head == -1);
-	assert(pool->free_head == -1);
-	assert(pool->used == 0);
+	kassert(pool->head == -1);
+	kassert(pool->free_head == -1);
+	kassert(pool->used == 0);
 
 	for (i = 0; i < pool->capacity; i++) {
 		pool->entries[i].prev = -1;
@@ -1196,7 +1196,7 @@ int mchain_add(phys_addr_t base, phys_size_t size, unsigned int attrs, int nid)
 					  MCHAIN_STATE_FREE, attrs, nid,
 					  MCHAIN_NAME_NONE);
 		if (ret) {
-			assert(0);
+			kassert(0);
 			return ret;
 		}
 	}
@@ -1252,7 +1252,7 @@ static int mchain_reserve_common(phys_addr_t base, phys_size_t size,
 					       start, stop, attrs, nid,
 					       name_id);
 		if (ret) {
-			assert(0);
+			kassert(0);
 			return ret;
 		}
 	}
@@ -1359,7 +1359,7 @@ int mchain_unreserve(phys_addr_t base, phys_size_t size)
 		ret = mchain_unreserve_reserved_part(&mchain_pool_instance, idx,
 						     start, stop);
 		if (ret) {
-			assert(0);
+			kassert(0);
 			return ret;
 		}
 	}

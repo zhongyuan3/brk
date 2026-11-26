@@ -125,8 +125,8 @@ void dentry_instantiate(struct dentry *dentry, struct inode *inode)
 	 * silently overwrite an existing inode (or add a second alias link):
 	 * either would leak a reference and corrupt inode->dentries.
 	 */
-	assert(dentry->inode == NULL);
-	assert(list_empty(&dentry->alias));
+	kassert(dentry->inode == NULL);
+	kassert(list_empty(&dentry->alias));
 
 	spin_lock(&inode->lock);
 	list_add(&dentry->alias, &inode->dentries);
@@ -225,7 +225,7 @@ void dentry_put(struct dentry *dentry)
 		pr_debug("removing: name=%.*s\n", (int)dentry->name.len,
 			 dentry->name.name);
 		spin_lock(&dentry_htable_lock);
-		assert(!hlist_unhashed(&dentry->hash));
+		kassert(!hlist_unhashed(&dentry->hash));
 		hlist_del_init(&dentry->hash);
 		spin_unlock(&dentry_htable_lock);
 	}
@@ -256,7 +256,7 @@ static struct dentry *__dentry_lookup(struct hlist_head *head,
 {
 	struct dentry *dentry;
 
-	assert(spin_is_locked_by_me(&dentry_htable_lock));
+	kassert(spin_is_locked_by_me(&dentry_htable_lock));
 
 	hlist_for_each_entry(dentry, head, hash) {
 		if (dentry->parent == parent &&

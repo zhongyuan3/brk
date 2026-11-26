@@ -94,7 +94,7 @@ void blkdev_put(struct block_dev *bd)
 	if (refcnt_dec_fetch(&bd->ref) > 0)
 		return;
 
-	assert(hlist_unhashed(&bd->hlist));
+	kassert(hlist_unhashed(&bd->hlist));
 	parent = bd->bd_parent;
 	page_cache_destroy(bd->bd_mapping);
 	bd->bd_mapping = NULL;

@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <brk/align.h>
 #include <brk/console.h>
 #include <brk/printf.h>
@@ -17,14 +18,14 @@ static char printk_buf[PRINTK_MAX_PAYLOAD];
 /* Early boot needs the console immediately; the console thread turns this off. */
 static bool printk_console_sync = true;
 
-_Static_assert(sizeof(struct printk_log_header) == 16,
-	       "printk_log_header must stay 16 bytes");
-_Static_assert(offsetof(struct printk_log_header, len) == 4,
-	       "printk_log_header layout changed");
-_Static_assert(offsetof(struct printk_log_header, nsec) == 8,
-	       "printk_log_header layout changed");
-_Static_assert(PRINTK_RING_BUFFER_SIZE % sizeof(struct printk_log_header) == 0,
-	       "ring size must be header-aligned");
+static_assert(sizeof(struct printk_log_header) == 16,
+	      "printk_log_header must stay 16 bytes");
+static_assert(offsetof(struct printk_log_header, len) == 4,
+	      "printk_log_header layout changed");
+static_assert(offsetof(struct printk_log_header, nsec) == 8,
+	      "printk_log_header layout changed");
+static_assert(PRINTK_RING_BUFFER_SIZE % sizeof(struct printk_log_header) == 0,
+	      "ring size must be header-aligned");
 
 static inline u32 printk_ring_off(u64 seq)
 {

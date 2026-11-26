@@ -5,6 +5,7 @@
 #include <brk/bits.h>
 #include <brk/cpu.h>
 #include <brk/irq.h>
+#include <brk/ktime.h>
 #include <brk/lengthof.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
@@ -13,7 +14,6 @@
 #include <brk/sleeplock.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
-#include <brk/ktime.h>
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <inttypes.h>
