@@ -1,5 +1,5 @@
-#ifndef BRK_BIO_H
-#define BRK_BIO_H
+#ifndef _BRK_BIO_H
+#define _BRK_BIO_H
 
 #include <brk/list.h>
 #include <brk/sleeplock_types.h>

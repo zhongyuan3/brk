@@ -1,5 +1,5 @@
-#ifndef BRKFS_H
-#define BRKFS_H
+#ifndef _BRKFS_H
+#define _BRKFS_H
 
 #include <brk/assert.h>
 #include <brk/blkdev.h>

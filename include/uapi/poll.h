@@ -1,5 +1,5 @@
-#ifndef UAPI_POLL_H
-#define UAPI_POLL_H
+#ifndef _UAPI_POLL_H
+#define _UAPI_POLL_H
 
 #include <uapi/types.h>
 

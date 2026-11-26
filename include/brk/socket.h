@@ -1,5 +1,5 @@
-#ifndef BRK_SOCKET_H
-#define BRK_SOCKET_H
+#ifndef _BRK_SOCKET_H
+#define _BRK_SOCKET_H
 
 #include <brk/list.h>
 #include <brk/skbuff.h>

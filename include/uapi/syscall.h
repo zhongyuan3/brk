@@ -29,8 +29,8 @@
  * using the __brk_* ABI types.  These are kernel primitives; libc may
  * expose a different POSIX wrapper around the same operation.
  */
-#ifndef UAPI_SYSCALL_H
-#define UAPI_SYSCALL_H
+#ifndef _UAPI_SYSCALL_H
+#define _UAPI_SYSCALL_H
 
 #include <uapi/asm/syscall.h>
 

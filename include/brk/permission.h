@@ -1,5 +1,5 @@
-#ifndef BRK_PERMISSION_H
-#define BRK_PERMISSION_H
+#ifndef _BRK_PERMISSION_H
+#define _BRK_PERMISSION_H
 
 #include <brk/types.h>
 #include <stdbool.h>

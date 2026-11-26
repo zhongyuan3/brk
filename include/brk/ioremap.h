@@ -1,5 +1,5 @@
-#ifndef BRK_IOREMAP_H
-#define BRK_IOREMAP_H
+#ifndef _BRK_IOREMAP_H
+#define _BRK_IOREMAP_H
 
 #include <brk/types.h>
 #include <stddef.h>

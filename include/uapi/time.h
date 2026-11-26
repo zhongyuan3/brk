@@ -1,5 +1,5 @@
-#ifndef UAPI_TIME_H
-#define UAPI_TIME_H
+#ifndef _UAPI_TIME_H
+#define _UAPI_TIME_H
 
 #include <uapi/types.h>
 

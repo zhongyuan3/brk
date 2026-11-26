@@ -1,5 +1,5 @@
-#ifndef RISCV_SBI_H
-#define RISCV_SBI_H
+#ifndef _RISCV_SBI_H
+#define _RISCV_SBI_H
 
 #include <brk/types.h>
 

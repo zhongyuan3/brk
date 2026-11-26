@@ -1,5 +1,5 @@
-#ifndef UAPI_STATVFS_H
-#define UAPI_STATVFS_H
+#ifndef _UAPI_STATVFS_H
+#define _UAPI_STATVFS_H
 
 #include <uapi/types.h>
 

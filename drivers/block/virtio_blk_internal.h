@@ -1,5 +1,5 @@
-#ifndef BRK_VIRTIO_BLK_INTERNAL_H
-#define BRK_VIRTIO_BLK_INTERNAL_H
+#ifndef _VIRTIO_BLK_INTERNAL_H
+#define _VIRTIO_BLK_INTERNAL_H
 
 #include <brk/irq.h>
 #include <brk/types.h>

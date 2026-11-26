@@ -1,5 +1,5 @@
-#ifndef BRK_LOG2_H
-#define BRK_LOG2_H
+#ifndef _BRK_LOG2_H
+#define _BRK_LOG2_H
 
 #define is_power_of_2(x)                            \
 	({                                          \

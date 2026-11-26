@@ -1,5 +1,5 @@
-#ifndef BRK_CONTAINER_OF_H
-#define BRK_CONTAINER_OF_H
+#ifndef _BRK_CONTAINER_OF_H
+#define _BRK_CONTAINER_OF_H
 
 #define container_of(ptr, type, member)                              \
 	({                                                           \

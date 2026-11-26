@@ -1,5 +1,5 @@
-#ifndef ARCH_ASM_HUGE_PAGE_H
-#define ARCH_ASM_HUGE_PAGE_H
+#ifndef _ARCH_ASM_HUGE_PAGE_H
+#define _ARCH_ASM_HUGE_PAGE_H
 
 /* RV64 supports 2MiB and 1GiB superpages. */
 #define PAGE_SHIFT_2M 21

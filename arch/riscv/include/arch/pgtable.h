@@ -1,5 +1,5 @@
-#ifndef ARCH_PGTABLE_H
-#define ARCH_PGTABLE_H
+#ifndef _ARCH_PGTABLE_H
+#define _ARCH_PGTABLE_H
 
 #include <arch/asm/page.h>
 #include <arch/asm/pgtable_config.h>

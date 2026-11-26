@@ -1,5 +1,5 @@
-#ifndef BRK_SKBUFF_H
-#define BRK_SKBUFF_H
+#ifndef _BRK_SKBUFF_H
+#define _BRK_SKBUFF_H
 
 #include <brk/types.h>
 #include <stdbool.h>

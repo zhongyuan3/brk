@@ -1,5 +1,5 @@
-#ifndef UAPI_RESOURCE_H
-#define UAPI_RESOURCE_H
+#ifndef _UAPI_RESOURCE_H
+#define _UAPI_RESOURCE_H
 
 #include <uapi/time.h>
 

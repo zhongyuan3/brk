@@ -1,5 +1,5 @@
-#ifndef BRK_MMIO_H
-#define BRK_MMIO_H
+#ifndef _BRK_MMIO_H
+#define _BRK_MMIO_H
 
 #include <brk/types.h>
 

@@ -1,5 +1,5 @@
-#ifndef ARCH_MM_H
-#define ARCH_MM_H
+#ifndef _ARCH_MM_H
+#define _ARCH_MM_H
 
 #include <arch/asm/page.h>
 #include <arch/asm/vmlayout.h>

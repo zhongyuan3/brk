@@ -1,5 +1,5 @@
-#ifndef ARCH_ASM_PAGE_H
-#define ARCH_ASM_PAGE_H
+#ifndef _ARCH_ASM_PAGE_H
+#define _ARCH_ASM_PAGE_H
 
 #define PAGE_SHIFT 12
 

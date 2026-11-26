@@ -1,5 +1,5 @@
-#ifndef BRK_SLEEPLOCK_H
-#define BRK_SLEEPLOCK_H
+#ifndef _BRK_SLEEPLOCK_H
+#define _BRK_SLEEPLOCK_H
 
 #include <brk/sleeplock_types.h>
 #include <brk/types.h>

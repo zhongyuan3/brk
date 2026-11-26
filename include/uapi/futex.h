@@ -1,5 +1,5 @@
-#ifndef UAPI_FUTEX_H
-#define UAPI_FUTEX_H
+#ifndef _UAPI_FUTEX_H
+#define _UAPI_FUTEX_H
 
 /* Futex operations and flags, matching the Linux ABI values. */
 #define FUTEX_WAIT 0

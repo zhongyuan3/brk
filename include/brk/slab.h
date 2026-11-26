@@ -1,5 +1,5 @@
-#ifndef BRK_SLAB_H
-#define BRK_SLAB_H
+#ifndef _BRK_SLAB_H
+#define _BRK_SLAB_H
 
 #include <brk/mm_types.h>
 #include <brk/spinlock_types.h>

@@ -1,5 +1,5 @@
-#ifndef BRK_NETDEVICE_H
-#define BRK_NETDEVICE_H
+#ifndef _BRK_NETDEVICE_H
+#define _BRK_NETDEVICE_H
 
 #include <brk/device.h>
 #include <brk/list.h>

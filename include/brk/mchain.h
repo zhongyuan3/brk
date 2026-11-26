@@ -9,8 +9,8 @@
  * with mchain_reserve(), and allocate with mchain_alloc().
  */
 
-#ifndef BRK_MCHAIN_H
-#define BRK_MCHAIN_H
+#ifndef _BRK_MCHAIN_H
+#define _BRK_MCHAIN_H
 
 #include <arch/asm/page.h>
 #include <brk/types.h>

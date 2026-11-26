@@ -1,5 +1,5 @@
-#ifndef UAPI_UIO_H
-#define UAPI_UIO_H
+#ifndef _UAPI_UIO_H
+#define _UAPI_UIO_H
 
 #include <uapi/types.h>
 

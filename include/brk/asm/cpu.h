@@ -1,5 +1,5 @@
-#ifndef BRK_ASM_CPU_H
-#define BRK_ASM_CPU_H
+#ifndef _BRK_ASM_CPU_H
+#define _BRK_ASM_CPU_H
 
 #include <arch/asm/page.h>
 

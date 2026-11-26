@@ -1,5 +1,5 @@
-#ifndef BRK_RAND_H
-#define BRK_RAND_H
+#ifndef _BRK_RAND_H
+#define _BRK_RAND_H
 
 #include <brk/types.h>
 

@@ -1,5 +1,5 @@
-#ifndef BRK_CLOCKSOURCE_H
-#define BRK_CLOCKSOURCE_H
+#ifndef _BRK_CLOCKSOURCE_H
+#define _BRK_CLOCKSOURCE_H
 
 #include <brk/list.h>
 #include <brk/types.h>

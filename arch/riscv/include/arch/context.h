@@ -1,5 +1,5 @@
-#ifndef ARCH_CONTEXT_H
-#define ARCH_CONTEXT_H
+#ifndef _ARCH_CONTEXT_H
+#define _ARCH_CONTEXT_H
 
 struct context {
 	unsigned long s0;

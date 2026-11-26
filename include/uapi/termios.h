@@ -1,5 +1,5 @@
-#ifndef UAPI_TERMIOS_H
-#define UAPI_TERMIOS_H
+#ifndef _UAPI_TERMIOS_H
+#define _UAPI_TERMIOS_H
 
 #include <uapi/types.h>
 

@@ -1,5 +1,5 @@
-#ifndef BRK_DIV_H
-#define BRK_DIV_H
+#ifndef _BRK_DIV_H
+#define _BRK_DIV_H
 
 #define div_ceil(num, div)                   \
 	({                                   \

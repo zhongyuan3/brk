@@ -1,5 +1,5 @@
-#ifndef BRK_TIMER_LIST_H
-#define BRK_TIMER_LIST_H
+#ifndef _BRK_TIMER_LIST_H
+#define _BRK_TIMER_LIST_H
 
 #include <brk/list.h>
 #include <brk/types.h>

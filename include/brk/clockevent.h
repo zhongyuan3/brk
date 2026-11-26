@@ -1,5 +1,5 @@
-#ifndef BRK_CLOCKEVENT_H
-#define BRK_CLOCKEVENT_H
+#ifndef _BRK_CLOCKEVENT_H
+#define _BRK_CLOCKEVENT_H
 
 #include <brk/list.h>
 #include <brk/types.h>

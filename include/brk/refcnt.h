@@ -1,5 +1,5 @@
-#ifndef BRK_REFCNT_H
-#define BRK_REFCNT_H
+#ifndef _BRK_REFCNT_H
+#define _BRK_REFCNT_H
 
 #include <brk/refcnt_types.h>
 #include <stdbool.h>

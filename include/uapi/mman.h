@@ -1,5 +1,5 @@
-#ifndef UAPI_MMAN_H
-#define UAPI_MMAN_H
+#ifndef _UAPI_MMAN_H
+#define _UAPI_MMAN_H
 
 /* Protection bits */
 #define PROT_NONE 0x0

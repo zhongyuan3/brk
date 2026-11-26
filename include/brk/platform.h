@@ -1,5 +1,5 @@
-#ifndef BRK_PLATFORM_H
-#define BRK_PLATFORM_H
+#ifndef _BRK_PLATFORM_H
+#define _BRK_PLATFORM_H
 
 #include <brk/container_of.h>
 #include <brk/device.h>

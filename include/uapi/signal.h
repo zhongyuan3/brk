@@ -1,5 +1,5 @@
-#ifndef UAPI_SIGNAL_H
-#define UAPI_SIGNAL_H
+#ifndef _UAPI_SIGNAL_H
+#define _UAPI_SIGNAL_H
 
 #include <uapi/types.h>
 

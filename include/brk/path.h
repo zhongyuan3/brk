@@ -1,5 +1,5 @@
-#ifndef BRK_PATH_H
-#define BRK_PATH_H
+#ifndef _BRK_PATH_H
+#define _BRK_PATH_H
 
 #include <brk/bits.h>
 #include <brk/dcache.h>

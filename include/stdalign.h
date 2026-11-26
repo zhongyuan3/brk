@@ -1,5 +1,5 @@
-#ifndef STDALIGN_H
-#define STDALIGN_H
+#ifndef _STDALIGN_H
+#define _STDALIGN_H
 
 #define alignas _Alignas
 #define alignof _Alignof

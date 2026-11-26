@@ -1,5 +1,5 @@
-#ifndef BRK_DEVNO_H
-#define BRK_DEVNO_H
+#ifndef _BRK_DEVNO_H
+#define _BRK_DEVNO_H
 
 #include <brk/bitmap.h>
 #include <brk/dev_t.h>

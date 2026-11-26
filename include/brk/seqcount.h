@@ -1,5 +1,5 @@
-#ifndef BRK_SEQCOUNT_H
-#define BRK_SEQCOUNT_H
+#ifndef _BRK_SEQCOUNT_H
+#define _BRK_SEQCOUNT_H
 
 #include <brk/types.h>
 #include <stdbool.h>

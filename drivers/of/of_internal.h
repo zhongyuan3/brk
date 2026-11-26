@@ -1,5 +1,5 @@
-#ifndef BRK_OF_INTERNAL_H
-#define BRK_OF_INTERNAL_H
+#ifndef _OF_INTERNAL_H
+#define _OF_INTERNAL_H
 
 /* Raw FDT pointer, only valid while the early memory scans run. */
 void *of_early_get_fdt(void);

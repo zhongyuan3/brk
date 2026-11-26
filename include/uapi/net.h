@@ -1,5 +1,5 @@
-#ifndef UAPI_NET_H
-#define UAPI_NET_H
+#ifndef _UAPI_NET_H
+#define _UAPI_NET_H
 
 #include <uapi/socket.h>
 #include <uapi/types.h>

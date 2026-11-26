@@ -1,5 +1,5 @@
-#ifndef BRK_VIRTIO_H
-#define BRK_VIRTIO_H
+#ifndef _BRK_VIRTIO_H
+#define _BRK_VIRTIO_H
 
 #include <brk/device.h>
 #include <brk/types.h>

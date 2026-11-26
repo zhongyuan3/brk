@@ -1,5 +1,5 @@
-#ifndef BRK_CONSOLE_H
-#define BRK_CONSOLE_H
+#ifndef _BRK_CONSOLE_H
+#define _BRK_CONSOLE_H
 
 #include <brk/list.h>
 #include <brk/printk_log.h>

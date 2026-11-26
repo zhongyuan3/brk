@@ -1,5 +1,5 @@
-#ifndef BRK_TTY_H
-#define BRK_TTY_H
+#ifndef _BRK_TTY_H
+#define _BRK_TTY_H
 
 #include <brk/refcnt_types.h>
 #include <brk/sleeplock_types.h>

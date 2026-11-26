@@ -1,5 +1,5 @@
-#ifndef STDINT_H
-#define STDINT_H
+#ifndef _STDINT_H
+#define _STDINT_H
 
 /*
  * C-standard spellings of the compiler's base integer types.  uapi/types.h

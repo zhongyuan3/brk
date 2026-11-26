@@ -1,5 +1,5 @@
-#ifndef BRK_TIMER_H
-#define BRK_TIMER_H
+#ifndef _BRK_TIMER_H
+#define _BRK_TIMER_H
 
 #include <brk/compiler_attr.h>
 

@@ -1,5 +1,5 @@
-#ifndef BRK_ROUTE_H
-#define BRK_ROUTE_H
+#ifndef _BRK_ROUTE_H
+#define _BRK_ROUTE_H
 
 #include <brk/netdevice.h>
 #include <brk/types.h>

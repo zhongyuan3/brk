@@ -1,5 +1,5 @@
-#ifndef BRK_SIGNAL_H
-#define BRK_SIGNAL_H
+#ifndef _BRK_SIGNAL_H
+#define _BRK_SIGNAL_H
 
 #include <brk/signal_types.h>
 #include <brk/spinlock_types.h>

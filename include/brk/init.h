@@ -1,5 +1,5 @@
-#ifndef BRK_INIT_H
-#define BRK_INIT_H
+#ifndef _BRK_INIT_H
+#define _BRK_INIT_H
 
 #include <brk/compiler_attr.h>
 void start_kernel(void);

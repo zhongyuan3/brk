@@ -1,5 +1,5 @@
-#ifndef BRK_BLKDEV_INTERNAL_H
-#define BRK_BLKDEV_INTERNAL_H
+#ifndef _BLKDEV_INTERNAL_H
+#define _BLKDEV_INTERNAL_H
 
 #include <brk/pagecache.h>
 

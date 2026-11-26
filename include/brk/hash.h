@@ -1,5 +1,5 @@
-#ifndef BRK_HASH_H
-#define BRK_HASH_H
+#ifndef _BRK_HASH_H
+#define _BRK_HASH_H
 
 #include <brk/types.h>
 #include <stddef.h>

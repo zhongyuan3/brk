@@ -1,5 +1,5 @@
-#ifndef BRK_UDP_H
-#define BRK_UDP_H
+#ifndef _BRK_UDP_H
+#define _BRK_UDP_H
 
 #include <brk/compiler_attr.h>
 #include <brk/skbuff.h>

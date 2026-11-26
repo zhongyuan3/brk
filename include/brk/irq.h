@@ -1,5 +1,5 @@
-#ifndef BRK_IRQ_H
-#define BRK_IRQ_H
+#ifndef _BRK_IRQ_H
+#define _BRK_IRQ_H
 
 #include <brk/types.h>
 #include <stddef.h>

@@ -1,5 +1,5 @@
-#ifndef BRK_PROCESS_TYPES_H
-#define BRK_PROCESS_TYPES_H
+#ifndef _BRK_PROCESS_TYPES_H
+#define _BRK_PROCESS_TYPES_H
 
 #include <brk/fdtable.h>
 #include <brk/fsinfo.h>

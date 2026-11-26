@@ -1,5 +1,5 @@
-#ifndef BRK_ICMP_H
-#define BRK_ICMP_H
+#ifndef _BRK_ICMP_H
+#define _BRK_ICMP_H
 
 #include <brk/compiler_attr.h>
 #include <brk/skbuff.h>

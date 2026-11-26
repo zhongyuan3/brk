@@ -1,5 +1,5 @@
-#ifndef UAPI_PROC_H
-#define UAPI_PROC_H
+#ifndef _UAPI_PROC_H
+#define _UAPI_PROC_H
 
 #include <uapi/types.h>
 

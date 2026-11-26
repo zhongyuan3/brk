@@ -1,5 +1,5 @@
-#ifndef BRK_MM_H
-#define BRK_MM_H
+#ifndef _BRK_MM_H
+#define _BRK_MM_H
 
 #include <arch/pgtable_types.h>
 #include <brk/compiler_attr.h>

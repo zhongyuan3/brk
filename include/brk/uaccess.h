@@ -1,5 +1,5 @@
-#ifndef BRK_UACCESS_H
-#define BRK_UACCESS_H
+#ifndef _BRK_UACCESS_H
+#define _BRK_UACCESS_H
 
 #include <arch/asm/vmlayout.h>
 #include <brk/string.h>

@@ -1,5 +1,5 @@
-#ifndef BRK_ERROR_H
-#define BRK_ERROR_H
+#ifndef _BRK_ERROR_H
+#define _BRK_ERROR_H
 
 #include <brk/compiler_attr.h>
 #include <brk/types.h>

@@ -1,5 +1,5 @@
-#ifndef BRK_ETH_H
-#define BRK_ETH_H
+#ifndef _BRK_ETH_H
+#define _BRK_ETH_H
 
 #include <brk/compiler_attr.h>
 #include <brk/netdevice.h>

@@ -1,5 +1,5 @@
-#ifndef BRK_TICK_H
-#define BRK_TICK_H
+#ifndef _BRK_TICK_H
+#define _BRK_TICK_H
 
 #include <brk/compiler_attr.h>
 #include <brk/list.h>

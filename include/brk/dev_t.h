@@ -1,5 +1,5 @@
-#ifndef BRK_DEV_T_H
-#define BRK_DEV_T_H
+#ifndef _BRK_DEV_T_H
+#define _BRK_DEV_T_H
 
 #include <brk/types.h>
 

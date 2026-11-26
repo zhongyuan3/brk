@@ -1,5 +1,5 @@
-#ifndef BRK_RAW_H
-#define BRK_RAW_H
+#ifndef _BRK_RAW_H
+#define _BRK_RAW_H
 
 #include <brk/skbuff.h>
 #include <brk/types.h>

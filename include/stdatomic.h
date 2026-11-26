@@ -1,5 +1,5 @@
-#ifndef STDATOMIC_H
-#define STDATOMIC_H
+#ifndef _STDATOMIC_H
+#define _STDATOMIC_H
 
 #include <stdbool.h>
 #include <stddef.h>

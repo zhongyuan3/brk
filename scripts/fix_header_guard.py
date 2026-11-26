@@ -1,145 +1,252 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Check/fix header guard format for C/C++ header files.
+Check and optionally fix C/C++ header guard naming conventions.
 
-Rules:
-1. If a header file is located under some 'include' directory (including subdirectories),
-   the guard macro is based on the path relative to that 'include' directory:
-       include/a.h       -> A_H
-       include/a/b/c.h   -> A_B_C_H
-2. If a header file is NOT under any 'include' directory, the guard is based on the file name:
-       xx.h              -> XX_H
+Expected naming:
+- include/foo/bar.h  -> _FOO_BAR_H
+- include/foo/baz.hpp -> _FOO_BAZ_HPP
+- fuz.h              -> _FUZ_H
+- internal/fuz.h     -> _FUZ_H
 
 Usage:
-    python fix_header_guard.py <directory>            # modify files directly, no output
-    python fix_header_guard.py <directory> --check    # only print non-conforming header files
+    python check_header_guards.py path [path ...]
+    python check_header_guards.py --fix path [path ...]
 """
 
-import os
+from __future__ import annotations
+
+import argparse
 import re
 import sys
-import argparse
+from pathlib import Path
+from typing import Iterable
 
-# Regex to match the guard macro name in #ifndef XXX / #define XXX lines
-IFNDEF_RE = re.compile(r"^(\s*#\s*ifndef\s+)(\S+)(.*)$")
-DEFINE_RE = re.compile(r"^(\s*#\s*define\s+)(\S+)(.*)$")
+HEADER_SUFFIXES = {".h", ".hh", ".hpp", ".hxx", ".inl"}
 
+GUARD_PATTERN = re.compile(
+    r"^\s*#\s*ifndef\s+([A-Za-z_][A-Za-z0-9_]*)\s*$"
+    r"(?:(?:[ \t]*\r?\n)[ \t]*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)\s*)?",
+    re.MULTILINE,
+)
 
-def compute_expected_guard(file_path):
-    """Compute the expected header guard macro name for the given file path."""
-    parts = os.path.normpath(file_path).split(os.sep)
-
-    # Find the closest 'include' directory (search from the end)
-    include_idx = None
-    for i in range(len(parts) - 1, -1, -1):
-        if parts[i] == "include":
-            include_idx = i
-            break
-
-    if include_idx is not None:
-        rel_parts = parts[include_idx + 1 :]
-    else:
-        rel_parts = [parts[-1]]
-
-    # Strip the extension from the file name (last part)
-    rel_parts = list(rel_parts)
-    rel_parts[-1] = os.path.splitext(rel_parts[-1])[0]
-
-    # Split directory names and the file name on '.'
-    name_parts = []
-    for p in rel_parts:
-        name_parts.extend(p.split("."))
-
-    # Filter out empty strings
-    name_parts = [p for p in name_parts if p]
-
-    guard = "_".join(name_parts).upper() + "_H"
-    # Replace any non-alphanumeric characters with underscores
-    guard = re.sub(r"[^A-Z0-9_]", "_", guard)
-    return guard
+ENDIF_PATTERN = re.compile(
+    r"^\s*#\s*endif(?://+|/\*+|\s)\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:\*/)?\s*$"
+)
 
 
-def get_current_guard(lines):
-    """Extract the currently used guard macro (the first macro found in #ifndef)."""
-    for line in lines:
-        m = IFNDEF_RE.match(line)
-        if m:
-            return m.group(2)
-    return None
+def collect_headers(paths: Iterable[Path]) -> list[Path]:
+    """Collect C/C++ header files from paths or directories."""
+    headers: list[Path] = []
 
-
-def fix_file(file_path, expected_guard):
-    """Replace the old guard macro with the expected one. Return True if modified."""
-    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-        content = f.read()
-    lines = content.splitlines(keepends=True)
-
-    old_guard = get_current_guard(lines)
-    if old_guard is None:
-        # No #ifndef found, skip this file
-        return False
-    if old_guard == expected_guard:
-        return False
-
-    new_lines = []
-    for line in lines:
-        m = IFNDEF_RE.match(line)
-        if m and m.group(2) == old_guard:
-            line = m.group(1) + expected_guard + m.group(3) + "\n"
+    for path in paths:
+        if path.is_file():
+            if path.suffix.lower() in HEADER_SUFFIXES:
+                headers.append(path)
+        elif path.is_dir():
+            headers.extend(
+                p
+                for p in path.rglob("*")
+                if p.is_file() and p.suffix.lower() in HEADER_SUFFIXES
+            )
         else:
-            m2 = DEFINE_RE.match(line)
-            if m2 and m2.group(2) == old_guard:
-                line = m2.group(1) + expected_guard + m2.group(3) + "\n"
-        new_lines.append(line)
+            print(f"warning: path does not exist: {path}", file=sys.stderr)
 
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
-    return True
+    return sorted(set(headers))
 
 
-def iter_header_files(root):
-    """Recursively yield all header files under the root directory."""
-    for dirpath, _dirnames, filenames in os.walk(root):
-        for fn in filenames:
-            if fn.endswith((".h", ".hpp", ".hh", ".hxx", ".H", ".h++")):
-                yield os.path.join(dirpath, fn)
+def normalize_component(component: str) -> str:
+    """Convert one path component into a valid C/C++ macro component."""
+    component = re.sub(r"[^A-Za-z0-9]+", "_", component)
+    component = re.sub(r"_+", "_", component).strip("_")
+    if not component:
+        component = "HEADER"
+    if component[0].isdigit():
+        component = "_" + component
+    return component.upper()
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Check/fix header guard format for C/C++ header files."
+def expected_guard(path: Path) -> str:
+    """
+    Calculate the expected header guard.
+
+    For a file below an `include` directory, path components after `include`
+    are used. Otherwise, only the filename is used because the header is
+    treated as module-private.
+    """
+    normalized_parts = [part for part in path.parts if part not in (".", "..")]
+
+    include_indexes = [
+        index
+        for index, part in enumerate(normalized_parts)
+        if part.lower() == "include"
+    ]
+
+    if include_indexes:
+        relevant_parts = normalized_parts[include_indexes[-1] + 1 :]
+    else:
+        relevant_parts = normalized_parts[-1:]
+
+    stem = Path(*relevant_parts).stem
+    macro_parts = [normalize_component(part) for part in relevant_parts[:-1]]
+    macro_parts.append(normalize_component(stem))
+    macro_parts.append(normalize_component(path.suffix.lstrip(".")))
+
+    return "_" + "_".join(macro_parts)
+
+
+def find_existing_guard(content: str) -> tuple[int, str] | None:
+    """Return the index and name of the first `#ifndef` guard, if present."""
+    match = re.search(
+        r"^\s*#\s*ifndef\s+([A-Za-z_][A-Za-z0-9_]*)\s*$",
+        content,
+        re.MULTILINE,
     )
-    parser.add_argument("directory", help="Directory to check recursively")
+    if not match:
+        return None
+    return match.start(1), match.group(1)
+
+
+def build_guard_block(macro: str) -> str:
+    return f"#ifndef {macro}\n#define {macro}\n"
+
+
+def replace_guard(content: str, old_macro: str, new_macro: str) -> str:
+    """Replace an existing guard while preserving surrounding formatting."""
+    if old_macro == new_macro:
+        return content
+
+    content = re.sub(
+        rf"(#\s*ifndef\s+){re.escape(old_macro)}\b",
+        rf"\g<1>{new_macro}",
+        content,
+        count=1,
+    )
+
+    content = re.sub(
+        rf"(#\s*define\s+){re.escape(old_macro)}\b",
+        rf"\g<1>{new_macro}",
+        content,
+        count=1,
+    )
+
+    content = re.sub(
+        rf"(#\s*endif\b[^A-Za-z0-9_]*?){re.escape(old_macro)}\b",
+        rf"\g<1>{new_macro}",
+        content,
+    )
+
+    return content
+
+
+def add_missing_guard(content: str, macro: str) -> str:
+    """Add a header guard if the file does not contain one."""
+    if find_existing_guard(content):
+        return content
+
+    guard_block = build_guard_block(macro)
+
+    if not content:
+        return guard_block + "\n#endif // " + macro + "\n"
+
+    lines = content.splitlines(keepends=True)
+    insertion_index = 0
+
+    # Keep a leading UTF-8 BOM in place.
+    if lines and lines[0].startswith("\ufeff"):
+        insertion_index = 1
+
+    lines.insert(insertion_index, guard_block)
+
+    if not content.endswith("\n"):
+        lines.append("\n")
+
+    lines.append("\n#endif // " + macro + "\n")
+    return "".join(lines)
+
+
+def process_file(path: Path, fix: bool) -> bool:
+    """
+    Check one header file.
+
+    Returns True when the file is valid after processing.
+    """
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        print(f"error: not a UTF-8 text file: {path}")
+        return False
+    except OSError as exc:
+        print(f"error: cannot read {path}: {exc}")
+        return False
+
+    macro = expected_guard(path)
+    existing = find_existing_guard(content)
+    valid = existing is not None and existing[1] == macro
+
+    if valid:
+        print(f"OK:       {path}")
+        return True
+
+    if not fix:
+        if existing is None:
+            print(f"MISSING:  {path} expected {macro}")
+        else:
+            print(f"MISMATCH: {path} " f"found {existing[1]}, expected {macro}")
+        return False
+
+    try:
+        if existing is None:
+            new_content = add_missing_guard(content, macro)
+        else:
+            new_content = replace_guard(content, existing[1], macro)
+
+        if new_content != content:
+            path.write_text(new_content, encoding="utf-8")
+
+        print(f"FIXED:    {path} -> {macro}")
+        return True
+    except OSError as exc:
+        print(f"error: cannot write {path}: {exc}")
+        return False
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Check or fix C/C++ header guards. "
+            "Public headers use the path below include/; private headers use the filename."
+        )
+    )
     parser.add_argument(
-        "--check",
+        "paths",
+        nargs="+",
+        type=Path,
+        help="Header files or directories to process recursively.",
+    )
+    parser.add_argument(
+        "--fix",
         action="store_true",
-        help="Only print non-conforming header files; do not modify them",
+        help="Fix invalid or missing header guards.",
     )
     args = parser.parse_args()
 
-    root = args.directory
-    if not os.path.isdir(root):
-        print(f"Error: {root} is not a directory", file=sys.stderr)
-        return 1
+    headers = collect_headers(args.paths)
 
-    for file_path in iter_header_files(root):
-        expected = compute_expected_guard(file_path)
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            lines = f.readlines()
-        current = get_current_guard(lines)
+    if not headers:
+        print("No header files found.")
+        return 0
 
-        if current == expected:
-            continue
+    failures = 0
 
-        if args.check:
-            # Print file path, current guard macro, and expected guard macro
-            print(f'{file_path}: current="{current}", expected="{expected}"')
-        else:
-            fix_file(file_path, expected)
+    for header in headers:
+        if not process_file(header, args.fix):
+            failures += 1
 
-    return 0
+    total = len(headers)
+    print(f"\nChecked {total} file(s), {failures} problem(s).")
+
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

@@ -1,5 +1,5 @@
-#ifndef ARCH_TRAPFRAME_H
-#define ARCH_TRAPFRAME_H
+#ifndef _ARCH_TRAPFRAME_H
+#define _ARCH_TRAPFRAME_H
 
 #include <arch/asm/trap.h>
 #include <brk/assert.h>

@@ -1,5 +1,5 @@
-#ifndef BRK_RESOURCE_H
-#define BRK_RESOURCE_H
+#ifndef _BRK_RESOURCE_H
+#define _BRK_RESOURCE_H
 
 #include <brk/types.h>
 

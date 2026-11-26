@@ -1,5 +1,5 @@
-#ifndef UAPI_SOCKET_H
-#define UAPI_SOCKET_H
+#ifndef _UAPI_SOCKET_H
+#define _UAPI_SOCKET_H
 
 #include <uapi/types.h>
 

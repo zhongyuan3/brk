@@ -1,5 +1,5 @@
-#ifndef BRK_FSINFO_H
-#define BRK_FSINFO_H
+#ifndef _BRK_FSINFO_H
+#define _BRK_FSINFO_H
 
 #include <brk/fs_types.h>
 #include <brk/path.h>

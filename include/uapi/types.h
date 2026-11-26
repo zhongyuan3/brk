@@ -1,5 +1,5 @@
-#ifndef UAPI_TYPES_H
-#define UAPI_TYPES_H
+#ifndef _UAPI_TYPES_H
+#define _UAPI_TYPES_H
 
 /*
  * Fixed-width types for the kernel/user ABI.

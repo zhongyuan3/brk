@@ -1,5 +1,5 @@
-#ifndef UAPI_AUXV_H
-#define UAPI_AUXV_H
+#ifndef _UAPI_AUXV_H
+#define _UAPI_AUXV_H
 
 /*
  * Auxiliary vector: key/value pairs the kernel appends after the

@@ -1,5 +1,5 @@
-#ifndef ARCH_ASM_TRAP_H
-#define ARCH_ASM_TRAP_H
+#ifndef _ARCH_ASM_TRAP_H
+#define _ARCH_ASM_TRAP_H
 
 /*
  * Hardware saves 32 general-purpose registers (256 bytes) plus sstatus,

@@ -1,5 +1,5 @@
-#ifndef BRK_MOUNT_H
-#define BRK_MOUNT_H
+#ifndef _BRK_MOUNT_H
+#define _BRK_MOUNT_H
 
 #include <brk/bits.h>
 #include <brk/fs_types.h>

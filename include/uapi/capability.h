@@ -1,5 +1,5 @@
-#ifndef UAPI_CAPABILITY_H
-#define UAPI_CAPABILITY_H
+#ifndef _UAPI_CAPABILITY_H
+#define _UAPI_CAPABILITY_H
 
 #include <uapi/types.h>
 

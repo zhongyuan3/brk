@@ -1,5 +1,5 @@
-#ifndef BRK_BITMAP_H
-#define BRK_BITMAP_H
+#ifndef _BRK_BITMAP_H
+#define _BRK_BITMAP_H
 
 #include <stdbool.h>
 #include <stddef.h>

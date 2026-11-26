@@ -1,5 +1,5 @@
-#ifndef BRK_VIRTIO_MMIO_H
-#define BRK_VIRTIO_MMIO_H
+#ifndef _BRK_VIRTIO_MMIO_H
+#define _BRK_VIRTIO_MMIO_H
 
 #include <brk/types.h>
 #include <brk/virtio.h>

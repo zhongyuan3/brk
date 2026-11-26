@@ -1,5 +1,5 @@
-#ifndef BRK_LIST_H
-#define BRK_LIST_H
+#ifndef _BRK_LIST_H
+#define _BRK_LIST_H
 
 #include <brk/container_of.h>
 #include <brk/types.h>

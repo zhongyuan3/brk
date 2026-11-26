@@ -1,5 +1,5 @@
-#ifndef BRK_VIRTIO_NET_H
-#define BRK_VIRTIO_NET_H
+#ifndef _BRK_VIRTIO_NET_H
+#define _BRK_VIRTIO_NET_H
 
 #include <brk/compiler_attr.h>
 #include <brk/spinlock_types.h>

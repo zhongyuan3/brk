@@ -1,5 +1,5 @@
-#ifndef BRK_KMALLOC_H
-#define BRK_KMALLOC_H
+#ifndef _BRK_KMALLOC_H
+#define _BRK_KMALLOC_H
 
 #include <stddef.h>
 

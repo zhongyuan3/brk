@@ -1,5 +1,5 @@
-#ifndef BRK_REFCNT_TYPES_H
-#define BRK_REFCNT_TYPES_H
+#ifndef _BRK_REFCNT_TYPES_H
+#define _BRK_REFCNT_TYPES_H
 
 #include <brk/spinlock_types.h>
 #include <brk/types.h>

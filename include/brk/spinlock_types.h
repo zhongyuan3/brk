@@ -1,5 +1,5 @@
-#ifndef BRK_SPINLOCK_TYPES_H
-#define BRK_SPINLOCK_TYPES_H
+#ifndef _BRK_SPINLOCK_TYPES_H
+#define _BRK_SPINLOCK_TYPES_H
 
 #include <brk/types.h>
 

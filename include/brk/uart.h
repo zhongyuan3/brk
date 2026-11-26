@@ -1,5 +1,5 @@
-#ifndef BRK_UART_H
-#define BRK_UART_H
+#ifndef _BRK_UART_H
+#define _BRK_UART_H
 
 #include <brk/dev_t.h>
 #include <brk/spinlock_types.h>

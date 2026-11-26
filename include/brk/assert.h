@@ -1,5 +1,5 @@
-#ifndef BRK_ASSERT_H
-#define BRK_ASSERT_H
+#ifndef _BRK_ASSERT_H
+#define _BRK_ASSERT_H
 
 #include <assert.h>
 #include <stdnoreturn.h>

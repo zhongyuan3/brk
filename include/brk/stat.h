@@ -1,5 +1,5 @@
-#ifndef BRK_STAT_H
-#define BRK_STAT_H
+#ifndef _BRK_STAT_H
+#define _BRK_STAT_H
 
 #include <brk/stat_types.h>
 #include <uapi/stat.h>

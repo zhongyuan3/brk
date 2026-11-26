@@ -1,5 +1,5 @@
-#ifndef BRK_COMPILER_ATTR_H
-#define BRK_COMPILER_ATTR_H
+#ifndef _BRK_COMPILER_ATTR_H
+#define _BRK_COMPILER_ATTR_H
 
 #define __must_check __attribute__((warn_unused_result))
 

@@ -1,5 +1,5 @@
-#ifndef BRK_TIMEKEEPER_H
-#define BRK_TIMEKEEPER_H
+#ifndef _BRK_TIMEKEEPER_H
+#define _BRK_TIMEKEEPER_H
 
 #include <brk/compiler_attr.h>
 #include <brk/types.h>

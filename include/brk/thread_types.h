@@ -1,5 +1,5 @@
-#ifndef BRK_THREAD_TYPES_H
-#define BRK_THREAD_TYPES_H
+#ifndef _BRK_THREAD_TYPES_H
+#define _BRK_THREAD_TYPES_H
 
 #include <arch/context.h>
 #include <brk/list.h>

@@ -1,5 +1,5 @@
-#ifndef BRK_VIRTIO_QUEUE_H
-#define BRK_VIRTIO_QUEUE_H
+#ifndef _BRK_VIRTIO_QUEUE_H
+#define _BRK_VIRTIO_QUEUE_H
 
 #include <brk/types.h>
 #include <stdbool.h>

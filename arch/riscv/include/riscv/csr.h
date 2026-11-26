@@ -1,5 +1,5 @@
-#ifndef RISCV_CSR_H
-#define RISCV_CSR_H
+#ifndef _RISCV_CSR_H
+#define _RISCV_CSR_H
 
 #include <arch/asm/pgtable_config.h>
 #include <brk/types.h>

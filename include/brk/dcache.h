@@ -1,5 +1,5 @@
-#ifndef BRK_DCACHE_H
-#define BRK_DCACHE_H
+#ifndef _BRK_DCACHE_H
+#define _BRK_DCACHE_H
 
 #include <brk/bits.h>
 #include <brk/hash.h>

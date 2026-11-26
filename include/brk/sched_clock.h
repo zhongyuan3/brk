@@ -1,5 +1,5 @@
-#ifndef BRK_SCHED_CLOCK_H
-#define BRK_SCHED_CLOCK_H
+#ifndef _BRK_SCHED_CLOCK_H
+#define _BRK_SCHED_CLOCK_H
 
 #include <brk/types.h>
 

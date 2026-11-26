@@ -1,5 +1,5 @@
-#ifndef BRK_PRINTK_LOG_H
-#define BRK_PRINTK_LOG_H
+#ifndef _BRK_PRINTK_LOG_H
+#define _BRK_PRINTK_LOG_H
 
 #include <brk/spinlock_types.h>
 #include <brk/types.h>

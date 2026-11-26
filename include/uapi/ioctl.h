@@ -1,5 +1,5 @@
-#ifndef UAPI_IOCTL_H
-#define UAPI_IOCTL_H
+#ifndef _UAPI_IOCTL_H
+#define _UAPI_IOCTL_H
 
 #include <uapi/types.h>
 

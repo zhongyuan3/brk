@@ -1,5 +1,5 @@
-#ifndef BRK_ALIGN_H
-#define BRK_ALIGN_H
+#ifndef _BRK_ALIGN_H
+#define _BRK_ALIGN_H
 
 #define align_up(x, align)                            \
 	({                                            \

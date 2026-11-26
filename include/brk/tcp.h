@@ -1,5 +1,5 @@
-#ifndef BRK_TCP_H
-#define BRK_TCP_H
+#ifndef _BRK_TCP_H
+#define _BRK_TCP_H
 
 #include <brk/compiler_attr.h>
 #include <brk/skbuff.h>

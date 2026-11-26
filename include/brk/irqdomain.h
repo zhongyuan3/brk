@@ -1,5 +1,5 @@
-#ifndef BRK_IRQDOMAIN_H
-#define BRK_IRQDOMAIN_H
+#ifndef _BRK_IRQDOMAIN_H
+#define _BRK_IRQDOMAIN_H
 
 #include <brk/irqdesc.h>
 #include <brk/list.h>

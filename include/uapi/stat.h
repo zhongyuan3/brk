@@ -1,5 +1,5 @@
-#ifndef UAPI_STAT_H
-#define UAPI_STAT_H
+#ifndef _UAPI_STAT_H
+#define _UAPI_STAT_H
 
 #include <uapi/types.h>
 

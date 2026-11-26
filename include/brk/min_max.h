@@ -1,5 +1,5 @@
-#ifndef BRK_MIN_MAX_H
-#define BRK_MIN_MAX_H
+#ifndef _BRK_MIN_MAX_H
+#define _BRK_MIN_MAX_H
 
 #define max(x, y)                      \
 	({                             \

@@ -1,5 +1,5 @@
-#ifndef BRK_ARP_H
-#define BRK_ARP_H
+#ifndef _BRK_ARP_H
+#define _BRK_ARP_H
 
 #include <brk/compiler_attr.h>
 #include <brk/netdevice.h>

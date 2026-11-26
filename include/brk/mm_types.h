@@ -1,5 +1,5 @@
-#ifndef BRK_MM_TYPES_H
-#define BRK_MM_TYPES_H
+#ifndef _BRK_MM_TYPES_H
+#define _BRK_MM_TYPES_H
 
 #include <arch/pgtable_types.h>
 #include <brk/refcnt_types.h>

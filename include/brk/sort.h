@@ -1,5 +1,5 @@
-#ifndef BRK_SORT_H
-#define BRK_SORT_H
+#ifndef _BRK_SORT_H
+#define _BRK_SORT_H
 
 #include <stddef.h>
 

@@ -1,5 +1,5 @@
-#ifndef UAPI_ELF_H
-#define UAPI_ELF_H
+#ifndef _UAPI_ELF_H
+#define _UAPI_ELF_H
 
 #include <uapi/types.h>
 

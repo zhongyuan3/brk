@@ -1,5 +1,5 @@
-#ifndef BRK_STRING_H
-#define BRK_STRING_H
+#ifndef _BRK_STRING_H
+#define _BRK_STRING_H
 
 #include <string.h>
 

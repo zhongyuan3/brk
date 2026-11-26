@@ -1,5 +1,5 @@
-#ifndef BRK_THREAD_H
-#define BRK_THREAD_H
+#ifndef _BRK_THREAD_H
+#define _BRK_THREAD_H
 
 #include <arch/asm/page.h>
 #include <brk/asm/cpu.h>

@@ -1,5 +1,5 @@
-#ifndef BRK_IRQDESC_H
-#define BRK_IRQDESC_H
+#ifndef _BRK_IRQDESC_H
+#define _BRK_IRQDESC_H
 
 #include <brk/irq.h>
 #include <brk/spinlock_types.h>

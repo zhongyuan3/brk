@@ -1,5 +1,5 @@
-#ifndef ARCH_PGTABLE_TYPES_H
-#define ARCH_PGTABLE_TYPES_H
+#ifndef _ARCH_PGTABLE_TYPES_H
+#define _ARCH_PGTABLE_TYPES_H
 
 #include <brk/types.h>
 

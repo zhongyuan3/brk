@@ -1,5 +1,5 @@
-#ifndef BRK_PRINTF_H
-#define BRK_PRINTF_H
+#ifndef _BRK_PRINTF_H
+#define _BRK_PRINTF_H
 
 #include <brk/compiler_attr.h>
 #include <stdarg.h>

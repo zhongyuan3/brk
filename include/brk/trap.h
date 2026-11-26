@@ -1,5 +1,5 @@
-#ifndef BRK_TRAP_H
-#define BRK_TRAP_H
+#ifndef _BRK_TRAP_H
+#define _BRK_TRAP_H
 
 #include <brk/compiler_attr.h>
 #include <brk/types.h>

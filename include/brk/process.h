@@ -1,5 +1,5 @@
-#ifndef BRK_PROCESS_H
-#define BRK_PROCESS_H
+#ifndef _BRK_PROCESS_H
+#define _BRK_PROCESS_H
 
 #include <brk/cpu.h>
 #include <brk/fdtable.h>

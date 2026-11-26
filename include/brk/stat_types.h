@@ -1,5 +1,5 @@
-#ifndef BRK_STAT_TYPES_H
-#define BRK_STAT_TYPES_H
+#ifndef _BRK_STAT_TYPES_H
+#define _BRK_STAT_TYPES_H
 
 #include <brk/types.h>
 

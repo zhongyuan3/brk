@@ -1,5 +1,5 @@
-#ifndef BRK_CPU_H
-#define BRK_CPU_H
+#ifndef _BRK_CPU_H
+#define _BRK_CPU_H
 
 #include <arch/context.h>
 #include <arch/irqstate.h>

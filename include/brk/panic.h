@@ -1,5 +1,5 @@
-#ifndef BRK_PANIC_H
-#define BRK_PANIC_H
+#ifndef _BRK_PANIC_H
+#define _BRK_PANIC_H
 
 #include <brk/compiler_attr.h>
 #include <stdnoreturn.h>

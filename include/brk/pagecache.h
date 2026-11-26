@@ -1,5 +1,5 @@
-#ifndef BRK_PAGECACHE_H
-#define BRK_PAGECACHE_H
+#ifndef _BRK_PAGECACHE_H
+#define _BRK_PAGECACHE_H
 
 #include <brk/fs_types.h>
 #include <brk/list.h>

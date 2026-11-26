@@ -1,5 +1,5 @@
-#ifndef ARCH_ASM_VMLAYOUT_H
-#define ARCH_ASM_VMLAYOUT_H
+#ifndef _ARCH_ASM_VMLAYOUT_H
+#define _ARCH_ASM_VMLAYOUT_H
 
 #include <arch/asm/page.h>
 #include <arch/asm/pgtable_config.h>

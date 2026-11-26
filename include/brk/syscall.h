@@ -1,5 +1,5 @@
-#ifndef BRK_SYSCALL_H
-#define BRK_SYSCALL_H
+#ifndef _BRK_SYSCALL_H
+#define _BRK_SYSCALL_H
 
 #include <brk/types.h>
 #include <stddef.h>

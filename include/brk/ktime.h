@@ -1,5 +1,5 @@
-#ifndef BRK_KTIME_H
-#define BRK_KTIME_H
+#ifndef _BRK_KTIME_H
+#define _BRK_KTIME_H
 
 #include <brk/stat_types.h>
 #include <brk/timeconst.h>

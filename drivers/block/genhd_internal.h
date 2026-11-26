@@ -1,5 +1,5 @@
-#ifndef BRK_GENHD_INTERNAL_H
-#define BRK_GENHD_INTERNAL_H
+#ifndef _GENHD_INTERNAL_H
+#define _GENHD_INTERNAL_H
 
 struct gendisk;
 

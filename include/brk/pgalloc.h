@@ -1,5 +1,5 @@
-#ifndef BRK_PGALLOC_H
-#define BRK_PGALLOC_H
+#ifndef _BRK_PGALLOC_H
+#define _BRK_PGALLOC_H
 
 #include <arch/asm/page.h>
 #include <arch/asm/vmlayout.h>

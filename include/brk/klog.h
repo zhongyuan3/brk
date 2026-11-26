@@ -1,5 +1,5 @@
-#ifndef BRK_KLOG_H
-#define BRK_KLOG_H
+#ifndef _BRK_KLOG_H
+#define _BRK_KLOG_H
 
 /*
  * Start the kernel log thread.  It drains the printk ring buffer into

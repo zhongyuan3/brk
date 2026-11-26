@@ -1,5 +1,5 @@
-#ifndef BRK_FUTEX_H
-#define BRK_FUTEX_H
+#ifndef _BRK_FUTEX_H
+#define _BRK_FUTEX_H
 
 #include <brk/thread_types.h>
 #include <brk/types.h>

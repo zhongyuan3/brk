@@ -1,5 +1,5 @@
-#ifndef BRK_IP_H
-#define BRK_IP_H
+#ifndef _BRK_IP_H
+#define _BRK_IP_H
 
 #include <brk/compiler_attr.h>
 #include <brk/net.h>

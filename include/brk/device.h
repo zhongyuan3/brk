@@ -1,5 +1,5 @@
-#ifndef BRK_DEVICE_H
-#define BRK_DEVICE_H
+#ifndef _BRK_DEVICE_H
+#define _BRK_DEVICE_H
 
 #include <brk/dev_t.h>
 #include <brk/list.h>

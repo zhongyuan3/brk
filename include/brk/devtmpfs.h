@@ -1,5 +1,5 @@
-#ifndef BRK_DEVTMPFS_H
-#define BRK_DEVTMPFS_H
+#ifndef _BRK_DEVTMPFS_H
+#define _BRK_DEVTMPFS_H
 
 #include <brk/device.h>
 #include <brk/fs.h>

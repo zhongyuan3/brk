@@ -1,5 +1,5 @@
-#ifndef BRK_TYPES_H
-#define BRK_TYPES_H
+#ifndef _BRK_TYPES_H
+#define _BRK_TYPES_H
 
 #include <uapi/types.h>
 

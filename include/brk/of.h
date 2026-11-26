@@ -1,5 +1,5 @@
-#ifndef BRK_OF_H
-#define BRK_OF_H
+#ifndef _BRK_OF_H
+#define _BRK_OF_H
 
 #include <brk/list.h>
 #include <brk/resource.h>

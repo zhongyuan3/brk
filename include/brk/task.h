@@ -1,5 +1,5 @@
-#ifndef BRK_TASK_H
-#define BRK_TASK_H
+#ifndef _BRK_TASK_H
+#define _BRK_TASK_H
 
 /*
  * Compatibility aggregate header.  New code should include <brk/process.h>

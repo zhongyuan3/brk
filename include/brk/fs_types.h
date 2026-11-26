@@ -1,5 +1,5 @@
-#ifndef BRK_FS_TYPES_H
-#define BRK_FS_TYPES_H
+#ifndef _BRK_FS_TYPES_H
+#define _BRK_FS_TYPES_H
 
 #include <brk/types.h>
 #include <stdbool.h>

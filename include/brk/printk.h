@@ -1,5 +1,5 @@
-#ifndef BRK_PRINTK_H
-#define BRK_PRINTK_H
+#ifndef _BRK_PRINTK_H
+#define _BRK_PRINTK_H
 
 #include <brk/compiler_attr.h>
 #include <brk/types.h>

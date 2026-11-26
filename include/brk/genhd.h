@@ -1,5 +1,5 @@
-#ifndef BRK_GENHD_H
-#define BRK_GENHD_H
+#ifndef _BRK_GENHD_H
+#define _BRK_GENHD_H
 
 #include <brk/bio.h>
 #include <brk/blkdev.h>

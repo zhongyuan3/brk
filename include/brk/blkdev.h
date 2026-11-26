@@ -1,5 +1,5 @@
-#ifndef BRK_BLKDEV_H
-#define BRK_BLKDEV_H
+#ifndef _BRK_BLKDEV_H
+#define _BRK_BLKDEV_H
 
 #include <brk/dev_t.h>
 #include <brk/refcnt_types.h>

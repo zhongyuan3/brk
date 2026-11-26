@@ -1,5 +1,5 @@
-#ifndef UAPI_DIRENT_H
-#define UAPI_DIRENT_H
+#ifndef _UAPI_DIRENT_H
+#define _UAPI_DIRENT_H
 
 #include <uapi/types.h>
 

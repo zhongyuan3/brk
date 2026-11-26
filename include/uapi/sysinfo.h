@@ -1,5 +1,5 @@
-#ifndef UAPI_SYSINFO_H
-#define UAPI_SYSINFO_H
+#ifndef _UAPI_SYSINFO_H
+#define _UAPI_SYSINFO_H
 
 #include <uapi/types.h>
 

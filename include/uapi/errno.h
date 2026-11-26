@@ -1,5 +1,5 @@
-#ifndef UAPI_ERRNO_H
-#define UAPI_ERRNO_H
+#ifndef _UAPI_ERRNO_H
+#define _UAPI_ERRNO_H
 
 #define EPERM 1 /* Operation not permitted */
 #define ENOENT 2 /* No such file or directory */

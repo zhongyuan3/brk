@@ -1,5 +1,5 @@
-#ifndef BRK_TTY_INTERNAL_H
-#define BRK_TTY_INTERNAL_H
+#ifndef _TTY_INTERNAL_H
+#define _TTY_INTERNAL_H
 
 struct file_ops;
 

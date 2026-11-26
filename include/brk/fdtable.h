@@ -1,5 +1,5 @@
-#ifndef BRK_FDTABLE_H
-#define BRK_FDTABLE_H
+#ifndef _BRK_FDTABLE_H
+#define _BRK_FDTABLE_H
 
 #include <brk/fs_types.h>
 #include <brk/spinlock_types.h>

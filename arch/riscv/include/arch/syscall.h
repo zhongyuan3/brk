@@ -1,5 +1,5 @@
-#ifndef ARCH_SYSCALL_H
-#define ARCH_SYSCALL_H
+#ifndef _ARCH_SYSCALL_H
+#define _ARCH_SYSCALL_H
 
 #include <arch/trapframe.h>
 #include <brk/panic.h>
