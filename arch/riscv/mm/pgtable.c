@@ -357,3 +357,8 @@ void user_access_disable(void)
 {
 	write_sstatus(read_sstatus() & ~SSTATUS_SUM);
 }
+
+void flush_tlb(void)
+{
+	sfence_vma();
+}

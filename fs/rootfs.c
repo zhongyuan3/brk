@@ -10,7 +10,6 @@
 #include <brk/task.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
-#include <uapi/stat.h>
 
 int rootfs_init(void)
 {

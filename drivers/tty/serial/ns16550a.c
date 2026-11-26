@@ -16,7 +16,6 @@
 #include <brk/types.h>
 #include <brk/uart.h>
 #include <uapi/errno.h>
-#include <uapi/types.h>
 
 #define RHR 0 /* Receiver Holding Register */
 #define THR 0 /* Transmitter Holding Register */

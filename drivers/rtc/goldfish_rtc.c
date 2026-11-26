@@ -10,7 +10,6 @@
 #include <brk/platform.h>
 #include <brk/printk.h>
 #include <brk/resource.h>
-#include <brk/rtc.h>
 #include <brk/spinlock.h>
 #include <brk/timekeeper.h>
 #include <brk/types.h>

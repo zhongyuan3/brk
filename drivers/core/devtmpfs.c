@@ -11,7 +11,6 @@
 #include <brk/types.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
-#include <uapi/stat.h>
 
 struct devtmpfs_work {
 	struct list_head list;

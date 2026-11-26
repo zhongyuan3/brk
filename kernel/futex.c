@@ -1,4 +1,3 @@
-#include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/error.h>
 #include <brk/futex.h>

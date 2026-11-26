@@ -1,5 +1,4 @@
 #include <brk/fsinfo.h>
-#include <brk/kmalloc.h>
 #include <brk/path.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>

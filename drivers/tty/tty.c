@@ -11,7 +11,6 @@
 #include <uapi/errno.h>
 #include <uapi/ioctl.h>
 #include <uapi/signal.h>
-#include <uapi/types.h>
 
 #define TTY_DEFAULT_ROWS 24
 #define TTY_DEFAULT_COLS 80

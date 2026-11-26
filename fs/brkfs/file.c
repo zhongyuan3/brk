@@ -4,7 +4,6 @@
 #include <brk/error.h>
 #include <brk/fs.h>
 #include <brk/kmalloc.h>
-#include <brk/ktime.h>
 #include <brk/pagecache.h>
 #include <brk/printk.h>
 #include <brk/sleeplock.h>

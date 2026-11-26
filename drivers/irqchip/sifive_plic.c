@@ -5,11 +5,9 @@
 #include <brk/irqdesc.h>
 #include <brk/irqdomain.h>
 #include <brk/kmalloc.h>
-#include <brk/mmio.h>
 #include <brk/of.h>
 #include <brk/printk.h>
 #include <brk/resource.h>
-#include <brk/spinlock.h>
 #include <brk/string.h>
 #include <brk/types.h>
 #include <inttypes.h>

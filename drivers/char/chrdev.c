@@ -11,7 +11,6 @@
 #include <brk/spinlock.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
-#include <uapi/types.h>
 
 static struct devno_allocator cd_devno;
 static struct hlist_head cd_htable[MAJOR_MAX];

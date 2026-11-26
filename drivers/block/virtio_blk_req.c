@@ -1,15 +1,12 @@
 #include <arch/mm.h>
-#include <brk/assert.h>
 #include <brk/bio.h>
 #include <brk/blkdev.h>
-#include <brk/container_of.h>
 #include <brk/device.h>
 #include <brk/fs.h>
 #include <brk/genhd.h>
 #include <brk/irq.h>
 #include <brk/kmalloc.h>
 #include <brk/list.h>
-#include <brk/log2.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/printf.h>
@@ -24,9 +21,6 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <uapi/errno.h>
-#include <uapi/fcntl.h>
-#include <uapi/stat.h>
-#include <uapi/types.h>
 
 #include "virtio_blk_internal.h"
 

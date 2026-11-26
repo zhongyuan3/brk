@@ -1,4 +1,3 @@
-#include <brk/assert.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>

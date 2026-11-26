@@ -20,7 +20,6 @@
 #include <uapi/dirent.h>
 #include <uapi/errno.h>
 #include <uapi/stat.h>
-#include <uapi/time.h>
 
 #define TMPFS_MAGIC 0x706d74
 

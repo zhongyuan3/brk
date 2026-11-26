@@ -3,10 +3,7 @@
 
 #include <arch/asm/page.h>
 #include <arch/asm/vmlayout.h>
-#include <arch/pgtable_types.h>
 #include <brk/align.h>
-#include <brk/asm/cpu.h>
-#include <brk/mm_types.h>
 #include <brk/types.h>
 #include <riscv/boot_info.h>
 

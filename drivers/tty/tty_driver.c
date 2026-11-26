@@ -12,10 +12,7 @@
 #include <brk/tty.h>
 #include <brk/types.h>
 #include <uapi/errno.h>
-#include <uapi/fcntl.h>
-#include <uapi/poll.h>
 #include <uapi/stat.h>
-#include <uapi/types.h>
 
 #include "tty_internal.h"
 

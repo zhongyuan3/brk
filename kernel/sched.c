@@ -19,11 +19,9 @@
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
-#include <riscv/boot_info.h>
 #include <uapi/capability.h>
 #include <uapi/errno.h>
 #include <uapi/futex.h>
-#include <uapi/limits.h>
 
 SPINLOCK_DEFINE(wait_lock);
 SPINLOCK_DEFINE(sleep_lock);

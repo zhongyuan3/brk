@@ -19,7 +19,6 @@
 #include <brk/string.h>
 #include <brk/task.h>
 #include <brk/timekeeper.h>
-#include <brk/timer.h>
 #include <brk/trap.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>

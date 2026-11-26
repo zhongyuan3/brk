@@ -1,5 +1,3 @@
-#include <arch/mm.h>
-#include <brk/assert.h>
 #include <brk/bio.h>
 #include <brk/blkdev.h>
 #include <brk/container_of.h>
@@ -20,12 +18,7 @@
 #include <brk/types.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
-#include <brk/virtio_queue.h>
-#include <inttypes.h>
 #include <uapi/errno.h>
-#include <uapi/fcntl.h>
-#include <uapi/stat.h>
-#include <uapi/types.h>
 
 #include "virtio_blk_internal.h"
 

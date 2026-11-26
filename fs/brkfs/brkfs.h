@@ -8,7 +8,6 @@
 #include <brk/sleeplock.h>
 #include <brk/spinlock.h>
 #include <brk/types.h>
-#include <uapi/types.h>
 
 /*
  * brkfs on-disk format.

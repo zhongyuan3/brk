@@ -14,7 +14,6 @@
 #include <brk/types.h>
 #include <inttypes.h>
 #include <uapi/errno.h>
-#include <uapi/fcntl.h>
 #include <uapi/stat.h>
 
 static void brkfs_inode_attach_ops(struct inode *inode)

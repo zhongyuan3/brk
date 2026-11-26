@@ -28,12 +28,10 @@
 #include <uapi/dirent.h>
 #include <uapi/errno.h>
 #include <uapi/fcntl.h>
-#include <uapi/limits.h>
 #include <uapi/stat.h>
 #include <uapi/statvfs.h>
 #include <uapi/sysinfo.h>
 #include <uapi/time.h>
-#include <uapi/types.h>
 #include <uapi/uio.h>
 
 long sys_read(const struct syscall_ctx *ctx)

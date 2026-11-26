@@ -12,6 +12,7 @@
 #include <brk/mm_types.h>
 #include <brk/pagecache.h>
 #include <brk/pgalloc.h>
+#include <brk/pgtable.h>
 #include <brk/refcnt.h>
 #include <brk/slab.h>
 #include <brk/sleeplock.h>
@@ -20,7 +21,6 @@
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/vmalloc.h>
-#include <riscv/csr.h>
 #include <stdalign.h>
 #include <uapi/errno.h>
 
@@ -345,7 +345,7 @@ failed_shared:
 	dst->nr_pages = npgs;
 
 	if (cow)
-		sfence_vma();
+		flush_tlb();
 	return 0;
 
 failed:

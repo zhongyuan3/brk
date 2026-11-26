@@ -10,13 +10,13 @@
 #include <brk/mm_types.h>
 #include <brk/pagecache.h>
 #include <brk/pgalloc.h>
+#include <brk/pgtable.h>
 #include <brk/sleeplock.h>
 #include <brk/string.h>
 #include <brk/syscall.h>
 #include <brk/task.h>
 #include <brk/types.h>
 #include <brk/uaccess.h>
-#include <riscv/csr.h>
 #include <uapi/errno.h>
 #include <uapi/mman.h>
 #include <uapi/stat.h>
@@ -619,7 +619,7 @@ int uvm_munmap(struct uvm_space *mm, user_addr_t addr, size_t len)
 	}
 
 	if (changed)
-		sfence_vma();
+		flush_tlb();
 	return 0;
 }
 
@@ -841,7 +841,7 @@ int uvm_handle_fault(struct uvm_space *mm, user_addr_t addr, bool write,
 			pte_set_leaf(pte, page_to_phys(pg),
 				     (r->flags & (PTE_R | PTE_W | PTE_X)) |
 					     PTE_U);
-			sfence_vma();
+			flush_tlb();
 			return 0;
 		}
 	}
@@ -870,7 +870,7 @@ int uvm_handle_fault(struct uvm_space *mm, user_addr_t addr, bool write,
 		if (err)
 			return err;
 	}
-	sfence_vma();
+	flush_tlb();
 	return 0;
 }
 
@@ -939,7 +939,7 @@ int uvm_mprotect(struct uvm_space *mm, user_addr_t addr, size_t len, int prot)
 		}
 	}
 
-	sfence_vma();
+	flush_tlb();
 	return 0;
 }
 
