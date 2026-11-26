@@ -217,7 +217,7 @@ static u64 stat_path_at(int dirfd, const char *path, struct kstat *buf,
 		return -EOPNOTSUPP;
 	}
 
-	ret = inode->ops->getattr(&p, buf, 0, 0);
+	ret = inode->ops->getattr(inode, buf, 0, 0);
 	path_put(&p);
 	return ret;
 }

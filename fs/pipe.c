@@ -53,11 +53,9 @@ static struct dentry *pipefs_lookup(struct inode *dir, struct dentry *dentry,
 	return NULL;
 }
 
-static int pipefs_dir_getattr(const struct path *path, struct kstat *st,
-			      u32 mask, unsigned int flags)
+static int pipefs_dir_getattr(struct inode *inode, struct kstat *st, u32 mask,
+			      unsigned int flags)
 {
-	struct inode *inode = path->dentry->inode;
-
 	(void)mask;
 	(void)flags;
 	memset(st, 0, sizeof(*st));
@@ -218,11 +216,9 @@ int pipefs_mount(struct mount_args *args, struct mount_result *result)
 	return 0;
 }
 
-static int pipe_getattr(const struct path *path, struct kstat *st, u32 mask,
+static int pipe_getattr(struct inode *inode, struct kstat *st, u32 mask,
 			unsigned int flags)
 {
-	struct inode *inode = path->dentry->inode;
-
 	(void)mask;
 	(void)flags;
 	memset(st, 0, sizeof(*st));

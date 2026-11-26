@@ -873,10 +873,9 @@ out:
 	return err;
 }
 
-static int brkfs_getattr(const struct path *path, struct kstat *stat, u32 mask,
+static int brkfs_getattr(struct inode *inode, struct kstat *stat, u32 mask,
 			 unsigned int flags)
 {
-	struct inode *inode = path->dentry->inode;
 	struct brkfs_sb_info *sbi = inode->sb->private_data;
 	u64 blocks;
 

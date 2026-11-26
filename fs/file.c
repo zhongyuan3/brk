@@ -199,7 +199,7 @@ int file_stat(struct file *file, struct kstat *buf)
 	}
 
 	i_op = file->inode->ops;
-	return i_op->getattr(&file->path, buf, 0, 0);
+	return i_op->getattr(file->inode, buf, 0, 0);
 }
 
 int file_truncate(struct file *file, loff_t size)

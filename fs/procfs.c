@@ -614,12 +614,11 @@ static struct dentry *procfs_pid_dir_lookup(struct inode *dir,
 	return NULL;
 }
 
-static int procfs_getattr(const struct path *path, struct kstat *stat, u32 mask,
+static int procfs_getattr(struct inode *inode, struct kstat *stat, u32 mask,
 			  unsigned int flags)
 {
 	(void)mask;
 	(void)flags;
-	struct inode *inode = path->dentry->inode;
 
 	memset(stat, 0, sizeof(*stat));
 	stat->ino = inode->ino;

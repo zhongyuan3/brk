@@ -141,7 +141,7 @@ struct inode_ops {
 	int (*rename)(struct inode *, struct dentry *, struct inode *,
 		      struct dentry *, unsigned int);
 	int (*mknod)(struct inode *, struct dentry *, umode_t, dev_t);
-	int (*getattr)(const struct path *, struct kstat *, u32, unsigned int);
+	int (*getattr)(struct inode *, struct kstat *, u32, unsigned int);
 	int (*setattr)(struct dentry *, struct iattr *);
 };
 

@@ -1230,13 +1230,11 @@ static int tmpfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	return 0;
 }
 
-static int tmpfs_getattr(const struct path *path, struct kstat *stat, u32 mask,
+static int tmpfs_getattr(struct inode *inode, struct kstat *stat, u32 mask,
 			 unsigned int flags)
 {
 	(void)flags;
 	(void)mask;
-
-	struct inode *inode = path->dentry->inode;
 
 	memset(stat, 0, sizeof(*stat));
 	stat->ino = inode->ino;
