@@ -6,6 +6,7 @@
 #include <brk/spinlock_types.h>
 #include <brk/types.h>
 #include <brk/virtio_queue.h>
+#include <brk/wait_types.h>
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -168,6 +169,7 @@ struct virtio_blk_dev {
 	struct virtio_blk_slot *slots;
 	unsigned queue_size;
 	spinlock_t lock;
+	wait_queue_head_t desc_wait;
 	struct virtio_blk_config config;
 	bool flush_supported;
 };

@@ -18,6 +18,7 @@
 #include <brk/types.h>
 #include <brk/virtio.h>
 #include <brk/virtio_blk.h>
+#include <brk/wait.h>
 #include <uapi/errno.h>
 
 #include "virtio_blk_internal.h"
@@ -35,6 +36,7 @@ static struct virtio_blk_dev *virtio_blk_alloc(unsigned queue_size)
 		return NULL;
 
 	spinlock_init(&vblk->lock, "virtio_blk_dev");
+	wait_queue_init(&vblk->desc_wait, &vblk->lock, "virtio_blk.desc");
 	vblk->queue_size = queue_size;
 	err = virtio_blk_alloc_vq(vblk, queue_size);
 	if (err) {
