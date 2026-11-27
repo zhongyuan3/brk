@@ -154,36 +154,27 @@ static int futex_wait_common(u32 *uaddr, u32 val,
 	waiter->woken = false;
 	list_add_tail(&waiter->node, &bucket->waiters);
 
-	if (deadline)
-		thread_arm_sleep_timer(&futex_lock, deadline);
+	spin_unlock_irqrestore(&futex_lock, flags);
 
-	for (;;) {
-		int slept = thread_sleep_on_interruptible(&bucket->wait,
-							  &futex_lock);
-
-		if (waiter->woken) {
-			err = 0;
-			break;
-		}
-		if (slept < 0 || signal_pending(thread)) {
-			err = -EINTR;
-			break;
-		}
+	if (deadline) {
 		now = (u64)ktime_get_mono_ns();
-		if (deadline && (s64)(now - deadline) >= 0) {
+		if ((s64)(now - deadline) >= 0)
 			err = -ETIMEDOUT;
-			break;
-		}
+		else
+			err = wait_event_interruptible_timeout_locked(
+				&bucket->wait, &futex_lock, waiter->woken,
+				(ktime_t)(deadline - now));
+	} else {
+		err = wait_event_interruptible_locked(
+			&bucket->wait, &futex_lock, waiter->woken);
 	}
 
+	flags = spin_lock_irqsave(&futex_lock);
 	if (waiter->queued) {
 		list_del_init(&waiter->node);
 		waiter->queued = false;
 	}
 	spin_unlock_irqrestore(&futex_lock, flags);
-
-	if (deadline)
-		thread_disarm_sleep_timer();
 
 	return err;
 }
@@ -219,11 +210,17 @@ static int futex_wake_locked(struct uvm_space *mm, u32 *uaddr, u32 bitset,
 			++count;
 			break;
 		}
+		/*
+		 * Wake while holding futex_lock: the waiter cannot observe
+		 * @woken, leave futex_wait and free its thread until we drop
+		 * the lock.
+		 */
+		if (thread)
+			thread_wake(thread);
 		spin_unlock_irqrestore(&futex_lock, flags);
 
 		if (!thread)
 			break;
-		thread_wake(thread);
 	}
 
 	return count;
