@@ -123,6 +123,7 @@ static void n_tty_signal(struct tty *tty, int sig, int c)
 	}
 
 	/* Wake a reader blocked in read() so it can observe the signal. */
+	tty->rx_gen++;
 	wake_up_all(&tty->rx_wait);
 }
 
@@ -135,6 +136,7 @@ static void n_tty_store(struct tty *tty, u8 c)
 	if (tty->rx_e - tty->rx_r >= tty->rx_size) {
 		/* Publish the buffer and let the reader drain it. */
 		tty->rx_w = tty->rx_e;
+		tty->rx_gen++;
 		wake_up_all(&tty->rx_wait);
 		return;
 	}
@@ -145,6 +147,7 @@ static void n_tty_store(struct tty *tty, u8 c)
 
 	if (!canonical) {
 		tty->rx_w = tty->rx_e;
+		tty->rx_gen++;
 		wake_up_all(&tty->rx_wait);
 	}
 }
@@ -301,6 +304,7 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 			} else {
 				tty->rx_w = tty->rx_e;
 			}
+			tty->rx_gen++;
 			wake_up_all(&tty->rx_wait);
 			continue;
 		}
@@ -310,11 +314,34 @@ static void n_tty_receive_buf(struct tty *tty, const u8 *buf, size_t size)
 		if (c == '\n' || c == t->c_cc[VEOL] || c == t->c_cc[VEOL2] ||
 		    tty->rx_e - tty->rx_r == tty->rx_size) {
 			tty->rx_w = tty->rx_e;
+			tty->rx_gen++;
 			wake_up_all(&tty->rx_wait);
 		}
 	}
 
 	spin_unlock_irqrestore(&port->lock, flags);
+}
+
+/*
+ * Wait for the next receive event.  @gen is the value of tty->rx_gen sampled
+ * while holding port->lock; all wakeup sites bump it after changing receive
+ * state.  This lets a reader re-evaluate VMIN/VTIME even when data was already
+ * present but not yet consumable (for example a partial canonical line).
+ */
+static void n_tty_wait(struct tty *tty, u32 gen, bool timed, u64 deadline)
+{
+	struct tty_port *port = tty->port;
+
+	if (timed) {
+		u64 now = ktime_boottime_ns();
+		ktime_t left = now < deadline ? (ktime_t)(deadline - now) : 0;
+
+		(void)wait_event_interruptible_timeout_locked(
+			&tty->rx_wait, &port->lock, tty->rx_gen != gen, left);
+	} else {
+		(void)wait_event_interruptible_locked(
+			&tty->rx_wait, &port->lock, tty->rx_gen != gen);
+	}
 }
 
 static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
@@ -339,6 +366,12 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 		irqstate_t flags;
 
 		flags = spin_lock_irqsave(&port->lock);
+
+		if (port->dead || tty->dead) {
+			spin_unlock_irqrestore(&port->lock, flags);
+			mutex_unlock(&tty->read_lock);
+			return total > 0 ? (ssize_t)total : -EIO;
+		}
 
 		/* Job control: background reads get SIGTTIN. */
 		if (n_tty_background(port, task) &&
@@ -390,9 +423,10 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 					return total > 0 ? (ssize_t)total :
 							   -EINTR;
 				}
-				(void)thread_sleep_on_interruptible(
-					&tty->rx_wait, tty->rx_wait.lock);
+				u32 gen = tty->rx_gen;
+
 				spin_unlock_irqrestore(&port->lock, flags);
+				n_tty_wait(tty, gen, false, 0);
 				continue;
 			}
 		} else {
@@ -439,9 +473,9 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 					}
 
 					if (timed && now >= deadline) {
-						if (avail > 0)
+						if (avail > 0) {
 							copy = avail;
-						else {
+						} else {
 							spin_unlock_irqrestore(
 								&port->lock,
 								flags);
@@ -449,30 +483,15 @@ static ssize_t n_tty_read(struct tty *tty, char *buf, size_t size)
 								&tty->read_lock);
 							return (ssize_t)total;
 						}
-					} else if (timed) {
-						thread_arm_sleep_timer(
-							&port->lock, deadline);
-						thread_sleep_on_interruptible(
-							&tty->rx_wait,
-							tty->rx_wait.lock);
-						spin_unlock_irqrestore(
-							&port->lock, flags);
-						thread_disarm_sleep_timer();
-						continue;
-					} else {
-						(void)thread_sleep_on_interruptible(
-							&tty->rx_wait,
-							tty->rx_wait.lock);
-						spin_unlock_irqrestore(
-							&port->lock, flags);
-						continue;
 					}
-				} else {
-					(void)thread_sleep_on_interruptible(
-						&tty->rx_wait,
-						tty->rx_wait.lock);
+				}
+
+				if (copy == 0) {
+					u32 gen = tty->rx_gen;
+
 					spin_unlock_irqrestore(&port->lock,
 							       flags);
+					n_tty_wait(tty, gen, timed, deadline);
 					continue;
 				}
 			}
@@ -658,6 +677,7 @@ static long n_tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 			tty->eof_pending = false;
 			tty->lnext = false;
 		}
+		tty->rx_gen++;
 		spin_unlock_irqrestore(&port->lock, flags);
 		wake_up_all(&tty->rx_wait);
 		wake_up_all(&tty->stop_wait);
@@ -672,6 +692,7 @@ static long n_tty_ioctl(struct tty *tty, unsigned int cmd, unsigned long arg)
 			tty->eof_pending = false;
 			tty->lnext = false;
 		}
+		tty->rx_gen++;
 		spin_unlock_irqrestore(&port->lock, flags);
 		wake_up_all(&tty->rx_wait);
 		return 0;

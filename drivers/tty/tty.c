@@ -37,6 +37,7 @@ struct tty *tty_alloc(void)
 	}
 	tty->rx_size = TTY_RX_BUF_SIZE;
 	tty->ldisc = &n_tty_ldisc_ops;
+	tty->rx_gen = 0;
 	tty->eof_pending = false;
 	/* The port owns the initial reference. */
 	refcnt_init(&tty->refcnt, 1);
@@ -265,8 +266,10 @@ void tty_detach_port(struct tty_port *port)
 	tty = port->tty;
 	port->tty = NULL;
 	port->dead = true;
-	if (tty)
+	if (tty) {
 		tty->dead = true;
+		tty->rx_gen++;
+	}
 	spin_unlock_irqrestore(&port->lock, flags);
 
 	/* Wake readers/writers waiting on this port. */

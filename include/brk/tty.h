@@ -91,6 +91,7 @@ struct tty {
 	size_t rx_r;
 	size_t rx_w;
 	size_t rx_e;
+	u32 rx_gen;
 	bool eof_pending;
 	bool lnext;
 	bool stopped;
