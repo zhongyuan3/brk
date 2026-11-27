@@ -109,8 +109,9 @@ void slab_deinit(struct slab_allocator *allocator)
 	struct list_head *first;
 	struct page *pg;
 	struct list_head *list;
+	irqstate_t flags;
 
-	spin_lock(&allocator->lock);
+	flags = spin_lock_irqsave(&allocator->lock);
 	list = &allocator->slab_list;
 	while (!list_empty(list)) {
 		first = list->next;
@@ -121,7 +122,7 @@ void slab_deinit(struct slab_allocator *allocator)
 		kassert(pg);
 		page_free(pg, allocator->page_order);
 	}
-	spin_unlock(&allocator->lock);
+	spin_unlock_irqrestore(&allocator->lock, flags);
 }
 
 void *slab_alloc(struct slab_allocator *allocator)
@@ -130,13 +131,14 @@ void *slab_alloc(struct slab_allocator *allocator)
 	void *obj;
 	int attempt = 0;
 	struct list_head *list;
+	irqstate_t flags;
 
-	spin_lock(&allocator->lock);
+	flags = spin_lock_irqsave(&allocator->lock);
 	list = &allocator->slab_list;
 
 retry:
 	if (attempt > 1) {
-		spin_unlock(&allocator->lock);
+		spin_unlock_irqrestore(&allocator->lock, flags);
 		return NULL;
 	}
 
@@ -145,13 +147,13 @@ retry:
 			obj = curr->slab_free_objs;
 			curr->slab_free_objs = *(void **)obj;
 			curr->slab_free_count--;
-			spin_unlock(&allocator->lock);
+			spin_unlock_irqrestore(&allocator->lock, flags);
 			return obj;
 		}
 	}
 
 	if (attempt == 0 && slab_add_page(allocator) < 0) {
-		spin_unlock(&allocator->lock);
+		spin_unlock_irqrestore(&allocator->lock, flags);
 		return NULL;
 	}
 
@@ -173,11 +175,12 @@ void slab_free(struct slab_allocator *allocator, void *obj)
 	struct page *curr;
 	u64 start, end;
 	struct list_head *list;
+	irqstate_t flags;
 
 	if (!obj)
 		return;
 
-	spin_lock(&allocator->lock);
+	flags = spin_lock_irqsave(&allocator->lock);
 
 	kassert(is_aligned((uintptr_t)obj, allocator->align));
 
@@ -189,12 +192,12 @@ void slab_free(struct slab_allocator *allocator, void *obj)
 			*(void **)obj = curr->slab_free_objs;
 			curr->slab_free_objs = obj;
 			curr->slab_free_count++;
-			spin_unlock(&allocator->lock);
+			spin_unlock_irqrestore(&allocator->lock, flags);
 			return;
 		}
 	}
 
-	spin_unlock(&allocator->lock);
+	spin_unlock_irqrestore(&allocator->lock, flags);
 
 	panic("%s(): invalid obj %p in cache %s\n", __func__, obj,
 	      allocator->name ? allocator->name : "(null)");

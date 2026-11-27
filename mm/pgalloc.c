@@ -86,8 +86,9 @@ static bool pcp_free(struct page *pg)
 static void __page_free_to_buddy(struct page *pg, unsigned int order)
 {
 	struct page *buddy;
+	irqstate_t flags;
 
-	spin_lock(&areas_lock);
+	flags = spin_lock_irqsave(&areas_lock);
 
 	kassert((pg->flags & PAGE_FLAGS_BUDDY));
 	kassert(!(pg->flags & PAGE_FLAGS_FREE));
@@ -111,7 +112,7 @@ static void __page_free_to_buddy(struct page *pg, unsigned int order)
 	pg->buddy_page_order = order;
 	list_add(&pg->buddy_lru, &areas[order].free_list);
 
-	spin_unlock(&areas_lock);
+	spin_unlock_irqrestore(&areas_lock, flags);
 }
 
 /*
@@ -146,6 +147,7 @@ struct page *page_alloc(unsigned int order)
 	unsigned int curr_order = order;
 	struct page *curr = NULL;
 	struct page *buddy = NULL;
+	irqstate_t flags;
 	bool retried = false;
 
 again:
@@ -157,7 +159,7 @@ again:
 		}
 	}
 
-	spin_lock(&areas_lock);
+	flags = spin_lock_irqsave(&areas_lock);
 
 	for (; curr_order <= PAGE_ORDER_MAX; ++curr_order) {
 		if (!list_empty(&areas[curr_order].free_list)) {
@@ -168,7 +170,7 @@ again:
 		}
 	}
 
-	spin_unlock(&areas_lock);
+	spin_unlock_irqrestore(&areas_lock, flags);
 
 	if (!retried) {
 		retried = true;
@@ -192,7 +194,7 @@ found:
 
 	curr->flags &= ~PAGE_FLAGS_FREE;
 	refcnt_init(&curr->refcnt, 1);
-	spin_unlock(&areas_lock);
+	spin_unlock_irqrestore(&areas_lock, flags);
 	return curr;
 }
 
