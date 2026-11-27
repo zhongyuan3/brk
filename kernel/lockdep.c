@@ -6,6 +6,7 @@
 #include <brk/string.h>
 #include <brk/thread.h>
 #include <brk/types.h>
+#include <stdint.h>
 
 #ifndef NDEBUG
 
@@ -18,10 +19,16 @@ struct lockdep_class {
 	bool nested;
 };
 
+#define LOCKDEP_CLASS_CACHE 512
+
 static struct lockdep_class lockdep_classes[LOCKDEP_MAX_CLASSES];
 static unsigned int lockdep_nr_classes;
 static u8 lockdep_edges[LOCKDEP_MAX_CLASSES][LOCKDEP_MAX_CLASSES];
 static const void *lockdep_edge_caller[LOCKDEP_MAX_CLASSES][LOCKDEP_MAX_CLASSES];
+static struct {
+	const char *name;
+	u16 id;
+} lockdep_class_cache[LOCKDEP_CLASS_CACHE];
 
 static spinlock_t lockdep_graph_lock = SPINLOCK_INITIALIZER("lockdep_graph");
 static bool lockdep_ready;
@@ -60,13 +67,29 @@ static bool lockdep_class_is_nested(const char *name)
 static u16 lockdep_class_id(const char *name)
 {
 	unsigned int i;
+	unsigned int slot;
+	unsigned int probe;
 
 	if (!name)
 		name = "<unnamed>";
 
+	/*
+	 * Lock names are overwhelmingly static string literals, so a
+	 * pointer-keyed cache avoids a strcmp walk over every class on the
+	 * lock hot path.
+	 */
+	slot = ((uintptr_t)name >> 4) & (LOCKDEP_CLASS_CACHE - 1);
+	for (probe = 0; probe < LOCKDEP_CLASS_CACHE; ++probe) {
+		if (lockdep_class_cache[slot].name == name)
+			return lockdep_class_cache[slot].id;
+		if (!lockdep_class_cache[slot].name)
+			break;
+		slot = (slot + 1) & (LOCKDEP_CLASS_CACHE - 1);
+	}
+
 	for (i = 0; i < lockdep_nr_classes; ++i) {
 		if (!strcmp(lockdep_classes[i].name, name))
-			return (u16)i;
+			goto cache;
 	}
 
 	if (lockdep_nr_classes >= LOCKDEP_MAX_CLASSES)
@@ -75,6 +98,19 @@ static u16 lockdep_class_id(const char *name)
 	strlcpy(lockdep_classes[i].name, name, LOCKDEP_NAME_LEN);
 	lockdep_classes[i].nested = lockdep_class_is_nested(name);
 	lockdep_nr_classes++;
+
+cache:
+	slot = ((uintptr_t)name >> 4) & (LOCKDEP_CLASS_CACHE - 1);
+	for (probe = 0; probe < LOCKDEP_CLASS_CACHE; ++probe) {
+		if (!lockdep_class_cache[slot].name ||
+		    lockdep_class_cache[slot].name == name) {
+			lockdep_class_cache[slot].name = name;
+			lockdep_class_cache[slot].id = (u16)i;
+			break;
+		}
+		slot = (slot + 1) & (LOCKDEP_CLASS_CACHE - 1);
+	}
+
 	return (u16)i;
 }
 
@@ -352,8 +388,11 @@ void lockdep_release(const void *lock)
 		return;
 	}
 
-	raw_spin_lock(&lockdep_graph_lock);
-
+	/*
+	 * The held stack is private to the current thread.  Interrupts stay
+	 * disabled until lockdep_leave(), so no other context can observe or
+	 * modify it here.
+	 */
 	for (unsigned int i = thread->lockdep_depth; i > 0; --i) {
 		if (thread->lockdep_held[i - 1].lock != lock)
 			continue;
@@ -364,7 +403,6 @@ void lockdep_release(const void *lock)
 		break;
 	}
 
-	raw_spin_unlock(&lockdep_graph_lock);
 	lockdep_leave(flags);
 }
 
@@ -383,14 +421,12 @@ bool lockdep_is_held(const void *lock)
 		return false;
 	}
 
-	raw_spin_lock(&lockdep_graph_lock);
 	for (unsigned int i = 0; i < thread->lockdep_depth; ++i) {
 		if (thread->lockdep_held[i].lock == lock) {
 			held = true;
 			break;
 		}
 	}
-	raw_spin_unlock(&lockdep_graph_lock);
 	lockdep_leave(flags);
 	return held;
 }
