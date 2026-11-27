@@ -844,6 +844,10 @@ void sched_resume(void)
 	 * run on another CPU while @prev was still on-CPU.  Now that the
 	 * zombie is really off-CPU and safe to reap, wake its waiters.
 	 */
-	if (wake_parent)
+	if (wake_parent) {
+		irqstate_t flags = spin_lock_irqsave(&wait_lock);
+
 		wake_up_all(&wake_parent->child_wait);
+		spin_unlock_irqrestore(&wait_lock, flags);
+	}
 }
