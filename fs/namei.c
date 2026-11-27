@@ -336,12 +336,25 @@ int do_linkat(int olddirfd, const char *oldpathname, int newdirfd,
 		goto out_paths;
 	}
 
-	down_write(&parent_inode->rwsem);
-	down_write(&old_inode->rwsem);
+	/* Lock both inodes in a stable order, like rename. */
+	bool parent_first = (uintptr_t)parent_inode < (uintptr_t)old_inode;
+
+	if (parent_first) {
+		down_write(&parent_inode->rwsem);
+		down_write(&old_inode->rwsem);
+	} else {
+		down_write(&old_inode->rwsem);
+		down_write(&parent_inode->rwsem);
+	}
 	err = parent_inode->ops->link(oldpath.dentry, parent_inode,
 				      newpath.dentry);
-	up_write(&old_inode->rwsem);
-	up_write(&parent_inode->rwsem);
+	if (parent_first) {
+		up_write(&old_inode->rwsem);
+		up_write(&parent_inode->rwsem);
+	} else {
+		up_write(&parent_inode->rwsem);
+		up_write(&old_inode->rwsem);
+	}
 
 out_paths:
 	path_put(&parent_path);

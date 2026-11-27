@@ -23,7 +23,7 @@ void down_read(rwsem_t *sem)
 {
 	irqstate_t flags;
 
-	kassert(preempt_count() == 0);
+	might_sleep();
 
 	flags = spin_lock_irqsave(&sem->wait_lock);
 	if (sem->writer == current_thread())
@@ -39,7 +39,7 @@ int down_read_interruptible(rwsem_t *sem)
 	irqstate_t flags;
 	int err;
 
-	kassert(preempt_count() == 0);
+	might_sleep();
 
 	flags = spin_lock_irqsave(&sem->wait_lock);
 	if (sem->writer == current_thread())
@@ -99,7 +99,7 @@ void down_write(rwsem_t *sem)
 	struct thread *self = current_thread();
 	irqstate_t flags;
 
-	kassert(preempt_count() == 0);
+	might_sleep();
 
 	flags = spin_lock_irqsave(&sem->wait_lock);
 	if (sem->writer == self)
@@ -119,7 +119,7 @@ int down_write_interruptible(rwsem_t *sem)
 	irqstate_t flags;
 	int err;
 
-	kassert(preempt_count() == 0);
+	might_sleep();
 
 	flags = spin_lock_irqsave(&sem->wait_lock);
 	if (sem->writer == self)

@@ -3,6 +3,7 @@
 
 #include <arch/asm/page.h>
 #include <brk/asm/cpu.h>
+#include <brk/assert.h>
 #include <brk/cpu.h>
 #include <brk/process_types.h>
 #include <brk/spinlock_types.h>
@@ -16,6 +17,17 @@
 #define USTACK_SIZE (PAGE_SIZE * (1 << USTACK_PAGE_ORDER))
 
 #define TIME_SLICE_MAX 5
+
+/*
+ * Debug check for functions that may sleep: they must be called from thread
+ * context with preemption enabled.  A plain spin_lock() (which disables
+ * preemption) must never be held across these calls.
+ */
+#ifndef NDEBUG
+#define might_sleep() kassert(preempt_count() == 0)
+#else
+#define might_sleep() ((void)0)
+#endif
 
 void thread_cache_init(void);
 struct thread *thread_create(struct process *process, void (*fn)(void *),

@@ -23,7 +23,7 @@ void wait_for_completion(completion_t *comp)
 {
 	irqstate_t flags;
 
-	kassert(preempt_count() == 0);
+	might_sleep();
 
 	flags = spin_lock_irqsave(&comp->wait_lock);
 	while (!comp->done)
@@ -36,7 +36,7 @@ int wait_for_completion_interruptible(completion_t *comp)
 	irqstate_t flags;
 	int err = 0;
 
-	kassert(preempt_count() == 0);
+	might_sleep();
 
 	flags = spin_lock_irqsave(&comp->wait_lock);
 	while (!comp->done) {

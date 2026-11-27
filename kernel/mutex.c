@@ -38,10 +38,10 @@ void mutex_lock(mutex_t *mutex)
 	struct mutex_waiter waiter;
 	irqstate_t flags;
 
+	might_sleep();
+
 	if (mutex_try_acquire(mutex, self))
 		return;
-
-	kassert(preempt_count() == 0);
 
 	flags = spin_lock_irqsave(&mutex->wait_lock);
 	if (mutex->owner == self)
@@ -69,10 +69,10 @@ int mutex_lock_interruptible(mutex_t *mutex)
 	irqstate_t flags;
 	int err = 0;
 
+	might_sleep();
+
 	if (mutex_try_acquire(mutex, self))
 		return 0;
-
-	kassert(preempt_count() == 0);
 
 	flags = spin_lock_irqsave(&mutex->wait_lock);
 	if (mutex->owner == self)
