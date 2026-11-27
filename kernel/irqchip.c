@@ -1,3 +1,4 @@
+#include <brk/atomic.h>
 #include <brk/cpu.h>
 #include <brk/irq.h>
 #include <brk/irqchip.h>
@@ -16,12 +17,12 @@ static u64 irq_spurious;
 
 void irq_note_spurious(void)
 {
-	__atomic_add_fetch(&irq_spurious, 1, __ATOMIC_RELAXED);
+	atomic_fetch_add(&irq_spurious, 1, ATOMIC_RELAXED);
 }
 
 u64 irq_spurious_count(void)
 {
-	return __atomic_load_n(&irq_spurious, __ATOMIC_RELAXED);
+	return atomic_load_n(&irq_spurious, ATOMIC_RELAXED);
 }
 
 int irqchip_register_driver(struct irqchip_driver *drv)

@@ -1,4 +1,5 @@
 #include <brk/assert.h>
+#include <brk/atomic.h>
 #include <brk/completion.h>
 #include <brk/spinlock.h>
 #include <brk/thread.h>
@@ -15,7 +16,7 @@ void completion_init(completion_t *comp, const char *name)
 
 void reinit_completion(completion_t *comp)
 {
-	__atomic_store_n(&comp->done, 0, __ATOMIC_RELEASE);
+	atomic_store_n(&comp->done, 0, ATOMIC_RELEASE);
 }
 
 void wait_for_completion(completion_t *comp)
@@ -78,5 +79,5 @@ void complete_all(completion_t *comp)
 
 bool completion_done(const completion_t *comp)
 {
-	return __atomic_load_n(&comp->done, __ATOMIC_ACQUIRE) != 0;
+	return atomic_load_n(&comp->done, ATOMIC_ACQUIRE) != 0;
 }

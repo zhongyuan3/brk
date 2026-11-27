@@ -1,3 +1,4 @@
+#include <brk/atomic.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
@@ -308,7 +309,7 @@ static struct thread *process_pick_live_thread_locked(struct process *process,
 
 		if (thread->state == THREAD_STATE_ZOMBIE)
 			continue;
-		blocked = __atomic_load_n(&thread->blocked, __ATOMIC_RELAXED);
+		blocked = atomic_load_n(&thread->blocked, ATOMIC_RELAXED);
 		if (!(blocked & (1ULL << sig)))
 			return thread;
 		if (!fallback)

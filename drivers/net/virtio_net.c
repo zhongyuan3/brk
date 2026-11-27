@@ -1,4 +1,5 @@
 #include <arch/mm.h>
+#include <brk/atomic.h>
 #include <brk/container_of.h>
 #include <brk/device.h>
 #include <brk/eth.h>
@@ -92,8 +93,7 @@ static bool vnet_mac_valid(const u8 *mac)
 
 static void vnet_generate_mac(struct virtio_net_dev *vnet)
 {
-	unsigned int index =
-		__atomic_fetch_add(&vnet_index, 1, __ATOMIC_RELAXED);
+	unsigned int index = atomic_fetch_add(&vnet_index, 1, ATOMIC_RELAXED);
 
 	/* Locally administered, unicast. */
 	vnet->mac[0] = 0x02;
@@ -254,7 +254,7 @@ static irqreturn_t vnet_irq(int irq, void *dev_id)
 	flags = spin_lock_irqsave(&vnet->lock);
 
 	status = virtio_ack_interrupt(vnet->vdev);
-	__sync_synchronize();
+	atomic_thread_fence(ATOMIC_SEQ_CST);
 
 	/* Bit 0 covers used-ring updates from every queue. */
 	if (status & 1) {

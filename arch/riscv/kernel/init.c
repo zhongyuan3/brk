@@ -3,6 +3,7 @@
 #include <arch/trap.h>
 #include <arch/trapframe.h>
 #include <brk/asm/cpu.h>
+#include <brk/atomic.h>
 #include <brk/cpu.h>
 #include <brk/init.h>
 #include <brk/irq.h>
@@ -104,7 +105,7 @@ void send_ipi(cpuid_t cpuid)
 {
 	if (cpuid >= MAX_CPUS)
 		return;
-	if (!__atomic_load_n(&cpus[cpuid].online, __ATOMIC_ACQUIRE))
+	if (!atomic_load_n(&cpus[cpuid].online, ATOMIC_ACQUIRE))
 		return;
 
 	/*

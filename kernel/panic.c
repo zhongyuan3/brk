@@ -1,4 +1,5 @@
 #include <brk/assert.h>
+#include <brk/atomic.h>
 #include <brk/cpu.h>
 #include <brk/panic.h>
 #include <brk/printf.h>
@@ -20,8 +21,8 @@ noreturn void panic(char const *fmt, ...)
 
 	local_irq_disable();
 
-	if (!__atomic_compare_exchange_n(&panic_owner, &expected, 1, false,
-					 __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+	if (!atomic_compare_exchange_n(&panic_owner, &expected, 1, 0,
+				       ATOMIC_SEQ_CST, ATOMIC_SEQ_CST)) {
 		int n = snprintf(
 			buf, sizeof(buf),
 			"PANIC: CPU %ld: another CPU is already panicking\n",

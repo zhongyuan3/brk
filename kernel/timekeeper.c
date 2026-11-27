@@ -1,4 +1,5 @@
 #define pr_fmt(fmt) "timekeeper: " fmt
+#include <brk/atomic.h>
 #include <brk/clocksource.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
@@ -79,7 +80,7 @@ u64 ktime_get_mono_ns(void)
 	u32 seq;
 	u64 ns;
 
-	if (!__atomic_load_n(&tkp->ready, __ATOMIC_ACQUIRE))
+	if (!atomic_load_n(&tkp->ready, ATOMIC_ACQUIRE))
 		return 0;
 
 	do {
@@ -96,7 +97,7 @@ u64 ktime_get_boottime_ns(void)
 	u32 seq;
 	s64 ns;
 
-	if (!__atomic_load_n(&tkp->ready, __ATOMIC_ACQUIRE))
+	if (!atomic_load_n(&tkp->ready, ATOMIC_ACQUIRE))
 		return 0;
 
 	do {
@@ -122,7 +123,7 @@ void timekeeper_init(void)
 	 */
 	flags = spin_lock_irqsave(&tk.lock);
 
-	if (__atomic_load_n(&tk.ready, __ATOMIC_RELAXED)) {
+	if (atomic_load_n(&tk.ready, ATOMIC_RELAXED)) {
 		spin_unlock_irqrestore(&tk.lock, flags);
 		pr_warn("already initialized\n");
 		return;
@@ -138,7 +139,7 @@ void timekeeper_init(void)
 
 	wall_valid = false;
 	wall_clock = NULL;
-	__atomic_store_n(&tk.ready, true, __ATOMIC_RELEASE);
+	atomic_store_n(&tk.ready, true, ATOMIC_RELEASE);
 	spin_unlock_irqrestore(&tk.lock, flags);
 
 	pr_debug("initialized (wall clock pending)\n");
@@ -200,7 +201,7 @@ ktime_t timekeeper_real(void)
 	u32 seq;
 	s64 ns;
 
-	if (!__atomic_load_n(&tkp->ready, __ATOMIC_ACQUIRE))
+	if (!atomic_load_n(&tkp->ready, ATOMIC_ACQUIRE))
 		return 0;
 
 	do {

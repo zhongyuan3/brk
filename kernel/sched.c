@@ -1,5 +1,6 @@
 #include <arch/mm.h>
 #include <brk/assert.h>
+#include <brk/atomic.h>
 #include <brk/cpu.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
@@ -58,13 +59,13 @@ static int thread_select_cpu(void)
 	int best = -1;
 	unsigned int best_load = ~0U;
 	unsigned int start =
-		__atomic_fetch_add(&next_cpu_hint, 1, __ATOMIC_RELAXED);
+		atomic_fetch_add(&next_cpu_hint, 1, ATOMIC_RELAXED);
 
 	for (int off = 0; off < MAX_CPUS; ++off) {
 		int i = (int)((start + (unsigned int)off) % MAX_CPUS);
 		unsigned int load;
 
-		if (!__atomic_load_n(&cpus[i].online, __ATOMIC_ACQUIRE))
+		if (!atomic_load_n(&cpus[i].online, ATOMIC_ACQUIRE))
 			continue;
 
 		load = cpu_load(&cpus[i]);
@@ -253,7 +254,7 @@ void sched_start(void)
 	 * IPI may then queue work immediately, but it stays pending until the
 	 * thread enables interrupts or switches to idle.
 	 */
-	__atomic_store_n(&cpu->online, true, __ATOMIC_RELEASE);
+	atomic_store_n(&cpu->online, true, ATOMIC_RELEASE);
 
 	if (cpu->id == boot_info.boot_hart_id) {
 		local_irq_enable();

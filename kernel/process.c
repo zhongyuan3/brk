@@ -2,6 +2,7 @@
 #include <arch/pgtable.h>
 #include <brk/asm/cpu.h>
 #include <brk/assert.h>
+#include <brk/atomic.h>
 #include <brk/console.h>
 #include <brk/container_of.h>
 #include <brk/cpu.h>
@@ -114,8 +115,7 @@ static void thread_free(struct thread *thread)
 static void thread_sleep_timeout(struct timer_list *timer)
 {
 	struct thread *thread = container_of(timer, struct thread, sleep_timer);
-	spinlock_t *lock =
-		__atomic_load_n(&thread->sleep_lock, __ATOMIC_ACQUIRE);
+	spinlock_t *lock = atomic_load_n(&thread->sleep_lock, ATOMIC_ACQUIRE);
 
 	if (lock) {
 		/*
@@ -135,7 +135,7 @@ void thread_arm_sleep_timer(spinlock_t *lock, u64 expires_ns)
 
 	timer_setup(&thread->sleep_timer, thread_sleep_timeout);
 	timer_set_expires(&thread->sleep_timer, expires_ns);
-	__atomic_store_n(&thread->sleep_lock, lock, __ATOMIC_RELEASE);
+	atomic_store_n(&thread->sleep_lock, lock, ATOMIC_RELEASE);
 	(void)timer_add(&thread->sleep_timer);
 }
 
@@ -144,7 +144,7 @@ void thread_disarm_sleep_timer(void)
 	struct thread *thread = current_thread();
 
 	timer_del_sync(&thread->sleep_timer);
-	__atomic_store_n(&thread->sleep_lock, NULL, __ATOMIC_RELEASE);
+	atomic_store_n(&thread->sleep_lock, NULL, ATOMIC_RELEASE);
 }
 
 static void complete_thread_switch(void);
@@ -347,7 +347,7 @@ void process_destroy(struct process *process)
 		list_del_init(&thread->proc_threads);
 
 		timer_del_sync(&thread->sleep_timer);
-		__atomic_store_n(&thread->sleep_lock, NULL, __ATOMIC_RELEASE);
+		atomic_store_n(&thread->sleep_lock, NULL, ATOMIC_RELEASE);
 
 		irqstate_t flags = spin_lock_irqsave(&process_list_lock);
 		list_del_init(&thread->list);
@@ -369,7 +369,7 @@ static void thread_destroy(struct thread *thread)
 	struct process *process = thread->process;
 
 	timer_del_sync(&thread->sleep_timer);
-	__atomic_store_n(&thread->sleep_lock, NULL, __ATOMIC_RELEASE);
+	atomic_store_n(&thread->sleep_lock, NULL, ATOMIC_RELEASE);
 
 	irqstate_t flags = spin_lock_irqsave(&process_list_lock);
 	list_del_init(&thread->list);
@@ -808,7 +808,7 @@ static enum thread_state process_state_locked(struct process *process)
 
 	list_for_each_entry(thread, &process->threads, proc_threads) {
 		enum thread_state tstate =
-			__atomic_load_n(&thread->state, __ATOMIC_RELAXED);
+			atomic_load_n(&thread->state, ATOMIC_RELAXED);
 
 		if (tstate == THREAD_STATE_ZOMBIE)
 			continue;
@@ -850,8 +850,7 @@ bool process_get_info(pid_t pid, struct process_info *info)
 	info->pid = target->pid;
 	exit_status = target->exit_status;
 	nr_threads = target->nr_live;
-	brk = target->mm ? __atomic_load_n(&target->mm->brk, __ATOMIC_RELAXED) :
-			   0;
+	brk = target->mm ? atomic_load_n(&target->mm->brk, ATOMIC_RELAXED) : 0;
 	state = process_state_locked(target);
 	for (size_t i = 0; i < PROCESS_NAME_MAX; ++i) {
 		name[i] = target->name[i];
@@ -890,10 +889,9 @@ void process_exit_group(int status)
 	if (!process->group_exiting) {
 		process->group_exiting = true;
 		process->group_exit_status = status;
-		__atomic_store_n(&process->group_exit_status, status,
-				 __ATOMIC_RELAXED);
-		__atomic_store_n(&process->group_exiting, true,
-				 __ATOMIC_RELEASE);
+		atomic_store_n(&process->group_exit_status, status,
+			       ATOMIC_RELAXED);
+		atomic_store_n(&process->group_exiting, true, ATOMIC_RELEASE);
 	}
 	exit_status = process->group_exit_status;
 	spin_unlock_irqrestore(&process->lock, flags);

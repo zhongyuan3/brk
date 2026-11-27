@@ -1,3 +1,4 @@
+#include <brk/atomic.h>
 #include <brk/cpu.h>
 #include <brk/panic.h>
 #include <brk/spinlock.h>
@@ -19,17 +20,15 @@ bool spin_is_locked_by_me(spinlock_t *lock)
 
 static void __spin_lock(spinlock_t *lock)
 {
-	while (__sync_lock_test_and_set(&lock->locked, 1) != 0)
+	while (atomic_exchange_n(&lock->locked, 1, ATOMIC_ACQUIRE) != 0)
 		;
-	__sync_synchronize();
 	lock->cpuid = this_cpuid();
 }
 
 static bool __spin_trylock(spinlock_t *lock)
 {
-	if (__sync_lock_test_and_set(&lock->locked, 1) != 0)
+	if (atomic_exchange_n(&lock->locked, 1, ATOMIC_ACQUIRE) != 0)
 		return false;
-	__sync_synchronize();
 	lock->cpuid = this_cpuid();
 	return true;
 }
@@ -40,8 +39,7 @@ static void __spin_unlock(spinlock_t *lock, bool check_owner)
 		panic("spin_unlock: name=%s,cpu=%lu\n", lock->name,
 		      lock->cpuid);
 	lock->cpuid = -1;
-	__sync_synchronize();
-	__sync_lock_release(&lock->locked);
+	atomic_store_n(&lock->locked, 0, ATOMIC_RELEASE);
 }
 
 void raw_spin_lock(spinlock_t *lock)

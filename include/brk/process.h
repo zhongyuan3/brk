@@ -1,6 +1,7 @@
 #ifndef _BRK_PROCESS_H
 #define _BRK_PROCESS_H
 
+#include <brk/atomic.h>
 #include <brk/cpu.h>
 #include <brk/fdtable.h>
 #include <brk/fs_types.h>
@@ -76,12 +77,12 @@ static inline struct process *current_process(void)
 
 static inline bool process_group_exiting(struct process *process)
 {
-	return __atomic_load_n(&process->group_exiting, __ATOMIC_ACQUIRE);
+	return atomic_load_n(&process->group_exiting, ATOMIC_ACQUIRE);
 }
 
 static inline int process_group_exit_status(struct process *process)
 {
-	return __atomic_load_n(&process->group_exit_status, __ATOMIC_RELAXED);
+	return atomic_load_n(&process->group_exit_status, ATOMIC_RELAXED);
 }
 
 struct process_fsids {

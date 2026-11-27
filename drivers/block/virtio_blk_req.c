@@ -1,4 +1,5 @@
 #include <arch/mm.h>
+#include <brk/atomic.h>
 #include <brk/bio.h>
 #include <brk/blkdev.h>
 #include <brk/completion.h>
@@ -120,7 +121,7 @@ irqreturn_t virtio_blk_irq_handler(int irq, void *dev_id)
 
 	virtio_ack_interrupt(vblk->vdev);
 
-	__sync_synchronize();
+	atomic_thread_fence(ATOMIC_SEQ_CST);
 
 	virtq_process_used(&vblk->vq, virtio_blk_vq_used, vblk);
 

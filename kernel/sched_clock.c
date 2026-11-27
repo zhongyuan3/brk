@@ -1,3 +1,4 @@
+#include <brk/atomic.h>
 #include <brk/clocksource.h>
 #include <brk/sched_clock.h>
 #include <brk/timeconst.h>
@@ -14,20 +15,19 @@ void sched_clock_init(struct clocksource *cs)
 		return;
 
 	base = cs->read();
-	__atomic_store_n(&sched_cycle_base, base, __ATOMIC_RELAXED);
-	__atomic_store_n(&sched_cs, cs, __ATOMIC_RELEASE);
+	atomic_store_n(&sched_cycle_base, base, ATOMIC_RELAXED);
+	atomic_store_n(&sched_cs, cs, ATOMIC_RELEASE);
 }
 
 u64 sched_clock(void)
 {
-	struct clocksource *cs = __atomic_load_n(&sched_cs, __ATOMIC_ACQUIRE);
+	struct clocksource *cs = atomic_load_n(&sched_cs, ATOMIC_ACQUIRE);
 	u64 cycles;
 
 	if (!cs)
 		return 0;
 
-	cycles = cs->read() -
-		 __atomic_load_n(&sched_cycle_base, __ATOMIC_RELAXED);
+	cycles = cs->read() - atomic_load_n(&sched_cycle_base, ATOMIC_RELAXED);
 	return clocksource_cycles_to_ns(cs, cycles);
 }
 

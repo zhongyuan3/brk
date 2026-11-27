@@ -1,4 +1,5 @@
 #include <brk/assert.h>
+#include <brk/atomic.h>
 #include <brk/kmalloc.h>
 #include <brk/virtio_queue.h>
 #include <uapi/errno.h>
@@ -109,11 +110,11 @@ void virtq_submit(struct virtq *vq, u16 head_idx)
 {
 	vq->avail->ring[vq->avail->idx % vq->num] = head_idx;
 
-	__sync_synchronize();
+	atomic_thread_fence(ATOMIC_SEQ_CST);
 
 	vq->avail->idx += 1;
 
-	__sync_synchronize();
+	atomic_thread_fence(ATOMIC_SEQ_CST);
 }
 
 void virtq_process_used(struct virtq *vq, virtq_used_fn fn, void *ctx)
@@ -123,7 +124,7 @@ void virtq_process_used(struct virtq *vq, virtq_used_fn fn, void *ctx)
 	while (vq->used_idx != curr_used_idx) {
 		u32 id, len;
 
-		__sync_synchronize();
+		atomic_thread_fence(ATOMIC_SEQ_CST);
 		id = vq->used->ring[vq->used_idx % vq->num].id;
 		len = vq->used->ring[vq->used_idx % vq->num].len;
 		fn(vq, id, len, ctx);

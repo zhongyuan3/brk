@@ -1,6 +1,7 @@
 #ifndef _BRK_SEQCOUNT_H
 #define _BRK_SEQCOUNT_H
 
+#include <brk/atomic.h>
 #include <brk/types.h>
 #include <stdbool.h>
 
@@ -18,7 +19,7 @@ typedef struct seqcount {
 
 static inline void seqcount_init(seqcount_t *s)
 {
-	__atomic_store_n(&s->sequence, 0, __ATOMIC_RELAXED);
+	atomic_store_n(&s->sequence, 0, ATOMIC_RELAXED);
 }
 
 static inline u32 read_seqcount_begin(const seqcount_t *s)
@@ -26,7 +27,7 @@ static inline u32 read_seqcount_begin(const seqcount_t *s)
 	u32 seq;
 
 	do {
-		seq = __atomic_load_n(&s->sequence, __ATOMIC_ACQUIRE);
+		seq = atomic_load_n(&s->sequence, ATOMIC_ACQUIRE);
 	} while (seq & 1);
 
 	return seq;
@@ -34,23 +35,23 @@ static inline u32 read_seqcount_begin(const seqcount_t *s)
 
 static inline bool read_seqcount_retry(const seqcount_t *s, u32 start)
 {
-	__atomic_thread_fence(__ATOMIC_ACQUIRE);
-	return __atomic_load_n(&s->sequence, __ATOMIC_RELAXED) != start;
+	atomic_thread_fence(ATOMIC_ACQUIRE);
+	return atomic_load_n(&s->sequence, ATOMIC_RELAXED) != start;
 }
 
 static inline void write_seqcount_begin(seqcount_t *s)
 {
-	u32 seq = __atomic_load_n(&s->sequence, __ATOMIC_RELAXED);
+	u32 seq = atomic_load_n(&s->sequence, ATOMIC_RELAXED);
 
-	__atomic_store_n(&s->sequence, seq + 1, __ATOMIC_RELAXED);
-	__atomic_thread_fence(__ATOMIC_RELEASE);
+	atomic_store_n(&s->sequence, seq + 1, ATOMIC_RELAXED);
+	atomic_thread_fence(ATOMIC_RELEASE);
 }
 
 static inline void write_seqcount_end(seqcount_t *s)
 {
-	u32 seq = __atomic_load_n(&s->sequence, __ATOMIC_RELAXED);
+	u32 seq = atomic_load_n(&s->sequence, ATOMIC_RELAXED);
 
-	__atomic_store_n(&s->sequence, seq + 1, __ATOMIC_RELEASE);
+	atomic_store_n(&s->sequence, seq + 1, ATOMIC_RELEASE);
 }
 
 #endif

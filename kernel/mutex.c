@@ -1,4 +1,5 @@
 #include <brk/assert.h>
+#include <brk/atomic.h>
 #include <brk/cpu.h>
 #include <brk/mutex.h>
 #include <brk/panic.h>
@@ -18,9 +19,8 @@ static bool mutex_try_acquire(mutex_t *mutex, struct thread *self)
 {
 	struct thread *expected = NULL;
 
-	return __atomic_compare_exchange_n(&mutex->owner, &expected, self,
-					   false, __ATOMIC_ACQUIRE,
-					   __ATOMIC_RELAXED);
+	return atomic_compare_exchange_n(&mutex->owner, &expected, self, 0,
+					 ATOMIC_ACQUIRE, ATOMIC_RELAXED);
 }
 
 void mutex_init(mutex_t *mutex, const char *name)
@@ -147,11 +147,10 @@ void mutex_unlock(mutex_t *mutex)
 
 bool mutex_is_locked(const mutex_t *mutex)
 {
-	return __atomic_load_n(&mutex->owner, __ATOMIC_ACQUIRE) != NULL;
+	return atomic_load_n(&mutex->owner, ATOMIC_ACQUIRE) != NULL;
 }
 
 bool mutex_is_locked_by_me(const mutex_t *mutex)
 {
-	return __atomic_load_n(&mutex->owner, __ATOMIC_ACQUIRE) ==
-	       current_thread();
+	return atomic_load_n(&mutex->owner, ATOMIC_ACQUIRE) == current_thread();
 }

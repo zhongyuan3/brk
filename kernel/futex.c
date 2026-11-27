@@ -1,3 +1,4 @@
+#include <brk/atomic.h>
 #include <brk/cpu.h>
 #include <brk/error.h>
 #include <brk/futex.h>
@@ -49,7 +50,7 @@ static int futex_get_value(u32 *uaddr, u32 *value)
 	    !user_range_ok((u64)(uintptr_t)uaddr, sizeof(u32)))
 		return -EFAULT;
 
-	*value = __atomic_load_n(uaddr, __ATOMIC_SEQ_CST);
+	*value = atomic_load_n(uaddr, ATOMIC_SEQ_CST);
 	return 0;
 }
 

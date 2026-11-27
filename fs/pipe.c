@@ -1,4 +1,5 @@
 #include <arch/asm/page.h>
+#include <brk/atomic.h>
 #include <brk/dcache.h>
 #include <brk/error.h>
 #include <brk/fdtable.h>
@@ -438,7 +439,7 @@ static unsigned long pipe_alloc_ino(void)
 {
 	static unsigned long counter = 1;
 
-	return __atomic_add_fetch(&counter, 1, __ATOMIC_RELAXED);
+	return atomic_add_fetch(&counter, 1, ATOMIC_RELAXED);
 }
 
 /**

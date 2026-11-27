@@ -1,3 +1,4 @@
+#include <brk/atomic.h>
 #include <brk/bio.h>
 #include <brk/blkdev.h>
 #include <brk/completion.h>
@@ -105,7 +106,7 @@ static int blk_queue_ensure_worker(struct request_queue *q)
 {
 	int err = 0;
 
-	if (__atomic_load_n(&q->worker, __ATOMIC_ACQUIRE))
+	if (atomic_load_n(&q->worker, ATOMIC_ACQUIRE))
 		return 0;
 
 	mutex_lock(&q->worker_lock);

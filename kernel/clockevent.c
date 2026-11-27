@@ -1,3 +1,4 @@
+#include <brk/atomic.h>
 #include <brk/clockevent.h>
 #include <brk/cpu.h>
 #include <brk/spinlock.h>
@@ -33,8 +34,7 @@ int clockevents_register_device(struct clock_event_device *dev)
 
 	if (!current_clockevents[cpu] ||
 	    dev->rating > current_clockevents[cpu]->rating)
-		__atomic_store_n(&current_clockevents[cpu], dev,
-				 __ATOMIC_RELEASE);
+		atomic_store_n(&current_clockevents[cpu], dev, ATOMIC_RELEASE);
 
 	spin_unlock_irqrestore(&clockevents_lock, flags);
 	return 0;
@@ -46,7 +46,7 @@ struct clock_event_device *clockevents_get_current(void)
 
 	if (cpu >= MAX_CPUS)
 		return NULL;
-	return __atomic_load_n(&current_clockevents[cpu], __ATOMIC_ACQUIRE);
+	return atomic_load_n(&current_clockevents[cpu], ATOMIC_ACQUIRE);
 }
 
 int clockevents_set_mode(struct clock_event_device *dev,

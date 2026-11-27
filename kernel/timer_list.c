@@ -1,3 +1,4 @@
+#include <brk/atomic.h>
 #include <brk/spinlock.h>
 #include <brk/tick.h>
 #include <brk/timer_list.h>
@@ -82,7 +83,7 @@ void timer_del_sync(struct timer_list *timer)
 
 	(void)timer_del(timer);
 
-	while (__atomic_load_n(&timer->running, __ATOMIC_ACQUIRE))
+	while (atomic_load_n(&timer->running, ATOMIC_ACQUIRE))
 		__asm__ volatile("" ::: "memory");
 }
 
@@ -133,11 +134,11 @@ void timer_run_expired(u64 now_ns)
 
 		list_del_init(&timer->node);
 		timer->pending = false;
-		__atomic_store_n(&timer->running, true, __ATOMIC_RELEASE);
+		atomic_store_n(&timer->running, true, ATOMIC_RELEASE);
 		spin_unlock_irqrestore(&timer_lock, flags);
 
 		timer->function(timer);
 
-		__atomic_store_n(&timer->running, false, __ATOMIC_RELEASE);
+		atomic_store_n(&timer->running, false, ATOMIC_RELEASE);
 	}
 }

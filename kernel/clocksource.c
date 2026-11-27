@@ -1,4 +1,5 @@
 #define pr_fmt(fmt) "clocksource: " fmt
+#include <brk/atomic.h>
 #include <brk/clocksource.h>
 #include <brk/panic.h>
 #include <brk/printk.h>
@@ -42,7 +43,7 @@ struct clocksource *clocksource_select(void)
 		if (!best || cs->rating > best->rating)
 			best = cs;
 	}
-	__atomic_store_n(&current_clocksource, best, __ATOMIC_RELEASE);
+	atomic_store_n(&current_clocksource, best, ATOMIC_RELEASE);
 	spin_unlock_irqrestore(&clocksource_lock, flags);
 	return best;
 }
@@ -67,7 +68,7 @@ void clocksource_init(void)
 
 struct clocksource *clocksource_get_current(void)
 {
-	return __atomic_load_n(&current_clocksource, __ATOMIC_ACQUIRE);
+	return atomic_load_n(&current_clocksource, ATOMIC_ACQUIRE);
 }
 
 u64 clocksource_cycles_to_ns(const struct clocksource *cs, u64 cycles)

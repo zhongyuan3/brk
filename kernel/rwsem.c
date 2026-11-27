@@ -1,4 +1,5 @@
 #include <brk/assert.h>
+#include <brk/atomic.h>
 #include <brk/cpu.h>
 #include <brk/panic.h>
 #include <brk/process.h>
@@ -187,13 +188,12 @@ bool rwsem_is_locked(const rwsem_t *sem)
 	bool locked;
 
 	/* The caller is only expected to use this for debugging. */
-	locked = __atomic_load_n(&sem->readers, __ATOMIC_ACQUIRE) != 0 ||
-		 __atomic_load_n(&sem->writer, __ATOMIC_ACQUIRE) != NULL;
+	locked = atomic_load_n(&sem->readers, ATOMIC_ACQUIRE) != 0 ||
+		 atomic_load_n(&sem->writer, ATOMIC_ACQUIRE) != NULL;
 	return locked;
 }
 
 bool rwsem_is_write_locked_by_me(const rwsem_t *sem)
 {
-	return __atomic_load_n(&sem->writer, __ATOMIC_ACQUIRE) ==
-	       current_thread();
+	return atomic_load_n(&sem->writer, ATOMIC_ACQUIRE) == current_thread();
 }
