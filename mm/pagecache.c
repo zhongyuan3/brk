@@ -6,6 +6,7 @@
 #include <brk/list.h>
 #include <brk/mutex.h>
 #include <brk/pagecache.h>
+#include <brk/panic.h>
 #include <brk/pgalloc.h>
 #include <brk/printk.h>
 #include <brk/refcnt.h>
@@ -240,10 +241,17 @@ void cached_page_get(struct cached_page *cp)
 
 void cached_page_put(struct cached_page *cp)
 {
+	refcnt_value_t old;
+
 	if (!cp)
 		return;
-	if (refcnt_dec_fetch(&cp->refcnt) > 0)
+
+	old = refcnt_fetch_dec(&cp->refcnt);
+	if (old > 1)
 		return;
+	if (old == 0)
+		panic("cached_page_put: underflow cp=%p caller=%p\n", cp,
+		      __builtin_return_address(0));
 
 	/*
 	 * refcount reached zero. By design the cache reference is dropped
