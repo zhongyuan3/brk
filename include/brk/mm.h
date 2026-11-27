@@ -19,7 +19,11 @@ int uvm_space_copy(struct uvm_space *dst, struct uvm_space *src);
 /* Anonymous, private mmap; pages are demand-faulted on first touch. */
 int uvm_mmap_anon(struct uvm_space *mm, user_addr_t hint, size_t len, int prot,
 		  int flags, int fd, u64 offset, user_addr_t *addr_out);
-/* File-backed, MAP_PRIVATE: eagerly copy the file into anonymous pages. */
+/*
+ * File-backed, MAP_PRIVATE: eagerly copy the file into anonymous pages.
+ * Must be called without mm->lock; the function reads the file first and
+ * takes the mm lock only while installing the mapping.
+ */
 int uvm_mmap_file_private(struct uvm_space *mm, user_addr_t hint, size_t len,
 			  int prot, int flags, int fd, u64 offset,
 			  user_addr_t *addr_out);
@@ -34,6 +38,12 @@ int uvm_mmap_file_shared(struct uvm_space *mm, user_addr_t hint, size_t len,
  */
 int uvm_handle_fault(struct uvm_space *mm, user_addr_t addr, bool write,
 		     bool instr);
+/*
+ * Resolve missing (or write-inaccessible) PTEs for a user range before a
+ * filesystem read/write holds its inode rwsem while copying to/from userspace.
+ */
+int uvm_prefault_user_range(struct uvm_space *mm, user_addr_t addr, size_t len,
+			    bool write);
 /* Remove write permission and mark one page copy-on-write (fork). */
 int uvm_cow_protect(struct uvm_space *mm, user_addr_t addr);
 /* True when the leaf PTE for @addr carries the software COW marker. */

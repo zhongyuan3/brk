@@ -11,6 +11,7 @@
 #include <brk/kernel.h>
 #include <brk/kmalloc.h>
 #include <brk/ktime.h>
+#include <brk/mm.h>
 #include <brk/mount.h>
 #include <brk/mutex.h>
 #include <brk/path.h>
@@ -51,6 +52,15 @@ long sys_read(const struct syscall_ctx *ctx)
 		return PTR_ERR(fp);
 	buf = syscall_arg_ptr(ctx, 1);
 	n = syscall_arg_raw(ctx, 2);
+	if (fp->inode && S_ISREG(fp->inode->mode)) {
+		ret = uvm_prefault_user_range(task->process->mm,
+					      (user_addr_t)(uintptr_t)buf, n,
+					      true);
+		if (ret) {
+			file_put(fp);
+			return ret;
+		}
+	}
 	ret = file_read(fp, buf, n);
 	file_put(fp);
 	return ret;
@@ -76,6 +86,15 @@ long sys_write(const struct syscall_ctx *ctx)
 	}
 	buf = syscall_arg_ptr(ctx, 1);
 	n = syscall_arg_raw(ctx, 2);
+	if (fp->inode && S_ISREG(fp->inode->mode)) {
+		ret = uvm_prefault_user_range(task->process->mm,
+					      (user_addr_t)(uintptr_t)buf, n,
+					      false);
+		if (ret) {
+			file_put(fp);
+			return ret;
+		}
+	}
 	ret = file_write(fp, buf, n);
 	file_put(fp);
 	return ret;
@@ -128,6 +147,18 @@ static u64 readv_writev(const struct syscall_ctx *ctx, bool is_write)
 			if (!total)
 				total = -EFAULT;
 			break;
+		}
+
+		if (fp->inode && S_ISREG(fp->inode->mode)) {
+			ssize_t pre = uvm_prefault_user_range(
+				current_process()->mm,
+				(user_addr_t)(uintptr_t)iov[i].iov_base,
+				iov[i].iov_len, !is_write);
+			if (pre) {
+				if (!total)
+					total = pre;
+				break;
+			}
 		}
 
 		if (is_write)

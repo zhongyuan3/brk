@@ -168,89 +168,102 @@ static int map_anon_lazy(struct uvm_space *mm, user_addr_t addr, size_t size,
 	return 0;
 }
 
+static void free_private_pages(struct page **pages, size_t nr_pages)
+{
+	if (!pages)
+		return;
+	for (size_t i = 0; i < nr_pages; ++i) {
+		if (pages[i])
+			page_free(pages[i], 0);
+	}
+	kfree(pages);
+}
+
+/*
+ * Read a private file mapping into anonymous pages.  This runs without
+ * uvm_space->lock because the filesystem read takes the inode rwsem, while a
+ * page fault taken under that rwsem needs uvm_space->lock.
+ */
+static struct page **read_private_pages(struct file *fp, loff_t file_off,
+					size_t nr_pages, int *err_out)
+{
+	struct page **pages;
+
+	pages = kcalloc(nr_pages, sizeof(*pages));
+	if (!pages) {
+		*err_out = -ENOMEM;
+		return NULL;
+	}
+
+	if (!fp->ops || !fp->ops->read) {
+		*err_out = -EINVAL;
+		kfree(pages);
+		return NULL;
+	}
+
+	for (size_t i = 0; i < nr_pages; ++i) {
+		struct page *pg = page_alloc(0);
+		void *va;
+		loff_t pos = file_off + (loff_t)(i * PAGE_SIZE);
+		size_t got = 0;
+
+		if (!pg) {
+			*err_out = -ENOMEM;
+			goto fail;
+		}
+
+		pages[i] = pg;
+		va = (void *)page_to_virt(pg);
+		memset(va, 0, PAGE_SIZE);
+
+		while (got < PAGE_SIZE) {
+			ssize_t n = fp->ops->read(fp, (char *)va + got,
+						  PAGE_SIZE - got, &pos);
+
+			if (n < 0) {
+				*err_out = (int)n;
+				goto fail;
+			}
+			if (n == 0)
+				break;
+			got += (size_t)n;
+		}
+	}
+
+	*err_out = 0;
+	return pages;
+
+fail:
+	free_private_pages(pages, nr_pages);
+	return NULL;
+}
+
 static int map_region(struct uvm_space *mm, user_addr_t addr, size_t size,
-		      int prot, struct file *fp, loff_t file_off)
+		      int prot, struct page **pages)
 {
 	size_t nr_pages = size / PAGE_SIZE;
 	struct uvm_region *vma;
-	struct page **pages;
 	unsigned int pte_flags = prot_to_pte(prot);
-	size_t i = 0;
 	int err = 0;
 
 	vma = uvm_region_alloc();
 	if (!vma)
 		return -ENOMEM;
 
-	pages = kcalloc(nr_pages, sizeof(*pages));
-	if (!pages) {
-		uvm_region_free(vma);
-		return -ENOMEM;
-	}
-
-	for (i = 0; i < nr_pages; i++) {
-		struct page *pg = page_alloc(0);
-		void *va;
-
-		if (!pg) {
-			err = -ENOMEM;
-			break;
-		}
-
-		va = (void *)page_to_virt(pg);
-		memset(va, 0, PAGE_SIZE);
-
-		if (fp) {
-			loff_t pos = file_off + (loff_t)(i * PAGE_SIZE);
-			size_t got = 0;
-
-			if (!fp->ops || !fp->ops->read) {
-				err = -EINVAL;
-				page_free(pg, 0);
-				break;
-			}
-
-			while (got < PAGE_SIZE) {
-				ssize_t n = fp->ops->read(fp, (char *)va + got,
-							  PAGE_SIZE - got,
-							  &pos);
-
-				if (n < 0) {
-					err = (int)n;
-					break;
-				}
-				if (n == 0)
-					break;
-				got += (size_t)n;
-			}
-			if (err) {
-				page_free(pg, 0);
-				break;
-			}
-		}
-
-		if (pte_flags) {
-			err = map_user_pages(mm->pgd, addr + i * PAGE_SIZE,
-					     PAGE_SIZE, page_to_phys(pg),
-					     pte_flags);
-			if (err) {
-				page_free(pg, 0);
-				break;
-			}
-		}
-		pages[i] = pg;
-	}
-
-	if (err) {
-		for (size_t j = 0; j < i; j++) {
-			if (pte_flags)
-				unmap_user_pages(mm->pgd, addr + j * PAGE_SIZE,
+	for (size_t i = 0; i < nr_pages; ++i) {
+		if (!pte_flags)
+			continue;
+		err = map_user_pages(mm->pgd, addr + i * PAGE_SIZE, PAGE_SIZE,
+				     page_to_phys(pages[i]), pte_flags);
+		if (err) {
+			while (i > 0) {
+				--i;
+				unmap_user_pages(mm->pgd, addr + i * PAGE_SIZE,
 						 PAGE_SIZE);
-			page_free(pages[j], 0);
+			}
+			uvm_region_free(vma);
+			return err;
 		}
-		kfree(pages);
-		uvm_region_free(vma);
-		return err;
 	}
 
 	vma->addr = addr;
@@ -307,6 +320,8 @@ int uvm_mmap_file_private(struct uvm_space *mm, user_addr_t hint, size_t len,
 			  user_addr_t *addr_out)
 {
 	struct file *fp;
+	struct page **pages;
+	size_t nr_pages;
 	u64 size;
 	user_addr_t addr = 0;
 	loff_t file_off;
@@ -341,6 +356,7 @@ int uvm_mmap_file_private(struct uvm_space *mm, user_addr_t hint, size_t len,
 		return -EINVAL;
 
 	file_off = (loff_t)offset;
+	nr_pages = (size_t)size / PAGE_SIZE;
 
 	fp = fdtable_get_file(&current_process()->fdtable, fd);
 	if (IS_ERR(fp))
@@ -355,18 +371,67 @@ int uvm_mmap_file_private(struct uvm_space *mm, user_addr_t hint, size_t len,
 		goto out_put;
 	}
 
-	err = choose_addr(mm, hint, (size_t)size, flags, &addr);
-	if (err)
+	/*
+	 * The file read takes the inode rwsem.  Do it before taking the mm
+	 * lock: page faults take mm->lock while a filesystem read may still
+	 * hold the inode rwsem.
+	 */
+	pages = read_private_pages(fp, file_off, nr_pages, &err);
+	if (!pages)
 		goto out_put;
 
-	err = map_region(mm, addr, (size_t)size, prot, fp, file_off);
-	if (err)
+	mutex_lock(&mm->lock);
+	err = choose_addr(mm, hint, (size_t)size, flags, &addr);
+	if (!err)
+		err = map_region(mm, addr, (size_t)size, prot, pages);
+	mutex_unlock(&mm->lock);
+
+	if (err) {
+		free_private_pages(pages, nr_pages);
 		goto out_put;
+	}
 
 	*addr_out = addr;
 	err = 0;
 
 out_put:
+	file_put(fp);
+	return err;
+}
+
+/*
+ * Extend a shared writable file before taking uvm_space->lock.  The inode
+ * rwsem must not be acquired under the mm lock: generic_file_read() can hold
+ * the inode rwsem while a user copy faults and needs uvm_space->lock.
+ */
+static int uvm_mmap_shared_prepare(int fd, size_t len, int prot, u64 offset)
+{
+	struct file *fp;
+	struct inode *inode;
+	u64 size;
+	int err = 0;
+
+	if (!(prot & PROT_WRITE))
+		return 0;
+	if (offset & (PAGE_SIZE - 1))
+		return 0;
+
+	size = (u64)len;
+	size = (size + PAGE_SIZE - 1) & ~(u64)(PAGE_SIZE - 1);
+	if (size == 0 || size > USER_SPACE_SIZE_MAX)
+		return 0;
+	if (offset > 0x7fffffffffffffffULL - size)
+		return 0;
+
+	fp = fdtable_get_file(&current_process()->fdtable, fd);
+	if (IS_ERR(fp))
+		return 0;
+
+	inode = fp->inode;
+	if (inode && S_ISREG(inode->mode) && inode->mapping &&
+	    (fp->mode & FMODE_WRITE) && (u64)inode->size < offset + size)
+		err = file_truncate(fp, (loff_t)(offset + size));
+
 	file_put(fp);
 	return err;
 }
@@ -432,15 +497,9 @@ int uvm_mmap_file_shared(struct uvm_space *mm, user_addr_t hint, size_t len,
 	}
 
 	/*
-	 * Shared writable mappings can extend the file.  Do it up front so
-	 * writeback has a valid inode size for pages past the old EOF.
+	 * Shared writable mappings were extended by
+	 * uvm_mmap_shared_prepare() before mm->lock was taken.
 	 */
-	if ((prot & PROT_WRITE) && (u64)inode->size < offset + size) {
-		err = file_truncate(fp, (loff_t)(offset + size));
-		if (err)
-			goto out_put;
-	}
-
 	err = choose_addr(mm, hint, (size_t)size, flags, &addr);
 	if (err)
 		goto out_put;
@@ -786,6 +845,54 @@ static struct uvm_region *split_region_at(struct uvm_space *mm,
 	return right;
 }
 
+#define UVM_PREFAULT_MAX (1024UL * PAGE_SIZE)
+
+int uvm_prefault_user_range(struct uvm_space *mm, user_addr_t addr, size_t len,
+			    bool write)
+{
+	user_addr_t end;
+	user_addr_t page;
+
+	if (!mm || !len)
+		return 0;
+
+	/*
+	 * syscall lengths are user-controlled and may be much larger than the
+	 * data the filesystem will actually return.  Fault the first few MiB;
+	 * larger reads still make progress, and the remaining pages are rare
+	 * enough to be handled by the normal fault path.
+	 */
+	if (len > UVM_PREFAULT_MAX)
+		len = UVM_PREFAULT_MAX;
+
+	end = addr + len;
+	if (end < addr)
+		return 0;
+
+	for (page = addr & ~(user_addr_t)(PAGE_SIZE - 1); page < end;
+	     page += PAGE_SIZE) {
+		unsigned int flags = 0;
+		bool need_fault;
+		int err = 0;
+
+		mutex_lock(&mm->lock);
+		need_fault = !uvm_page_is_mapped(mm, page);
+		if (!need_fault && write) {
+			if (uvm_pte_flags(mm, page, &flags) ||
+			    !(flags & PTE_W) || uvm_pte_is_cow(mm, page))
+				need_fault = true;
+		}
+		if (need_fault)
+			err = uvm_handle_fault(mm, page, write, false);
+		mutex_unlock(&mm->lock);
+
+		if (err)
+			return err == -ENOMEM ? -ENOMEM : -EFAULT;
+	}
+
+	return 0;
+}
+
 int uvm_handle_fault(struct uvm_space *mm, user_addr_t addr, bool write,
 		     bool instr)
 {
@@ -1086,15 +1193,19 @@ long sys_mmap(const struct syscall_ctx *ctx)
 				    &addr);
 		mutex_unlock(&mm->lock);
 	} else if (flags & MAP_SHARED) {
+		if (!(flags & (MAP_PRIVATE | MAP_ANONYMOUS))) {
+			err = uvm_mmap_shared_prepare(fd, len, prot, offset);
+			if (err)
+				return (u64)(long)err;
+		}
 		mutex_lock(&mm->lock);
 		err = uvm_mmap_file_shared(mm, hint, len, prot, flags, fd,
 					   offset, &addr);
 		mutex_unlock(&mm->lock);
 	} else {
-		mutex_lock(&mm->lock);
+		/* Takes mm->lock internally after reading the file. */
 		err = uvm_mmap_file_private(mm, hint, len, prot, flags, fd,
 					    offset, &addr);
-		mutex_unlock(&mm->lock);
 	}
 	if (err)
 		return (u64)(long)err;
