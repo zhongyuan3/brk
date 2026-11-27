@@ -6,7 +6,7 @@
 #include <stdalign.h>
 #include <stddef.h>
 
-#define PRINTK_RING_BUFFER_SIZE (1u << 16)
+#define PRINTK_RING_BUFFER_SIZE (1u << 18)
 #define PRINTK_RING_BUFFER_MASK (PRINTK_RING_BUFFER_SIZE - 1u)
 
 #define PRINTK_MAX_PAYLOAD 1024
@@ -32,6 +32,8 @@ struct printk_ring_buffer {
 		struct printk_log_header)) char buf[PRINTK_RING_BUFFER_SIZE];
 	u64 head;
 	u64 tail;
+	/* Total bytes discarded at the tail since boot. */
+	u64 dropped;
 	spinlock_t lock;
 };
 

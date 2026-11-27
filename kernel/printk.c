@@ -9,6 +9,16 @@
 #include <brk/string.h>
 #include <uapi/errno.h>
 
+/*
+ * The ring backs both the boot consoles and klogd.  Debug records are not
+ * emitted by the default KERN_INFO consoles and would otherwise evict useful
+ * boot messages from the fixed-size ring before klogd starts.  Override this
+ * at build time to keep a verbose in-memory trace.
+ */
+#ifndef PRINTK_RING_LEVEL
+#define PRINTK_RING_LEVEL KERN_INFO
+#endif
+
 static struct printk_ring_buffer printk_ring = {
 	.lock = SPINLOCK_INITIALIZER("printk_ring"),
 };
@@ -86,6 +96,8 @@ static u32 printk_oldest_record_total(void)
 
 static void printk_drop_oldest(void)
 {
+	u64 old_tail = printk_ring.tail;
+
 	if (printk_ring.tail == printk_ring.head)
 		return;
 
@@ -93,12 +105,13 @@ static void printk_drop_oldest(void)
 
 	if (step == 0) {
 		printk_ring.tail = printk_ring.head;
-		return;
+	} else {
+		printk_ring.tail += step;
+		if (printk_ring.tail > printk_ring.head)
+			printk_ring.tail = printk_ring.head;
 	}
 
-	printk_ring.tail += step;
-	if (printk_ring.tail > printk_ring.head)
-		printk_ring.tail = printk_ring.head;
+	printk_ring.dropped += printk_ring.tail - old_tail;
 }
 
 /*
@@ -131,6 +144,8 @@ static void printk_log_store_locked(u8 level, const char *text, size_t len,
 {
 	if (level > KERN_MAX)
 		level = KERN_MAX;
+	if (level > PRINTK_RING_LEVEL)
+		return;
 	if (len == 0)
 		return;
 	if (len > PRINTK_MAX_PAYLOAD) {
@@ -205,7 +220,13 @@ void printk_log_reader_init(struct printk_log_reader *reader,
 	reader->ring = &printk_ring;
 	reader->cursor = start == PRINTK_LOG_START_NEWEST ? printk_ring.head :
 							    printk_ring.tail;
-	reader->pending_lost = 0;
+	/*
+	 * A reader that starts at the oldest retained record must be told
+	 * about bytes already discarded, otherwise early boot loss is silent.
+	 * Starting at the newest record is an explicit "skip history" request.
+	 */
+	reader->pending_lost =
+		start == PRINTK_LOG_START_OLDEST ? printk_ring.dropped : 0;
 
 	spin_unlock_irqrestore(&printk_ring.lock, flags);
 }
@@ -312,6 +333,9 @@ int printk_log_read_try(struct printk_log_reader *reader, char *buf,
 
 static void vprintk_common(int level, const char *fmt, va_list ap)
 {
+	if (level > PRINTK_RING_LEVEL)
+		return;
+
 	u64 nsec = printk_now_nsec();
 	irqstate_t lock = spin_lock_irqsave(&printk_ring.lock);
 	int n = vsnprintf(printk_buf, sizeof(printk_buf), fmt, ap);
