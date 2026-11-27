@@ -9,6 +9,7 @@
 #include <brk/futex.h>
 #include <brk/ktime.h>
 #include <brk/list.h>
+#include <brk/lockdep.h>
 #include <brk/mm.h>
 #include <brk/panic.h>
 #include <brk/process.h>
@@ -241,6 +242,7 @@ void sched_start(void)
 	kassert(init->oncpu == -1);
 	init->oncpu = cpu->id;
 	set_current_thread(init);
+	lockdep_init();
 
 	load_final_page_table();
 	user_access_disable();

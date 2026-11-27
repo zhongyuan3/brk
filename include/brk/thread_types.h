@@ -3,6 +3,7 @@
 
 #include <arch/context.h>
 #include <brk/list.h>
+#include <brk/lockdep_types.h>
 #include <brk/spinlock_types.h>
 #include <brk/timer_list.h>
 #include <brk/types.h>
@@ -106,6 +107,12 @@ struct thread {
 	bool in_exit; /* no lock protection */
 	void (*kthrd_fn)(void *); /* no lock protection */
 	void *kthrd_data; /* no lock protection */
+
+#ifndef NDEBUG
+	/* Lockdep's per-thread held-lock stack. */
+	struct lockdep_held lockdep_held[LOCKDEP_MAX_HELD];
+	u8 lockdep_depth;
+#endif
 };
 
 #endif

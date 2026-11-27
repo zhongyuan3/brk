@@ -1,6 +1,7 @@
 #include <brk/assert.h>
 #include <brk/atomic.h>
 #include <brk/cpu.h>
+#include <brk/lockdep.h>
 #include <brk/panic.h>
 #include <brk/process.h>
 #include <brk/rwsem.h>
@@ -24,6 +25,8 @@ void down_read(rwsem_t *sem)
 	irqstate_t flags;
 
 	might_sleep();
+	lockdep_acquire(sem->name, sem, LOCKDEP_READ, false,
+			__builtin_return_address(0));
 
 	flags = spin_lock_irqsave(&sem->wait_lock);
 	if (sem->writer == current_thread())
@@ -40,6 +43,8 @@ int down_read_interruptible(rwsem_t *sem)
 	int err;
 
 	might_sleep();
+	lockdep_acquire(sem->name, sem, LOCKDEP_READ, false,
+			__builtin_return_address(0));
 
 	flags = spin_lock_irqsave(&sem->wait_lock);
 	if (sem->writer == current_thread())
@@ -59,6 +64,8 @@ int down_read_interruptible(rwsem_t *sem)
 				err = 0;
 			}
 			spin_unlock_irqrestore(&sem->wait_lock, flags);
+			if (err < 0)
+				lockdep_release(sem);
 			return err;
 		}
 	}
@@ -78,6 +85,9 @@ bool down_read_trylock(rwsem_t *sem)
 		acquired = true;
 	}
 	spin_unlock_irqrestore(&sem->wait_lock, flags);
+	if (acquired)
+		lockdep_acquire(sem->name, sem, LOCKDEP_READ, true,
+				__builtin_return_address(0));
 	return acquired;
 }
 
@@ -85,6 +95,7 @@ void up_read(rwsem_t *sem)
 {
 	irqstate_t flags;
 
+	lockdep_release(sem);
 	flags = spin_lock_irqsave(&sem->wait_lock);
 	if (!sem->readers)
 		panic("up_read: name=%s readers=0\n", sem->name);
@@ -100,6 +111,8 @@ void down_write(rwsem_t *sem)
 	irqstate_t flags;
 
 	might_sleep();
+	lockdep_acquire(sem->name, sem, LOCKDEP_WRITE, false,
+			__builtin_return_address(0));
 
 	flags = spin_lock_irqsave(&sem->wait_lock);
 	if (sem->writer == self)
@@ -120,6 +133,8 @@ int down_write_interruptible(rwsem_t *sem)
 	int err;
 
 	might_sleep();
+	lockdep_acquire(sem->name, sem, LOCKDEP_WRITE, false,
+			__builtin_return_address(0));
 
 	flags = spin_lock_irqsave(&sem->wait_lock);
 	if (sem->writer == self)
@@ -146,6 +161,7 @@ int down_write_interruptible(rwsem_t *sem)
 			if (!sem->waiting_writers)
 				thread_wake_all(&sem->wait);
 			spin_unlock_irqrestore(&sem->wait_lock, flags);
+			lockdep_release(sem);
 			return err;
 		}
 	}
@@ -166,6 +182,9 @@ bool down_write_trylock(rwsem_t *sem)
 		acquired = true;
 	}
 	spin_unlock_irqrestore(&sem->wait_lock, flags);
+	if (acquired)
+		lockdep_acquire(sem->name, sem, LOCKDEP_WRITE, true,
+				__builtin_return_address(0));
 	return acquired;
 }
 
@@ -174,6 +193,7 @@ void up_write(rwsem_t *sem)
 	struct thread *self = current_thread();
 	irqstate_t flags;
 
+	lockdep_release(sem);
 	flags = spin_lock_irqsave(&sem->wait_lock);
 	if (sem->writer != self)
 		panic("up_write: name=%s writer=%p self=%p\n", sem->name,

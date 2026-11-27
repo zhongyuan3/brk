@@ -25,6 +25,11 @@ struct cpu {
 	struct list_head run_queue;
 	spinlock_t run_queue_lock;
 	unsigned int nr_running;
+
+#ifndef NDEBUG
+	/* Prevent lockdep from recursing through its own diagnostics. */
+	int lockdep_recursion;
+#endif
 };
 
 int cpu_init(cpuid_t cpuid, bool boot);

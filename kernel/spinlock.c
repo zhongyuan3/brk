@@ -1,5 +1,6 @@
 #include <brk/atomic.h>
 #include <brk/cpu.h>
+#include <brk/lockdep.h>
 #include <brk/panic.h>
 #include <brk/spinlock.h>
 #include <brk/string.h>
@@ -56,6 +57,8 @@ void spin_lock(spinlock_t *lock)
 {
 	preempt_disable();
 	__spin_lock(lock);
+	lockdep_acquire(lock->name, lock, LOCKDEP_WRITE, false,
+			__builtin_return_address(0));
 }
 
 bool spin_trylock(spinlock_t *lock)
@@ -65,11 +68,14 @@ bool spin_trylock(spinlock_t *lock)
 		preempt_enable();
 		return false;
 	}
+	lockdep_acquire(lock->name, lock, LOCKDEP_WRITE, true,
+			__builtin_return_address(0));
 	return true;
 }
 
 void spin_unlock(spinlock_t *lock)
 {
+	lockdep_release(lock);
 	__spin_unlock(lock, true);
 	preempt_enable();
 }
@@ -79,11 +85,14 @@ irqstate_t spin_lock_irqsave(spinlock_t *lock)
 	irqstate_t flags = local_irq_save();
 
 	__spin_lock(lock);
+	lockdep_acquire(lock->name, lock, LOCKDEP_WRITE, false,
+			__builtin_return_address(0));
 	return flags;
 }
 
 void spin_unlock_irqrestore(spinlock_t *lock, irqstate_t flags)
 {
+	lockdep_release(lock);
 	__spin_unlock(lock, true);
 	local_irq_restore(flags);
 }
@@ -97,6 +106,8 @@ bool spin_trylock_irqsave(spinlock_t *lock, irqstate_t *flags)
 		return false;
 	}
 
+	lockdep_acquire(lock->name, lock, LOCKDEP_WRITE, true,
+			__builtin_return_address(0));
 	*flags = saved;
 	return true;
 }

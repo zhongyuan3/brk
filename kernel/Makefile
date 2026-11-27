@@ -5,6 +5,7 @@ obj-y += panic.o
 obj-y += signal.o
 obj-y += syscall.o
 obj-y += futex.o
+obj-y += lockdep.o
 obj-y += mutex.o
 obj-y += rwsem.o
 obj-y += completion.o

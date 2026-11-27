@@ -1,6 +1,7 @@
 #include <brk/assert.h>
 #include <brk/atomic.h>
 #include <brk/cpu.h>
+#include <brk/lockdep.h>
 #include <brk/mutex.h>
 #include <brk/panic.h>
 #include <brk/process.h>
@@ -40,8 +41,14 @@ void mutex_lock(mutex_t *mutex)
 
 	might_sleep();
 
-	if (mutex_try_acquire(mutex, self))
+	if (mutex_try_acquire(mutex, self)) {
+		lockdep_acquire(mutex->name, mutex, LOCKDEP_WRITE, false,
+				__builtin_return_address(0));
 		return;
+	}
+
+	lockdep_acquire(mutex->name, mutex, LOCKDEP_WRITE, false,
+			__builtin_return_address(0));
 
 	flags = spin_lock_irqsave(&mutex->wait_lock);
 	if (mutex->owner == self)
@@ -59,6 +66,14 @@ void mutex_lock(mutex_t *mutex)
 	while (!waiter.granted)
 		thread_sleep_on(&mutex->wait, &mutex->wait_lock);
 
+#ifndef NDEBUG
+	if (mutex->owner != self)
+		panic("mutex_lock: bad handoff name=%s owner=%p(tid=%d) "
+		      "self=%p(tid=%d)\n",
+		      mutex->name, mutex->owner,
+		      mutex->owner ? mutex->owner->tid : -1, self, self->tid);
+#endif
+
 	spin_unlock_irqrestore(&mutex->wait_lock, flags);
 }
 
@@ -71,8 +86,14 @@ int mutex_lock_interruptible(mutex_t *mutex)
 
 	might_sleep();
 
-	if (mutex_try_acquire(mutex, self))
+	if (mutex_try_acquire(mutex, self)) {
+		lockdep_acquire(mutex->name, mutex, LOCKDEP_WRITE, false,
+				__builtin_return_address(0));
 		return 0;
+	}
+
+	lockdep_acquire(mutex->name, mutex, LOCKDEP_WRITE, false,
+			__builtin_return_address(0));
 
 	flags = spin_lock_irqsave(&mutex->wait_lock);
 	if (mutex->owner == self)
@@ -106,13 +127,28 @@ int mutex_lock_interruptible(mutex_t *mutex)
 		}
 	}
 
+#ifndef NDEBUG
+	if (!err && mutex->owner != self)
+		panic("mutex_lock_interruptible: bad handoff name=%s "
+		      "owner=%p(tid=%d) self=%p(tid=%d)\n",
+		      mutex->name, mutex->owner,
+		      mutex->owner ? mutex->owner->tid : -1, self, self->tid);
+#endif
+
 	spin_unlock_irqrestore(&mutex->wait_lock, flags);
+	if (err < 0 && !waiter.granted)
+		lockdep_release(mutex);
 	return err;
 }
 
 bool mutex_trylock(mutex_t *mutex)
 {
-	return mutex_try_acquire(mutex, current_thread());
+	bool acquired = mutex_try_acquire(mutex, current_thread());
+
+	if (acquired)
+		lockdep_acquire(mutex->name, mutex, LOCKDEP_WRITE, true,
+				__builtin_return_address(0));
+	return acquired;
 }
 
 void mutex_unlock(mutex_t *mutex)
@@ -123,13 +159,24 @@ void mutex_unlock(mutex_t *mutex)
 
 	kassert(preempt_count() == 0);
 
+	lockdep_release(mutex);
+
 	flags = spin_lock_irqsave(&mutex->wait_lock);
-	if (mutex->owner != self)
+	if (mutex->owner != self) {
+		void *caller0 = __builtin_return_address(0);
+		void *caller1;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wframe-address"
+		caller1 = __builtin_return_address(1);
+#pragma GCC diagnostic pop
+
 		panic("mutex_unlock: name=%s owner=%p(tid=%d) self=%p(tid=%d) "
-		      "caller=%p\n",
+		      "caller=%p/%p\n",
 		      mutex->name, mutex->owner,
 		      mutex->owner ? mutex->owner->tid : -1, self, self->tid,
-		      __builtin_return_address(0));
+		      caller0, caller1);
+	}
 
 	if (!list_empty(&mutex->wait_list)) {
 		waiter = list_first_entry(&mutex->wait_list,
